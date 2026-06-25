@@ -10,6 +10,7 @@ import { Screen } from '@/components/ui/screen';
 import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
+import { useAuth } from '@/lib/auth';
 import { saveProfile } from '@/lib/profile';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
@@ -21,6 +22,9 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
 ];
 
 export default function CompleteProfileScreen() {
+  const { user } = useAuth();
+  // Already captured at sign-up if they registered by phone — don't ask again.
+  const hasPhone = Boolean(user?.phone);
   const [dob, setDob] = useState<string | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
   const [phone, setPhone] = useState('');
@@ -41,7 +45,7 @@ export default function CompleteProfileScreen() {
     if (!validate() || !dob || !sex) return;
     setSubmitting(true);
     try {
-      await saveProfile({ dateOfBirth: dob, sex, phone });
+      await saveProfile({ dateOfBirth: dob, sex, phone: hasPhone ? undefined : phone });
       router.replace('/home');
     } catch {
       setFormError("Couldn't save your details. Check your connection and try again.");
@@ -78,14 +82,16 @@ export default function CompleteProfileScreen() {
               error={errors.sex}
             />
 
-            <TextField
-              label="Phone number (optional)"
-              placeholder="09xx xxx xxxx"
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              value={phone}
-              onChangeText={setPhone}
-            />
+            {hasPhone ? null : (
+              <TextField
+                label="Phone number (optional)"
+                placeholder="09xx xxx xxxx"
+                keyboardType="phone-pad"
+                textContentType="telephoneNumber"
+                value={phone}
+                onChangeText={setPhone}
+              />
+            )}
           </View>
 
           <View style={styles.actions}>
