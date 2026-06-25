@@ -1,12 +1,3 @@
-/**
- * Minimal typed fetch client for the SpotOn backend.
- *
- * Directory/sync endpoints are public; `/me` (added later) needs a Supabase
- * Bearer token — register a provider via `setAuthTokenProvider` so the auth layer
- * can inject the token without this module depending on it.
- *
- * Query strings are built manually (not via `URL`) for React Native compatibility.
- */
 import { API_BASE_URL } from "../config";
 
 export class ApiError extends Error {
@@ -17,14 +8,32 @@ export class ApiError extends Error {
     super(`API ${status}: ${body.slice(0, 200)}`);
     this.name = "ApiError";
   }
+
+  /** Best-effort human message from a FastAPI `{ "detail": ... }` body. */
+  get detail(): string {
+    try {
+      const parsed = JSON.parse(this.body);
+      if (typeof parsed?.detail === "string") return parsed.detail;
+    } catch {
+      // not JSON
+    }
+    return this.body || `Request failed (${this.status}).`;
+  }
 }
 
 type AuthTokenProvider = () => string | null | Promise<string | null>;
 let tokenProvider: AuthTokenProvider | null = null;
 
-/** Auth layer calls this once so authed requests carry the Supabase token. */
+/** Auth layer registers this so authed requests carry the access token. */
 export function setAuthTokenProvider(fn: AuthTokenProvider | null): void {
   tokenProvider = fn;
+}
+
+/** Called once on a 401 to refresh the access token; returns the new token or null. */
+type AuthRefreshHandler = () => Promise<string | null>;
+let refreshHandler: AuthRefreshHandler | null = null;
+export function setAuthRefreshHandler(fn: AuthRefreshHandler | null): void {
+  refreshHandler = fn;
 }
 
 type QueryParams = Record<string, string | number | boolean | undefined | null>;
@@ -40,7 +49,7 @@ function queryString(params?: QueryParams): string {
 async function request<T>(
   method: string,
   path: string,
-  opts: { params?: QueryParams; body?: unknown; auth?: boolean } = {},
+  opts: { params?: QueryParams; body?: unknown; auth?: boolean; _retried?: boolean } = {},
 ): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
@@ -54,6 +63,14 @@ async function request<T>(
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
+
+  // One-shot refresh-and-retry on an expired access token.
+  if (res.status === 401 && opts.auth && refreshHandler && !opts._retried) {
+    const newToken = await refreshHandler();
+    if (newToken) {
+      return request<T>(method, path, { ...opts, _retried: true });
+    }
+  }
 
   if (!res.ok) {
     throw new ApiError(res.status, await res.text().catch(() => ""));

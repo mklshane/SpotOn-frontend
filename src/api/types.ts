@@ -1,8 +1,3 @@
-/**
- * Types mirroring the backend `/sync` payload (api/app/schemas/sync.py) and the
- * directory `/meta` endpoint. Kept in sync with the server schemas by hand.
- */
-
 export interface HoursPeriod {
   open: string; // "HH:MM"
   close: string; // "HH:MM"
@@ -94,4 +89,24 @@ export interface SyncResponse {
 export interface MetaResponse {
   services: string[];
   specialties: string[];
+}
+
+// Matches backend Literal in api/app/schemas/user.py.
+export type Sex = 'male' | 'female' | 'intersex' | 'other' | 'prefer_not_to_say';
+
+// Mirrors backend UserOut (GET /me).
+export interface UserProfile {
+  id: string;
+  email: string | null;
+  phone: string | null;
+  full_name: string | null;
+  date_of_birth: string | null; // ISO date "YYYY-MM-DD"
+  sex: string | null;
+  fitzpatrick_skin_type: number | null;
+  is_active: boolean;
+  is_verified: boolean;
+  consent_data_privacy: boolean;
+  consent_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

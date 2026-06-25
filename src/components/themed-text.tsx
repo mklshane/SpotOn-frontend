@@ -1,28 +1,43 @@
 import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
 
-import { Fonts, ThemeColor } from '@/constants/theme';
+import { Fonts, ThemeColor, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+export type ThemedTextType =
+  // SpotOn type ramp
+  | 'largeTitle'
+  | 'title1'
+  | 'title2'
+  | 'headline'
+  | 'body'
+  | 'callout'
+  | 'subhead'
+  | 'footnote'
+  | 'caption'
+  // legacy template variants (still used by tab screens)
+  | 'default'
+  | 'title'
+  | 'small'
+  | 'smallBold'
+  | 'subtitle'
+  | 'link'
+  | 'linkPrimary'
+  | 'code';
+
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
+  type?: ThemedTextType;
   themeColor?: ThemeColor;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
+export function ThemedText({ style, type = 'body', themeColor, ...rest }: ThemedTextProps) {
   const theme = useTheme();
 
   return (
     <Text
       style={[
         { color: theme[themeColor ?? 'text'] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
+        styles[type],
+        type === 'linkPrimary' && { color: theme.brand },
         style,
       ]}
       {...rest}
@@ -31,30 +46,41 @@ export function ThemedText({ style, type = 'default', themeColor, ...rest }: The
 }
 
 const styles = StyleSheet.create({
+  // SpotOn type ramp
+  largeTitle: Type.largeTitle,
+  title1: Type.title1,
+  title2: Type.title2,
+  headline: Type.headline,
+  body: Type.body,
+  callout: Type.callout,
+  subhead: Type.subhead,
+  footnote: Type.footnote,
+  caption: Type.caption,
+  // legacy template variants
   small: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 500,
+    fontWeight: '500',
   },
   smallBold: {
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: 700,
+    fontWeight: '700',
   },
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: 500,
+    fontWeight: '500',
   },
   title: {
     fontSize: 48,
-    fontWeight: 600,
+    fontWeight: '600',
     lineHeight: 52,
   },
   subtitle: {
     fontSize: 32,
     lineHeight: 44,
-    fontWeight: 600,
+    fontWeight: '600',
   },
   link: {
     lineHeight: 30,
@@ -63,11 +89,10 @@ const styles = StyleSheet.create({
   linkPrimary: {
     lineHeight: 30,
     fontSize: 14,
-    color: '#3c87f7',
   },
   code: {
     fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
+    fontWeight: Platform.select({ android: '700' }) ?? '500',
     fontSize: 12,
   },
 });
