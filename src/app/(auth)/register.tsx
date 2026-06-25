@@ -115,6 +115,7 @@ export default function RegisterScreen() {
               onChangeValue={setIdentifier}
               onToggleMode={toggleMode}
               error={errors.identifier}
+              containerStyle={styles.identifier}
             />
 
             <TextField
@@ -177,6 +178,7 @@ const styles = StyleSheet.create({
   header: { gap: Space.md },
   title: { marginTop: Space.sm },
   form: { gap: Space.lg },
+  identifier: { marginBottom: -Space.md },
   consent: { gap: Space.xs, marginBottom: Space.xs },
   consentError: { marginLeft: Space.xl + Space.md },
   inlineLink: { fontWeight: '600' },

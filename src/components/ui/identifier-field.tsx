@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: Space.sm,
+    marginTop: Space.xs,
   },
   error: { flex: 1 },
   toggle: { fontWeight: '600' },

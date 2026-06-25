@@ -94,6 +94,7 @@ export default function LoginScreen() {
               onChangeValue={setIdentifier}
               onToggleMode={toggleMode}
               error={errors.identifier}
+              containerStyle={styles.identifier}
             />
             <TextField
               label="Password"
@@ -144,6 +145,7 @@ const styles = StyleSheet.create({
   header: { gap: Space.md },
   title: { marginTop: Space.sm },
   form: { gap: Space.lg },
+  identifier: { marginBottom: -Space.md },
   actions: { marginTop: 'auto', gap: Space.lg },
   center: { textAlign: 'center' },
   footnoteRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },

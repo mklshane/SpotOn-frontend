@@ -32,7 +32,7 @@ export function DevTools() {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.layer, { bottom: insets.bottom + Space.base, right: Space.base }]}>
+      style={[styles.layer, { bottom: insets.bottom + 80, right: Space.base }]}>
       {open ? (
         <View style={[styles.panel, { backgroundColor: theme.surface }, Elevation.md]}>
           <ThemedText type="caption" themeColor="muted" style={styles.heading}>
