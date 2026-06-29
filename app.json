@@ -52,6 +52,13 @@
         {
           "photosPermission": "Allow SpotOn to access your photos to upload a skin spot."
         }
+      ],
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "SpotOn uses your camera to detect and capture the skin spot for triage.",
+          "enableFrameProcessors": true
+        }
       ]
     ],
     "experiments": {
