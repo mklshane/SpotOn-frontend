@@ -1,4 +1,4 @@
-import { type SymbolViewProps } from 'expo-symbols';
+import { type IconName } from '@/components/ui/icon';
 import { StyleSheet, View } from 'react-native';
 
 import { Radius, Space } from '@/constants/theme';
@@ -9,7 +9,7 @@ import { IconCircle } from './icon-circle';
 import { Screen } from './screen';
 
 export type ScreenPlaceholderProps = {
-  icon: SymbolViewProps['name'];
+  icon: IconName;
   title: string;
   subtitle: string;
 };

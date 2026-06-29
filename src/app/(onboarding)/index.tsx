@@ -1,4 +1,4 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -25,7 +25,7 @@ type Slide = {
   key: string;
   title: string;
   description: string;
-  icon: SymbolViewProps['name'];
+  icon: IconName;
   // Drop a real illustration here later: require('@/assets/images/onboarding/welcome.png')
   image?: ImageSourcePropType;
 };
@@ -118,7 +118,7 @@ export default function OnboardingScreen() {
             accessibilityRole="button"
             accessibilityLabel="Back"
             style={styles.backRow}>
-            <SymbolView name="chevron.left" tintColor={theme.muted} size={16} />
+            <Icon name="chevron.left" tintColor={theme.muted} size={16} />
           </Pressable>
         ) : (
           <View />

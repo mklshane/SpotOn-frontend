@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 
@@ -50,7 +50,7 @@ export function Select<T extends string>({
           <ThemedText type="body" themeColor={selected ? 'text' : 'muted'}>
             {selected ? selected.label : placeholder}
           </ThemedText>
-          <SymbolView name={open ? 'chevron.up' : 'chevron.down'} tintColor={theme.muted} size={16} />
+          <Icon name={open ? 'chevron.up' : 'chevron.down'} tintColor={theme.muted} size={16} />
         </Pressable>
 
         {open ? (
@@ -77,7 +77,7 @@ export function Select<T extends string>({
                   <ThemedText type="body" themeColor={isSel ? 'brand' : 'text'}>
                     {o.label}
                   </ThemedText>
-                  {isSel ? <SymbolView name="checkmark" tintColor={theme.brand} size={16} /> : null}
+                  {isSel ? <Icon name="checkmark" tintColor={theme.brand} size={16} /> : null}
                 </Pressable>
               );
             })}

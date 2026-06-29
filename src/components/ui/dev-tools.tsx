@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { type Href, router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -68,7 +68,7 @@ export function DevTools() {
         onPress={() => setOpen((o) => !o)}
         style={[styles.fab, { backgroundColor: theme.text }, Elevation.md]}
         accessibilityLabel="Developer tools">
-        <SymbolView name={open ? 'xmark' : 'hammer.fill'} tintColor={theme.background} size={20} />
+        <Icon name={open ? 'xmark' : 'hammer.fill'} tintColor={theme.background} size={20} />
       </Pressable>
     </View>
   );

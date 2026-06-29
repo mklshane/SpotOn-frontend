@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
@@ -53,7 +53,7 @@ export function SelectCard({ title, subtitle, selected, onPress, style }: Select
             ? { backgroundColor: theme.brand, borderColor: theme.brand }
             : { backgroundColor: 'transparent', borderColor: theme.hairline },
         ]}>
-        {selected ? <SymbolView name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
+        {selected ? <Icon name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
       </View>
     </AnimatedPressable>
   );

@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { type SymbolViewProps } from 'expo-symbols';
+import { type IconName } from '@/components/ui/icon';
 import { type ImageSourcePropType, StyleSheet, View } from 'react-native';
 
 import { Radius } from '@/constants/theme';
@@ -11,7 +11,7 @@ export type OnboardingHeroProps = {
   /** Drop a real illustration here later (assets/images/onboarding/*.png). */
   image?: ImageSourcePropType;
   /** Fallback glyph shown inside the placeholder until real art is added. */
-  icon: SymbolViewProps['name'];
+  icon: IconName;
   size?: number;
 };
 

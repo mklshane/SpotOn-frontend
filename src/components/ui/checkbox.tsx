@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Radius, Space } from '@/constants/theme';
@@ -26,7 +26,7 @@ export function Checkbox({ checked, onChange, children }: CheckboxProps) {
             ? { backgroundColor: theme.brand, borderColor: theme.brand }
             : { backgroundColor: 'transparent', borderColor: theme.hairline },
         ]}>
-        {checked ? <SymbolView name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
+        {checked ? <Icon name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
       </View>
       <View style={styles.label}>{children}</View>
     </Pressable>

@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -8,7 +8,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
 
-type SF = SymbolViewProps['name'];
+type SF = IconName;
 type TabConfig = { label: string; icon: SF; iconActive?: SF; center?: boolean };
 
 const TABS: Record<string, TabConfig> = {
@@ -73,7 +73,7 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
                     end={{ x: 0.9, y: 1 }}
                     style={StyleSheet.absoluteFill}
                   />
-                  <SymbolView name={cfg.icon} tintColor={theme.onBrand} size={26} />
+                  <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
                 </View>
               </View>
               <ThemedText
@@ -92,7 +92,7 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
             onPress={onPress}
             style={({ pressed }) => [styles.item, pressed && styles.pressed]}
             accessibilityRole="button">
-            <SymbolView
+            <Icon
               name={focused ? cfg.iconActive ?? cfg.icon : cfg.icon}
               tintColor={focused ? theme.brand : theme.muted}
               size={25}

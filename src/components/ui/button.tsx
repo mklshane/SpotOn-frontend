@@ -1,4 +1,4 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { Icon, type IconName } from '@/components/ui/icon';
 import {
   ActivityIndicator,
   Pressable,
@@ -21,7 +21,7 @@ export type ButtonProps = Omit<PressableProps, 'style'> & {
   label: string;
   variant?: ButtonVariant;
   loading?: boolean;
-  icon?: SymbolViewProps['name'];
+  icon?: IconName;
   style?: any;
 };
 
@@ -74,7 +74,7 @@ export function Button({
         ) : (
           <>
             {icon ? (
-              <SymbolView name={icon} tintColor={textColor} size={18} style={styles.icon} />
+              <Icon name={icon} tintColor={textColor} size={18} style={styles.icon} />
             ) : null}
             <ThemedText style={[styles.label, { color: textColor }]}>{label}</ThemedText>
           </>

@@ -1,12 +1,12 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { Elevation, Gradients } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type IconCircleProps = {
-  icon: SymbolViewProps['name'];
+  icon: IconName;
   size?: number;
   /** Soft tint circle, solid brand, or a warm sunset gradient fill. */
   variant?: 'tint' | 'brand' | 'gradient';
@@ -37,7 +37,7 @@ export function IconCircle({ icon, size = 72, variant = 'tint', iconColor, style
           ]}
         />
       )}
-      <SymbolView name={icon} tintColor={glyphColor} size={size * 0.46} />
+      <Icon name={icon} tintColor={glyphColor} size={size * 0.46} />
     </View>
   );
 }

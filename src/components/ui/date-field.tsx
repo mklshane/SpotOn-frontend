@@ -1,5 +1,5 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,7 +62,7 @@ export function DateField({ label, error, onChange, containerStyle }: DateFieldP
         <ThemedText type="body" themeColor={date ? 'text' : 'muted'}>
           {date ? format(date) : 'Select date'}
         </ThemedText>
-        <SymbolView name="calendar" tintColor={theme.muted} size={18} />
+        <Icon name="calendar" tintColor={theme.muted} size={18} />
       </Pressable>
 
       {error ? (

@@ -1,4 +1,4 @@
-import { SymbolView } from 'expo-symbols';
+import { Icon } from '@/components/ui/icon';
 import { useState } from 'react';
 import {
   Pressable,
@@ -70,7 +70,7 @@ export function TextField({
             onPress={() => setHidden((h) => !h)}
             style={styles.toggle}
             accessibilityLabel={hidden ? 'Show password' : 'Hide password'}>
-            <SymbolView name={hidden ? 'eye' : 'eye.slash'} tintColor={theme.muted} size={18} />
+            <Icon name={hidden ? 'eye' : 'eye.slash'} tintColor={theme.muted} size={18} />
           </Pressable>
         ) : null}
       </View>
