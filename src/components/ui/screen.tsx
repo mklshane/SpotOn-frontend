@@ -1,13 +1,15 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { type Edge, SafeAreaView } from 'react-native-safe-area-context';
 
-import { Space } from '@/constants/theme';
+import { Gradients, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { GradientBackground } from './gradient-background';
 
 export type ScreenProps = {
   variant?: 'plain' | 'gradient';
+  /** Which gradient to render when variant="gradient". Defaults to the warm `dawn`. */
+  gradient?: keyof typeof Gradients;
   /** Horizontal page padding. Defaults to Space.xl. Pass 0 for full-bleed content. */
   padded?: boolean;
   edges?: readonly Edge[];
@@ -17,6 +19,7 @@ export type ScreenProps = {
 
 export function Screen({
   variant = 'plain',
+  gradient = 'dawn',
   padded = true,
   edges = ['top', 'bottom'],
   style,
@@ -27,7 +30,7 @@ export function Screen({
   return (
     <View style={styles.root}>
       {variant === 'gradient' ? (
-        <GradientBackground variant="dawn" />
+        <GradientBackground variant={gradient} />
       ) : (
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
       )}

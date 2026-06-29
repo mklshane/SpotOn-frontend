@@ -1,0 +1,47 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="welcome-screen" x1="140" y1="80" x2="260" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE9D6"/>
+      <stop offset="0.55" stop-color="#FFD7C0"/>
+      <stop offset="1" stop-color="#FFC3AC"/>
+    </linearGradient>
+    <linearGradient id="welcome-sun" x1="170" y1="150" x2="230" y2="215" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFA468"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <radialGradient id="welcome-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(200 182) scale(78)">
+      <stop stop-color="#FF8A4C" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FF8A4C" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="welcome-shadow" x="80" y="60" width="240" height="320" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#211A15" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <!-- ground shadow -->
+  <ellipse cx="200" cy="352" rx="92" ry="16" fill="#211A15" opacity="0.08"/>
+
+  <!-- phone, slight 3/4 tilt -->
+  <g transform="rotate(-8 200 200)" filter="url(#welcome-shadow)">
+    <rect x="128" y="78" width="144" height="244" rx="30" fill="#FFFFFF"/>
+    <rect x="128" y="78" width="144" height="244" rx="30" fill="#FFE9DA" opacity="0.35"/>
+    <rect x="140" y="92" width="120" height="216" rx="22" fill="url(#welcome-screen)"/>
+    <!-- notch / speaker -->
+    <rect x="184" y="100" width="32" height="6" rx="3" fill="#FFFFFF" opacity="0.6"/>
+    <!-- sun / spot glow + disc -->
+    <circle cx="200" cy="182" r="78" fill="url(#welcome-glow)"/>
+    <circle cx="200" cy="182" r="34" fill="url(#welcome-sun)"/>
+    <circle cx="190" cy="172" r="10" fill="#FFFFFF" opacity="0.55"/>
+    <!-- soft horizon line under sun -->
+    <path d="M148 246 H252" stroke="#FFFFFF" stroke-opacity="0.5" stroke-width="4" stroke-linecap="round"/>
+    <path d="M160 262 H240" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="4" stroke-linecap="round"/>
+  </g>
+
+  <!-- sparkles -->
+  <g fill="#FF8A4C">
+    <path d="M300 118 l5 12 l12 5 l-12 5 l-5 12 l-5 -12 l-12 -5 l12 -5 z" opacity="0.9"/>
+    <path d="M96 156 l3.5 8 l8 3.5 l-8 3.5 l-3.5 8 l-3.5 -8 l-8 -3.5 l8 -3.5 z" opacity="0.7"/>
+    <circle cx="312" cy="232" r="5" opacity="0.55"/>
+    <circle cx="104" cy="270" r="4" opacity="0.5"/>
+  </g>
+</svg>

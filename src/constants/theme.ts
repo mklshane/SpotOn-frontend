@@ -48,6 +48,11 @@ export const Gradients = {
     colors: ['#FCF4D6', '#FEF8EC', '#FBE5D2', '#F7D5BE'] as const,
     locations: [0, 0.35, 0.72, 1] as const,
   },
+  // Lighter dawn — softer cream → faint peach, for form-heavy screens (auth, profile).
+  dawnSoft: {
+    colors: ['#FFFAEF', '#FFFCF6', '#FEF3E9', '#FCE8DB'] as const,
+    locations: [0, 0.35, 0.72, 1] as const,
+  },
   sunsetSoft: { colors: ['#FFE9D6', '#FFD7C0', '#FFC3AC'] as const, locations: [0, 0.5, 1] as const },
   sunsetWarm: { colors: ['#FFD9B8', '#FFB98E', '#FF9E78'] as const, locations: [0, 0.5, 1] as const },
   sunsetVivid: { colors: ['#FFA468', '#FF8A4C', '#F26A2E'] as const, locations: [0, 0.5, 1] as const },

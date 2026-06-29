@@ -69,7 +69,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen>
+    <Screen variant="gradient" gradient="dawnSoft">
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

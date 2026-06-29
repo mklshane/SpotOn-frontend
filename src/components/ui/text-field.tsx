@@ -36,7 +36,7 @@ export function TextField({
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(secure);
 
-  const borderColor = error ? theme.riskCritical : focused ? theme.brand : 'transparent';
+  const borderColor = error ? theme.riskCritical : focused ? theme.brand : theme.hairline;
 
   return (
     <View style={containerStyle}>

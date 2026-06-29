@@ -20,7 +20,7 @@ export type OnboardingHeroProps = {
  * shows an on-brand placeholder (soft tint frame + brand IconCircle) that the user
  * can swap for real 3D art without any layout change.
  */
-export function OnboardingHero({ image, icon, size = 260 }: OnboardingHeroProps) {
+export function OnboardingHero({ image, icon, size = 300 }: OnboardingHeroProps) {
   const theme = useTheme();
 
   if (image) {

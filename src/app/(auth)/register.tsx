@@ -82,7 +82,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen>
+    <Screen variant="gradient" gradient="dawnSoft">
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}

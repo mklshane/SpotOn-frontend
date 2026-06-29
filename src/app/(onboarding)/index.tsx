@@ -37,6 +37,7 @@ const SLIDES: Slide[] = [
     description:
       'Your pocket guide to checking skin changes early — calm, private, and made for the Philippines.',
     icon: 'sparkles',
+    image: require('@/assets/images/onboarding/welcome.svg'),
   },
   {
     key: 'classify',
@@ -44,12 +45,14 @@ const SLIDES: Slide[] = [
     description:
       'Snap a photo and get an instant, on-device triage of how concerning a spot looks.',
     icon: 'camera.viewfinder',
+    image: require('@/assets/images/onboarding/classify.svg'),
   },
   {
     key: 'dermatologists',
     title: 'Access Local Dermatologists',
     description: 'Find verified dermatology clinics and doctors near you, even offline.',
     icon: 'stethoscope',
+    image: require('@/assets/images/onboarding/dermatologists.svg'),
   },
   {
     key: 'privacy',
@@ -57,6 +60,7 @@ const SLIDES: Slide[] = [
     description:
       'Your photos and results stay on your phone. Nothing is shared without your say-so.',
     icon: 'lock.shield.fill',
+    image: require('@/assets/images/onboarding/privacy.svg'),
   },
 ];
 

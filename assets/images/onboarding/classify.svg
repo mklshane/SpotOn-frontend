@@ -1,0 +1,75 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="classify-arm" x1="167" y1="172" x2="233" y2="248" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6AE80"/>
+      <stop offset="0.45" stop-color="#C98A5E"/>
+      <stop offset="1" stop-color="#9C6038"/>
+    </linearGradient>
+    <linearGradient id="classify-phone" x1="96" y1="70" x2="304" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF3EB"/>
+    </linearGradient>
+    <radialGradient id="classify-scan" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(200 210) scale(70)">
+      <stop stop-color="#FF8A4C" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FF8A4C" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="classify-frame">
+      <rect x="108" y="118" width="184" height="184" rx="28"/>
+    </clipPath>
+    <filter id="classify-shadow" x="80" y="74" width="240" height="280" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#211A15" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="200" cy="350" rx="96" ry="16" fill="#211A15" opacity="0.08"/>
+
+  <!-- camera / phone frame -->
+  <g filter="url(#classify-shadow)">
+    <rect x="96" y="86" width="208" height="248" rx="34" fill="url(#classify-phone)"/>
+    <!-- viewfinder window -->
+    <rect x="108" y="118" width="184" height="184" rx="28" fill="#FFF9F4"/>
+  </g>
+
+  <!-- forearm + spot inside the viewfinder -->
+  <g clip-path="url(#classify-frame)">
+    <rect x="108" y="118" width="184" height="184" fill="#FFE9DA"/>
+
+    <!-- tapering forearm: elbow (lower-left) -> wrist (upper-right) -->
+    <path d="M53 258 Q150 158 272 86 Q336 87 327 150 Q245 262 127 342 Q48 337 53 258 Z"
+      fill="url(#classify-arm)"/>
+    <!-- lower-edge form shadow (roundness) -->
+    <path d="M122 332 Q240 256 320 152" stroke="#834E2C" stroke-width="22" stroke-linecap="round"
+      fill="none" opacity="0.22"/>
+    <!-- upper-edge highlight -->
+    <path d="M72 250 Q162 168 268 102" stroke="#F4CBA1" stroke-width="11" stroke-linecap="round"
+      fill="none" opacity="0.5"/>
+    <!-- soft wrist creases -->
+    <path d="M250 118 q14 9 27 -2" stroke="#834E2C" stroke-width="3" stroke-linecap="round"
+      fill="none" opacity="0.25"/>
+    <path d="M259 131 q14 9 27 -2" stroke="#834E2C" stroke-width="3" stroke-linecap="round"
+      fill="none" opacity="0.2"/>
+
+    <!-- scan glow + the spot being examined -->
+    <circle cx="200" cy="210" r="64" fill="url(#classify-scan)"/>
+    <!-- lesion contact shadow -->
+    <ellipse cx="205" cy="217" rx="17" ry="13" fill="#5A3818" opacity="0.3"/>
+    <!-- lesion: slightly asymmetric mole (ABCDE asymmetry cue) -->
+    <path d="M200 196 C211 195 219 200 218 209 C217 220 211 226 201 226 C191 226 186 218 188 208 C189 199 192 197 200 196 Z"
+      fill="#5E3A1C"/>
+    <path d="M200 200 C208 200 213 204 212 210 C211 217 207 221 200 221 C193 221 189 216 190 209 C191 203 194 200 200 200 Z"
+      fill="#462912" opacity="0.55"/>
+  </g>
+
+  <!-- corner brackets (focus frame) -->
+  <g stroke="#FF8A4C" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M162 178 v-16 h16"/>
+    <path d="M238 178 v-16 h-16"/>
+    <path d="M162 242 v16 h16"/>
+    <path d="M238 242 v16 h-16"/>
+  </g>
+  <!-- reticle center -->
+  <circle cx="200" cy="210" r="3" fill="#F26A2E"/>
+
+  <!-- camera bump -->
+  <rect x="180" y="100" width="40" height="10" rx="5" fill="#FFE9DA"/>
+</svg>

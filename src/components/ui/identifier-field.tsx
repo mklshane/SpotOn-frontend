@@ -35,7 +35,7 @@ export function IdentifierField({
   const theme = useTheme();
   const [focused, setFocused] = useState(false);
   const isPhone = mode === 'phone';
-  const borderColor = error ? theme.riskCritical : focused ? theme.brand : 'transparent';
+  const borderColor = error ? theme.riskCritical : focused ? theme.brand : theme.hairline;
 
   return (
     <View style={containerStyle}>

@@ -1,22 +1,25 @@
 # Onboarding illustrations
 
-These are the hero illustration slots for the 4-step onboarding flow. Until real art is
-added, `OnboardingHero` renders an on-brand placeholder (sunset gradient frame + glyph), so
-the UI is complete and shippable. Dropping the PNGs in here lights up the real art with **no
-layout change**.
+Hero illustration slots for the 4-step onboarding flow. **Real vector art now ships** as
+transparent **SVGs** (`welcome.svg`, `classify.svg`, `dermatologists.svg`, `privacy.svg`),
+wired into each slide in `src/app/(onboarding)/index.tsx`. If an `image` is ever removed,
+`OnboardingHero` falls back to an on-brand placeholder (sunset gradient frame + glyph), so
+the UI stays shippable.
 
-## How to add real illustrations
-1. Export each as a transparent PNG, roughly square (~1024×1024), soft 3D "sunset" style
-   (warm orange / coral / peach), matching `inspiration2.png`.
-2. Save them here with these exact names:
-   - `welcome.png` — Welcome to SpotOn
-   - `classify.png` — Classify Skin Lesions
-   - `dermatologists.png` — Access Local Dermatologists
-   - `privacy.png` — Your Data is Safe
-3. Wire them in `src/app/(onboarding)/index.tsx` — add an `image` to each slide, e.g.:
+## Why SVG works with no extra deps
+`expo-image` (already a dependency) renders SVG natively, and Metro treats `.svg` as an
+**asset** by default — so `require('@/assets/images/onboarding/welcome.svg')` resolves to an
+image source exactly like a PNG. No `react-native-svg-transformer` / Metro config needed.
+
+## How to swap or add art
+1. Author a transparent, ~square SVG (`viewBox="0 0 400 400"`), flat/semi-flat "sunset"
+   vector style (warm orange / coral / peach), matching `inspiration2.png`. PNGs (~1024×1024)
+   also work in the same slot.
+2. Save here with the exact name (`welcome` / `classify` / `dermatologists` / `privacy`).
+3. Wire in `src/app/(onboarding)/index.tsx` — add an `image` to the slide:
    ```ts
    { key: 'welcome', title: '…', description: '…', icon: 'sparkles',
-     image: require('@/assets/images/onboarding/welcome.png') },
+     image: require('@/assets/images/onboarding/welcome.svg') },
    ```
 
 ## Suggested generation prompts (soft 3D, sunset palette, transparent background)

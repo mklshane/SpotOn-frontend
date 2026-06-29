@@ -1,0 +1,41 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="privacy-shield" x1="150" y1="86" x2="252" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFD7C0"/>
+      <stop offset="0.5" stop-color="#FFA468"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <linearGradient id="privacy-phone" x1="236" y1="208" x2="300" y2="318" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF1E8"/>
+    </linearGradient>
+    <filter id="privacy-shadow" x="110" y="70" width="190" height="280" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#211A15" flood-opacity="0.17"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="200" cy="346" rx="78" ry="14" fill="#211A15" opacity="0.08"/>
+
+  <!-- small phone tucked behind shield, lower-right -->
+  <g transform="rotate(10 262 268)">
+    <rect x="234" y="206" width="58" height="104" rx="16" fill="url(#privacy-phone)" stroke="#FFE0CC" stroke-width="2"/>
+    <rect x="244" y="218" width="38" height="64" rx="8" fill="#FFE9DA"/>
+    <circle cx="263" cy="296" r="5" fill="#FFD7C0"/>
+  </g>
+
+  <!-- shield -->
+  <g filter="url(#privacy-shadow)">
+    <path d="M200 86 c-22 14 -48 22 -74 24 c-2 70 6 142 74 196 c68 -54 76 -126 74 -196 c-26 -2 -52 -10 -74 -24 z" fill="url(#privacy-shield)"/>
+    <path d="M200 86 c-22 14 -48 22 -74 24 c-1 26 -0.5 53 5 80 l138 0 c5.5 -27 6 -54 5 -80 c-26 -2 -52 -10 -74 -24 z" fill="#FFFFFF" opacity="0.12"/>
+
+    <!-- padlock -->
+    <path d="M178 176 v-12 a22 22 0 0 1 44 0 v12" stroke="#FFFFFF" stroke-width="10" fill="none" stroke-linecap="round"/>
+    <rect x="164" y="176" width="72" height="58" rx="14" fill="#FFFFFF"/>
+    <circle cx="200" cy="200" r="9" fill="#F26A2E"/>
+    <rect x="196" y="206" width="8" height="16" rx="4" fill="#F26A2E"/>
+  </g>
+
+  <!-- green safety check -->
+  <circle cx="252" cy="248" r="22" fill="#34A878"/>
+  <path d="M242 248 l7 8 l13 -16" stroke="#FFFFFF" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
