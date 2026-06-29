@@ -1,6 +1,6 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * App colors. The app is light-only — there is no dark palette or system
+ * light/dark auto-detection. All screens render from `Colors.light`.
  */
 
 import '@/global.css';
@@ -36,34 +36,9 @@ export const Colors = {
     riskCritical: '#E04347',
     riskCriticalBg: '#FCE7E7',
   },
-  dark: {
-    // STUB — warm-dark, not built out yet. Mirror keys; refine later.
-    text: '#FBF1EA',
-    background: '#171210',
-    backgroundElement: '#2A211B',
-    backgroundSelected: '#3A2A20',
-    textSecondary: '#C9BBB0',
-    brand: '#FF8A4C',
-    brandPressed: '#F26A2E',
-    brandBright: '#FFA468',
-    brandTint: '#3A2A20',
-    onBrand: '#1A130E',
-    muted: '#8C7E73',
-    surface: '#211A15',
-    elementBg: '#2A211B',
-    hairline: '#2E2620',
-    riskLow: '#3FBA88',
-    riskLowBg: '#16271F',
-    riskModerate: '#F2B454',
-    riskModerateBg: '#2A2113',
-    riskHigh: '#F26A33',
-    riskHighBg: '#2C1810',
-    riskCritical: '#F05B5F',
-    riskCriticalBg: '#2A1414',
-  },
 } as const;
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColor = keyof typeof Colors.light;
 
 // Gradients (use with expo-linear-gradient). Tuples of color stops.
 // Gradients (use with expo-linear-gradient). `colors` + optional `locations`.
