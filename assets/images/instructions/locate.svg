@@ -1,0 +1,42 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="loc-body" x1="200" y1="70" x2="200" y2="350" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE3CE"/>
+      <stop offset="1" stop-color="#FFC29C"/>
+    </linearGradient>
+    <linearGradient id="loc-mark" x1="216" y1="160" x2="244" y2="196" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFA468"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <radialGradient id="loc-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(232 176) scale(44)">
+      <stop stop-color="#FF8A4C" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#FF8A4C" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="loc-shadow" x="100" y="56" width="200" height="320" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7A4A2B" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="200" cy="360" rx="66" ry="11" fill="#211A15" opacity="0.06"/>
+
+  <!-- rotate arrows -->
+  <g stroke="#FF8A4C" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.5">
+    <path d="M96 168 a86 96 0 0 0 -4 96"/>
+    <path d="M96 168 l-11 0 l3 12"/>
+    <path d="M304 232 a86 96 0 0 0 4 -96"/>
+    <path d="M304 232 l11 0 l-3 -12"/>
+  </g>
+
+  <!-- figure: left half + mirrored right half (inlined for renderer compatibility) -->
+  <g fill="url(#loc-body)" filter="url(#loc-shadow)">
+    <path d="M200 72 C168 72 154 94 168 119 C172 126 178 130 178 136 C150 141 130 154 122 176 C116 192 115 216 117 250 C118 265 122 273 130 273 C139 273 141 260 143 242 C145 215 149 197 161 189 C165 210 167 231 165 252 C163 274 161 291 167 302 C169 322 173 336 178 346 C180 352 188 353 192 346 C196 332 197 311 198 293 L200 290 L200 72 Z"/>
+    <path transform="matrix(-1 0 0 1 400 0)" d="M200 72 C168 72 154 94 168 119 C172 126 178 130 178 136 C150 141 130 154 122 176 C116 192 115 216 117 250 C118 265 122 273 130 273 C139 273 141 260 143 242 C145 215 149 197 161 189 C165 210 167 231 165 252 C163 274 161 291 167 302 C169 322 173 336 178 346 C180 352 188 353 192 346 C196 332 197 311 198 293 L200 290 L200 72 Z"/>
+  </g>
+  <!-- soft top highlight -->
+  <path d="M182 158 q18 -9 36 0" stroke="#FFFFFF" stroke-opacity="0.45" stroke-width="7" stroke-linecap="round" fill="none"/>
+
+  <!-- marker on the chest -->
+  <circle cx="232" cy="176" r="42" fill="url(#loc-glow)"/>
+  <circle cx="232" cy="176" r="13" fill="url(#loc-mark)"/>
+  <circle cx="227" cy="171" r="4" fill="#FFFFFF" opacity="0.6"/>
+</svg>

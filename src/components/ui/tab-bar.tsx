@@ -1,4 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,7 +63,7 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
           return (
             <Pressable
               key={route.key}
-              onPress={onPress}
+              onPress={() => router.push('/scan/body')}
               style={({ pressed }) => [styles.item, pressed && styles.pressed]}
               accessibilityRole="button">
               <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>

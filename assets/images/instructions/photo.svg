@@ -1,0 +1,47 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ph-arm" x1="60" y1="120" x2="320" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6AE80"/>
+      <stop offset="1" stop-color="#B97E4F"/>
+    </linearGradient>
+    <linearGradient id="ph-phone" x1="150" y1="150" x2="290" y2="340" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF1E8"/>
+    </linearGradient>
+    <linearGradient id="ph-hand" x1="180" y1="300" x2="300" y2="392" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8B488"/>
+      <stop offset="1" stop-color="#CC8E5C"/>
+    </linearGradient>
+    <filter id="ph-shadow" x="120" y="120" width="200" height="250" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7A4A2B" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="210" cy="360" rx="86" ry="13" fill="#211A15" opacity="0.06"/>
+
+  <!-- tapering forearm: elbow (lower-left) -> wrist (upper-right) -->
+  <path d="M44 246 Q140 156 256 96 Q312 100 304 150 Q224 244 120 318 Q52 314 44 246 Z" fill="url(#ph-arm)"/>
+  <path d="M70 236 Q150 164 250 110" stroke="#F4CBA1" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.45"/>
+  <path d="M110 312 Q214 244 296 150" stroke="#834E2C" stroke-width="18" stroke-linecap="round" fill="none" opacity="0.18"/>
+  <!-- the spot on the arm -->
+  <circle cx="206" cy="196" r="10" fill="#5E3A1C"/>
+
+  <!-- phone framing the spot -->
+  <g filter="url(#ph-shadow)">
+    <rect x="150" y="148" width="116" height="180" rx="26" fill="url(#ph-phone)"/>
+    <rect x="162" y="162" width="92" height="152" rx="18" fill="#FFF6EF"/>
+    <rect x="196" y="170" width="24" height="6" rx="3" fill="#EFE0D4"/>
+    <!-- viewfinder corners -->
+    <g stroke="#34A878" stroke-width="5" stroke-linecap="round" fill="none">
+      <path d="M186 218 v-12 h12"/>
+      <path d="M230 218 v-12 h-12"/>
+      <path d="M186 262 v12 h12"/>
+      <path d="M230 262 v12 h-12"/>
+    </g>
+    <circle cx="208" cy="240" r="9" fill="#5E3A1C"/>
+  </g>
+
+  <!-- thumb tapping the screen -->
+  <path d="M214 374 q-10 -42 16 -68 q14 -14 31 -7 q11 5 6 19 q-4 13 -16 21 q15 -2 27 3 q12 5 7 17 q-5 12 -23 13 l-52 0 z" fill="url(#ph-hand)"/>
+  <path d="M236 300 q10 -4 18 2" stroke="#FFFFFF" stroke-width="0" fill="none"/>
+</svg>

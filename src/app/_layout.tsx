@@ -13,6 +13,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DevTools } from '@/components/ui/dev-tools';
 import { AuthProvider } from '@/lib/auth';
+import { ScanDraftProvider } from '@/lib/scan-draft';
+import { ScanHistoryProvider } from '@/lib/scan-history';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -36,16 +38,21 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <ThemeProvider value={DefaultTheme}>
-            <StatusBar style="dark" />
-            <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF9F4' } }}>
-              <Stack.Screen name="index" />
-              <Stack.Screen name="(onboarding)" />
-              <Stack.Screen name="(auth)" />
-              <Stack.Screen name="(tabs)" />
-            </Stack>
-            <DevTools />
-          </ThemeProvider>
+          <ScanHistoryProvider>
+          <ScanDraftProvider>
+            <ThemeProvider value={DefaultTheme}>
+              <StatusBar style="dark" />
+              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF9F4' } }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="(onboarding)" />
+                <Stack.Screen name="(auth)" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="scan" />
+              </Stack>
+              <DevTools />
+            </ThemeProvider>
+          </ScanDraftProvider>
+          </ScanHistoryProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

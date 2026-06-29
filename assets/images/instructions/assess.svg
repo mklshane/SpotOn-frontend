@@ -1,0 +1,31 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="as-shadow" x="60" y="50" width="280" height="280" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#7A4A2B" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- tracks -->
+  <g fill="none" stroke="#EFE7DF" stroke-width="20">
+    <circle cx="200" cy="180" r="112"/>
+    <circle cx="200" cy="180" r="82"/>
+    <circle cx="200" cy="180" r="52"/>
+  </g>
+
+  <!-- value arcs (start at top, clockwise) -->
+  <g fill="none" stroke-width="20" stroke-linecap="round" transform="rotate(-90 200 180)" filter="url(#as-shadow)">
+    <!-- green 74% : C=703.7, dash=520.7 -->
+    <circle cx="200" cy="180" r="112" stroke="#34A878" stroke-dasharray="520.7 703.7"/>
+    <!-- amber 25% : C=515.2, dash=128.8 -->
+    <circle cx="200" cy="180" r="82" stroke="#F2A93B" stroke-dasharray="128.8 515.2"/>
+    <!-- burnt 5% : C=326.7, dash=16.3 -->
+    <circle cx="200" cy="180" r="52" stroke="#E5571B" stroke-dasharray="16.3 326.7"/>
+  </g>
+
+  <!-- labels -->
+  <g font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="20" text-anchor="middle">
+    <text x="118" y="350" fill="#34A878">Low</text>
+    <text x="200" y="350" fill="#F2A93B">Medium</text>
+    <text x="296" y="350" fill="#E5571B">High</text>
+  </g>
+</svg>

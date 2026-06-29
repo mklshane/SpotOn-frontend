@@ -1,0 +1,61 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sc-cal" x1="120" y1="100" x2="290" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FFF3EB"/>
+    </linearGradient>
+    <linearGradient id="sc-top" x1="110" y1="110" x2="300" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFA468"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <linearGradient id="sc-pen" x1="90" y1="150" x2="140" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFB98E"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <filter id="sc-shadow" x="90" y="92" width="240" height="240" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#7A4A2B" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <ellipse cx="210" cy="344" rx="92" ry="14" fill="#211A15" opacity="0.06"/>
+
+  <!-- binding rings -->
+  <g stroke="#C9BCB0" stroke-width="7" stroke-linecap="round">
+    <path d="M150 96 v26"/>
+    <path d="M186 96 v26"/>
+    <path d="M222 96 v26"/>
+    <path d="M258 96 v26"/>
+  </g>
+
+  <!-- calendar body -->
+  <g filter="url(#sc-shadow)">
+    <rect x="120" y="110" width="180" height="190" rx="26" fill="url(#sc-cal)"/>
+    <path d="M120 136 q0 -26 26 -26 h128 q26 0 26 26 v14 h-180 z" fill="url(#sc-top)"/>
+
+    <!-- date cells -->
+    <g>
+      <rect x="146" y="172" width="30" height="26" rx="7" fill="#F3E7DD"/>
+      <rect x="188" y="172" width="30" height="26" rx="7" fill="#F3E7DD"/>
+      <rect x="230" y="172" width="30" height="26" rx="7" fill="#FFE0CC"/>
+      <rect x="146" y="210" width="30" height="26" rx="7" fill="#FFE0CC"/>
+      <rect x="188" y="210" width="30" height="26" rx="7" fill="#F3E7DD"/>
+      <rect x="230" y="210" width="30" height="26" rx="7" fill="#F3E7DD"/>
+      <rect x="146" y="248" width="30" height="26" rx="7" fill="#F3E7DD"/>
+      <rect x="188" y="248" width="30" height="26" rx="7" fill="#FFE0CC"/>
+      <rect x="230" y="248" width="30" height="26" rx="7" fill="#F3E7DD"/>
+    </g>
+    <!-- checkmarks on a few cells -->
+    <g stroke="#34A878" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M238 184 l4 5 l8 -10"/>
+      <path d="M154 222 l4 5 l8 -10"/>
+      <path d="M196 260 l4 5 l8 -10"/>
+    </g>
+  </g>
+
+  <!-- pen -->
+  <g transform="rotate(-32 110 230)">
+    <rect x="96" y="150" width="22" height="150" rx="11" fill="url(#sc-pen)"/>
+    <path d="M96 300 h22 l-11 22 z" fill="#3A2A1E"/>
+    <rect x="96" y="150" width="22" height="20" rx="10" fill="#FFD7C0"/>
+  </g>
+</svg>
