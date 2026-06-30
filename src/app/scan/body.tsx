@@ -12,17 +12,11 @@ import { BodyViewer } from '@/components/scan/body-viewer';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanDraft } from '@/lib/scan-draft';
-import { useScanHistory } from '@/lib/scan-history';
 
 export default function BodyAreaScreen() {
   const theme = useTheme();
-  const { bodyMark, setBodyMark, reset } = useScanDraft();
-  const { addEntry } = useScanHistory();
+  const { bodyMark, setBodyMark } = useScanDraft();
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  function goHome() {
-    router.replace('/(tabs)/home');
-  }
 
   async function pickFromGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -34,9 +28,8 @@ export default function BodyAreaScreen() {
       quality: 0.9,
     });
     if (!result.canceled && result.assets[0]) {
-      if (bodyMark) addEntry({ mark: bodyMark, imageUri: result.assets[0].uri });
-      reset();
-      goHome();
+      // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
+      router.push({ pathname: '/scan/quality', params: { uri: result.assets[0].uri } });
     }
   }
 

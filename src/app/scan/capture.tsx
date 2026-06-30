@@ -1,10 +1,8 @@
-import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { NitroModules } from 'react-native-nitro-modules';
-import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedProps,
@@ -31,6 +29,7 @@ import { Icon } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
 import { CaptureCoach } from '@/components/scan/too-dark-overlay';
 import { DetectionBox, type DetectionBBox } from '@/components/scan/detection-box';
+import { getLesionModel, type LesionModel } from '@/lib/lesion-model';
 import { Space } from '@/constants/theme';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
@@ -55,24 +54,14 @@ export default function CaptureScreen() {
   const { resize } = useResizePlugin();
   const { width: SW, height: SH } = useWindowDimensions();
 
-  const [model, setModel] = useState<Awaited<ReturnType<typeof loadTensorflowModel>> | null>(null);
+  const [model, setModel] = useState<LesionModel | null>(null);
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try {
-        const src = Image.resolveAssetSource(require('../../../assets/models/itobos_plus_large_v2_float16.tflite'));
-        let uri = src.uri;
-        if (uri.startsWith('http')) {
-          const dest = `${FileSystem.cacheDirectory}itobos_plus_large_v2_float16.tflite`;
-          await FileSystem.downloadAsync(uri, dest);
-          uri = dest;
-        }
-        const m = await loadTensorflowModel({ url: uri }, []);
+    getLesionModel()
+      .then((m) => {
         if (alive) setModel(m);
-      } catch (e) {
-        console.warn('[tflite] model load failed', e);
-      }
-    })();
+      })
+      .catch((e) => console.warn('[tflite] model load failed', e));
     return () => {
       alive = false;
     };

@@ -11,8 +11,6 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Space } from '@/constants/theme';
-import { useScanDraft } from '@/lib/scan-draft';
-import { useScanHistory } from '@/lib/scan-history';
 
 const OUTPUT = 1024;
 
@@ -20,8 +18,6 @@ export default function CropScreen() {
   const { uri } = useLocalSearchParams<{ uri: string }>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { bodyMark, reset } = useScanDraft();
-  const { addEntry } = useScanHistory();
 
   const frame = width - Space.xl * 2;
   const [img, setImg] = useState<{ w: number; h: number } | null>(null);
@@ -89,10 +85,8 @@ export default function CropScreen() {
         ],
         { compress: 0.9, format: SaveFormat.JPEG },
       );
-      // Record the screening in history so it appears on the body-lesions map.
-      if (bodyMark) addEntry({ mark: bodyMark, imageUri: result.uri });
-      reset();
-      router.replace('/(tabs)/home');
+      // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
+      router.replace({ pathname: '/scan/quality', params: { uri: result.uri } });
     } finally {
       setBusy(false);
     }
