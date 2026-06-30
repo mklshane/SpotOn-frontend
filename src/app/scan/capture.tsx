@@ -2,10 +2,17 @@ import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { NitroModules } from 'react-native-nitro-modules';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useSharedValue } from 'react-native-reanimated';
+import Reanimated, {
+  useAnimatedProps,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Camera,
@@ -21,16 +28,23 @@ import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
-import { TooDarkOverlay } from '@/components/scan/too-dark-overlay';
+import { CaptureCoach } from '@/components/scan/too-dark-overlay';
 import { DetectionBox, type DetectionBBox } from '@/components/scan/detection-box';
 import { Space } from '@/constants/theme';
+
+// Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
+// would recreate the gesture mid-pinch and crash react-native-gesture-handler).
+const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
+Reanimated.addWhitelistedNativeProps({ zoom: true });
 
 const DETECT_SCORE = 0.32; // clean gap from logs: blank ≤~0.25, lesions ≥~0.34
 const DETECT_SHOW = 2; // consecutive valid frames before showing (debounce)
 const BOX_FRAC = 0.24; // displayed framing box side, as a fraction of screen width
 const SMOOTH = 0.45; // EMA weight for the new center (lower = smoother/laggier)
 const DARK_THRESHOLD = 0.2; // mean luminance below which we coach "too dark"
-const DEBUG = false; // set true to log [fp] scores/coords for tuning
+const BLUR_THRESHOLD = 0.0004; // mean gradient energy below this = genuinely blurry (normal use ≥~0.001)
+const BLUR_SHOW = 5; // consecutive blurry frames before coaching (avoids flicker on plain/brief frames)
+const DEBUG = false; // set true to log [fp] best/sharp/lume for tuning
 
 export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
@@ -65,14 +79,20 @@ export default function CaptureScreen() {
 
   const [torch, setTorch] = useState(false);
   const [aiCamera, setAiCamera] = useState(true);
-  const [zoom, setZoom] = useState(device?.neutralZoom ?? 1);
   const [busy, setBusy] = useState(false);
   const [tooDark, setTooDark] = useState(false);
+  const [tooBlurry, setTooBlurry] = useState(false);
   const [detection, setDetection] = useState<DetectionBBox | null>(null);
-  const startZoom = useSharedValue(1);
+  const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
   const minZoom = device?.minZoom ?? 1;
+
+  const zoomSV = useSharedValue(1);
+  const startZoom = useSharedValue(1);
+  useEffect(() => {
+    if (device?.neutralZoom) zoomSV.value = device.neutralZoom;
+  }, [device, zoomSV]);
 
   const detStreak = useRef(0);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
@@ -95,7 +115,16 @@ export default function CaptureScreen() {
     }
   }, []);
   const onDark = useRunOnJS((d: boolean) => setTooDark(d), []);
-  const setZoomJS = useRunOnJS((z: number) => setZoom(z), []);
+  const blurStreak = useRef(0);
+  const onBlur = useRunOnJS((b: boolean) => {
+    if (b) {
+      blurStreak.current = Math.min(BLUR_SHOW + 2, blurStreak.current + 1);
+      if (blurStreak.current >= BLUR_SHOW) setTooBlurry(true);
+    } else {
+      blurStreak.current = 0;
+      setTooBlurry(false);
+    }
+  }, []);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
@@ -128,13 +157,29 @@ export default function CaptureScreen() {
           rotation: '90deg',
         });
 
+        // Quality gates over the model input (rgb float 0..1): mean luminance for "too dark",
+        // mean horizontal gradient energy for "too blurry / hold steady".
+        const Wn = layout.inputSize;
         let sum = 0;
         let n = 0;
-        for (let i = 0; i < input.length; i += 30) {
-          sum += input[i];
-          n++;
+        let grad = 0;
+        let gc = 0;
+        for (let y = 0; y < Wn; y += 16) {
+          const row = y * Wn;
+          for (let x = 0; x < Wn - 8; x += 16) {
+            const r = input[(row + x) * 3];
+            sum += r;
+            n++;
+            const d = input[(row + x + 8) * 3] - r;
+            grad += d * d;
+            gc++;
+          }
         }
-        onDark(n > 0 && sum / n < DARK_THRESHOLD);
+        const lume = n > 0 ? sum / n : 1;
+        const sharp = gc > 0 ? grad / gc : 1;
+        onDark(lume < DARK_THRESHOLD);
+        // Only flag blur when it's NOT just darkness, and there's some light to focus on.
+        onBlur(lume >= DARK_THRESHOLD && sharp < BLUR_THRESHOLD);
 
         const inputBuffer = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
         const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
@@ -160,6 +205,8 @@ export default function CaptureScreen() {
           }
         }
 
+        if (DEBUG) onDebug('best=' + best.toFixed(2) + ' sharp=' + sharp.toFixed(4) + ' lume=' + lume.toFixed(2));
+
         if (best >= DETECT_SCORE) {
           // Map the lesion center to the screen. The model input is a center 1:1 crop of
           // the upright frame (resize-plugin default), so first undo that crop to get
@@ -175,26 +222,63 @@ export default function CaptureScreen() {
           const pcy = (fY * dispH - (dispH - SH) / 2) / SH;
           const w = (BOX_FRAC * SW) / SW;
           const h = (BOX_FRAC * SW) / SH;
-          if (DEBUG) onDebug('best=' + best.toFixed(2) + ' cx=' + cx.toFixed(2) + ' cy=' + cy.toFixed(2) + ' f=' + frame.width + 'x' + frame.height);
           onDetection({ x: pcx - w / 2, y: pcy - h / 2, w, h });
         } else {
           onDetection(null);
         }
       });
     },
-    [boxedModel, layout, resize, onDetection, onDark, onDebug],
+    [boxedModel, layout, resize, onDetection, onDark, onBlur, onDebug],
   );
 
-  const pinch = Gesture.Pinch()
-    .onBegin(() => {
-      'worklet';
-      startZoom.value = zoom;
-    })
-    .onUpdate((e) => {
-      'worklet';
-      const next = Math.min(maxZoom, Math.max(minZoom, startZoom.value * e.scale));
-      setZoomJS(next);
-    });
+  const pinch = useMemo(
+    () =>
+      Gesture.Pinch()
+        .onBegin(() => {
+          'worklet';
+          startZoom.value = zoomSV.value;
+        })
+        .onUpdate((e) => {
+          'worklet';
+          zoomSV.value = Math.min(maxZoom, Math.max(minZoom, startZoom.value * e.scale));
+        }),
+    [maxZoom, minZoom, zoomSV, startZoom],
+  );
+
+  // Tap-to-focus like the native camera: focus the device at the tapped point + show a reticle.
+  const focusAt = useCallback(
+    (x: number, y: number) => {
+      const cam = camera.current;
+      console.log('[focus] tap', Math.round(x), Math.round(y), 'supportsFocus=', device?.supportsFocus);
+      if (!cam) return;
+      setFocusPt({ x, y, id: Date.now() });
+      cam
+        .focus({ x, y })
+        .then(() => console.log('[focus] ok'))
+        .catch((e) => console.log('[focus] err', String(e)));
+    },
+    [device],
+  );
+  const tap = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDuration(250)
+        .runOnJS(true)
+        .onEnd((e) => focusAt(e.x, e.y)),
+    [focusAt],
+  );
+  const gesture = useMemo(() => Gesture.Simultaneous(pinch, tap), [pinch, tap]);
+
+  useEffect(() => {
+    if (!focusPt) return;
+    const t = setTimeout(() => setFocusPt(null), 900);
+    return () => clearTimeout(t);
+  }, [focusPt]);
+
+  const animatedProps = useAnimatedProps(() => ({ zoom: zoomSV.value }), [zoomSV]);
+  const zoomBarStyle = useAnimatedStyle(() => ({
+    width: `${Math.round(((zoomSV.value - minZoom) / Math.max(0.001, maxZoom - minZoom)) * 100)}%`,
+  }));
 
   async function shoot() {
     if (!camera.current || busy) return;
@@ -229,24 +313,24 @@ export default function CaptureScreen() {
 
   if (!device) return <View style={styles.black} />;
 
-  const zoomPct = Math.round(((zoom - minZoom) / Math.max(0.001, maxZoom - minZoom)) * 100);
-
   return (
     <View style={styles.root}>
-      <GestureDetector gesture={pinch}>
+      <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill}>
-          <Camera
+          <ReanimatedCamera
             ref={camera}
             style={StyleSheet.absoluteFill}
             device={device}
             isActive
             photo
-            zoom={zoom}
+            animatedProps={animatedProps}
             torch={torch ? 'on' : 'off'}
             frameProcessor={aiCamera ? frameProcessor : undefined}
           />
         </View>
       </GestureDetector>
+
+      {focusPt ? <FocusReticle key={focusPt.id} x={focusPt.x} y={focusPt.y} /> : null}
 
       {/* Framing brackets */}
       <View style={styles.overlay} pointerEvents="none">
@@ -259,7 +343,11 @@ export default function CaptureScreen() {
       {/* AI camera = live lesion detector; the box tracks the detected lesion. */}
       {aiCamera ? <DetectionBox bbox={detection} /> : null}
 
-      {tooDark ? <TooDarkOverlay /> : null}
+      {tooDark ? (
+        <CaptureCoach title="It's too dark" subtitle="Turn on a flash or change the lighting conditions" icon="sun.max" />
+      ) : tooBlurry ? (
+        <CaptureCoach title="Hold steady" subtitle="Move a little closer and keep the camera still to focus" icon="camera.viewfinder" />
+      ) : null}
 
       {/* Close */}
       <Pressable
@@ -281,7 +369,7 @@ export default function CaptureScreen() {
       {/* Zoom indicator */}
       <View style={styles.zoomWrap} pointerEvents="none">
         <View style={styles.zoomTrack}>
-          <View style={[styles.zoomFill, { width: `${zoomPct}%` }]} />
+          <Reanimated.View style={[styles.zoomFill, zoomBarStyle]} />
         </View>
         <ThemedText type="caption" style={styles.zoomLabel}>
           Zoom
@@ -322,6 +410,35 @@ export default function CaptureScreen() {
   );
 }
 
+const RETICLE = 76;
+
+function FocusReticle({ x, y }: { x: number; y: number }) {
+  const scale = useSharedValue(1.35);
+  const opacity = useSharedValue(0);
+  useEffect(() => {
+    scale.value = withTiming(1, { duration: 180 });
+    opacity.value = withSequence(withTiming(1, { duration: 110 }), withDelay(450, withTiming(0, { duration: 240 })));
+  }, [scale, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ scale: scale.value }] }));
+  return (
+    <Reanimated.View
+      pointerEvents="none"
+      style={[focusStyles.reticle, { left: x - RETICLE / 2, top: y - RETICLE / 2 }, style]}
+    />
+  );
+}
+
+const focusStyles = StyleSheet.create({
+  reticle: {
+    position: 'absolute',
+    width: RETICLE,
+    height: RETICLE,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#FFD7C0',
+  },
+});
+
 const BRACKET = 36;
 
 const styles = StyleSheet.create({
@@ -345,7 +462,7 @@ const styles = StyleSheet.create({
   },
   instructionsLabel: { color: '#FFFFFF' },
   zoomWrap: { position: 'absolute', bottom: 150, left: 0, right: 0, alignItems: 'center', gap: 6 },
-  zoomTrack: { width: '60%', height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' },
+  zoomTrack: { width: '60%', height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
   zoomFill: { height: 4, borderRadius: 2, backgroundColor: '#FF8A4C' },
   zoomLabel: { color: 'rgba(255,255,255,0.9)' },
   controls: {

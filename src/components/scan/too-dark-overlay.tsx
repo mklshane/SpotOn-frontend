@@ -1,27 +1,34 @@
 import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Icon } from '@/components/ui/icon';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { Space } from '@/constants/theme';
 
 /**
- * Full-screen "It's too dark" coaching overlay for the capture screen (matches
- * assets/inspo/5-too-dark.jpeg). Detection is wired in the vision-camera/ML phase;
- * for now this is rendered only when a `tooDark` flag is set.
+ * Full-screen camera coaching overlay (e.g. "It's too dark" / "Hold steady"), matching
+ * assets/inspo/5-too-dark.jpeg. Rendered when a quality gate (luminance / sharpness) trips.
  */
-export function TooDarkOverlay() {
+export function CaptureCoach({
+  title,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  subtitle: string;
+  icon: IconName;
+}) {
   return (
     <View style={styles.root} pointerEvents="none">
       <View style={styles.copy}>
         <ThemedText type="title2" style={styles.title}>
-          It&apos;s too dark
+          {title}
         </ThemedText>
         <ThemedText type="body" style={styles.subtitle}>
-          Turn on a flash or change the lighting conditions
+          {subtitle}
         </ThemedText>
       </View>
       <View style={styles.ring}>
-        <Icon name="sun.max" tintColor="rgba(255,255,255,0.95)" size={44} />
+        <Icon name={icon} tintColor="rgba(255,255,255,0.95)" size={44} />
       </View>
     </View>
   );
