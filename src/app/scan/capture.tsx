@@ -1,6 +1,7 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
 import { NitroModules } from 'react-native-nitro-modules';
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -285,8 +286,11 @@ export default function CaptureScreen() {
     setBusy(true);
     try {
       const photo = await camera.current.takePhoto({ flash: torch ? 'on' : 'off' });
-      const uri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
-      router.push({ pathname: '/scan/crop', params: { uri } });
+      const raw = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
+      // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
+      const upright = await manipulateAsync(raw, [{ rotate: 0 }], { compress: 0.95, format: SaveFormat.JPEG });
+      router.push({ pathname: '/scan/crop', params: { uri: upright.uri } });
     } finally {
       setBusy(false);
     }

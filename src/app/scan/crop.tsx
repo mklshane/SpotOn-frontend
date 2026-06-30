@@ -119,9 +119,16 @@ export default function CropScreen() {
               </Animated.View>
             </GestureDetector>
           ) : null}
+
+          {/* Center target — where the lesion should sit */}
+          <View style={styles.centerGuide} pointerEvents="none">
+            <View style={styles.centerRing} />
+            <View style={styles.crossH} />
+            <View style={styles.crossV} />
+          </View>
         </View>
         <ThemedText type="footnote" style={styles.hint}>
-          Drag and pinch to center the spot
+          Center the spot in the circle
         </ThemedText>
       </View>
 
@@ -158,6 +165,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   imgWrap: { alignItems: 'center', justifyContent: 'center' },
+  centerGuide: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  centerRing: {
+    width: '44%',
+    aspectRatio: 1,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.75)',
+  },
+  crossH: { position: 'absolute', width: 16, height: 1.5, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.85)' },
+  crossV: { position: 'absolute', width: 1.5, height: 16, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.85)' },
   hint: { color: 'rgba(255,255,255,0.7)' },
   footer: { paddingHorizontal: Space.xl, gap: Space.md, alignItems: 'center' },
   retake: { paddingVertical: Space.sm },
