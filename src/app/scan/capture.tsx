@@ -45,10 +45,10 @@ export default function CaptureScreen() {
     let alive = true;
     (async () => {
       try {
-        const src = Image.resolveAssetSource(require('../../../assets/models/itobos_lesion_float16.tflite'));
+        const src = Image.resolveAssetSource(require('../../../assets/models/itobos_plus_large_v2_float16.tflite'));
         let uri = src.uri;
         if (uri.startsWith('http')) {
-          const dest = `${FileSystem.cacheDirectory}itobos_lesion_float16.tflite`;
+          const dest = `${FileSystem.cacheDirectory}itobos_plus_large_v2_float16.tflite`;
           await FileSystem.downloadAsync(uri, dest);
           uri = dest;
         }
