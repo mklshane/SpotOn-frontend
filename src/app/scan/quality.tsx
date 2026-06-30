@@ -173,11 +173,13 @@ export default function QualityScreen() {
               />
             </Animated.View>
           ) : (
-            <Animated.View
-              entering={ZoomIn.springify().damping(12)}
-              style={[styles.resultBadge, { backgroundColor: pass ? theme.riskLow : theme.riskModerate }]}>
-              <Icon name={pass ? 'checkmark' : 'exclamationmark.triangle.fill'} tintColor="#FFFFFF" size={32} />
-            </Animated.View>
+            <View style={styles.badgeWrap} pointerEvents="none">
+              <Animated.View
+                entering={ZoomIn.springify().damping(12)}
+                style={[styles.resultBadge, { backgroundColor: pass ? theme.riskLow : theme.riskModerate }]}>
+                <Icon name={pass ? 'checkmark' : 'exclamationmark.triangle.fill'} tintColor="#FFFFFF" size={32} />
+              </Animated.View>
+            </View>
           )}
         </View>
 
@@ -228,10 +230,10 @@ export default function QualityScreen() {
 
       {showFooter ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Button label="Use anyway" variant="brand" onPress={proceed} style={styles.useAnyway} />
-          <Pressable hitSlop={10} onPress={retake} style={styles.retake} accessibilityRole="button">
-            <ThemedText type="headline" themeColor="brand">
-              Retake or choose another
+          <Button label="Retake or choose another" variant="brand" onPress={retake} style={styles.useAnyway} />
+          <Pressable hitSlop={10} onPress={proceed} style={styles.retake} accessibilityRole="button">
+            <ThemedText type="headline" themeColor="textSecondary">
+              Use anyway
             </ThemedText>
           </Pressable>
         </Animated.View>
@@ -267,17 +269,8 @@ const styles = StyleSheet.create({
   bl: { bottom: 10, left: 10, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 10 },
   br: { bottom: 10, right: 10, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 10 },
   beam: { position: 'absolute', left: 0, right: 0, top: 0, height: 56 },
-  resultBadge: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '50%',
-    marginTop: -30,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  badgeWrap: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
+  resultBadge: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
   header: { alignItems: 'center', gap: Space.xs, paddingTop: Space.lg },
   center: { textAlign: 'center' },
   checklist: { marginTop: Space.lg, gap: 0 },
