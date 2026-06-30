@@ -15,7 +15,7 @@ import { Space } from '@/constants/theme';
 const OUTPUT = 1024;
 
 export default function CropScreen() {
-  const { uri } = useLocalSearchParams<{ uri: string }>();
+  const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -86,7 +86,7 @@ export default function CropScreen() {
         { compress: 0.9, format: SaveFormat.JPEG },
       );
       // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
-      router.replace({ pathname: '/scan/quality', params: { uri: result.uri } });
+      router.replace({ pathname: '/scan/quality', params: { uri: result.uri, detected } });
     } finally {
       setBusy(false);
     }

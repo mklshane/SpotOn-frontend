@@ -279,7 +279,8 @@ export default function CaptureScreen() {
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
       // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
       const upright = await manipulateAsync(raw, [{ rotate: 0 }], { compress: 0.95, format: SaveFormat.JPEG });
-      router.push({ pathname: '/scan/crop', params: { uri: upright.uri } });
+      // Carry the live detector's verdict (green box) forward — the still-image model can't run.
+      router.push({ pathname: '/scan/crop', params: { uri: upright.uri, detected: detection != null ? '1' : '0' } });
     } finally {
       setBusy(false);
     }

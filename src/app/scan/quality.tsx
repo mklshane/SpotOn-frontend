@@ -20,7 +20,7 @@ import { Button, Card, Screen } from '@/components/ui';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { assessImage, type IqaResult } from '@/lib/image-quality';
+import { assessImage, type IqaChecks } from '@/lib/image-quality';
 import { useScanDraft } from '@/lib/scan-draft';
 import { useScanHistory } from '@/lib/scan-history';
 
@@ -28,26 +28,29 @@ const STEP_MS = 1300; // per-check reveal cadence
 const PROCEED_MS = 850; // beat before auto-advancing on a clean pass
 
 type RowStatus = 'pending' | 'ok' | 'warn';
-type Row = { label: string; icon: IconName; ok: (r: IqaResult) => boolean };
-
-const ROWS: Row[] = [
-  { label: 'Lighting', icon: 'sun.max', ok: (r) => r.brightness.ok },
-  { label: 'Focus', icon: 'camera.viewfinder', ok: (r) => r.sharpness.ok },
-  { label: 'Lesion in frame', icon: 'sparkles', ok: (r) => r.lesion.found },
+const ROW_META: { label: string; icon: IconName }[] = [
+  { label: 'Lighting', icon: 'sun.max' },
+  { label: 'Focus', icon: 'camera.viewfinder' },
+  { label: 'Lesion in frame', icon: 'sparkles' },
 ];
 
 export default function QualityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { uri } = useLocalSearchParams<{ uri: string }>();
+  const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
   const { bodyMark, reset } = useScanDraft();
   const { addEntry } = useScanHistory();
 
   const CARD = Math.min(width - Space.xl * 2, 216);
 
+  // Lesion verdict comes from the live camera detector (carried via param). Gallery uploads
+  // have no live detection, so they fall back to skin-colour presence.
+  const lesionKnown = detected === '0' || detected === '1';
+  const lesionFound = detected === '1';
+
   const [step, setStep] = useState(0);
-  const [result, setResult] = useState<IqaResult | null>(null);
+  const [checks, setChecks] = useState<IqaChecks | null>(null);
   const [error, setError] = useState(false);
   const proceeded = useRef(false);
 
@@ -58,7 +61,7 @@ export default function QualityScreen() {
       return;
     }
     assessImage(uri)
-      .then((r) => alive && setResult(r))
+      .then((c) => alive && setChecks(c))
       .catch((e) => {
         console.warn('[iqa] failed', e);
         if (alive) setError(true);
@@ -69,14 +72,34 @@ export default function QualityScreen() {
   }, [uri]);
 
   useEffect(() => {
-    const id = setInterval(() => setStep((s) => Math.min(ROWS.length, s + 1)), STEP_MS);
+    const id = setInterval(() => setStep((s) => Math.min(ROW_META.length, s + 1)), STEP_MS);
     return () => clearInterval(id);
   }, []);
 
-  const settled = result != null || error;
-  const analyzing = step < ROWS.length || !settled;
-  const pass = !error && result?.pass === true;
-  const reasons = error ? ['We couldn’t analyze this photo.'] : (result?.reasons ?? []);
+  const settled = checks != null || error;
+  const analyzing = step < ROW_META.length || !settled;
+
+  const brightnessOk = checks?.brightness.ok ?? false;
+  const sharpOk = checks?.sharpness.ok ?? false;
+  const skinOk = checks?.skin.ok ?? false;
+  const lesionOk = lesionKnown ? lesionFound : skinOk;
+  const pass = !error && brightnessOk && sharpOk && lesionOk;
+
+  const reasons = useMemo(() => {
+    if (error) return ['We couldn’t analyze this photo.'];
+    if (!checks) return [];
+    const out: string[] = [];
+    if (!brightnessOk) out.push(checks.brightness.value < 0.2 ? 'The photo looks too dark.' : 'The photo looks overexposed.');
+    if (!sharpOk) out.push('The photo looks blurry — hold steady and tap to focus.');
+    if (!lesionOk) {
+      out.push(
+        lesionKnown
+          ? 'We couldn’t find a clear lesion — center the spot in the frame.'
+          : 'This doesn’t look like a photo of skin.',
+      );
+    }
+    return out;
+  }, [error, checks, brightnessOk, sharpOk, lesionOk, lesionKnown]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {
@@ -112,7 +135,8 @@ export default function QualityScreen() {
     const ready = step > i && settled;
     if (!ready) return 'pending';
     if (error) return 'warn';
-    return result && ROWS[i].ok(result) ? 'ok' : 'warn';
+    const ok = i === 0 ? brightnessOk : i === 1 ? sharpOk : lesionOk;
+    return ok ? 'ok' : 'warn';
   }
 
   const title = analyzing ? 'Analyzing your photo' : pass ? 'Looks great' : 'A few things to check';
@@ -122,17 +146,17 @@ export default function QualityScreen() {
       ? 'Preparing your result…'
       : 'You can still continue if you’d like';
 
-  const rows = useMemo(() => ROWS.map((r, i) => ({ ...r, status: statusFor(i) })), [step, settled, error, result]); // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(
+    () => ROW_META.map((r, i) => ({ ...r, status: statusFor(i) })),
+    [step, settled, error, brightnessOk, sharpOk, lesionOk], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;
   const showFooter = !analyzing && !pass;
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Scanning preview of the actual photo */}
         <View style={[styles.card, { width: CARD, height: CARD, borderColor: frameColor }]}>
           {uri ? <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" /> : null}
@@ -264,6 +288,6 @@ const styles = StyleSheet.create({
   reasons: { marginTop: Space.lg, gap: Space.xs, paddingHorizontal: Space.sm },
   reason: { textAlign: 'center' },
   footer: { paddingHorizontal: Space.xl, paddingTop: Space.md, gap: Space.sm, alignItems: 'center' },
-  useAnyway: { alignSelf: 'stretch' },
+  useAnyway: { alignSelf: 'stretch', paddingVertical: Space.base },
   retake: { paddingVertical: Space.sm },
 });
