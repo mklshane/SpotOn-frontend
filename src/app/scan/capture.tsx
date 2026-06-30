@@ -1,10 +1,11 @@
 import { loadTensorflowModel } from 'react-native-fast-tflite';
+import { NitroModules } from 'react-native-nitro-modules';
 import * as FileSystem from 'expo-file-system/legacy';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS, useSharedValue } from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Camera,
@@ -24,33 +25,34 @@ import { TooDarkOverlay } from '@/components/scan/too-dark-overlay';
 import { DetectionBox, type DetectionBBox } from '@/components/scan/detection-box';
 import { Space } from '@/constants/theme';
 
-const INPUT_SIZE = 640; // YOLOv8 export imgsz
-const SCORE_THRESHOLD = 0.45;
-const DARK_THRESHOLD = 0.2; // mean luminance (0..1) below which we coach "too dark"
+const DETECT_SCORE = 0.32; // clean gap from logs: blank ≤~0.25, lesions ≥~0.34
+const DETECT_SHOW = 2; // consecutive valid frames before showing (debounce)
+const BOX_FRAC = 0.24; // displayed framing box side, as a fraction of screen width
+const SMOOTH = 0.45; // EMA weight for the new center (lower = smoother/laggier)
+const DARK_THRESHOLD = 0.2; // mean luminance below which we coach "too dark"
+const DEBUG = false; // set true to log [fp] scores/coords for tuning
 
 export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
   const camera = useRef<Camera>(null);
-
   const { resize } = useResizePlugin();
+  const { width: SW, height: SH } = useWindowDimensions();
 
-  // Load the model from a real local file. (Expo's dev Metro asset URL isn't fetchable
-  // by fast-tflite's native AssetLoader, so we download it to cache and load via {url}.)
   const [model, setModel] = useState<Awaited<ReturnType<typeof loadTensorflowModel>> | null>(null);
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const src = Image.resolveAssetSource(require('../../../assets/models/yolo_best_float16.tflite'));
+        const src = Image.resolveAssetSource(require('../../../assets/models/itobos_lesion_float16.tflite'));
         let uri = src.uri;
         if (uri.startsWith('http')) {
-          const dest = `${FileSystem.cacheDirectory}yolo_best_float16.tflite`;
+          const dest = `${FileSystem.cacheDirectory}itobos_lesion_float16.tflite`;
           await FileSystem.downloadAsync(uri, dest);
           uri = dest;
         }
-        const m = await loadTensorflowModel({ url: uri });
+        const m = await loadTensorflowModel({ url: uri }, []);
         if (alive) setModel(m);
       } catch (e) {
         console.warn('[tflite] model load failed', e);
@@ -72,23 +74,60 @@ export default function CaptureScreen() {
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
   const minZoom = device?.minZoom ?? 1;
 
-  const onDetection = useRunOnJS((b: DetectionBBox | null) => setDetection(b), []);
+  const detStreak = useRef(0);
+  const lastCenter = useRef<{ x: number; y: number } | null>(null);
+  const onDetection = useRunOnJS((b: DetectionBBox | null) => {
+    if (b) {
+      detStreak.current = Math.min(DETECT_SHOW + 1, detStreak.current + 1);
+      const cxn = b.x + b.w / 2;
+      const cyn = b.y + b.h / 2;
+      const prev = lastCenter.current;
+      const sx = prev ? prev.x * (1 - SMOOTH) + cxn * SMOOTH : cxn;
+      const sy = prev ? prev.y * (1 - SMOOTH) + cyn * SMOOTH : cyn;
+      lastCenter.current = { x: sx, y: sy };
+      if (detStreak.current >= DETECT_SHOW) setDetection({ x: sx - b.w / 2, y: sy - b.h / 2, w: b.w, h: b.h });
+    } else {
+      detStreak.current = Math.max(0, detStreak.current - 1);
+      if (detStreak.current === 0) {
+        setDetection(null);
+        lastCenter.current = null;
+      }
+    }
+  }, []);
   const onDark = useRunOnJS((d: boolean) => setTooDark(d), []);
+  const setZoomJS = useRunOnJS((z: number) => setZoom(z), []);
+  const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
+
+  // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
+  // model (unbox inside the worklet) and read the output/input shapes here on the JS thread.
+  const boxedModel = useMemo(() => (model != null ? NitroModules.box(model) : undefined), [model]);
+  const layout = useMemo(() => {
+    if (model == null) return null;
+    const shape = model.outputs[0].shape; // [1, d1, d2]
+    const d1 = shape[1];
+    const d2 = shape[2];
+    const chMajor = d1 < d2; // [1, channels, anchors]
+    const channels = chMajor ? d1 : d2;
+    const anchors = chMajor ? d2 : d1;
+    const inShape = model.inputs[0].shape;
+    const inputSize = inShape.length === 4 ? (inShape[3] === 3 ? inShape[1] : inShape[2]) : 640;
+    return { chMajor, channels, anchors, numClasses: channels - 4, inputSize };
+  }, [model]);
 
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
-      if (model == null) return;
-      runAtTargetFps(5, () => {
+      if (boxedModel == null || layout == null) return;
+      runAtTargetFps(8, () => {
         'worklet';
+        const tflite = boxedModel.unbox();
         const input = resize(frame, {
-          scale: { width: INPUT_SIZE, height: INPUT_SIZE },
+          scale: { width: layout.inputSize, height: layout.inputSize },
           pixelFormat: 'rgb',
           dataType: 'float32',
           rotation: '90deg',
         });
 
-        // Mean luminance for the "too dark" coach (sample every 30th channel).
         let sum = 0;
         let n = 0;
         for (let i = 0; i < input.length; i += 30) {
@@ -97,21 +136,17 @@ export default function CaptureScreen() {
         }
         onDark(n > 0 && sum / n < DARK_THRESHOLD);
 
-        const outputs = model.runSync([input]);
-        const out = outputs[0] as unknown as Float32Array;
-        const shape = model.outputs[0].shape; // [1, d1, d2]
-        const d1 = shape[1];
-        const d2 = shape[2];
-        const chMajor = d1 < d2; // [1, channels, anchors]
-        const channels = chMajor ? d1 : d2;
-        const anchors = chMajor ? d2 : d1;
-        const numClasses = channels - 4;
+        const inputBuffer = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+        const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
+        const out = new Float32Array(outputs[0]);
+        const chMajor = layout.chMajor;
+        const channels = layout.channels;
+        const anchors = layout.anchors;
+        const numClasses = layout.numClasses;
 
         let best = 0;
         let cx = 0;
         let cy = 0;
-        let bw = 0;
-        let bh = 0;
         for (let i = 0; i < anchors; i++) {
           let score = 0;
           for (let k = 0; k < numClasses; k++) {
@@ -122,26 +157,32 @@ export default function CaptureScreen() {
             best = score;
             cx = out[chMajor ? i : i * channels];
             cy = out[chMajor ? anchors + i : i * channels + 1];
-            bw = out[chMajor ? 2 * anchors + i : i * channels + 2];
-            bh = out[chMajor ? 3 * anchors + i : i * channels + 3];
           }
         }
 
-        if (best >= SCORE_THRESHOLD) {
-          // Ultralytics tflite coords are normalized 0..1; guard against pixel-space exports.
-          if (cx > 1.5 || cy > 1.5) {
-            cx /= INPUT_SIZE;
-            cy /= INPUT_SIZE;
-            bw /= INPUT_SIZE;
-            bh /= INPUT_SIZE;
-          }
-          onDetection({ x: cx - bw / 2, y: cy - bh / 2, w: bw, h: bh });
+        if (best >= DETECT_SCORE) {
+          // Map the lesion center to the screen. The model input is a center 1:1 crop of
+          // the upright frame (resize-plugin default), so first undo that crop to get
+          // full-frame coords, then apply the preview's cover-crop.
+          const Rw = Math.min(frame.width, frame.height); // upright frame width
+          const Rh = Math.max(frame.width, frame.height); // upright frame height
+          const fX = cx; // square crop keeps full width
+          const fY = ((Rh - Rw) / 2 + cy * Rw) / Rh; // undo the vertical center crop
+          const sc = Math.max(SW / Rw, SH / Rh);
+          const dispW = Rw * sc;
+          const dispH = Rh * sc;
+          const pcx = (fX * dispW - (dispW - SW) / 2) / SW;
+          const pcy = (fY * dispH - (dispH - SH) / 2) / SH;
+          const w = (BOX_FRAC * SW) / SW;
+          const h = (BOX_FRAC * SW) / SH;
+          if (DEBUG) onDebug('best=' + best.toFixed(2) + ' cx=' + cx.toFixed(2) + ' cy=' + cy.toFixed(2) + ' f=' + frame.width + 'x' + frame.height);
+          onDetection({ x: pcx - w / 2, y: pcy - h / 2, w, h });
         } else {
           onDetection(null);
         }
       });
     },
-    [model, resize, onDetection, onDark],
+    [boxedModel, layout, resize, onDetection, onDark, onDebug],
   );
 
   const pinch = Gesture.Pinch()
@@ -152,7 +193,7 @@ export default function CaptureScreen() {
     .onUpdate((e) => {
       'worklet';
       const next = Math.min(maxZoom, Math.max(minZoom, startZoom.value * e.scale));
-      runOnJS(setZoom)(next);
+      setZoomJS(next);
     });
 
   async function shoot() {

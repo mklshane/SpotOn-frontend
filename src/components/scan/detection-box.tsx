@@ -2,8 +2,6 @@ import { useEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Icon } from '@/components/ui/icon';
-
 /** Lesion bounding box in normalized [0,1] coordinates of the camera preview (top-left origin). */
 export type DetectionBBox = { x: number; y: number; w: number; h: number };
 
@@ -47,9 +45,7 @@ export function DetectionBox({ bbox }: { bbox: DetectionBBox | null }) {
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <Animated.View style={[styles.box, style, { borderColor: color }]}>
-        <Icon name="plus" tintColor={color} size={20} />
-      </Animated.View>
+      <Animated.View style={[styles.box, style, { borderColor: color }]} />
     </View>
   );
 }
