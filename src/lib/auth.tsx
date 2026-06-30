@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { ApiError } from '@/api/client';
 import type { UserProfile } from '@/api/types';
@@ -26,22 +26,45 @@ function messageFor(e: unknown): string {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUserState] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Mirror the profile to encrypted storage so it survives restarts (offline-first).
+  const setUser = useCallback((u: UserProfile | null) => {
+    setUserState(u);
+    if (u) void authApi.cacheProfile(u);
+    else void authApi.clearCachedProfile();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const hasTokens = await authApi.loadTokens();
-      if (hasTokens) {
-        try {
-          const me = await fetchProfile(); // refreshes the access token on 401
-          if (mounted) setUser(me);
-        } catch {
-          await authApi.clearTokens();
-        }
+      const hasStored = await authApi.loadTokens();
+      if (!hasStored) {
+        if (mounted) setLoading(false);
+        return;
       }
-      if (mounted) setLoading(false);
+
+      // Offline-first: restore the cached profile immediately so a logged-in user is never
+      // kicked out just because the network is unavailable. Unblock the UI without waiting.
+      const cached = await authApi.loadCachedProfile();
+      if (cached && mounted) {
+        setUserState(cached);
+        setLoading(false);
+      }
+
+      // Refresh from the server (background if we already restored a cache; blocking otherwise).
+      try {
+        const me = await fetchProfile(); // refreshes the access token on 401
+        if (mounted) setUserState(me);
+        await authApi.cacheProfile(me);
+      } catch {
+        // If the refresh failed the session is gone (tokens cleared) → log out. Otherwise it's
+        // just offline — keep the cached profile so the user stays signed in.
+        if (!authApi.hasTokens() && mounted) setUserState(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => {
       mounted = false;
@@ -56,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: async (identifier, password) => {
         try {
           const tokens = await authApi.login(identifier, password);
-          setUser(tokens.user);
+          setUserState(tokens.user); // login() already cached the profile via persist()
           return { error: null };
         } catch (e) {
           return { error: messageFor(e) };
@@ -65,18 +88,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp: async (input) => {
         try {
           const tokens = await authApi.register(input);
-          setUser(tokens.user);
+          setUserState(tokens.user);
           return { error: null };
         } catch (e) {
           return { error: messageFor(e) };
         }
       },
       signOut: async () => {
-        await authApi.logout();
-        setUser(null);
+        await authApi.logout(); // clears tokens + cached profile
+        setUserState(null);
       },
     }),
-    [user, loading],
+    [user, loading, setUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

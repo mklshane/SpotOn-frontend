@@ -5,6 +5,7 @@ import type { UserProfile } from '@/api/types';
 
 const ACCESS_KEY = 'spoton.access';
 const REFRESH_KEY = 'spoton.refresh';
+const PROFILE_KEY = 'spoton.profile';
 
 export type TokenOut = {
   access_token: string;
@@ -31,6 +32,7 @@ async function persist(tokens: TokenOut): Promise<void> {
   refreshToken = tokens.refresh_token;
   await SecureStore.setItemAsync(ACCESS_KEY, tokens.access_token);
   await SecureStore.setItemAsync(REFRESH_KEY, tokens.refresh_token);
+  await SecureStore.setItemAsync(PROFILE_KEY, JSON.stringify(tokens.user));
 }
 
 export async function loadTokens(): Promise<boolean> {
@@ -39,11 +41,36 @@ export async function loadTokens(): Promise<boolean> {
   return Boolean(accessToken);
 }
 
+/** Whether an access token is currently held in memory (after loadTokens/persist). */
+export function hasTokens(): boolean {
+  return accessToken != null;
+}
+
 export async function clearTokens(): Promise<void> {
   accessToken = null;
   refreshToken = null;
   await SecureStore.deleteItemAsync(ACCESS_KEY);
   await SecureStore.deleteItemAsync(REFRESH_KEY);
+  await SecureStore.deleteItemAsync(PROFILE_KEY);
+}
+
+/** The last authenticated profile, cached for offline-first startup (PII → SecureStore). */
+export async function loadCachedProfile(): Promise<UserProfile | null> {
+  try {
+    const raw = await SecureStore.getItemAsync(PROFILE_KEY);
+    return raw ? (JSON.parse(raw) as UserProfile) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the latest authenticated profile (e.g. after profile completion / refresh). */
+export async function cacheProfile(user: UserProfile): Promise<void> {
+  await SecureStore.setItemAsync(PROFILE_KEY, JSON.stringify(user));
+}
+
+export async function clearCachedProfile(): Promise<void> {
+  await SecureStore.deleteItemAsync(PROFILE_KEY);
 }
 
 export async function register(input: RegisterInput): Promise<TokenOut> {
