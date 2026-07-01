@@ -6,7 +6,7 @@ import { loadTensorflowModel } from 'react-native-fast-tflite';
 export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
-const MODEL_ASSET = require('../../assets/models/itobos_plus_large_v2_float16.tflite');
+const MODEL_ASSET = require('../../assets/models/itobos_plus_large_v2_float16_best.tflite');
 
 let modelPromise: Promise<LesionModel> | null = null;
 
@@ -22,7 +22,7 @@ export function getLesionModel(): Promise<LesionModel> {
       const src = Image.resolveAssetSource(MODEL_ASSET);
       let uri = src.uri;
       if (uri.startsWith('http')) {
-        const dest = `${FileSystem.cacheDirectory}itobos_plus_large_v2_float16.tflite`;
+        const dest = `${FileSystem.cacheDirectory}itobos_plus_large_v2_float16_best.tflite`;
         await FileSystem.downloadAsync(uri, dest);
         uri = dest;
       }

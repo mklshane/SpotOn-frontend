@@ -8,13 +8,21 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DevTools } from '@/components/ui/dev-tools';
 import { AuthProvider } from '@/lib/auth';
 import { ScanDraftProvider } from '@/lib/scan-draft';
 import { ScanHistoryProvider } from '@/lib/scan-history';
+
+// The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
+// intentional, correct pattern that Reanimated v4 strict mode over-flags. Disable strict mode
+// (keep real warnings/errors), and silence three.js's benign "multiple instances" bundler notice.
+configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
+LogBox.ignoreLogs(['Multiple instances of Three.js being imported.']);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
