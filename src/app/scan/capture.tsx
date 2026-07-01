@@ -274,7 +274,10 @@ export default function CaptureScreen() {
     if (!camera.current || busy) return;
     setBusy(true);
     try {
-      const photo = await camera.current.takePhoto({ flash: torch ? 'on' : 'off' });
+      // Never fire a flash burst: it flickers (VisionCamera toggles the torch off→burst→on) and
+      // captures at the wrong exposure. The torch toggle is the light control — WYSIWYG with the
+      // preview — so we shoot under the steady light already shown.
+      const photo = await camera.current.takePhoto({ flash: 'off' });
       const raw = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
       // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
@@ -337,8 +340,9 @@ export default function CaptureScreen() {
       {/* AI camera = live lesion detector; the box tracks the detected lesion. */}
       {aiCamera ? <DetectionBox bbox={detection} /> : null}
 
-      {tooDark ? (
-        <CaptureCoach title="It's too dark" subtitle="Turn on a flash or change the lighting conditions" icon="sun.max" />
+      {/* Hide the live coaches during capture — frames glitch dark/blurry as the shutter fires. */}
+      {busy ? null : tooDark ? (
+        <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
       ) : tooBlurry ? (
         <CaptureCoach title="Hold steady" subtitle="Move a little closer and keep the camera still to focus" icon="camera.viewfinder" />
       ) : null}

@@ -89,8 +89,17 @@ export default function QualityScreen() {
     if (error) return ['We couldn’t analyze this photo.'];
     if (!checks) return [];
     const out: string[] = [];
-    if (!brightnessOk) out.push(checks.brightness.value < 0.2 ? 'The photo looks too dark.' : 'The photo looks overexposed.');
-    if (!sharpOk) out.push('The photo looks blurry — hold steady and tap to focus.');
+    if (!brightnessOk) {
+      const v = checks.brightness.value;
+      out.push(
+        v < 0.18
+          ? 'The photo looks too dark.'
+          : v > 0.9
+            ? 'The photo looks overexposed.'
+            : 'Uneven lighting — avoid casting a shadow on the spot.',
+      );
+    }
+    if (!sharpOk) out.push('The photo looks blurry — move closer and tap to focus.');
     if (!lesionOk) {
       out.push(
         lesionKnown
