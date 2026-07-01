@@ -43,6 +43,7 @@ const DETECT_SHOW = 2; // consecutive valid frames before showing (debounce)
 const BOX_FRAC = 0.24; // displayed framing box side, as a fraction of screen width
 const SMOOTH = 0.45; // EMA weight for the new center (lower = smoother/laggier)
 const DARK_THRESHOLD = 0.2; // mean luminance below which we coach "too dark"
+const BRIGHT_THRESHOLD = 0.82; // mean luminance above which we coach "too bright"
 const BLUR_THRESHOLD = 0.0004; // mean gradient energy below this = genuinely blurry (normal use ≥~0.001)
 const BLUR_SHOW = 5; // consecutive blurry frames before coaching (avoids flicker on plain/brief frames)
 const DEBUG = false; // set true to log [fp] best/sharp/lume for tuning
@@ -72,6 +73,7 @@ export default function CaptureScreen() {
   const [aiCamera, setAiCamera] = useState(true);
   const [busy, setBusy] = useState(false);
   const [tooDark, setTooDark] = useState(false);
+  const [tooBright, setTooBright] = useState(false);
   const [tooBlurry, setTooBlurry] = useState(false);
   const [detection, setDetection] = useState<DetectionBBox | null>(null);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
@@ -106,6 +108,7 @@ export default function CaptureScreen() {
     }
   }, []);
   const onDark = useRunOnJS((d: boolean) => setTooDark(d), []);
+  const onBright = useRunOnJS((b: boolean) => setTooBright(b), []);
   const blurStreak = useRef(0);
   const onBlur = useRunOnJS((b: boolean) => {
     if (b) {
@@ -169,8 +172,9 @@ export default function CaptureScreen() {
         const lume = n > 0 ? sum / n : 1;
         const sharp = gc > 0 ? grad / gc : 1;
         onDark(lume < DARK_THRESHOLD);
-        // Only flag blur when it's NOT just darkness, and there's some light to focus on.
-        onBlur(lume >= DARK_THRESHOLD && sharp < BLUR_THRESHOLD);
+        onBright(lume > BRIGHT_THRESHOLD);
+        // Only flag blur when the lighting is usable (not too dark or blown out) to focus on.
+        onBlur(lume >= DARK_THRESHOLD && lume <= BRIGHT_THRESHOLD && sharp < BLUR_THRESHOLD);
 
         const inputBuffer = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
         const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
@@ -219,7 +223,7 @@ export default function CaptureScreen() {
         }
       });
     },
-    [boxedModel, layout, resize, onDetection, onDark, onBlur, onDebug],
+    [boxedModel, layout, resize, onDetection, onDark, onBright, onBlur, onDebug],
   );
 
   const pinch = useMemo(
@@ -346,6 +350,8 @@ export default function CaptureScreen() {
           preview stays visible and the user can watch it sharpen. */}
       {busy ? null : tooDark ? (
         <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
+      ) : tooBright ? (
+        <CaptureCoach title="It's too bright" subtitle="Move out of direct light or glare" icon="sun.max" />
       ) : tooBlurry ? (
         <FocusBanner top={insets.top + Space.xxl} />
       ) : null}

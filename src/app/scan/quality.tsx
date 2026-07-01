@@ -90,12 +90,11 @@ export default function QualityScreen() {
     if (!checks) return [];
     const out: string[] = [];
     if (!brightnessOk) {
-      const v = checks.brightness.value;
       out.push(
-        v < 0.18
+        checks.brightness.issue === 'dark'
           ? 'The photo looks too dark.'
-          : v > 0.9
-            ? 'The photo looks overexposed.'
+          : checks.brightness.issue === 'bright'
+            ? 'The photo looks too bright — avoid glare on the spot.'
             : 'Uneven lighting — avoid casting a shadow on the spot.',
       );
     }

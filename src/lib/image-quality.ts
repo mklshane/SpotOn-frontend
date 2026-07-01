@@ -11,7 +11,8 @@ import * as jpeg from 'jpeg-js';
  * the lesion verdict is carried from the live detector (see scan/quality).
  */
 export type IqaChecks = {
-  brightness: { ok: boolean; value: number }; // ok = in range AND evenly lit (no shadow)
+  // ok = well lit (not dark, not overexposed, not shadowed); `issue` says which if not ok.
+  brightness: { ok: boolean; value: number; issue: 'ok' | 'dark' | 'bright' | 'shadow' };
   sharpness: { ok: boolean; value: number }; // measured on the centered lesion ROI
   shadow: { ok: boolean; value: number }; // directional light gradient (0..1)
   skin: { ok: boolean; coverage: number };
@@ -20,7 +21,8 @@ export type IqaChecks = {
 const SIZE = 768; // analysis resolution
 const ROI_FRAC = 0.5; // centered lesion region (matches the crop guide) for the blur check
 const DARK = 0.16; // mean luminance (0..1) below this = too dark
-const BRIGHT = 0.93; // above this = overexposed
+const BRIGHT = 0.9; // mean luminance above this = overexposed
+const BLOWN_MAX = 0.12; // fraction of blown-out (near-white) pixels above this = overexposed/glare
 const BLUR = 0.001; // variance-of-Laplacian on the ROI below this = too blurry
 const SHADOW_GRAD = 0.1; // one side this much darker than the other (0..1) = shadow / uneven
 const SKIN_MIN = 0.3; // fraction of skin-coloured pixels
@@ -39,6 +41,7 @@ export async function assessImage(uri: string): Promise<IqaChecks> {
   const gray = new Float32Array(n);
   let sumLuma = 0;
   let skinCount = 0;
+  let blownCount = 0;
   let leftSum = 0;
   let rightSum = 0;
   let topSum = 0;
@@ -56,6 +59,7 @@ export async function assessImage(uri: string): Promise<IqaChecks> {
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
       gray[base + x] = luma;
       sumLuma += luma;
+      if (luma > 245) blownCount++;
       if (x < halfW) leftSum += luma;
       else rightSum += luma;
       if (isTop) topSum += luma;
@@ -101,13 +105,21 @@ export async function assessImage(uri: string): Promise<IqaChecks> {
 
   const brightness = sumLuma / n / 255;
   const skinCov = skinCount / n;
-  const rangeOk = brightness >= DARK && brightness <= BRIGHT;
+  const blownFrac = blownCount / n;
+  const overexposed = brightness > BRIGHT || blownFrac > BLOWN_MAX; // mean too high OR blown highlights
   const shadowOk = shadow <= SHADOW_GRAD;
+
+  // Pick the single most relevant lighting problem for the message.
+  let issue: 'ok' | 'dark' | 'bright' | 'shadow' = 'ok';
+  if (brightness < DARK) issue = 'dark';
+  else if (overexposed) issue = 'bright';
+  else if (!shadowOk) issue = 'shadow';
 
   if (DEBUG) {
     console.log(
       '[iqa]',
       'bright=' + brightness.toFixed(2),
+      'blown=' + blownFrac.toFixed(2),
       'sharpROI=' + sharpness.toFixed(4),
       'shadow=' + shadow.toFixed(3),
       'skin=' + skinCov.toFixed(2),
@@ -115,7 +127,7 @@ export async function assessImage(uri: string): Promise<IqaChecks> {
   }
 
   return {
-    brightness: { ok: rangeOk && shadowOk, value: brightness },
+    brightness: { ok: issue === 'ok', value: brightness, issue },
     sharpness: { ok: sharpness >= BLUR, value: sharpness },
     shadow: { ok: shadowOk, value: shadow },
     skin: { ok: skinCov >= SKIN_MIN, coverage: skinCov },
