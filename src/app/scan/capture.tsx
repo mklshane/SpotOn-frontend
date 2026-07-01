@@ -9,6 +9,7 @@ import Reanimated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
@@ -340,11 +341,13 @@ export default function CaptureScreen() {
       {/* AI camera = live lesion detector; the box tracks the detected lesion. */}
       {aiCamera ? <DetectionBox bbox={detection} /> : null}
 
-      {/* Hide the live coaches during capture — frames glitch dark/blurry as the shutter fires. */}
+      {/* Hide the live coaches during capture — frames glitch dark/blurry as the shutter fires.
+          Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
+          preview stays visible and the user can watch it sharpen. */}
       {busy ? null : tooDark ? (
         <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
       ) : tooBlurry ? (
-        <CaptureCoach title="Hold steady" subtitle="Move a little closer and keep the camera still to focus" icon="camera.viewfinder" />
+        <FocusBanner top={insets.top + Space.xxl} />
       ) : null}
 
       {/* Close */}
@@ -426,6 +429,28 @@ function FocusReticle({ x, y }: { x: number; y: number }) {
   );
 }
 
+/**
+ * Compact, non-blocking "hold steady" banner. Unlike the full-screen too-dark coach, it leaves
+ * the preview visible so the user can watch the shot come into focus.
+ */
+function FocusBanner({ top }: { top: number }) {
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(0.55, { duration: 650 }), -1, true);
+  }, [pulse]);
+  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return (
+    <View style={[focusStyles.bannerWrap, { top }]} pointerEvents="none">
+      <Reanimated.View style={[focusStyles.banner, style]}>
+        <Icon name="camera.viewfinder" tintColor="#FFFFFF" size={18} />
+        <ThemedText type="subhead" style={focusStyles.bannerText}>
+          Hold steady to focus
+        </ThemedText>
+      </Reanimated.View>
+    </View>
+  );
+}
+
 const focusStyles = StyleSheet.create({
   reticle: {
     position: 'absolute',
@@ -435,6 +460,17 @@ const focusStyles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#FFD7C0',
   },
+  bannerWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.base,
+    paddingVertical: Space.sm,
+    borderRadius: 999,
+    backgroundColor: 'rgba(242,169,59,0.96)',
+  },
+  bannerText: { color: '#FFFFFF', fontWeight: '600' },
 });
 
 const BRACKET = 36;
