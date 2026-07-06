@@ -2,7 +2,7 @@ import { NitroModules } from 'react-native-nitro-modules';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedProps,
@@ -26,11 +26,12 @@ import { useRunOnJS } from 'react-native-worklets-core';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/ui/icon';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
 import { CaptureCoach } from '@/components/scan/too-dark-overlay';
 import { DetectionBox, type DetectionBBox } from '@/components/scan/detection-box';
 import { getLesionModel, type LesionModel } from '@/lib/lesion-model';
+import { makeOneEuro } from '@/lib/one-euro';
 import { Space } from '@/constants/theme';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
@@ -38,10 +39,27 @@ import { Space } from '@/constants/theme';
 const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
 Reanimated.addWhitelistedNativeProps({ zoom: true });
 
-const DETECT_SCORE = 0.32; // clean gap from logs: blank ≤~0.25, lesions ≥~0.34
-const DETECT_SHOW = 2; // consecutive valid frames before showing (debounce)
-const BOX_FRAC = 0.24; // displayed framing box side, as a fraction of screen width
-const SMOOTH = 0.45; // EMA weight for the new center (lower = smoother/laggier)
+// Confidence hysteresis: a high bar to *create* the box, a low bar to *keep* it — so it appears
+// only when we're sure and doesn't flicker as the score hovers near a single threshold.
+const CREATE_SCORE = 0.35; // score needed for the box to first appear (sensitive; near old 0.32)
+const KEEP_SCORE = 0.28; // once shown, the box stays while the score holds above this
+const FUSE_SCORE = 0.25; // anchors this confident (and near the best) are fused into the box
+const LOCK_SCORE = 0.5; // above this the box is "locked" (green + eligible for the ready coach)
+const DETECT_SHOW = 2; // consecutive qualifying frames before the box first appears
+const KEEP_GRACE = 3; // extra frames the box survives detection misses before it drops
+const STABLE_EPS = 0.01; // box move (fraction of screen) under this counts as "held still"
+const STABLE_FRAMES = 5; // consecutive still frames before the framing is "stable" (good to shoot)
+const BOX_PAD = 0.25; // grow the drawn green box this much around the lesion (breathing room)
+const BOX_MAX = 0.98; // sanity cap: a bad frame can't blow the box up past the screen
+// One-Euro filter params for the box (see lib/one-euro.ts). Low minCutoff = steady when still;
+// beta adds responsiveness when the lesion actually moves. Tune on device.
+const EURO_MIN_CUTOFF = 1.5;
+const EURO_BETA = 0.05; // higher = snaps to real motion faster (less follow-lag), still smooth when still
+const DEADBAND = 0.004; // ignore box moves smaller than this (fraction of screen) — no creep
+// Coaching thresholds, in full-frame normalized units (box size = max(w,h); center offset).
+const FAR_MAX = 0.14; // lesion smaller than this → "move closer"
+const CLOSE_MIN = 0.72; // lesion larger than this → "move back"
+const OFFSET_MAX = 0.25; // center further than this from frame center → "center the spot"
 const DARK_THRESHOLD = 0.2; // mean luminance below which we coach "too dark"
 const BRIGHT_THRESHOLD = 0.82; // mean luminance above which we coach "too bright"
 const BLUR_THRESHOLD = 0.0004; // mean gradient energy below this = genuinely blurry (normal use ≥~0.001)
@@ -76,6 +94,11 @@ export default function CaptureScreen() {
   const [tooBright, setTooBright] = useState(false);
   const [tooBlurry, setTooBlurry] = useState(false);
   const [detection, setDetection] = useState<DetectionBBox | null>(null);
+  // Full-frame box metrics (normalized) used for the positional coaching (distance/centering).
+  // `stable` = the box has barely moved for STABLE_FRAMES, i.e. the framing is settled.
+  const [frameMetrics, setFrameMetrics] = useState<
+    { cx: number; cy: number; w: number; h: number; locked: boolean; stable: boolean } | null
+  >(null);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
@@ -88,25 +111,100 @@ export default function CaptureScreen() {
   }, [device, zoomSV]);
 
   const detStreak = useRef(0);
+  const activeRef = useRef(false); // whether a box is currently shown (drives confidence hysteresis)
+  const stableStreak = useRef(0); // consecutive frames the box has held still
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
-  const onDetection = useRunOnJS((b: DetectionBBox | null) => {
-    if (b) {
-      detStreak.current = Math.min(DETECT_SHOW + 1, detStreak.current + 1);
-      const cxn = b.x + b.w / 2;
-      const cyn = b.y + b.h / 2;
-      const prev = lastCenter.current;
-      const sx = prev ? prev.x * (1 - SMOOTH) + cxn * SMOOTH : cxn;
-      const sy = prev ? prev.y * (1 - SMOOTH) + cyn * SMOOTH : cyn;
-      lastCenter.current = { x: sx, y: sy };
-      if (detStreak.current >= DETECT_SHOW) setDetection({ x: sx - b.w / 2, y: sy - b.h / 2, w: b.w, h: b.h });
-    } else {
-      detStreak.current = Math.max(0, detStreak.current - 1);
-      if (detStreak.current === 0) {
-        setDetection(null);
-        lastCenter.current = null;
+  const lastSize = useRef<{ w: number; h: number } | null>(null);
+  // The detected box in full-frame (= saved photo) normalized coords, carried to the crop
+  // screen so it can auto-frame the lesion without re-running the model (see shoot()).
+  const lastImgBox = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // One-Euro filters — one per tracked scalar. Preview box (what's drawn) + img box (forwarded
+  // to crop). These keep the box steady under small camera shifts but responsive to real motion.
+  const euro = useRef({
+    px: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    py: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    pw: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    ph: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    ix: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    iy: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    iw: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    ih: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+  }).current;
+  const clearTrack = () => {
+    activeRef.current = false;
+    stableStreak.current = 0;
+    setDetection(null);
+    setFrameMetrics(null);
+    lastCenter.current = null;
+    lastSize.current = null;
+    lastImgBox.current = null;
+    // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
+    Object.values(euro).forEach((f) => f.reset());
+  };
+  const onDetection = useRunOnJS(
+    (d: { p: DetectionBBox; cx: number; cy: number; iw: number; ih: number; score: number; locked: boolean } | null) => {
+      // The worklet emits a box whenever score ≥ KEEP_SCORE. Confidence hysteresis lives here:
+      // while inactive, a weak box (< CREATE_SCORE) can't build toward appearing; once active,
+      // any emitted box (≥ KEEP_SCORE) sustains it, and it only drops after KEEP_GRACE misses.
+      if (d) {
+        if (!activeRef.current && d.score < CREATE_SCORE) {
+          detStreak.current = Math.max(0, detStreak.current - 1);
+          return;
+        }
+        detStreak.current = Math.min(DETECT_SHOW + KEEP_GRACE, detStreak.current + 1);
+        if (!activeRef.current) {
+          if (detStreak.current < DETECT_SHOW) return; // still acquiring — don't show a box yet
+          activeRef.current = true;
+        }
+
+        const t = Date.now();
+        const b = d.p;
+
+        // Filter the preview box (center + size), then apply a deadband so tiny residual
+        // movement doesn't make the box creep when the user is holding still.
+        let fx = euro.px.filter(b.x + b.w / 2, t);
+        let fy = euro.py.filter(b.y + b.h / 2, t);
+        let fw = euro.pw.filter(b.w, t);
+        let fh = euro.ph.filter(b.h, t);
+        const prev = lastCenter.current;
+        // Track how far the box moved this frame → "stable" once it holds still for a while.
+        const moved = prev ? Math.max(Math.abs(fx - prev.x), Math.abs(fy - prev.y)) : 1;
+        if (prev && Math.abs(fx - prev.x) < DEADBAND && Math.abs(fy - prev.y) < DEADBAND) {
+          fx = prev.x;
+          fy = prev.y;
+        }
+        const prevS = lastSize.current;
+        if (prevS && Math.abs(fw - prevS.w) < DEADBAND * 1.5 && Math.abs(fh - prevS.h) < DEADBAND * 1.5) {
+          fw = prevS.w;
+          fh = prevS.h;
+        }
+        stableStreak.current = moved < STABLE_EPS ? stableStreak.current + 1 : 0;
+        lastCenter.current = { x: fx, y: fy };
+        lastSize.current = { w: fw, h: fh };
+        setDetection({ x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh });
+
+        // Filter the forward-to-crop box in full-frame coords (also feeds positional coaching).
+        const icx = euro.ix.filter(d.cx, t);
+        const icy = euro.iy.filter(d.cy, t);
+        const iw = euro.iw.filter(d.iw, t);
+        const ih = euro.ih.filter(d.ih, t);
+        lastImgBox.current = { cx: icx, cy: icy, w: iw, h: ih };
+        setFrameMetrics({
+          cx: icx,
+          cy: icy,
+          w: iw,
+          h: ih,
+          locked: d.locked,
+          stable: stableStreak.current >= STABLE_FRAMES,
+        });
+      } else {
+        detStreak.current = Math.max(0, detStreak.current - 1);
+        stableStreak.current = 0;
+        if (detStreak.current === 0) clearTrack();
       }
-    }
-  }, []);
+    },
+    [],
+  );
   const onDark = useRunOnJS((d: boolean) => setTooDark(d), []);
   const onBright = useRunOnJS((b: boolean) => setTooBright(b), []);
   const blurStreak = useRef(0);
@@ -141,7 +239,7 @@ export default function CaptureScreen() {
     (frame) => {
       'worklet';
       if (boxedModel == null || layout == null) return;
-      runAtTargetFps(8, () => {
+      runAtTargetFps(12, () => {
         'worklet';
         const tflite = boxedModel.unbox();
         const input = resize(frame, {
@@ -184,9 +282,13 @@ export default function CaptureScreen() {
         const anchors = layout.anchors;
         const numClasses = layout.numClasses;
 
+        // Pass 1 — argmax: find the single highest-scoring anchor and its box (center in
+        // channels 0,1; w/h in channels 2,3, all normalized to the model input).
         let best = 0;
-        let cx = 0;
-        let cy = 0;
+        let bcx = 0;
+        let bcy = 0;
+        let bbw = 0;
+        let bbh = 0;
         for (let i = 0; i < anchors; i++) {
           let score = 0;
           for (let k = 0; k < numClasses; k++) {
@@ -195,29 +297,85 @@ export default function CaptureScreen() {
           }
           if (score > best) {
             best = score;
-            cx = out[chMajor ? i : i * channels];
-            cy = out[chMajor ? anchors + i : i * channels + 1];
+            bcx = out[chMajor ? i : i * channels];
+            bcy = out[chMajor ? anchors + i : i * channels + 1];
+            bbw = out[chMajor ? 2 * anchors + i : i * channels + 2];
+            bbh = out[chMajor ? 3 * anchors + i : i * channels + 3];
+          }
+        }
+
+        // Pass 2 — Weighted Boxes Fusion: a single argmax anchor flickers frame-to-frame (a
+        // different anchor wins each frame), which makes the box jitter. Fuse all confident
+        // anchors near the best one (confidence-weighted average of cx,cy,w,h) into one steady
+        // box. The proximity gate keeps a second, distant lesion from being merged in.
+        let cx = bcx;
+        let cy = bcy;
+        let bw = bbw;
+        let bh = bbh;
+        if (best >= KEEP_SCORE) {
+          const gate = Math.max(bbw, bbh) * 0.5;
+          let ws = 0;
+          let sx = 0;
+          let sy = 0;
+          let sw = 0;
+          let sh = 0;
+          for (let i = 0; i < anchors; i++) {
+            let score = 0;
+            for (let k = 0; k < numClasses; k++) {
+              const v = out[chMajor ? (4 + k) * anchors + i : i * channels + (4 + k)];
+              if (v > score) score = v;
+            }
+            if (score < FUSE_SCORE) continue;
+            const ax = out[chMajor ? i : i * channels];
+            const ay = out[chMajor ? anchors + i : i * channels + 1];
+            if (Math.abs(ax - bcx) > gate || Math.abs(ay - bcy) > gate) continue;
+            const aw = out[chMajor ? 2 * anchors + i : i * channels + 2];
+            const ah = out[chMajor ? 3 * anchors + i : i * channels + 3];
+            ws += score;
+            sx += score * ax;
+            sy += score * ay;
+            sw += score * aw;
+            sh += score * ah;
+          }
+          if (ws > 0) {
+            cx = sx / ws;
+            cy = sy / ws;
+            bw = sw / ws;
+            bh = sh / ws;
           }
         }
 
         if (DEBUG) onDebug('best=' + best.toFixed(2) + ' sharp=' + sharp.toFixed(4) + ' lume=' + lume.toFixed(2));
 
-        if (best >= DETECT_SCORE) {
-          // Map the lesion center to the screen. The model input is a center 1:1 crop of
-          // the upright frame (resize-plugin default), so first undo that crop to get
-          // full-frame coords, then apply the preview's cover-crop.
+        if (best >= KEEP_SCORE) {
+          // Map the model box to the screen. The model input is a center 1:1 crop of the
+          // upright frame (resize-plugin default), so first undo that crop to get full-frame
+          // coords, then apply the preview's cover-crop.
           const Rw = Math.min(frame.width, frame.height); // upright frame width
           const Rh = Math.max(frame.width, frame.height); // upright frame height
-          const fX = cx; // square crop keeps full width
-          const fY = ((Rh - Rw) / 2 + cy * Rw) / Rh; // undo the vertical center crop
+          const fX = cx; // center x — square crop keeps full width
+          const fY = ((Rh - Rw) / 2 + cy * Rw) / Rh; // center y — undo the vertical center crop
+          const fW = bw; // box width — full width uncropped
+          const fH = (bh * Rw) / Rh; // box height — bh is a fraction of the crop band (Rw)
           const sc = Math.max(SW / Rw, SH / Rh);
           const dispW = Rw * sc;
           const dispH = Rh * sc;
           const pcx = (fX * dispW - (dispW - SW) / 2) / SW;
           const pcy = (fY * dispH - (dispH - SH) / 2) / SH;
-          const w = (BOX_FRAC * SW) / SW;
-          const h = (BOX_FRAC * SW) / SH;
-          onDetection({ x: pcx - w / 2, y: pcy - h / 2, w, h });
+          // Draw the YOLO box with a little padding so the green frame sits around the lesion,
+          // not right on its edge; cap the size so a bad frame can't blow it up past the screen.
+          // (The img box below stays tight — the crop screen adds its own padding.)
+          const w = Math.min(BOX_MAX, (fW * dispW * (1 + BOX_PAD)) / SW);
+          const h = Math.min(BOX_MAX, (fH * dispH * (1 + BOX_PAD)) / SH);
+          onDetection({
+            p: { x: pcx - w / 2, y: pcy - h / 2, w, h },
+            cx: fX,
+            cy: fY,
+            iw: fW,
+            ih: fH,
+            score: best,
+            locked: best >= LOCK_SCORE,
+          });
         } else {
           onDetection(null);
         }
@@ -275,6 +433,28 @@ export default function CaptureScreen() {
     width: `${Math.round(((zoomSV.value - minZoom) / Math.max(0.001, maxZoom - minZoom)) * 100)}%`,
   }));
 
+  // Positional coaching — one message at a time, and only when lighting/focus are already OK so
+  // messages never stack. Narrows the user toward a good frame the way ID/document scanners do.
+  const positionalCoach = useMemo<CoachKind | null>(() => {
+    if (!aiCamera || tooDark || tooBright || tooBlurry) return null;
+    if (!frameMetrics) return 'search';
+    const size = Math.max(frameMetrics.w, frameMetrics.h);
+    if (size < FAR_MAX) return 'far';
+    if (size > CLOSE_MIN) return 'close';
+    if (Math.abs(frameMetrics.cx - 0.5) > OFFSET_MAX || Math.abs(frameMetrics.cy - 0.5) > OFFSET_MAX) return 'offcenter';
+    if (!frameMetrics.locked) return 'search';
+    // Framing is good — only call it "ready" once the box has settled (stable for N frames).
+    return frameMetrics.stable ? 'ready' : 'steady';
+  }, [aiCamera, tooDark, tooBright, tooBlurry, frameMetrics]);
+
+  // One haptic tick the moment the frame becomes good, so a well-framed shot feels earned.
+  const wasReady = useRef(false);
+  useEffect(() => {
+    const ready = positionalCoach === 'ready';
+    if (ready && !wasReady.current) Vibration.vibrate(10);
+    wasReady.current = ready;
+  }, [positionalCoach]);
+
   async function shoot() {
     if (!camera.current || busy) return;
     setBusy(true);
@@ -287,8 +467,20 @@ export default function CaptureScreen() {
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
       // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
       const upright = await manipulateAsync(raw, [{ rotate: 0 }], { compress: 0.95, format: SaveFormat.JPEG });
-      // Carry the live detector's verdict (green box) forward — the still-image model can't run.
-      router.push({ pathname: '/scan/crop', params: { uri: upright.uri, detected: detection != null ? '1' : '0' } });
+      // Carry the live detector's verdict + box forward. We can't re-run the model on the still
+      // here — its interpreter is busy on the camera thread, and hitting it from JS crashes — so
+      // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
+      const box = lastImgBox.current;
+      router.push({
+        pathname: '/scan/crop',
+        params: {
+          uri: upright.uri,
+          detected: detection != null ? '1' : '0',
+          ...(box && detection != null
+            ? { lx: String(box.cx), ly: String(box.cy), lw: String(box.w), lh: String(box.h) }
+            : {}),
+        },
+      });
     } finally {
       setBusy(false);
     }
@@ -354,6 +546,8 @@ export default function CaptureScreen() {
         <CaptureCoach title="It's too bright" subtitle="Move out of direct light or glare" icon="sun.max" />
       ) : tooBlurry ? (
         <FocusBanner top={insets.top + Space.xxl} />
+      ) : positionalCoach ? (
+        <CoachPill kind={positionalCoach} top={insets.top + Space.xxl} />
       ) : null}
 
       {/* Close */}
@@ -456,6 +650,48 @@ function FocusBanner({ top }: { top: number }) {
     </View>
   );
 }
+
+type CoachKind = 'search' | 'far' | 'close' | 'offcenter' | 'steady' | 'ready';
+const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
+  search: { text: 'Point at the spot', icon: 'camera.viewfinder' },
+  far: { text: 'Move closer', icon: 'camera.viewfinder' },
+  close: { text: 'Move back a little', icon: 'camera.viewfinder' },
+  offcenter: { text: 'Center the spot', icon: 'camera.viewfinder' },
+  steady: { text: 'Hold steady…', icon: 'camera.viewfinder' },
+  ready: { text: 'Looks good — tap to capture', icon: 'checkmark.circle.fill' },
+};
+
+/**
+ * Compact positional coach. Neutral guidance (point/move/center) shows in a dark pill; the
+ * "ready" state turns green to match the locked DetectionBox, signalling a good frame.
+ */
+function CoachPill({ kind, top }: { kind: CoachKind; top: number }) {
+  const { text, icon } = COACH_COPY[kind];
+  const ready = kind === 'ready';
+  return (
+    <View style={[focusStyles.bannerWrap, { top }]} pointerEvents="none">
+      <View style={[coachStyles.pill, ready ? coachStyles.pillReady : coachStyles.pillNeutral]}>
+        <Icon name={icon} tintColor="#FFFFFF" size={18} />
+        <ThemedText type="subhead" style={focusStyles.bannerText}>
+          {text}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+const coachStyles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    paddingHorizontal: Space.base,
+    paddingVertical: Space.sm,
+    borderRadius: 999,
+  },
+  pillNeutral: { backgroundColor: 'rgba(20,16,13,0.6)' },
+  pillReady: { backgroundColor: 'rgba(52,168,120,0.96)' }, // matches DetectionBox LOCKED green
+});
 
 const focusStyles = StyleSheet.create({
   reticle: {

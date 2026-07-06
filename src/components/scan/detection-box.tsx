@@ -7,7 +7,7 @@ export type DetectionBBox = { x: number; y: number; w: number; h: number };
 
 const LOCKED = '#34A878';
 const SEARCHING = 'rgba(255,255,255,0.85)';
-const SPRING = { damping: 18, stiffness: 180 };
+const SPRING = { damping: 24, stiffness: 320 }; // snappy — the box tracks the filtered detection with minimal settle-lag
 
 /**
  * The "AI camera" detection box. When the detector reports a lesion (`bbox`), the box

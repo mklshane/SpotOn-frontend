@@ -13,9 +13,18 @@ import { Icon } from '@/components/ui/icon';
 import { Space } from '@/constants/theme';
 
 const OUTPUT = 1024;
+const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
+const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the image's short side
 
 export default function CropScreen() {
-  const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
+  const { uri, detected, lx, ly, lw, lh } = useLocalSearchParams<{
+    uri: string;
+    detected?: string;
+    lx?: string;
+    ly?: string;
+    lw?: string;
+    lh?: string;
+  }>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -39,6 +48,35 @@ export default function CropScreen() {
   const s0 = img ? frame / Math.min(img.w, img.h) : 1;
   const displayW = img ? img.w * s0 : frame;
   const displayH = img ? img.h * s0 : frame;
+
+  // Auto-frame: pre-position the crop square to hug the lesion the live detector found (box is
+  // carried from capture as full-frame normalized params). The user can still pan/pinch to
+  // adjust. Falls back to the centered default when there's no box (e.g. no live detection).
+  useEffect(() => {
+    if (!img) return;
+    const cx = parseFloat(lx ?? '');
+    const cy = parseFloat(ly ?? '');
+    const bw = parseFloat(lw ?? '');
+    const bh = parseFloat(lh ?? '');
+    if (![cx, cy, bw, bh].every(Number.isFinite)) return;
+
+    const { w: IW, h: IH } = img;
+    const shortSide = Math.min(IW, IH);
+    const lesionPx = Math.max(bw * IW, bh * IH);
+    // Desired crop side in source pixels: lesion + padding, floored and capped to the square.
+    const cropSide = Math.min(shortSide, Math.max(shortSide * CROP_MIN_FRAC, lesionPx * (1 + CROP_PAD)));
+    const s0local = frame / shortSide;
+    const scv = Math.min(4, shortSide / cropSide); // pinch caps zoom at 4x
+    const eff = s0local * scv;
+    // What confirm() will actually crop (mirrors its cropSize math) — keep centers consistent.
+    const actualCrop = Math.min(shortSide, frame / eff);
+    const half = actualCrop / 2;
+    const cxPx = Math.min(IW - half, Math.max(half, cx * IW));
+    const cyPx = Math.min(IH - half, Math.max(half, cy * IH));
+    scale.value = scv;
+    tx.value = (IW / 2 - cxPx) * eff;
+    ty.value = (IH / 2 - cyPx) * eff;
+  }, [img, lx, ly, lw, lh, frame, scale, tx, ty]);
 
   const pan = Gesture.Pan()
     .onBegin(() => {
