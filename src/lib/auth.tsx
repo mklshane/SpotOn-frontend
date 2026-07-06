@@ -20,8 +20,16 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function isNetworkError(e: unknown): boolean {
+  if (!(e instanceof Error)) return false;
+  // RN fetch throws TypeError('Network request failed'); newer runtimes throw
+  // Error('fetch failed') wrapping the platform error (e.g. java.net.ConnectException).
+  return /network request failed|fetch failed|connect|timed? ?out|unreachable/i.test(e.message);
+}
+
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) return e.detail;
+  if (isNetworkError(e)) return "Can't reach the server. Check your internet connection and try again.";
   return 'Something went wrong. Please try again.';
 }
 
