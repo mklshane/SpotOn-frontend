@@ -2,6 +2,9 @@ import * as SecureStore from 'expo-secure-store';
 
 import { api, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
+import { setMeta } from '@/data/db';
+
+import { STORAGE_KEYS } from './storage-keys';
 
 const ACCESS_KEY = 'spoton.access';
 const REFRESH_KEY = 'spoton.refresh';
@@ -71,6 +74,21 @@ export async function cacheProfile(user: UserProfile): Promise<void> {
 
 export async function clearCachedProfile(): Promise<void> {
   await SecureStore.deleteItemAsync(PROFILE_KEY);
+}
+
+/**
+ * Wipes every local trace of the current account: auth tokens, cached profile,
+ * and app-scoped local preferences (onboarding-seen, notification prefs).
+ * Called before `signOut()` when an account is deleted, so a fresh install/login
+ * on the same device never inherits a deleted account's stray local flags.
+ * Does NOT touch the directory sync cache (facilities/doctors) — that data isn't
+ * user-specific.
+ */
+export async function clearAllLocalData(): Promise<void> {
+  await clearTokens();
+  await clearCachedProfile();
+  await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
+  await setMeta(STORAGE_KEYS.reengagementRemindersEnabled, '');
 }
 
 export async function register(input: RegisterInput): Promise<TokenOut> {
