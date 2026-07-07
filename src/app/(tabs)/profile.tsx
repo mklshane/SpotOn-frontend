@@ -167,11 +167,11 @@ export default function ProfileScreen() {
           <SettingsRow icon="person.fill" label="Edit profile" onPress={() => router.push('/profile/edit')} />
           <SettingsRow icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
         </Card>
-      </ScrollView>
 
-      <View style={styles.actions}>
-        <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
-      </View>
+        <View style={styles.actions}>
+          <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -197,5 +197,5 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   section: { marginTop: Space.base, gap: 0 },
   pressed: { opacity: 0.7 },
-  actions: { paddingTop: Space.base, paddingBottom: Space.base },
+  actions: { marginTop: Space.xl },
 });
