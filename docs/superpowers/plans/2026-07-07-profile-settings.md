@@ -1715,11 +1715,11 @@ export default function ProfileScreen() {
           <SettingsRow icon="person.fill" label="Edit profile" onPress={() => router.push('/profile/edit')} />
           <SettingsRow icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
         </Card>
-      </ScrollView>
 
-      <View style={styles.actions}>
-        <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
-      </View>
+        <View style={styles.actions}>
+          <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -1745,9 +1745,11 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   section: { marginTop: Space.base, gap: 0 },
   pressed: { opacity: 0.7 },
-  actions: { paddingTop: Space.base, paddingBottom: Space.base },
+  actions: { marginTop: Space.xl },
 });
 ```
+
+**Post-implementation correction:** manual verification on Android found that a `ScrollView(flex:1)` sharing flex space with a fixed sibling below it (the Sign Out button, originally placed outside the `ScrollView`) corrupted the layout of the last row inside the ScrollView's content — the second `SettingsRow` ("Settings") measured with inverted/negative bounds and was invisible despite existing correctly in the render tree (confirmed via `uiautomator dump`). The code above reflects the fix: Sign Out moved to be the last item *inside* the ScrollView's own content, matching the working pattern in `settings.tsx` (which has no such sibling).
 
 - [ ] **Step 2: Verify**
 
