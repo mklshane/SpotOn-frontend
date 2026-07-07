@@ -26,7 +26,12 @@ const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
 function computeAge(dob: string | null): number | null {
   if (!dob) return null;
-  const birth = new Date(dob);
+  // Parse "YYYY-MM-DD" as a local date, not `new Date(dob)`'s UTC-midnight
+  // parsing — the latter can roll the birth date back a day in timezones
+  // behind UTC once read back via local getMonth()/getDate().
+  const [y, m, d] = dob.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const birth = new Date(y, m - 1, d);
   if (Number.isNaN(birth.getTime())) return null;
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
