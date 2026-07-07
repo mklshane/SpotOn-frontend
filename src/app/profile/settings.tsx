@@ -127,7 +127,9 @@ export default function SettingsScreen() {
         'Could not request export',
         isNotDeployed(e)
           ? "Data export isn't available yet — check back soon."
-          : 'Something went wrong. Please try again.',
+          : e instanceof ApiError
+            ? e.detail
+            : 'Something went wrong. Please try again.',
       );
     } finally {
       setExporting(false);
