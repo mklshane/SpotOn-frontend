@@ -54,6 +54,17 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'book.fill': { set: 'ionicons', name: 'book' },
   person: { set: 'ionicons', name: 'person-outline' },
   'person.fill': { set: 'ionicons', name: 'person' },
+  // settings / account
+  'gearshape.fill': { set: 'ionicons', name: 'settings' },
+  'bell.fill': { set: 'ionicons', name: 'notifications' },
+  'lock.fill': { set: 'ionicons', name: 'lock-closed' },
+  'key.fill': { set: 'ionicons', name: 'key' },
+  'trash.fill': { set: 'ionicons', name: 'trash' },
+  'shield.fill': { set: 'ionicons', name: 'shield' },
+  'questionmark.circle.fill': { set: 'ionicons', name: 'help-circle' },
+  'doc.text.fill': { set: 'ionicons', name: 'document-text' },
+  'envelope.fill': { set: 'ionicons', name: 'mail' },
+  'info.circle.fill': { set: 'ionicons', name: 'information-circle' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };
