@@ -13,7 +13,8 @@ account/security, notifications, privacy/data, and about/support.
 - Extend `lib/profile.ts` to save more fields.
 - Add two small new lib modules for settings-related API calls and a local
   notification preference flag.
-- Add two small new UI primitives: `SettingsRow` and `Switch`.
+- Add three small new UI primitives: `SettingsRow`, `Switch`, and
+  `StubScreen`.
 
 Out of scope (explicitly deferred): actually scheduling local notifications
 (no `expo-notifications` install/native rebuild in this pass), real Terms of
@@ -59,6 +60,14 @@ A simple on/off toggle matching the app's rounded, warm-sunset aesthetic
   track's background color is toggled directly via state/style, not
   animated — animating `backgroundColor` can't use the native driver and
   would run the transition on the JS thread.
+
+### `StubScreen` (`src/components/ui/stub-screen.tsx`)
+
+Placeholder content screen with a working back-chevron header (see §3's
+"About & support" for its two call sites). Props: `title: string`,
+`body?: string` (defaults to "This document is coming soon."). Reuses the
+`Screen` + header pattern already established in `scan/history.tsx` so
+navigating into a stub never traps the user without a way back.
 
 ## 2. Profile tab (`(tabs)/profile.tsx`)
 
@@ -171,9 +180,17 @@ Four `ThemedText type="headline"` section headers, each with a stack of
 - "Help & support" → opens `mailto:help.spoton@gmail.com` via
   `Linking.openURL`.
 - "Terms of Service" / "Privacy Policy" → each pushes a stub screen
-  (`profile/terms.tsx`, `profile/privacy.tsx`) with placeholder body text
-  ("This document is coming soon.") — kept as real routes so the nav
-  wiring doesn't need to change later, just the content.
+  (`profile/terms.tsx`, `profile/privacy.tsx`) — kept as real routes so the
+  nav wiring doesn't need to change later, just the content. Both render a
+  shared `StubScreen` component (`src/components/ui/stub-screen.tsx`),
+  parametrized by `title: string` (and default body copy "This document is
+  coming soon."), rather than duplicating placeholder markup twice.
+  `StubScreen` includes the same back-chevron header used elsewhere
+  (`scan/history.tsx`'s pattern: `Pressable` + `chevron.left` calling
+  `router.back()`, centered `ThemedText` title) so these screens are never
+  a dead end — each file is then just:
+  `<StubScreen title="Terms of Service" />` /
+  `<StubScreen title="Privacy Policy" />`.
 
 ## 4. Data layer changes
 
