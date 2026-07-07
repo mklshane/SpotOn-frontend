@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router, useNavigation } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -51,7 +51,23 @@ export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { entries } = useScanHistory();
   const theme = useTheme();
+  const navigation = useNavigation();
   const [signingOut, setSigningOut] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+
+  // Tapping the Profile tab icon while already on this screen toggles the stats card.
+  // `tabPress` isn't in expo-router's typed navigation event map, hence the cast.
+  useEffect(() => {
+    const unsubscribe = (navigation as unknown as { addListener: (event: 'tabPress', cb: () => void) => () => void }).addListener(
+      'tabPress',
+      () => {
+        if (navigation.isFocused()) {
+          setShowStats((s) => !s);
+        }
+      },
+    );
+    return unsubscribe;
+  }, [navigation]);
 
   const name = user?.full_name?.trim() || 'Your profile';
   const identifier = user?.email || user?.phone || '';
@@ -83,53 +99,61 @@ export default function ProfileScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        <Card style={styles.identity}>
-          <IconCircle icon="person.fill" variant="gradient" size={60} />
-          <View style={styles.identityText}>
-            <ThemedText type="headline">{name}</ThemedText>
-            {identifier ? (
-              <ThemedText type="footnote" themeColor="textSecondary">
-                {identifier}
-              </ThemedText>
-            ) : null}
-          </View>
-        </Card>
+        <Pressable
+          onPress={() => router.push('/profile/edit')}
+          accessibilityRole="button"
+          style={({ pressed }) => pressed && styles.pressed}>
+          <Card style={styles.identity}>
+            <IconCircle icon="person.fill" variant="gradient" size={60} />
+            <View style={styles.identityText}>
+              <ThemedText type="headline">{name}</ThemedText>
+              {identifier ? (
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  {identifier}
+                </ThemedText>
+              ) : null}
+            </View>
+            <Icon name="chevron.right" tintColor={theme.muted} size={18} />
+          </Card>
+        </Pressable>
 
-        <Card style={styles.statsCard}>
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Age
-              </ThemedText>
-              <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
+        {showStats ? (
+          <Card style={styles.statsCard}>
+            <View style={styles.statsRow}>
+              <View style={styles.statItem}>
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  Age
+                </ThemedText>
+                <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
+              <View style={styles.statItem}>
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  Sex
+                </ThemedText>
+                <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
+              </View>
+              <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
+              <View style={styles.statItem}>
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  Skin type
+                </ThemedText>
+                <ThemedText type="headline">{skinLabel}</ThemedText>
+              </View>
             </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-            <View style={styles.statItem}>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Sex
-              </ThemedText>
-              <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-            <View style={styles.statItem}>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Skin type
-              </ThemedText>
-              <ThemedText type="headline">{skinLabel}</ThemedText>
-            </View>
-          </View>
-          {missingDetails ? (
-            <Pressable
-              onPress={() => router.push('/profile/edit')}
-              accessibilityRole="button"
-              style={styles.addDetails}>
-              <ThemedText type="footnote" themeColor="brand">
-                Add details
-              </ThemedText>
-              <Icon name="chevron.right" tintColor={theme.brand} size={14} />
-            </Pressable>
-          ) : null}
-        </Card>
+            {missingDetails ? (
+              <Pressable
+                onPress={() => router.push('/profile/edit')}
+                accessibilityRole="button"
+                style={styles.addDetails}>
+                <ThemedText type="footnote" themeColor="brand">
+                  Add details
+                </ThemedText>
+                <Icon name="chevron.right" tintColor={theme.brand} size={14} />
+              </Pressable>
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card style={styles.row}>
           <IconCircle icon="sparkles" variant="tint" size={48} />
@@ -164,7 +188,6 @@ export default function ProfileScreen() {
         </Pressable>
 
         <Card style={styles.section}>
-          <SettingsRow icon="person.fill" label="Edit profile" onPress={() => router.push('/profile/edit')} />
           <SettingsRow icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
         </Card>
 
