@@ -143,9 +143,11 @@ Four `ThemedText type="headline"` section headers, each with a stack of
   `Select`-free simple two-field password form shown via local state
   toggle — avoids a 5th new route for one form) calling
   `changePassword(currentPassword, newPassword)`. This inline section is
-  wrapped in `KeyboardAvoidingView` (`behavior="padding"` on iOS, as done in
-  `complete-profile.tsx`) so the keyboard doesn't obscure the inputs on
-  Android when the settings list is scrolled.
+  wrapped in `KeyboardAvoidingView` with
+  `behavior={Platform.OS === 'ios' ? 'padding' : 'height'}` (not
+  `undefined` on Android like `complete-profile.tsx` — `'padding'` causes
+  layout jumps on Android, `'height'` is the correct behavior there) so the
+  keyboard doesn't obscure the inputs when the settings list is scrolled.
 - "Delete account" (`destructive`) → confirmation `ActionSheet` (existing
   `action-sheet.tsx` component), then calls `deleteAccount()`, then
   `clearAllLocalData()` (new — see §4), then `signOut()` +
@@ -239,13 +241,16 @@ for showing a friendly message (not silently swallowed, unlike the
 `saveProfile` phone case, since these are explicit user-initiated actions
 that need visible success/failure feedback).
 
-Also exports `clearAllLocalData()`, called by `settings.tsx` right after a
-successful `deleteAccount()` and before `signOut()`. This app has no
-AsyncStorage usage — local state lives in `expo-secure-store` (auth tokens
-+ cached profile, via `lib/auth-api.ts`) and the SQLite `meta`/`facilities`/
-`doctors` tables (via `lib/data/db.ts`). `clearAllLocalData()` calls the
-existing `clearTokens()` + `clearCachedProfile()` (already in
-`auth-api.ts`) and clears the `meta` table's app-scoped keys (onboarding-seen,
+`settings.tsx` calls `clearAllLocalData()` right after a successful
+`deleteAccount()` and before `signOut()`. This function lives in
+`lib/auth-api.ts` (alongside the existing `clearTokens()` and
+`clearCachedProfile()`), not in `settings-api.ts` — `settings-api.ts` is
+network calls only; local-storage cleanup is `auth-api.ts`'s existing
+responsibility. This app has no AsyncStorage usage — local state lives in
+`expo-secure-store` (auth tokens + cached profile) and the SQLite
+`meta`/`facilities`/`doctors` tables (via `lib/data/db.ts`).
+`clearAllLocalData()` calls `clearTokens()` + `clearCachedProfile()`
+directly and clears the `meta` table's app-scoped keys (onboarding-seen,
 notification preference — see `lib/storage-keys.ts` below), so a fresh
 install/login on the same device never inherits a deleted account's stray
 local flags.
