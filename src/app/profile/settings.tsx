@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 20 },
   content: { paddingHorizontal: Space.xl, paddingTop: Space.base, paddingBottom: Space.xxl },
   sectionTitle: { fontWeight: '700', letterSpacing: 0.6, marginTop: Space.xl, marginBottom: Space.base },
-  section: { gap: 0, paddingVertical: Space.md },
+  section: { gap: 0, paddingVertical: Space.sm },
   sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
 });
