@@ -156,8 +156,8 @@ export default function SettingsScreen() {
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <ThemedText type="subhead" themeColor="textSecondary" style={styles.sectionTitle}>
-            Account & security
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
+            ACCOUNT & SECURITY
           </ThemedText>
           <Card style={styles.section}>
             <SettingsRow
@@ -202,8 +202,8 @@ export default function SettingsScreen() {
             />
           </Card>
 
-          <ThemedText type="subhead" themeColor="textSecondary" style={styles.sectionTitle}>
-            Notifications
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
+            NOTIFICATIONS
           </ThemedText>
           <Card style={styles.section}>
             <SettingsRow
@@ -216,8 +216,8 @@ export default function SettingsScreen() {
             />
           </Card>
 
-          <ThemedText type="subhead" themeColor="textSecondary" style={styles.sectionTitle}>
-            Privacy & data
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
+            PRIVACY & DATA
           </ThemedText>
           <Card style={styles.section}>
             <SettingsRow
@@ -233,8 +233,8 @@ export default function SettingsScreen() {
             />
           </Card>
 
-          <ThemedText type="subhead" themeColor="textSecondary" style={styles.sectionTitle}>
-            About & support
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
+            ABOUT & SUPPORT
           </ThemedText>
           <Card style={styles.section}>
             <SettingsRow icon="info.circle.fill" label="App version" sublabel={appVersion} accessory={null} />
@@ -285,8 +285,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSpacer: { width: 20 },
-  content: { paddingHorizontal: Space.xl, paddingBottom: Space.xxl, gap: Space.sm },
-  sectionTitle: { marginTop: Space.lg, marginBottom: Space.sm },
+  content: { paddingHorizontal: Space.xl, paddingTop: Space.base, paddingBottom: Space.xxl },
+  sectionTitle: { fontWeight: '700', letterSpacing: 0.6, marginTop: Space.xl, marginBottom: Space.base },
   section: { gap: 0 },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
 });
