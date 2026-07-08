@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useNavigation } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -54,23 +54,7 @@ export default function ProfileScreen() {
   const { entries } = useScanHistory();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
   const [signingOut, setSigningOut] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-
-  // Tapping the Profile tab icon while already on this screen toggles the stats pill.
-  // `tabPress` isn't in expo-router's typed navigation event map, hence the cast.
-  useEffect(() => {
-    const unsubscribe = (navigation as unknown as { addListener: (event: 'tabPress', cb: () => void) => () => void }).addListener(
-      'tabPress',
-      () => {
-        if (navigation.isFocused()) {
-          setShowStats((s) => !s);
-        }
-      },
-    );
-    return unsubscribe;
-  }, [navigation]);
 
   const name = user?.full_name?.trim() || 'Your profile';
   const identifier = user?.email || user?.phone || '';
@@ -126,6 +110,46 @@ export default function ProfileScreen() {
               {identifier}
             </ThemedText>
           ) : null}
+
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <ThemedText type="caption" style={styles.statLabel}>
+                AGE
+              </ThemedText>
+              <ThemedText type="headline" themeColor="onBrand">
+                {age != null ? age : '—'}
+              </ThemedText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText type="caption" style={styles.statLabel}>
+                SEX
+              </ThemedText>
+              <ThemedText type="headline" themeColor="onBrand">
+                {sexLabel ?? '—'}
+              </ThemedText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText type="caption" style={styles.statLabel}>
+                SKIN TYPE
+              </ThemedText>
+              <ThemedText type="headline" themeColor="onBrand">
+                {skinLabel}
+              </ThemedText>
+            </View>
+          </View>
+          {missingDetails ? (
+            <Pressable
+              onPress={() => router.push('/profile/edit')}
+              accessibilityRole="button"
+              style={styles.addDetails}>
+              <ThemedText type="footnote" themeColor="onBrand" style={styles.addDetailsText}>
+                Add details
+              </ThemedText>
+              <Icon name="chevron.right" tintColor="#FFFFFF" size={13} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -134,44 +158,6 @@ export default function ProfileScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
-          {showStats ? (
-            <Card style={styles.statsCard}>
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
-                    AGE
-                  </ThemedText>
-                  <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
-                </View>
-                <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-                <View style={styles.statItem}>
-                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
-                    SEX
-                  </ThemedText>
-                  <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
-                </View>
-                <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-                <View style={styles.statItem}>
-                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
-                    SKIN TYPE
-                  </ThemedText>
-                  <ThemedText type="headline">{skinLabel}</ThemedText>
-                </View>
-              </View>
-              {missingDetails ? (
-                <Pressable
-                  onPress={() => router.push('/profile/edit')}
-                  accessibilityRole="button"
-                  style={styles.addDetails}>
-                  <ThemedText type="footnote" themeColor="brand" style={styles.addDetailsText}>
-                    Add details
-                  </ThemedText>
-                  <Icon name="chevron.right" tintColor={theme.brand} size={13} />
-                </Pressable>
-              ) : null}
-            </Card>
-          ) : null}
-
           <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
             ACTIVITY
           </ThemedText>
@@ -251,11 +237,10 @@ const styles = StyleSheet.create({
   },
   heroName: { textAlign: 'center' },
   heroIdentifier: { textAlign: 'center', marginTop: 2 },
-  statsCard: { marginBottom: Space.xl },
-  statsRow: { flexDirection: 'row', alignItems: 'center' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: Space.xl },
   statItem: { flex: 1, alignItems: 'center', gap: Space.xs },
-  statLabel: { letterSpacing: 0.5 },
-  statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
+  statLabel: { color: 'rgba(255,255,255,0.75)', letterSpacing: 0.5 },
+  statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.3)' },
   addDetails: {
     flexDirection: 'row',
     alignItems: 'center',
