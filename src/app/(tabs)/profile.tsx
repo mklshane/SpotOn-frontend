@@ -7,9 +7,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Icon, type IconName } from '@/components/ui/icon';
+import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Screen } from '@/components/ui/screen';
+import { SettingsRow } from '@/components/ui/settings-row';
 import { Gradients, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -46,20 +47,6 @@ function computeAge(dob: string | null): number | null {
 function skinTypeLabel(type: number | null): string {
   if (type == null || type < 1 || type > 6) return '—';
   return `Type ${SKIN_TYPE_ROMAN[type - 1]}`;
-}
-
-function QuickAction({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.quickItem, pressed && styles.pressed]}>
-      <IconCircle icon={icon} variant="tint" size={56} />
-      <ThemedText type="footnote" themeColor="textSecondary" style={styles.quickLabel}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
 }
 
 export default function ProfileScreen() {
@@ -186,19 +173,6 @@ export default function ProfileScreen() {
           ) : null}
 
           <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
-            QUICK ACTIONS
-          </ThemedText>
-          <View style={styles.quickRow}>
-            <QuickAction icon="pencil" label="Edit profile" onPress={() => router.push('/profile/edit')} />
-            <QuickAction
-              icon="figure.stand"
-              label="History"
-              onPress={() => router.push('/scan/history')}
-            />
-            <QuickAction icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
-          </View>
-
-          <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
             ACTIVITY
           </ThemedText>
           <Card style={styles.row}>
@@ -215,6 +189,20 @@ export default function ProfileScreen() {
                 </ThemedText>
               ) : null}
             </View>
+          </Card>
+
+          <Card style={styles.menu}>
+            <SettingsRow
+              icon="figure.stand"
+              label="See body lesions"
+              sublabel="View your screening history on the 3D body"
+              onPress={() => router.push('/scan/history')}
+            />
+            <SettingsRow
+              icon="gearshape.fill"
+              label="Settings"
+              onPress={() => router.push('/profile/settings')}
+            />
           </Card>
 
           <View style={styles.actions}>
@@ -277,11 +265,8 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.base },
   sectionLabel: { fontWeight: '700', letterSpacing: 0.6, marginBottom: Space.base },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Space.xl },
-  quickItem: { alignItems: 'center', gap: Space.sm, width: 84 },
-  quickLabel: { textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   rowText: { flex: 1, gap: 2 },
-  pressed: { opacity: 0.7 },
+  menu: { marginTop: Space.base, gap: 0 },
   actions: { marginTop: Space.xl },
 });
