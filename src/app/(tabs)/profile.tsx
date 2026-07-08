@@ -1,15 +1,16 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useNavigation } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Icon } from '@/components/ui/icon';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Screen } from '@/components/ui/screen';
-import { SettingsRow } from '@/components/ui/settings-row';
-import { Space } from '@/constants/theme';
+import { Gradients, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { useScanHistory } from '@/lib/scan-history';
@@ -47,15 +48,30 @@ function skinTypeLabel(type: number | null): string {
   return `Type ${SKIN_TYPE_ROMAN[type - 1]}`;
 }
 
+function QuickAction({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [styles.quickItem, pressed && styles.pressed]}>
+      <IconCircle icon={icon} variant="tint" size={56} />
+      <ThemedText type="footnote" themeColor="textSecondary" style={styles.quickLabel}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { entries } = useScanHistory();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const [signingOut, setSigningOut] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
-  // Tapping the Profile tab icon while already on this screen toggles the stats card.
+  // Tapping the Profile tab icon while already on this screen toggles the stats pill.
   // `tabPress` isn't in expo-router's typed navigation event map, hence the cast.
   useEffect(() => {
     const unsubscribe = (navigation as unknown as { addListener: (event: 'tabPress', cb: () => void) => () => void }).addListener(
@@ -90,126 +106,164 @@ export default function ProfileScreen() {
   }
 
   return (
-    <Screen>
-      <View style={styles.header}>
-        <ThemedText type="largeTitle">Profile</ThemedText>
+    <Screen padded={false} edges={['bottom']}>
+      <View style={styles.hero}>
+        <LinearGradient
+          colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={{ paddingTop: insets.top + Space.md }}>
+          <ThemedText type="title2" themeColor="onBrand" style={styles.heroTitle}>
+            Profile
+          </ThemedText>
+
+          <Pressable
+            onPress={() => router.push('/profile/edit')}
+            accessibilityRole="button"
+            style={styles.avatarWrap}>
+            <View style={styles.avatarFrost}>
+              <Icon name="person.fill" tintColor="#FFFFFF" size={40} />
+            </View>
+            <View style={[styles.editBadge, { backgroundColor: theme.surface }]}>
+              <Icon name="pencil" tintColor={theme.brand} size={13} />
+            </View>
+          </Pressable>
+
+          <ThemedText type="title2" themeColor="onBrand" style={styles.heroName}>
+            {name}
+          </ThemedText>
+          {identifier ? (
+            <ThemedText type="footnote" style={[styles.heroIdentifier, { color: 'rgba(255,255,255,0.8)' }]}>
+              {identifier}
+            </ThemedText>
+          ) : null}
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        <Pressable
-          onPress={() => router.push('/profile/edit')}
-          accessibilityRole="button"
-          style={({ pressed }) => pressed && styles.pressed}>
-          <Card style={styles.identity}>
-            <IconCircle icon="person.fill" variant="gradient" size={60} />
-            <View style={styles.identityText}>
-              <ThemedText type="headline" style={styles.center}>
-                {name}
+      <View style={[styles.sheet, { backgroundColor: theme.background }]}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          {showStats ? (
+            <Card style={styles.statsCard}>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
+                    AGE
+                  </ThemedText>
+                  <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
+                <View style={styles.statItem}>
+                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
+                    SEX
+                  </ThemedText>
+                  <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
+                <View style={styles.statItem}>
+                  <ThemedText type="caption" themeColor="textSecondary" style={styles.statLabel}>
+                    SKIN TYPE
+                  </ThemedText>
+                  <ThemedText type="headline">{skinLabel}</ThemedText>
+                </View>
+              </View>
+              {missingDetails ? (
+                <Pressable
+                  onPress={() => router.push('/profile/edit')}
+                  accessibilityRole="button"
+                  style={styles.addDetails}>
+                  <ThemedText type="footnote" themeColor="brand" style={styles.addDetailsText}>
+                    Add details
+                  </ThemedText>
+                  <Icon name="chevron.right" tintColor={theme.brand} size={13} />
+                </Pressable>
+              ) : null}
+            </Card>
+          ) : null}
+
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
+            QUICK ACTIONS
+          </ThemedText>
+          <View style={styles.quickRow}>
+            <QuickAction icon="pencil" label="Edit profile" onPress={() => router.push('/profile/edit')} />
+            <QuickAction
+              icon="figure.stand"
+              label="History"
+              onPress={() => router.push('/scan/history')}
+            />
+            <QuickAction icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
+          </View>
+
+          <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
+            ACTIVITY
+          </ThemedText>
+          <Card style={styles.row}>
+            <IconCircle icon="sparkles" variant="tint" size={48} />
+            <View style={styles.rowText}>
+              <ThemedText type="headline">
+                {scanCount === 0
+                  ? 'No screenings yet'
+                  : `${scanCount} ${scanCount === 1 ? 'screening' : 'screenings'} completed`}
               </ThemedText>
-              {identifier ? (
-                <ThemedText type="footnote" themeColor="textSecondary" style={styles.center}>
-                  {identifier}
+              {lastScanLabel ? (
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  Last screening {lastScanLabel}
                 </ThemedText>
               ) : null}
             </View>
           </Card>
-        </Pressable>
 
-        {showStats ? (
-          <Card style={styles.statsCard}>
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <ThemedText type="footnote" themeColor="textSecondary">
-                  Age
-                </ThemedText>
-                <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-              <View style={styles.statItem}>
-                <ThemedText type="footnote" themeColor="textSecondary">
-                  Sex
-                </ThemedText>
-                <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
-              </View>
-              <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
-              <View style={styles.statItem}>
-                <ThemedText type="footnote" themeColor="textSecondary">
-                  Skin type
-                </ThemedText>
-                <ThemedText type="headline">{skinLabel}</ThemedText>
-              </View>
-            </View>
-            {missingDetails ? (
-              <Pressable
-                onPress={() => router.push('/profile/edit')}
-                accessibilityRole="button"
-                style={styles.addDetails}>
-                <ThemedText type="footnote" themeColor="brand">
-                  Add details
-                </ThemedText>
-                <Icon name="chevron.right" tintColor={theme.brand} size={14} />
-              </Pressable>
-            ) : null}
-          </Card>
-        ) : null}
-
-        <Card style={styles.row}>
-          <IconCircle icon="sparkles" variant="tint" size={48} />
-          <View style={styles.rowText}>
-            <ThemedText type="headline">
-              {scanCount === 0
-                ? 'No screenings yet'
-                : `${scanCount} ${scanCount === 1 ? 'screening' : 'screenings'} completed`}
-            </ThemedText>
-            {lastScanLabel ? (
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Last screening {lastScanLabel}
-              </ThemedText>
-            ) : null}
+          <View style={styles.actions}>
+            <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
           </View>
-        </Card>
-
-        <Pressable
-          onPress={() => router.push('/scan/history')}
-          accessibilityRole="button"
-          style={({ pressed }) => pressed && styles.pressed}>
-          <Card style={styles.row}>
-            <IconCircle icon="figure.stand" variant="tint" size={48} />
-            <View style={styles.rowText}>
-              <ThemedText type="headline">See body lesions</ThemedText>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                View your screening history on the 3D body
-              </ThemedText>
-            </View>
-            <Icon name="chevron.right" tintColor={theme.muted} size={18} />
-          </Card>
-        </Pressable>
-
-        <Card style={styles.section}>
-          <SettingsRow icon="gearshape.fill" label="Settings" onPress={() => router.push('/profile/settings')} />
-        </Card>
-
-        <View style={styles.actions}>
-          <Button label="Sign out" variant="outline" loading={signingOut} onPress={handleSignOut} />
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </View>
     </Screen>
   );
 }
 
+const AVATAR = 88;
+const EDIT_BADGE = 30;
+
 const styles = StyleSheet.create({
-  header: { paddingTop: Space.lg },
-  scroll: { flex: 1 },
-  scrollContent: { paddingBottom: Space.base },
-  identity: { marginTop: Space.xl, alignItems: 'center', gap: Space.base },
-  identityText: { alignItems: 'center', gap: 2 },
-  center: { textAlign: 'center' },
-  statsCard: { marginTop: Space.base },
+  hero: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
+  heroTitle: { opacity: 0.85, marginBottom: Space.lg },
+  avatarWrap: { alignSelf: 'center', marginBottom: Space.base },
+  avatarFrost: {
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: AVATAR / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: EDIT_BADGE,
+    height: EDIT_BADGE,
+    borderRadius: EDIT_BADGE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#7A2E08',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  heroName: { textAlign: 'center' },
+  heroIdentifier: { textAlign: 'center', marginTop: 2 },
+  statsCard: { marginBottom: Space.xl },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center', gap: Space.xs },
+  statLabel: { letterSpacing: 0.5 },
   statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch' },
   addDetails: {
     flexDirection: 'row',
@@ -218,9 +272,16 @@ const styles = StyleSheet.create({
     gap: Space.xs,
     marginTop: Space.base,
   },
-  row: { marginTop: Space.base, flexDirection: 'row', alignItems: 'center', gap: Space.base },
+  addDetailsText: { fontWeight: '600' },
+  sheet: { flex: 1, marginTop: -Radius.xl, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.base },
+  sectionLabel: { fontWeight: '700', letterSpacing: 0.6, marginBottom: Space.base },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: Space.xl },
+  quickItem: { alignItems: 'center', gap: Space.sm, width: 84 },
+  quickLabel: { textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   rowText: { flex: 1, gap: 2 },
-  section: { marginTop: Space.base, gap: 0 },
   pressed: { opacity: 0.7 },
   actions: { marginTop: Space.xl },
 });

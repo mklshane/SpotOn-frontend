@@ -63,6 +63,7 @@ export function SettingsRow({
         variant="tint"
         size={44}
         iconColor={destructive ? theme.riskCritical : undefined}
+        tintBg={destructive ? theme.riskCriticalBg : undefined}
       />
       <View style={styles.text}>
         <ThemedText type="headline" themeColor={destructive ? 'riskCritical' : 'text'}>

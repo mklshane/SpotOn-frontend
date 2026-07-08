@@ -65,6 +65,7 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'doc.text.fill': { set: 'ionicons', name: 'document-text' },
   'envelope.fill': { set: 'ionicons', name: 'mail' },
   'info.circle.fill': { set: 'ionicons', name: 'information-circle' },
+  pencil: { set: 'ionicons', name: 'pencil' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };
