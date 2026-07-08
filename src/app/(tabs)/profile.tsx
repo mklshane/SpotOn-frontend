@@ -62,7 +62,6 @@ export default function ProfileScreen() {
   const age = computeAge(user?.date_of_birth ?? null);
   const sexLabel = user?.sex ? (SEX_LABELS[user.sex] ?? user.sex) : null;
   const skinLabel = skinTypeLabel(user?.fitzpatrick_skin_type ?? null);
-  const missingDetails = age == null || !sexLabel || user?.fitzpatrick_skin_type == null;
 
   const scanCount = entries.length;
   const lastScan = entries[0]?.createdAt;
@@ -139,17 +138,6 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
           </View>
-          {missingDetails ? (
-            <Pressable
-              onPress={() => router.push('/profile/edit')}
-              accessibilityRole="button"
-              style={styles.addDetails}>
-              <ThemedText type="footnote" themeColor="onBrand" style={styles.addDetailsText}>
-                Add details
-              </ThemedText>
-              <Icon name="chevron.right" tintColor="#FFFFFF" size={13} />
-            </Pressable>
-          ) : null}
         </View>
       </View>
 
@@ -241,14 +229,6 @@ const styles = StyleSheet.create({
   statItem: { flex: 1, alignItems: 'center', gap: Space.xs },
   statLabel: { color: 'rgba(255,255,255,0.75)', letterSpacing: 0.5 },
   statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.3)' },
-  addDetails: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Space.xs,
-    marginTop: Space.base,
-  },
-  addDetailsText: { fontWeight: '600' },
   sheet: { flex: 1, marginTop: -Radius.xl, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.base },
