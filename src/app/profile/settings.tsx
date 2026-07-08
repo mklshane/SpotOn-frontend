@@ -194,6 +194,9 @@ export default function SettingsScreen() {
                 />
               </View>
             ) : null}
+          </Card>
+
+          <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="trash.fill"
               label={deleting ? 'Deleting…' : 'Delete account'}
@@ -226,6 +229,9 @@ export default function SettingsScreen() {
               sublabel={formatConsentStatus(user)}
               accessory={null}
             />
+          </Card>
+
+          <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
               label={exporting ? 'Requesting export…' : 'Request data export'}
@@ -238,17 +244,26 @@ export default function SettingsScreen() {
           </ThemedText>
           <Card style={styles.section}>
             <SettingsRow icon="info.circle.fill" label="App version" sublabel={appVersion} accessory={null} />
+          </Card>
+
+          <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="envelope.fill"
               label="Help & support"
               sublabel={SUPPORT_EMAIL}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             />
+          </Card>
+
+          <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
               label="Terms of Service"
               onPress={() => router.push('/profile/terms')}
             />
+          </Card>
+
+          <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="lock.fill"
               label="Privacy Policy"
@@ -288,5 +303,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Space.xl, paddingTop: Space.base, paddingBottom: Space.xxl },
   sectionTitle: { fontWeight: '700', letterSpacing: 0.6, marginTop: Space.xl, marginBottom: Space.base },
   section: { gap: 0 },
+  sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
 });
