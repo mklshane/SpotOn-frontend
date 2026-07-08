@@ -255,6 +255,6 @@ const styles = StyleSheet.create({
   sectionLabel: { fontWeight: '700', letterSpacing: 0.6, marginBottom: Space.base },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   rowText: { flex: 1, gap: 2 },
-  menu: { marginTop: Space.base, gap: 0 },
+  menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
   actions: { marginTop: Space.xl },
 });
