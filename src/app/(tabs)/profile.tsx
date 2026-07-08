@@ -198,6 +198,9 @@ export default function ProfileScreen() {
               sublabel="View your screening history on the 3D body"
               onPress={() => router.push('/scan/history')}
             />
+          </Card>
+
+          <Card style={styles.menu}>
             <SettingsRow
               icon="gearshape.fill"
               label="Settings"
