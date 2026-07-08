@@ -52,13 +52,17 @@ export default function EditProfileScreen() {
     user?.fitzpatrick_skin_type != null ? String(user.fitzpatrick_skin_type) : null,
   );
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dob?: string; sex?: string }>({});
+  const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   function validate() {
     const next: typeof errors = {};
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone && !/^(\+63|0)9\d{9}$/.test(trimmedPhone)) {
+      next.phone = 'Enter a valid PH mobile number (e.g. 09xx xxx xxxx).';
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -123,6 +127,7 @@ export default function EditProfileScreen() {
               textContentType="telephoneNumber"
               value={phone}
               onChangeText={setPhone}
+              error={errors.phone}
             />
             <Select
               label="Skin type"
