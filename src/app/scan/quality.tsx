@@ -21,11 +21,14 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
+import { detectOnImage, type StillDetection } from '@/lib/lesion-model';
 import { useScanDraft } from '@/lib/scan-draft';
 import { useScanHistory } from '@/lib/scan-history';
 
 const STEP_MS = 1300; // per-check reveal cadence
 const PROCEED_MS = 850; // beat before auto-advancing on a clean pass
+const DETECT_MIN = 0.3; // still-image detector confidence for a "lesion present" verdict (matches CREATE_SCORE)
+const DETECT_TIMEOUT_MS = 6000; // if the still detector stalls, fall back to skin coverage
 
 type RowStatus = 'pending' | 'ok' | 'warn';
 const ROW_META: { label: string; icon: IconName }[] = [
@@ -52,6 +55,9 @@ export default function QualityScreen() {
   const [step, setStep] = useState(0);
   const [checks, setChecks] = useState<IqaChecks | null>(null);
   const [error, setError] = useState(false);
+  // Still-image detector verdict for the gallery path (no live detector ran). `undefined` = pending,
+  // `null` = unavailable (fall back to skin coverage). Camera captures skip this (verdict carried).
+  const [stillDet, setStillDet] = useState<StillDetection | null | undefined>(lesionKnown ? null : undefined);
   const proceeded = useRef(false);
 
   useEffect(() => {
@@ -71,18 +77,39 @@ export default function QualityScreen() {
     };
   }, [uri]);
 
+  // Gallery uploads never saw the live detector — re-run it once on the still (off the camera
+  // thread) for a real "lesion present" verdict. Safe: any failure/timeout leaves the skin fallback.
+  useEffect(() => {
+    if (lesionKnown || !uri) return;
+    let alive = true;
+    const timeout = setTimeout(() => alive && setStillDet((d) => (d === undefined ? null : d)), DETECT_TIMEOUT_MS);
+    detectOnImage(uri)
+      .then((d) => alive && setStillDet(d))
+      .catch(() => alive && setStillDet(null))
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      alive = false;
+      clearTimeout(timeout);
+    };
+  }, [uri, lesionKnown]);
+
   useEffect(() => {
     const id = setInterval(() => setStep((s) => Math.min(ROW_META.length, s + 1)), STEP_MS);
     return () => clearInterval(id);
   }, []);
 
-  const settled = checks != null || error;
+  // Wait for the still detector too on the gallery path, so we don't auto-advance before its verdict.
+  const detSettled = lesionKnown || stillDet !== undefined;
+  const settled = (checks != null || error) && detSettled;
   const analyzing = step < ROW_META.length || !settled;
 
   const brightnessOk = checks?.brightness.ok ?? false;
   const sharpOk = checks?.sharpness.ok ?? false;
   const skinOk = checks?.skin.ok ?? false;
-  const lesionOk = lesionKnown ? lesionFound : skinOk;
+  // Gallery lesion verdict: the still detector when available, else skin-colour coverage.
+  const galleryLesionOk = stillDet == null ? skinOk : stillDet.conf >= DETECT_MIN;
+  // Skin coverage is always a hard "is this skin?" guard on top of the lesion verdict.
+  const lesionOk = (lesionKnown ? lesionFound : galleryLesionOk) && skinOk;
   const pass = !error && brightnessOk && sharpOk && lesionOk;
 
   const reasons = useMemo(() => {
@@ -93,21 +120,20 @@ export default function QualityScreen() {
       out.push(
         checks.brightness.issue === 'dark'
           ? 'The photo looks too dark.'
-          : checks.brightness.issue === 'bright'
-            ? 'The photo looks too bright — avoid glare on the spot.'
-            : 'Uneven lighting — avoid casting a shadow on the spot.',
+          : checks.brightness.issue === 'glare'
+            ? 'Glare on the spot — tilt slightly to avoid the reflection.'
+            : 'The photo looks too bright — try softer, even light.',
       );
     }
     if (!sharpOk) out.push('The photo looks blurry — move closer and tap to focus.');
-    if (!lesionOk) {
-      out.push(
-        lesionKnown
-          ? 'We couldn’t find a clear lesion — center the spot in the frame.'
-          : 'This doesn’t look like a photo of skin.',
-      );
+    if (!skinOk) out.push('This doesn’t look like a photo of skin.');
+    else if (!lesionOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
+    // Shadow is advisory: it never blocks, but when we're already asking for a retake, surface it.
+    if (checks.shadow && !checks.shadow.ok) {
+      out.push('Tip: even out the lighting — avoid casting a shadow across the spot.');
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, lesionOk, lesionKnown]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, lesionOk]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {

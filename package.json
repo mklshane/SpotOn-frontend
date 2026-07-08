@@ -62,7 +62,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test:api": "node scripts/smoke-api.mjs"
+    "test:api": "node scripts/smoke-api.mjs",
+    "test:iqa": "node scripts/test-image-quality.mjs"
   },
   "private": true
 }
