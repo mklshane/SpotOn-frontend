@@ -106,14 +106,15 @@ export default function ProfileScreen() {
           <Card style={styles.identity}>
             <IconCircle icon="person.fill" variant="gradient" size={60} />
             <View style={styles.identityText}>
-              <ThemedText type="headline">{name}</ThemedText>
+              <ThemedText type="headline" style={styles.center}>
+                {name}
+              </ThemedText>
               {identifier ? (
-                <ThemedText type="footnote" themeColor="textSecondary">
+                <ThemedText type="footnote" themeColor="textSecondary" style={styles.center}>
                   {identifier}
                 </ThemedText>
               ) : null}
             </View>
-            <Icon name="chevron.right" tintColor={theme.muted} size={18} />
           </Card>
         </Pressable>
 
@@ -203,8 +204,9 @@ const styles = StyleSheet.create({
   header: { paddingTop: Space.lg },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: Space.base },
-  identity: { marginTop: Space.xl, flexDirection: 'row', alignItems: 'center', gap: Space.base },
-  identityText: { flex: 1, gap: 2 },
+  identity: { marginTop: Space.xl, alignItems: 'center', gap: Space.base },
+  identityText: { alignItems: 'center', gap: 2 },
+  center: { textAlign: 'center' },
   statsCard: { marginTop: Space.base },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center', gap: Space.xs },
