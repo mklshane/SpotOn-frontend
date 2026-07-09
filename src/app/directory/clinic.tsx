@@ -88,7 +88,8 @@ export default function ClinicDetailScreen() {
                 latitude: facility.latitude,
                 longitude: facility.longitude,
               })
-            }>
+            }
+            accessibilityRole="button">
             <Card style={styles.row} elevation="sm">
               <Icon name="mappin.circle.fill" size={18} tintColor={theme.brand} />
               <ThemedText type="body" style={styles.rowText}>
