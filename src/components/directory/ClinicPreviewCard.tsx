@@ -23,6 +23,15 @@ const MAX_SERVICES_SHOWN = 2;
 export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps) {
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
+  // The parent re-renders this component in place (no key) when a different pin
+  // is selected — reset the disclosure during render so a new clinic never opens
+  // pre-expanded (React's documented "adjust state on prop change" pattern).
+  const [shownFacilityId, setShownFacilityId] = useState(facility.id);
+  if (facility.id !== shownFacilityId) {
+    setShownFacilityId(facility.id);
+    setExpanded(false);
+  }
+
   const distance = 'distance_m' in facility ? facility.distance_m : null;
   const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
 
@@ -55,7 +64,11 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
       </View>
 
       {open != null ? (
-        <Pressable onPress={() => setExpanded((v) => !v)} style={styles.hoursRow} accessibilityRole="button">
+        <Pressable
+          onPress={() => setExpanded((v) => !v)}
+          style={styles.hoursRow}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}>
           <Icon name="clock.fill" size={14} tintColor={open ? theme.riskLow : theme.riskHigh} />
           <ThemedText type="footnote" themeColor={open ? 'riskLow' : 'riskHigh'} style={styles.hoursLabel}>
             {open ? 'Open Now' : 'Closed Now'}
@@ -74,7 +87,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         </View>
       ) : null}
 
-      <ThemedText type="footnote" themeColor="muted" numberOfLines={1} style={styles.address}>
+      <ThemedText type="footnote" themeColor="muted" numberOfLines={1}>
         {distance != null ? `${formatDistance(distance)} (Near You) · ` : ''}
         {facility.address}
       </ThemedText>
@@ -94,12 +107,11 @@ const styles = StyleSheet.create({
   card: { width: '100%', borderRadius: Radius.lg, padding: Space.base, gap: Space.xs, ...Elevation.lg },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
   name: { flex: 1 },
-  specRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  specRow: { flexDirection: 'row' },
   spec: { flexShrink: 1 },
   more: { textDecorationLine: 'underline', fontWeight: '600' },
   hoursRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   hoursLabel: { fontWeight: '600' },
   hoursDetail: { gap: 2, paddingLeft: Space.lg },
-  address: {},
   buttonWrap: { marginTop: Space.xs },
 });
