@@ -45,6 +45,14 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [sort, setSort] = useState<SortMode>('name');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
+  // Default sort to distance the first time location becomes known — adjusted
+  // during render (not an effect) so it fires exactly once regardless of how
+  // many times `coords` changes, same pattern as ClinicPreviewCard's reset.
+  const [hasDefaultedSort, setHasDefaultedSort] = useState(false);
+  if (coords && !hasDefaultedSort) {
+    setHasDefaultedSort(true);
+    if (sort === 'name') setSort('distance');
+  }
 
   // Facet chips — one-time broad fetch.
   useEffect(() => {
@@ -66,11 +74,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
     };
   }, [query, service, coords]);
 
-  // Default sort to distance once location is known.
-  useEffect(() => {
-    if (coords) setSort((s) => (s === 'name' ? 'distance' : s));
-  }, [coords]);
-
   // Cache map tiles for the area once we have a fix and a connection.
   useEffect(() => {
     if (coords && isOnline) downloadAreaPack(coords).catch(() => {});
@@ -84,6 +87,10 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
     const sorted = [...rows];
     if (sort === 'distance' && coords) {
+      // `distance_m` is only absent for one transient render right after coords
+      // first resolves, before the nearby-fetch response lands — the Infinity
+      // fallback makes that comparator a no-op (NaN) for that render instead of
+      // throwing, and it self-corrects once `facilities` updates.
       sorted.sort((a, b) => ('distance_m' in a ? a.distance_m : Infinity) - ('distance_m' in b ? b.distance_m : Infinity));
     } else if (sort === 'rating') {
       sorted.sort((a, b) => (b.google_rating ?? 0) - (a.google_rating ?? 0));
