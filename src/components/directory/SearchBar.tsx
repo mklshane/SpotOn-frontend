@@ -27,7 +27,7 @@ export function SearchBar({ value, onChangeText, placeholder = 'Search', floatin
         returnKeyType="search"
       />
       {value.length > 0 ? (
-        <Pressable onPress={() => onChangeText('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="Clear search">
+        <Pressable onPress={() => onChangeText('')} hitSlop={13} accessibilityRole="button" accessibilityLabel="Clear search">
           <Icon name="xmark.circle.fill" size={18} tintColor={theme.muted} />
         </Pressable>
       ) : null}
