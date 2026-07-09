@@ -33,15 +33,16 @@ export type ClinicMapProps = {
 const SCREEN_W = Dimensions.get('window').width;
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 18;
-// A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
-// stopPropagation() (native bubbling quirk) — this window suppresses the bubbled
-// "clear selection" call. See docs/DIRECTORY_SCREEN.md §5 "Pin -> preview card".
-const SOURCE_PRESS_GUARD_MS = 250;
 
 export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bottomInset }: ClinicMapProps) {
   const theme = useTheme();
   const cameraRef = useRef<CameraRef>(null);
-  const lastSourcePressAt = useRef(0);
+  // A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
+  // stopPropagation() (native bubbling quirk) — GeoJSONSource fires first (it's the
+  // child), so it flags the bubble here for Map.onPress to consume and ignore, exactly
+  // once, regardless of how long the bubble takes to arrive. See
+  // docs/DIRECTORY_SCREEN.md §5 "Pin -> preview card".
+  const suppressNextMapPress = useRef(false);
   const [zoom, setZoom] = useState(coords ? 13 : MAP_DEFAULT.zoom);
 
   const selectedFacility = useMemo(
@@ -96,9 +97,13 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
         compass={false}
         scaleBar={false}
         onPress={() => {
-          if (Date.now() - lastSourcePressAt.current < SOURCE_PRESS_GUARD_MS) return;
+          if (suppressNextMapPress.current) {
+            suppressNextMapPress.current = false;
+            return;
+          }
           onSelectFacility(null);
-        }}>
+        }}
+        onRegionDidChange={(e: { nativeEvent: { zoom: number } }) => setZoom(e.nativeEvent.zoom)}>
         <Camera ref={cameraRef} initialViewState={{ center: initialCenter, zoom }} />
         <UserLocation />
 
@@ -106,7 +111,7 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
           id="clinics"
           data={featureCollection}
           onPress={(e: { stopPropagation?: () => void; nativeEvent?: { features?: GeoJSON.Feature[] } }) => {
-            lastSourcePressAt.current = Date.now();
+            suppressNextMapPress.current = true;
             e.stopPropagation?.();
             const feature = e.nativeEvent?.features?.[0];
             const id = feature?.properties?.id as string | undefined;
