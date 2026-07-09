@@ -1,15 +1,15 @@
 import { getMeta, setMeta } from '@/data/db';
 
-const ONBOARDING_KEY = 'has_seen_onboarding';
+import { STORAGE_KEYS } from './storage-keys';
 
 export async function hasSeenOnboarding(): Promise<boolean> {
-  return (await getMeta(ONBOARDING_KEY)) === '1';
+  return (await getMeta(STORAGE_KEYS.hasSeenOnboarding)) === '1';
 }
 
 export async function markOnboardingSeen(): Promise<void> {
-  await setMeta(ONBOARDING_KEY, '1');
+  await setMeta(STORAGE_KEYS.hasSeenOnboarding, '1');
 }
 
 export async function resetOnboarding(): Promise<void> {
-  await setMeta(ONBOARDING_KEY, '');
+  await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
 }

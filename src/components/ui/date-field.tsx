@@ -13,10 +13,19 @@ import { Button } from './button';
 export type DateFieldProps = {
   label?: string;
   error?: string;
+  /** Pre-fill with an existing ISO "YYYY-MM-DD" date (e.g. when editing a saved profile). */
+  value?: string | null;
   /** Called with an ISO "YYYY-MM-DD" string when a date is picked. */
   onChange: (iso: string | null) => void;
   containerStyle?: ViewStyle | ViewStyle[];
 };
+
+function fromIso(iso: string | null | undefined): Date | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
 
 const MAX_AGE = 120;
 const TODAY = new Date();
@@ -28,11 +37,11 @@ const toIso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.
 const format = (d: Date) =>
   d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
-export function DateField({ label, error, onChange, containerStyle }: DateFieldProps) {
+export function DateField({ label, error, value, onChange, containerStyle }: DateFieldProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [date, setDate] = useState<Date | null>(null);
-  const [temp, setTemp] = useState<Date>(DEFAULT_DATE);
+  const [date, setDate] = useState<Date | null>(() => fromIso(value));
+  const [temp, setTemp] = useState<Date>(() => fromIso(value) ?? DEFAULT_DATE);
   const [open, setOpen] = useState(false);
 
   const borderColor = error ? theme.riskCritical : 'transparent';
