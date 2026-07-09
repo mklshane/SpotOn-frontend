@@ -23,12 +23,18 @@ export default function DoctorDetailScreen() {
   const [links, setLinks] = useState<BookingLinkWithPlatform[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Reset loading/error during render when `id` changes (not synchronously in
+  // the effect body below, which trips react-hooks/set-state-in-effect).
+  const [loadedId, setLoadedId] = useState(id);
+  if (id !== loadedId) {
+    setLoadedId(id);
+    setLoading(true);
+    setError(false);
+  }
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setLoading(true);
-    setError(false);
     Promise.all([getDoctor(id), getDoctorBookingLinks(id)])
       .then(([d, l]) => {
         if (cancelled) return;

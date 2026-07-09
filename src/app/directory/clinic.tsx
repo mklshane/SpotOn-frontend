@@ -24,12 +24,18 @@ export default function ClinicDetailScreen() {
   const [facility, setFacility] = useState<FacilitySync | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Reset loading/error during render when `id` changes (not synchronously in
+  // the effect body below, which trips react-hooks/set-state-in-effect).
+  const [loadedId, setLoadedId] = useState(id);
+  if (id !== loadedId) {
+    setLoadedId(id);
+    setLoading(true);
+    setError(false);
+  }
 
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    setLoading(true);
-    setError(false);
     getFacility(id)
       .then((f) => {
         if (cancelled) return;
