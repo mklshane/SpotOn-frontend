@@ -8,7 +8,6 @@
  */
 import { MAP_STYLE_URL } from '@/config';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mod: any = null;
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
