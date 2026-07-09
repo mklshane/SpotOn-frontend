@@ -22,15 +22,24 @@ export default function DoctorDetailScreen() {
   const [doctor, setDoctor] = useState<DoctorSync | null>(null);
   const [links, setLinks] = useState<BookingLinkWithPlatform[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
     Promise.all([getDoctor(id), getDoctorBookingLinks(id)])
       .then(([d, l]) => {
+        if (cancelled) return;
         setDoctor(d);
         setLinks(l);
       })
-      .finally(() => setLoading(false));
+      .catch(() => !cancelled && setError(true))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   return (
@@ -47,6 +56,8 @@ export default function DoctorDetailScreen() {
 
       {loading ? (
         <ListState kind="loading" title="Loading doctor…" />
+      ) : error ? (
+        <ListState kind="error" title="Couldn't load doctor" subtitle="Check your connection and try again." />
       ) : !doctor ? (
         <ListState kind="error" title="Doctor not found" />
       ) : (
@@ -73,7 +84,7 @@ export default function DoctorDetailScreen() {
             <ListState kind="empty" title="No booking links yet" subtitle="Check back later." />
           ) : (
             links.map((link) => (
-              <Pressable key={link.id} onPress={() => openWebsite(link.url)}>
+              <Pressable key={link.id} onPress={() => openWebsite(link.url)} accessibilityRole="button">
                 <Card style={styles.linkCard} elevation="sm">
                   <View style={styles.linkTop}>
                     <ThemedText type="headline">{link.platform?.name ?? 'Booking platform'}</ThemedText>
