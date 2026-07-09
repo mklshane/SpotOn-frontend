@@ -11,5 +11,8 @@ export { OnboardingHero } from './onboarding-hero';
 export { Screen } from './screen';
 export { Segmented } from './segmented';
 export { Select } from './select';
+export { SettingsRow } from './settings-row';
+export { StubScreen } from './stub-screen';
+export { Switch } from './switch';
 export { SelectCard } from './select-card';
 export { TextField } from './text-field';

@@ -11,24 +11,62 @@ export function isProfileComplete(user: UserProfile): boolean {
 }
 
 export type ProfileInput = {
+  fullName?: string;
   dateOfBirth: string; // ISO "YYYY-MM-DD"
   sex: Sex;
   phone?: string;
+  fitzpatrickSkinType?: number; // 1-6
 };
 
-export async function saveProfile({ dateOfBirth, sex, phone }: ProfileInput): Promise<void> {
+export type SaveProfileResult = {
+  /** Server-authoritative profile, re-fetched after all PATCH attempts — never assembled from local input. */
+  user: UserProfile;
+  /** Field names (matching the API's snake_case) that failed to save, if any. */
+  failedFields: string[];
+};
+
+export async function saveProfile({
+  fullName,
+  dateOfBirth,
+  sex,
+  phone,
+  fitzpatrickSkinType,
+}: ProfileInput): Promise<SaveProfileResult> {
+  const failedFields: string[] = [];
+
   // DOB + sex are accepted by the deployed API today.
   await api.patch('/me', { date_of_birth: dateOfBirth, sex });
-  // `phone` requires the UserUpdate change to be redeployed; isolate so a 422
-  // before redeploy doesn't fail the whole step.
-  const trimmed = phone?.trim();
-  if (trimmed) {
+
+  // Each of the following isolates its own PATCH so a 404/422 on one field
+  // (e.g. before the backend redeploys with that field) doesn't fail the others.
+  const trimmedName = fullName?.trim();
+  if (trimmedName) {
     try {
-      await api.patch('/me', { phone: trimmed });
+      await api.patch('/me', { full_name: trimmedName });
     } catch {
-      // Backend not yet redeployed with the phone field — skip silently.
+      failedFields.push('full_name');
     }
   }
+
+  const trimmedPhone = phone?.trim();
+  if (trimmedPhone) {
+    try {
+      await api.patch('/me', { phone: trimmedPhone });
+    } catch {
+      failedFields.push('phone');
+    }
+  }
+
+  if (fitzpatrickSkinType != null) {
+    try {
+      await api.patch('/me', { fitzpatrick_skin_type: fitzpatrickSkinType });
+    } catch {
+      failedFields.push('fitzpatrick_skin_type');
+    }
+  }
+
+  const user = await fetchProfile();
+  return { user, failedFields };
 }
 
 /**

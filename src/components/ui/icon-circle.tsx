@@ -11,10 +11,12 @@ export type IconCircleProps = {
   /** Soft tint circle, solid brand, or a warm sunset gradient fill. */
   variant?: 'tint' | 'brand' | 'gradient';
   iconColor?: string;
+  /** Overrides the `tint` variant's fill color (e.g. a risk-tier tint for a destructive row). */
+  tintBg?: string;
   style?: ViewStyle | ViewStyle[];
 };
 
-export function IconCircle({ icon, size = 72, variant = 'tint', iconColor, style }: IconCircleProps) {
+export function IconCircle({ icon, size = 72, variant = 'tint', iconColor, tintBg, style }: IconCircleProps) {
   const theme = useTheme();
   const dim = { width: size, height: size, borderRadius: size / 2 };
   const glyphColor = iconColor ?? (variant === 'tint' ? theme.brand : theme.onBrand);
@@ -33,7 +35,7 @@ export function IconCircle({ icon, size = 72, variant = 'tint', iconColor, style
           style={[
             StyleSheet.absoluteFill,
             dim,
-            { backgroundColor: variant === 'brand' ? theme.brand : theme.brandTint },
+            { backgroundColor: variant === 'brand' ? theme.brand : (tintBg ?? theme.brandTint) },
           ]}
         />
       )}
