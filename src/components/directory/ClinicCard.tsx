@@ -24,7 +24,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
   const topService = facility.services[0];
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable onPress={onPress} accessible={false}>
       <Card style={styles.card} elevation="sm">
         <View style={styles.row}>
           <View style={styles.rail}>
@@ -73,6 +73,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                   })
                 }
                 style={[styles.actionFilled, { backgroundColor: theme.brand }]}
+                hitSlop={4}
                 accessibilityRole="button">
                 <Icon name="arrow.triangle.turn.up.right.diamond.fill" size={14} tintColor={theme.onBrand} />
                 <ThemedText type="footnote" themeColor="onBrand" style={styles.actionLabel}>
@@ -83,12 +84,17 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 <Pressable
                   onPress={() => callNumber(facility.phone as string)}
                   style={[styles.actionIcon, { backgroundColor: theme.elementBg }]}
+                  hitSlop={4}
                   accessibilityRole="button"
                   accessibilityLabel="Call">
                   <Icon name="phone.fill" size={16} tintColor={theme.brand} />
                 </Pressable>
               ) : null}
-              <Pressable onPress={onPress} style={[styles.actionOutline, { borderColor: theme.hairline }]} accessibilityRole="button">
+              <Pressable
+                onPress={onPress}
+                style={[styles.actionOutline, { borderColor: theme.hairline }]}
+                hitSlop={4}
+                accessibilityRole="button">
                 <ThemedText type="footnote" themeColor="text" style={styles.actionLabel}>
                   Details
                 </ThemedText>
