@@ -8,12 +8,20 @@ import { Space } from '@/constants/theme';
 import { LEARN_TOPICS, type Topic } from '@/data/learn-content';
 
 function onSelect(topic: Topic) {
-  if (topic.kind === 'article') {
-    router.push({ pathname: '/learn/article', params: { topicId: topic.id } });
-  } else if (topic.kind === 'subtopics') {
-    router.push({ pathname: '/learn/topic', params: { topicId: topic.id } });
-  } else {
-    router.push('/learn/questionnaire');
+  switch (topic.kind) {
+    case 'article':
+      router.push({ pathname: '/learn/article', params: { topicId: topic.id } });
+      return;
+    case 'subtopics':
+      router.push({ pathname: '/learn/topic', params: { topicId: topic.id } });
+      return;
+    case 'comingSoon':
+      router.push('/learn/questionnaire');
+      return;
+    default:
+      // Exhaustiveness check: a compile error here means a new Topic kind was
+      // added without teaching onSelect where it should navigate.
+      topic satisfies never;
   }
 }
 
