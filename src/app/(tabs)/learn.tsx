@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { TopicRow } from '@/components/learn/TopicRow';
+import { TopicCard } from '@/components/learn/TopicCard';
 import { ThemedText } from '@/components/themed-text';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
@@ -35,15 +35,17 @@ export default function LearnScreen() {
         <ThemedText type="body" themeColor="textSecondary" style={styles.subtitle}>
           Understand skin cancer signs, the ABCDEs, and when to see a doctor.
         </ThemedText>
-        {LEARN_TOPICS.map((topic) => (
-          <TopicRow
-            key={topic.id}
-            icon={topic.icon}
-            title={topic.title}
-            subtitle={topic.subtitle}
-            onPress={() => onSelect(topic)}
-          />
-        ))}
+        <View style={styles.grid}>
+          {LEARN_TOPICS.map((topic) => (
+            <TopicCard
+              key={topic.id}
+              icon={topic.icon}
+              title={topic.title}
+              subtitle={topic.subtitle}
+              onPress={() => onSelect(topic)}
+            />
+          ))}
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -53,4 +55,5 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: Space.xl, paddingTop: Space.base, paddingBottom: Space.xxxl },
   title: { marginBottom: Space.xs },
   subtitle: { marginBottom: Space.xl },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: Space.md },
 });
