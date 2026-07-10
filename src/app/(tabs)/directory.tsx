@@ -27,7 +27,9 @@ export default function DirectoryScreen() {
   useEffect(() => {
     (async () => {
       if (await needsInitialSync()) {
-        await runSync({ full: true }).catch(() => {});
+        // First-ever sync — if this fails offline-first screens fall back to an
+        // empty local DB with no distinct "sync failed" signal, so at least log it.
+        await runSync({ full: true }).catch((err) => console.warn('[directory] initial sync failed', err));
       } else {
         runSync().catch(() => {});
       }
