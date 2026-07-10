@@ -196,26 +196,43 @@ export const LEARN_TOPICS: Topic[] = [
   },
   {
     id: 'prevention',
-    title: 'Prevention & Sun Safety',
-    subtitle: 'Everyday habits that lower your risk.',
+    title: 'UV Protection in the Philippines',
+    subtitle: 'Sun safety tips for our year-round tropical climate.',
     icon: 'sun.max.fill',
     kind: 'article',
     article: {
       id: 'prevention',
-      title: 'Prevention & Sun Safety',
+      title: 'UV Protection in the Philippines',
       icon: 'sun.max.fill',
       sections: [
         {
-          heading: 'Sunscreen',
-          paragraphs: ['Use broad-spectrum SPF 30+ daily, reapplied every two hours outdoors, even on cloudy days.'],
+          paragraphs: [
+            "The Philippines sits close to the equator, so UV levels stay high year-round — not just during summer (March to May, when PAGASA regularly reports \"Extreme\" UV Index readings). Sun protection is a daily habit here, not a seasonal one.",
+          ],
         },
         {
-          heading: 'Protective clothing',
-          paragraphs: ['Long sleeves, wide-brimmed hats, and sunglasses reduce direct UV exposure.'],
+          heading: 'Check the UV Index',
+          paragraphs: [
+            'PAGASA publishes a daily UV Index forecast. From "Very High" to "Extreme" (8 and above, common on clear days), unprotected skin can burn in under 15 minutes — plan outdoor errands, commutes, or exercise around it when you can.',
+          ],
         },
         {
-          heading: 'Timing',
-          paragraphs: ['UV rays are strongest between 10am and 4pm — seek shade during peak hours when possible.'],
+          heading: 'Sunscreen that survives the humidity',
+          paragraphs: [
+            'Use broad-spectrum SPF 30+ daily, reapplied every two hours outdoors — more often if you are sweating or swimming, both common here. A water-resistant, lightweight formula sits better under our humidity than heavy creams.',
+          ],
+        },
+        {
+          heading: 'Everyday exposure adds up',
+          paragraphs: [
+            'Jeepney and tricycle rides, market trips, waiting for a ride, walking to school or work — a lot of daily sun exposure here happens outside of "beach days." Long sleeves, a wide-brimmed hat or cap, and sunglasses help on ordinary errands, not just vacations.',
+          ],
+        },
+        {
+          heading: 'Peak hours and cloudy days',
+          paragraphs: [
+            'UV rays are strongest between 10am and 4pm — seek shade when possible during this window. Overcast or rainy-season skies block heat but not most UV, so cloudy days still call for protection.',
+          ],
         },
         {
           heading: 'Regular self-checks',
