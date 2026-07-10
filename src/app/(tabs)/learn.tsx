@@ -36,6 +36,17 @@ function badgeFor(topic: Topic): string | undefined {
   return undefined;
 }
 
+/** Chunks topics into rows of 2 so each row's two cards can stretch to match
+ * each other's height, instead of the taller card in a wrapped flex grid
+ * leaving mismatched blank space in shorter neighbors. */
+function pairUp(topics: Topic[]): Topic[][] {
+  const rows: Topic[][] = [];
+  for (let i = 0; i < topics.length; i += 2) {
+    rows.push(topics.slice(i, i + 2));
+  }
+  return rows;
+}
+
 export default function LearnScreen() {
   const { user } = useAuth();
   const [query, setQuery] = useState('');
@@ -78,15 +89,20 @@ export default function LearnScreen() {
         <ThemedText type="title2">All Topics</ThemedText>
 
         <View style={styles.grid}>
-          {filtered.map((topic) => (
-            <TopicCard
-              key={topic.id}
-              icon={topic.icon}
-              title={topic.title}
-              subtitle={topic.subtitle}
-              badge={badgeFor(topic)}
-              onPress={() => onSelect(topic)}
-            />
+          {pairUp(filtered).map((row, i) => (
+            <View key={i} style={styles.row}>
+              {row.map((topic) => (
+                <TopicCard
+                  key={topic.id}
+                  icon={topic.icon}
+                  title={topic.title}
+                  subtitle={topic.subtitle}
+                  badge={badgeFor(topic)}
+                  onPress={() => onSelect(topic)}
+                />
+              ))}
+              {row.length === 1 ? <View style={styles.spacer} /> : null}
+            </View>
           ))}
         </View>
       </ScrollView>
@@ -103,5 +119,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   greeting: { gap: 2 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: Space.md },
+  grid: { gap: Space.md },
+  row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.md },
+  spacer: { flex: 1 },
 });
