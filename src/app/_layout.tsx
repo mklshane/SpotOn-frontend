@@ -58,6 +58,7 @@ export default function RootLayout() {
                 <Stack.Screen name="scan" />
                 <Stack.Screen name="profile" />
                 <Stack.Screen name="directory" />
+                <Stack.Screen name="learn" />
               </Stack>
               <DevTools />
             </ThemeProvider>
