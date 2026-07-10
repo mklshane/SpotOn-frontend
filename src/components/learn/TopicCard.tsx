@@ -16,9 +16,9 @@ export type TopicCardProps = {
   onPress: () => void;
 };
 
-/** 2-column grid tile for the Learn hub. Title/subtitle/badge each get a fixed,
- * compact height (not just numberOfLines) so every card in the grid is the same
- * height and rows line up evenly, regardless of how long each topic's text is. */
+/** Grid tile for the Learn hub. Sized to its actual content (no reserved blank
+ * space) — the parent row is responsible for making both cards in a row match
+ * heights, via `flex: 1` + `alignItems: 'stretch'` on the row itself. */
 export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardProps) {
   const theme = useTheme();
 
@@ -29,19 +29,18 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
         <ThemedText type="subhead" numberOfLines={2} style={styles.title}>
           {title}
         </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2} style={styles.subtitle}>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
           {subtitle}
         </ThemedText>
-        <View style={styles.badgeSlot}>{badge ? <Badge label={badge} /> : null}</View>
+        {badge ? <Badge label={badge} style={styles.badge} /> : null}
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: '48%' },
-  card: { borderRadius: Radius.lg, padding: Space.md },
-  title: { marginTop: Space.xs, height: 40, fontWeight: '600' },
-  subtitle: { height: 32 },
-  badgeSlot: { height: 24, marginTop: Space.xs, justifyContent: 'center' },
+  wrap: { flex: 1 },
+  card: { flex: 1, borderRadius: Radius.lg, padding: Space.md, gap: 2 },
+  title: { marginTop: Space.xs, fontWeight: '600' },
+  badge: { marginTop: Space.xs, alignSelf: 'flex-start' },
 });
