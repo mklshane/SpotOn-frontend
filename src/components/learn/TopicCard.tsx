@@ -29,7 +29,7 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
         <ThemedText type="headline" numberOfLines={2} style={styles.title}>
           {title}
         </ThemedText>
-        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
+        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2} style={styles.subtitle}>
           {subtitle}
         </ThemedText>
         {badge ? <Badge label={badge} style={styles.badge} /> : null}
@@ -40,7 +40,8 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  card: { flex: 1, borderRadius: Radius.lg, padding: Space.md, gap: 4 },
-  title: { marginTop: Space.xs },
-  badge: { marginTop: Space.xs, alignSelf: 'flex-start' },
+  card: { flex: 1, borderRadius: Radius.lg, padding: Space.base, gap: Space.xs },
+  title: { marginTop: Space.sm },
+  subtitle: { marginTop: 2 },
+  badge: { marginTop: Space.sm, alignSelf: 'flex-start' },
 });

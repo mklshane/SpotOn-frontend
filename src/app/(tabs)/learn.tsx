@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   greeting: { gap: 2 },
-  grid: { gap: Space.md },
-  row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.md },
+  grid: { gap: Space.base },
+  row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
   spacer: { flex: 1 },
 });
