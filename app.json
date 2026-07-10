@@ -53,6 +53,13 @@
         }
       ],
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow SpotOn to use your location to find clinics near you."
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      [
         "react-native-vision-camera",
         {
           "cameraPermissionText": "SpotOn uses your camera to detect and capture the skin spot for triage.",

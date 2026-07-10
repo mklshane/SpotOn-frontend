@@ -66,6 +66,19 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'envelope.fill': { set: 'ionicons', name: 'mail' },
   'info.circle.fill': { set: 'ionicons', name: 'information-circle' },
   pencil: { set: 'ionicons', name: 'pencil' },
+  // directory
+  'magnifyingglass': { set: 'ionicons', name: 'search' },
+  'xmark.circle.fill': { set: 'ionicons', name: 'close-circle' },
+  minus: { set: 'ionicons', name: 'remove' },
+  'star.fill': { set: 'ionicons', name: 'star' },
+  'clock.fill': { set: 'ionicons', name: 'time' },
+  'phone.fill': { set: 'ionicons', name: 'call' },
+  globe: { set: 'ionicons', name: 'globe-outline' },
+  'arrow.up.arrow.down': { set: 'ionicons', name: 'swap-vertical' },
+  'mappin.circle.fill': { set: 'ionicons', name: 'location' },
+  'wifi.slash': { set: 'ionicons', name: 'cloud-offline-outline' },
+  'checkmark.seal.fill': { set: 'ionicons', name: 'checkmark-circle' },
+  'arrow.triangle.turn.up.right.diamond.fill': { set: 'ionicons', name: 'navigate' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };
