@@ -25,11 +25,11 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.wrap}>
       <View style={[styles.card, { backgroundColor: theme.surface }, Elevation.sm]}>
-        <IconCircle icon={icon} variant="tint" size={36} />
-        <ThemedText type="subhead" numberOfLines={2} style={styles.title}>
+        <IconCircle icon={icon} variant="tint" size={40} />
+        <ThemedText type="headline" numberOfLines={2} style={styles.title}>
           {title}
         </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
+        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
           {subtitle}
         </ThemedText>
         {badge ? <Badge label={badge} style={styles.badge} /> : null}
@@ -40,7 +40,7 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  card: { flex: 1, borderRadius: Radius.lg, padding: Space.md, gap: 2 },
-  title: { marginTop: Space.xs, fontWeight: '600' },
+  card: { flex: 1, borderRadius: Radius.lg, padding: Space.md, gap: 4 },
+  title: { marginTop: Space.xs },
   badge: { marginTop: Space.xs, alignSelf: 'flex-start' },
 });
