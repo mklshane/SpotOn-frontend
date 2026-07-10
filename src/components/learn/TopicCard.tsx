@@ -16,7 +16,11 @@ export type TopicCardProps = {
   onPress: () => void;
 };
 
-/** 2-column grid tile for the Learn hub — icon + title + subtitle + optional badge, no chevron. */
+const BADGE_SLOT_HEIGHT = 24;
+
+/** 2-column grid tile for the Learn hub — icon + title + subtitle + optional badge, no chevron.
+ * Every card renders at the same height (title/subtitle clamped to 2 lines, badge slot always
+ * reserved) so grid rows line up evenly whether or not a given topic has a badge. */
 export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardProps) {
   const theme = useTheme();
 
@@ -27,10 +31,10 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
         <ThemedText type="headline" numberOfLines={2} style={styles.title}>
           {title}
         </ThemedText>
-        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
+        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2} style={styles.subtitle}>
           {subtitle}
         </ThemedText>
-        {badge ? <Badge label={badge} style={styles.badge} /> : null}
+        <View style={styles.badgeSlot}>{badge ? <Badge label={badge} /> : null}</View>
       </View>
     </Pressable>
   );
@@ -38,7 +42,8 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
 
 const styles = StyleSheet.create({
   wrap: { width: '48%' },
-  card: { borderRadius: Radius.lg, padding: Space.base, gap: Space.xs },
-  title: { marginTop: Space.xs },
-  badge: { marginTop: Space.xs },
+  card: { borderRadius: Radius.lg, padding: Space.base },
+  title: { marginTop: Space.xs, height: 44 },
+  subtitle: { marginTop: 2, height: 36 },
+  badgeSlot: { height: BADGE_SLOT_HEIGHT, marginTop: Space.xs, justifyContent: 'center' },
 });
