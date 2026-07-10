@@ -79,6 +79,10 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'wifi.slash': { set: 'ionicons', name: 'cloud-offline-outline' },
   'checkmark.seal.fill': { set: 'ionicons', name: 'checkmark-circle' },
   'arrow.triangle.turn.up.right.diamond.fill': { set: 'ionicons', name: 'navigate' },
+  // learn
+  'cross.case.fill': { set: 'ionicons', name: 'medkit' },
+  'square.grid.2x2.fill': { set: 'ionicons', name: 'grid' },
+  'sun.max.fill': { set: 'ionicons', name: 'sunny' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };
