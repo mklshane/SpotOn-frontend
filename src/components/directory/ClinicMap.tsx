@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
 
 import type { FacilitySync } from '@/api/types';
@@ -28,15 +28,54 @@ export type ClinicMapProps = {
   onSelectFacility: (id: string | null) => void;
   /** Screen-space distance from the bottom to keep floating controls clear of the collapsed sheet. */
   bottomInset: number;
+  /** The active search query — a change here (once `facilities` catches up) re-centers the camera on the results. */
+  query: string;
 };
 
 const SCREEN_W = Dimensions.get('window').width;
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 18;
 
-export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bottomInset }: ClinicMapProps) {
+export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bottomInset, query }: ClinicMapProps) {
   const theme = useTheme();
   const cameraRef = useRef<CameraRef>(null);
+  // Re-center on search results: when `query` changes, flag that the *next* facilities
+  // update (the fetch triggered by that query) should fit the camera to it — not every
+  // facilities update, which also fires for unrelated filter/sort changes.
+  const prevQueryRef = useRef(query);
+  const pendingFitRef = useRef(false);
+
+  useEffect(() => {
+    if (query !== prevQueryRef.current) {
+      prevQueryRef.current = query;
+      if (query.trim()) pendingFitRef.current = true;
+    }
+  }, [query]);
+
+  useEffect(() => {
+    if (!pendingFitRef.current) return;
+    pendingFitRef.current = false;
+    if (facilities.length === 0) return;
+
+    if (facilities.length === 1) {
+      const [only] = facilities;
+      cameraRef.current?.easeTo({ center: [only.longitude, only.latitude], zoom: 14, duration: 600 });
+      return;
+    }
+
+    const lats = facilities.map((f) => f.latitude);
+    const lngs = facilities.map((f) => f.longitude);
+    const bounds: [number, number, number, number] = [
+      Math.min(...lngs),
+      Math.min(...lats),
+      Math.max(...lngs),
+      Math.max(...lats),
+    ];
+    cameraRef.current?.fitBounds(bounds, {
+      padding: { top: 80, right: 60, bottom: 80, left: 60 },
+      duration: 600,
+    });
+  }, [facilities]);
   // A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
   // stopPropagation() (native bubbling quirk) — GeoJSONSource fires first (it's the
   // child), so it flags the bubble here for Map.onPress to consume and ignore, exactly

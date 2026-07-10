@@ -119,6 +119,7 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
         selectedId={selectedId}
         onSelectFacility={setSelectedId}
         bottomInset={COLLAPSED_BOTTOM_INSET}
+        query={query}
       />
 
       <BottomSheet
