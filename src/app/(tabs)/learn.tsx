@@ -66,12 +66,12 @@ export default function LearnScreen() {
     <Screen padded={false}>
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.header}>
-          <IconCircle icon="person.fill" variant="tint" size={44} />
+          <IconCircle icon="person.fill" variant="tint" size={48} />
           <View style={styles.greeting}>
-            <ThemedText type="footnote" themeColor="muted">
+            <ThemedText type="callout" themeColor="muted">
               Hello,
             </ThemedText>
-            <ThemedText type="headline">{firstName}</ThemedText>
+            <ThemedText type="title2">{firstName}</ThemedText>
           </View>
         </View>
 
