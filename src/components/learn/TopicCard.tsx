@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { Badge } from '@/components/ui/badge';
 import { ThemedText } from '@/components/themed-text';
 import { type IconName } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
@@ -10,11 +11,13 @@ export type TopicCardProps = {
   icon: IconName;
   title: string;
   subtitle: string;
+  /** Small pill under the subtitle, e.g. "3 topics" or "Coming soon". */
+  badge?: string;
   onPress: () => void;
 };
 
-/** 2-column grid tile for the Learn hub — icon + title + subtitle, no chevron. */
-export function TopicCard({ icon, title, subtitle, onPress }: TopicCardProps) {
+/** 2-column grid tile for the Learn hub — icon + title + subtitle + optional badge, no chevron. */
+export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardProps) {
   const theme = useTheme();
 
   return (
@@ -27,6 +30,7 @@ export function TopicCard({ icon, title, subtitle, onPress }: TopicCardProps) {
         <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
           {subtitle}
         </ThemedText>
+        {badge ? <Badge label={badge} style={styles.badge} /> : null}
       </View>
     </Pressable>
   );
@@ -36,4 +40,5 @@ const styles = StyleSheet.create({
   wrap: { width: '48%' },
   card: { borderRadius: Radius.lg, padding: Space.base, minHeight: 152, gap: Space.xs },
   title: { marginTop: Space.xs },
+  badge: { marginTop: 'auto' },
 });

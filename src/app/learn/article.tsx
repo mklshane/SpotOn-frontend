@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
-import { Space } from '@/constants/theme';
+import { Elevation, Radius, Space } from '@/constants/theme';
 import { getArticle } from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -31,20 +31,29 @@ export default function LearnArticleScreen() {
         <ListState kind="error" title="Article not found" />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
-          <IconCircle icon={article.icon} variant="gradient" size={88} style={styles.hero} />
-          <ThemedText type="title1" style={styles.title}>
-            {article.title}
-          </ThemedText>
+          <View style={[styles.identityCard, { backgroundColor: theme.surface }, Elevation.sm]}>
+            <IconCircle icon={article.icon} variant="gradient" size={56} />
+            <View style={styles.identityText}>
+              <ThemedText type="title2">{article.title}</ThemedText>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {article.sections.length} {article.sections.length === 1 ? 'section' : 'sections'}
+              </ThemedText>
+            </View>
+          </View>
+
           {article.sections.map((section, i) => (
-            <View key={i} style={styles.section}>
-              {section.heading ? (
-                <ThemedText type="headline">{section.heading}</ThemedText>
-              ) : null}
-              {section.paragraphs.map((p, j) => (
-                <ThemedText key={j} type="body" themeColor="textSecondary">
-                  {p}
-                </ThemedText>
-              ))}
+            <View key={i} style={[styles.sectionRow, { backgroundColor: theme.surface }, Elevation.sm]}>
+              <View style={[styles.sectionIcon, { backgroundColor: theme.brandTint }]}>
+                <Icon name="doc.text.fill" size={16} tintColor={theme.brand} />
+              </View>
+              <View style={styles.sectionText}>
+                {section.heading ? <ThemedText type="headline">{section.heading}</ThemedText> : null}
+                {section.paragraphs.map((p, j) => (
+                  <ThemedText key={j} type="body" themeColor="textSecondary">
+                    {p}
+                  </ThemedText>
+                ))}
+              </View>
             </View>
           ))}
         </ScrollView>
@@ -62,8 +71,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSpacer: { width: 20 },
-  body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, alignItems: 'center' },
-  hero: { marginTop: Space.base, marginBottom: Space.base },
-  title: { textAlign: 'center', marginBottom: Space.lg },
-  section: { alignSelf: 'stretch', gap: Space.xs, marginBottom: Space.lg },
+  body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, gap: Space.md },
+  identityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.base,
+    borderRadius: Radius.xl,
+    padding: Space.lg,
+  },
+  identityText: { flex: 1, gap: 2 },
+  sectionRow: { flexDirection: 'row', gap: Space.base, borderRadius: Radius.lg, padding: Space.base },
+  sectionIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  sectionText: { flex: 1, gap: Space.xs },
 });
