@@ -38,7 +38,7 @@ export function TopicCard({ icon, title, subtitle, badge, onPress }: TopicCardPr
 
 const styles = StyleSheet.create({
   wrap: { width: '48%' },
-  card: { borderRadius: Radius.lg, padding: Space.base, minHeight: 152, gap: Space.xs },
+  card: { borderRadius: Radius.lg, padding: Space.base, gap: Space.xs },
   title: { marginTop: Space.xs },
-  badge: { marginTop: 'auto' },
+  badge: { marginTop: Space.xs },
 });
