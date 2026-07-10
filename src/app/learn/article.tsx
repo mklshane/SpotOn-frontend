@@ -22,7 +22,7 @@ export default function LearnArticleScreen() {
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Article
+          {article?.title ?? 'Article'}
         </ThemedText>
         <View style={styles.headerSpacer} />
       </View>
@@ -38,9 +38,7 @@ export default function LearnArticleScreen() {
           {article.sections.map((section, i) => (
             <View key={i} style={styles.section}>
               {section.heading ? (
-                <ThemedText type="headline" style={styles.sectionHeading}>
-                  {section.heading}
-                </ThemedText>
+                <ThemedText type="headline">{section.heading}</ThemedText>
               ) : null}
               {section.paragraphs.map((p, j) => (
                 <ThemedText key={j} type="body" themeColor="textSecondary">
@@ -68,5 +66,4 @@ const styles = StyleSheet.create({
   hero: { marginTop: Space.base, marginBottom: Space.base },
   title: { textAlign: 'center', marginBottom: Space.lg },
   section: { alignSelf: 'stretch', gap: Space.xs, marginBottom: Space.lg },
-  sectionHeading: {},
 });
