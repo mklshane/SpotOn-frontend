@@ -1,7 +1,7 @@
 # SpotOn UI Plan — Splash · Onboarding · Auth (UI pass)
 
-Self-contained build plan for a fresh session. Pairs with `/spoton-ui-design` skill
-(`.claude/skills/spoton-ui-design/REFERENCE.md` = paste-ready tokens & recipes) and the refs
+Self-contained build plan for a fresh session. Follows the SpotOn design system (sunset palette,
+type ramp, tokens, component recipes) and the refs
 `inspiration2.png` (onboarding aesthetic) / `inspiration.png` / `screeningsummary.png`.
 
 ## Scope & decisions

@@ -24,7 +24,7 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
   // One-time broad fetch to derive the specialty facet chips.
   useEffect(() => {
     let cancelled = false;
-    listDoctors({ limit: 500 })
+    listDoctors({ hasBookingLink: true, limit: 500 })
       .then((all) => {
         if (cancelled) return;
         setSpecialties(Array.from(new Set(all.flatMap((d) => d.specialties))).sort());
@@ -41,6 +41,7 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
       q: query || undefined,
       pdsCertified: pdsOnly || undefined,
       specialty: specialty ?? undefined,
+      hasBookingLink: true,
       limit: 100,
     };
     listDoctors(q)

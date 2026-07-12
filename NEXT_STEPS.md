@@ -26,8 +26,8 @@ npx expo run:ios                     # iOS simulator (Xcode ready on this machin
   machine's LAN IP, not `localhost`.
 
 ## Design system — use it for every screen
-Invoke **`/spoton-ui-design`** (skill at `.claude/skills/spoton-ui-design/`). It carries the
-sunset palette, type ramp, tokens, component recipes, and the anti-AI-slop rules.
+Follow the SpotOn design system: the sunset palette, type ramp, tokens, component recipes, and the
+anti-AI-slop rules.
 - Visual refs in this folder: `inspiration2.png` (primary onboarding aesthetic), `inspiration.png`
   (functional screens), `screeningsummary.png` (report).
 - Decisions: **Hanken Grotesk** (display) + **SF Pro** (body); **light-first** (dark deferred).

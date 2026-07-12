@@ -7,6 +7,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
+import { IconCircle } from '@/components/ui/icon-circle';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { StarRating } from '@/components/ui/star-rating';
@@ -69,11 +70,22 @@ export default function DoctorDetailScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.identity}>
-            <ThemedText type="title1">{doctor.name}</ThemedText>
+            <IconCircle icon="stethoscope" size={84} variant="gradient" style={styles.avatar} />
+            <ThemedText type="title1" style={styles.centered}>
+              {doctor.name}
+            </ThemedText>
             {doctor.title ? (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText type="callout" themeColor="textSecondary" style={styles.centered}>
                 {doctor.title}
               </ThemedText>
+            ) : null}
+            {doctor.city || doctor.region ? (
+              <View style={styles.locationRow}>
+                <Icon name="mappin.circle.fill" size={14} tintColor={theme.muted} />
+                <ThemedText type="footnote" themeColor="muted">
+                  {[doctor.city, doctor.region].filter(Boolean).join(' · ')}
+                </ThemedText>
+              </View>
             ) : null}
             <View style={styles.badges}>
               {doctor.pds_certified ? <Badge label="PDS Certified" tone="brand" /> : null}
@@ -83,9 +95,14 @@ export default function DoctorDetailScreen() {
             </View>
           </View>
 
-          <ThemedText type="title2" style={styles.sectionTitle}>
-            Book online
-          </ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="title2">Book online</ThemedText>
+            {links.length > 0 ? (
+              <ThemedText type="footnote" themeColor="muted">
+                {links.length === 1 ? '1 platform' : `${links.length} platforms`}
+              </ThemedText>
+            ) : null}
+          </View>
           {links.length === 0 ? (
             <ListState kind="empty" title="No booking links yet" subtitle="Check back later." />
           ) : (
@@ -93,22 +110,39 @@ export default function DoctorDetailScreen() {
               <Pressable key={link.id} onPress={() => openWebsite(link.url)} accessibilityRole="button">
                 <Card style={styles.linkCard} elevation="sm">
                   <View style={styles.linkTop}>
-                    <ThemedText type="headline">{link.platform?.name ?? 'Booking platform'}</ThemedText>
-                    <Icon name="globe" size={16} tintColor={theme.brand} />
-                  </View>
-                  <View style={styles.linkMeta}>
-                    {link.consultation_fee != null ? (
-                      <ThemedText type="footnote" themeColor="textSecondary">
-                        {formatFee(link.consultation_fee)}
-                        {link.is_introductory_fee ? ' (intro)' : ''}
+                    <IconCircle icon="calendar" size={40} variant="tint" />
+                    <View style={styles.linkText}>
+                      <ThemedText type="headline" numberOfLines={1}>
+                        {link.platform?.name ?? 'Booking platform'}
                       </ThemedText>
-                    ) : null}
-                    {link.rating != null ? <StarRating rating={link.rating} reviewCount={link.review_count} /> : null}
+                      {link.rating != null ? (
+                        <StarRating rating={link.rating} reviewCount={link.review_count} />
+                      ) : null}
+                    </View>
+                    <Icon name="arrow.up.right" size={16} tintColor={theme.brand} />
                   </View>
-                  {link.available_text ? (
-                    <ThemedText type="footnote" themeColor="muted">
-                      {link.available_text}
-                    </ThemedText>
+
+                  {link.consultation_fee != null || link.available_text ? (
+                    <View style={[styles.linkDetails, { borderTopColor: theme.hairline }]}>
+                      {link.consultation_fee != null ? (
+                        <View style={styles.metaRow}>
+                          <ThemedText type="subhead" style={styles.fee}>
+                            {formatFee(link.consultation_fee)}
+                          </ThemedText>
+                          <ThemedText type="footnote" themeColor="muted">
+                            {link.is_introductory_fee ? 'intro consultation fee' : 'consultation fee'}
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                      {link.available_text ? (
+                        <View style={styles.metaRow}>
+                          <Icon name="clock.fill" size={12} tintColor={theme.muted} />
+                          <ThemedText type="footnote" themeColor="muted" numberOfLines={2} style={styles.availText}>
+                            {link.available_text}
+                          </ThemedText>
+                        </View>
+                      ) : null}
+                    </View>
                   ) : null}
                 </Card>
               </Pressable>
@@ -130,10 +164,28 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 20 },
   body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, gap: Space.md },
-  identity: { gap: Space.sm, marginBottom: Space.sm },
-  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs, marginTop: Space.xs },
-  sectionTitle: { marginTop: Space.md },
-  linkCard: { gap: Space.xs },
-  linkTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  linkMeta: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  identity: { alignItems: 'center', gap: Space.sm, marginTop: Space.sm, marginBottom: Space.sm },
+  avatar: { marginBottom: Space.xs },
+  centered: { textAlign: 'center' },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  badges: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: Space.xs,
+    marginTop: Space.xs,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginTop: Space.md,
+  },
+  linkCard: { gap: Space.base },
+  linkTop: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  linkText: { flex: 1, gap: 2 },
+  linkDetails: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Space.md, gap: Space.sm },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  fee: { fontWeight: '600' },
+  availText: { flexShrink: 1 },
 });

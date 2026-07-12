@@ -199,6 +199,7 @@ export interface DoctorQuery {
   specialty?: string;
   city?: string;
   pdsCertified?: boolean;
+  hasBookingLink?: boolean; // only doctors with ≥1 active booking link
   limit?: number;
   offset?: number;
 }
@@ -211,6 +212,11 @@ export async function listDoctors(query: DoctorQuery = {}): Promise<DoctorSync[]
   if (query.city) { where.push("city LIKE ?"); params.push(`%${query.city}%`); }
   if (query.specialty) { where.push("specialties LIKE ?"); params.push(`%"${query.specialty}"%`); }
   if (query.pdsCertified !== undefined) { where.push("pds_certified = ?"); params.push(query.pdsCertified ? 1 : 0); }
+  if (query.hasBookingLink) {
+    where.push(
+      "EXISTS (SELECT 1 FROM booking_links bl WHERE bl.doctor_id = doctors.id AND bl.is_active = 1)",
+    );
+  }
   const clause = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const rows = await db.getAllAsync<DoctorRow>(
     `SELECT * FROM doctors ${clause} ORDER BY name LIMIT ? OFFSET ?`,

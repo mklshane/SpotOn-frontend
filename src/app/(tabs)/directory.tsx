@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { type LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +20,14 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { isOnline } = useConnectivity();
 
+  const params = useLocalSearchParams<{ segment?: string }>();
   const [segment, setSegment] = useState<DirectorySegment>('clinics');
   const [query, setQuery] = useState('');
+
+  // Allow deep links like /directory?segment=doctors to land on a segment.
+  useEffect(() => {
+    if (params.segment === 'doctors' || params.segment === 'clinics') setSegment(params.segment);
+  }, [params.segment]);
   const debouncedQuery = useDebouncedValue(query, 250);
   const [overlayH, setOverlayH] = useState(0);
 
