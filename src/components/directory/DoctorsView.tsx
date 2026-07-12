@@ -2,31 +2,37 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 
-import type { DoctorSync } from '@/api/types';
+import type { DoctorSync, FacilitySync } from '@/api/types';
+import { ThemedText } from '@/components/themed-text';
 import { Chip } from '@/components/ui/chip';
 import { ListState } from '@/components/ui/list-state';
 import { Space } from '@/constants/theme';
-import { listDoctors, type DoctorQuery } from '@/data/repositories';
+import { listDoctors, listFacilities, type DoctorQuery } from '@/data/repositories';
 
+import { ClinicCard } from './ClinicCard';
 import { DoctorCard } from './DoctorCard';
 
 export type DoctorsViewProps = { query: string; topInset: number };
 
 const PDS_CHIP = 'PDS certified';
-const BOOKABLE_CHIP = 'Bookable online';
 
+/**
+ * The "Online Booking" tab: ONLY entries that can be booked online —
+ * doctors with an active booking link, plus clinics with their own
+ * online-booking page (facilities.booking_url).
+ */
 export function DoctorsView({ query, topInset }: DoctorsViewProps) {
   const [pdsOnly, setPdsOnly] = useState(false);
-  const [bookableOnly, setBookableOnly] = useState(false);
   const [specialty, setSpecialty] = useState<string | null>(null);
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
+  const [clinics, setClinics] = useState<FacilitySync[]>([]);
   const [error, setError] = useState(false);
 
-  // One-time broad fetch to derive the specialty facet chips.
+  // One-time broad fetch to derive the specialty facet chips (bookable pool).
   useEffect(() => {
     let cancelled = false;
-    listDoctors({ limit: 500 })
+    listDoctors({ hasBookingLink: true, limit: 500 })
       .then((all) => {
         if (cancelled) return;
         setSpecialties(Array.from(new Set(all.flatMap((d) => d.specialties))).sort());
@@ -43,16 +49,27 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
       q: query || undefined,
       pdsCertified: pdsOnly || undefined,
       specialty: specialty ?? undefined,
-      hasBookingLink: bookableOnly || undefined,
+      hasBookingLink: true,
       limit: 100,
     };
-    listDoctors(q)
-      .then((rows) => !cancelled && setDoctors(rows))
+    Promise.all([
+      listDoctors(q),
+      // Clinics with their own booking page; hidden while a specialty or PDS
+      // facet is active (those facets are doctor attributes).
+      pdsOnly || specialty
+        ? Promise.resolve([] as FacilitySync[])
+        : listFacilities({ q: query || undefined, hasBookingUrl: true, limit: 100 }),
+    ])
+      .then(([docRows, clinicRows]) => {
+        if (cancelled) return;
+        setDoctors(docRows);
+        setClinics(clinicRows);
+      })
       .catch(() => !cancelled && setError(true));
     return () => {
       cancelled = true;
     };
-  }, [query, pdsOnly, bookableOnly, specialty]);
+  }, [query, pdsOnly, specialty]);
 
   const onSelect = (id: string) => router.push({ pathname: '/directory/doctor', params: { id } });
 
@@ -67,14 +84,12 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={[PDS_CHIP, BOOKABLE_CHIP, ...specialties]}
+            data={[PDS_CHIP, ...specialties]}
             keyExtractor={(s) => s}
             contentContainerStyle={styles.chips}
             renderItem={({ item }) =>
               item === PDS_CHIP ? (
                 <Chip label={item} active={pdsOnly} onPress={() => setPdsOnly((v) => !v)} />
-              ) : item === BOOKABLE_CHIP ? (
-                <Chip label={item} active={bookableOnly} onPress={() => setBookableOnly((v) => !v)} />
               ) : (
                 <Chip
                   label={item}
@@ -86,6 +101,22 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
             style={styles.chipRow}
           />
         }
+        ListFooterComponent={
+          clinics.length ? (
+            <View style={styles.clinicSection}>
+              <ThemedText type="title2" style={styles.clinicHeader}>
+                Clinics with online booking
+              </ThemedText>
+              {clinics.map((f) => (
+                <ClinicCard
+                  key={f.id}
+                  facility={f}
+                  onPress={() => router.push({ pathname: '/directory/clinic', params: { id: f.id } })}
+                />
+              ))}
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           doctors === null ? (
             error ? (
@@ -93,8 +124,8 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
             ) : (
               <ListState kind="loading" title="Loading doctors…" />
             )
-          ) : (
-            <ListState kind="empty" title="No doctors found" subtitle="Try a different search or filter." />
+          ) : clinics.length ? null : (
+            <ListState kind="empty" title="No online booking found" subtitle="Try a different search or filter." />
           )
         }
       />
@@ -107,4 +138,6 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
   chipRow: { marginBottom: Space.base },
   chips: { gap: Space.sm },
+  clinicSection: { marginTop: Space.md },
+  clinicHeader: { marginBottom: Space.md },
 });

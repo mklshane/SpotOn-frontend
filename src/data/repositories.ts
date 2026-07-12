@@ -52,7 +52,11 @@ const arr = (v: string | null): string[] => {
 const hours = (v: string | null): HoursPeriod | null => {
   if (!v) return null;
   try {
-    return JSON.parse(v) as HoursPeriod;
+    const p = JSON.parse(v) as HoursPeriod;
+    // Guard against empty/partial objects ({}), which would render as
+    // "Hours unavailable" rows instead of hiding the section.
+    if (typeof p?.open !== "string" || typeof p?.close !== "string") return null;
+    return p;
   } catch {
     return null;
   }
@@ -102,6 +106,7 @@ export interface FacilityQuery {
   service?: string; // single service tag (one of SERVICES)
   city?: string;
   type?: string; // collector type, e.g. dermatology_clinic
+  hasBookingUrl?: boolean; // only facilities with an online booking page
   includeExcluded?: boolean; // default false — hide status='excluded'
   limit?: number;
   offset?: number;
@@ -127,6 +132,9 @@ function facilityWhere(query: FacilityQuery): { clause: string; params: (string 
     // services is a JSON array string like ["dermoscopy","excision"]
     where.push("services LIKE ?");
     params.push(`%"${query.service}"%`);
+  }
+  if (query.hasBookingUrl) {
+    where.push("booking_url IS NOT NULL AND booking_url != ''");
   }
   return { clause: where.length ? `WHERE ${where.join(" AND ")}` : "", params };
 }

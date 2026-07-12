@@ -72,6 +72,7 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   minus: { set: 'ionicons', name: 'remove' },
   'star.fill': { set: 'ionicons', name: 'star' },
   'clock.fill': { set: 'ionicons', name: 'time' },
+  banknote: { set: 'mci', name: 'cash' },
   'phone.fill': { set: 'ionicons', name: 'call' },
   globe: { set: 'ionicons', name: 'globe-outline' },
   'arrow.up.arrow.down': { set: 'ionicons', name: 'swap-vertical' },

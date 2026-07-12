@@ -15,7 +15,7 @@ import { Radius, Space } from '@/constants/theme';
 import type { FacilitySync } from '@/api/types';
 import { getFacility } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { facilityDisplayName, formatFeeRange, humanizeTag } from '@/lib/format';
+import { facilityNameParts, formatFeeRange, humanizeTag } from '@/lib/format';
 import { formatHours, isOpenNow } from '@/lib/hours';
 import { callNumber, openDirections, openWebsite } from '@/lib/links';
 
@@ -51,6 +51,8 @@ export default function ClinicDetailScreen() {
 
   const open = facility ? isOpenNow(facility.weekday_hours, facility.weekend_hours) : null;
   const feeRange = facility ? formatFeeRange(facility.fee_min, facility.fee_max) : null;
+  const nameParts = facility ? facilityNameParts(facility) : null;
+  const hasHours = !!(facility && (facility.weekday_hours || facility.weekend_hours));
 
   return (
     <Screen padded={false}>
@@ -91,7 +93,12 @@ export default function ClinicDetailScreen() {
           ) : null}
 
           <View style={styles.identity}>
-            <ThemedText type="title1">{facilityDisplayName(facility)}</ThemedText>
+            <ThemedText type="title1">{nameParts?.title ?? facility.name}</ThemedText>
+            {nameParts?.affiliation ? (
+              <ThemedText type="callout" themeColor="textSecondary">
+                at {nameParts.affiliation}
+              </ThemedText>
+            ) : null}
             <View style={styles.badges}>
               <Badge label={humanizeTag(facility.type)} tone="brand" />
               {open != null ? <Badge label={open ? 'Open Now' : 'Closed'} /> : null}
@@ -106,37 +113,64 @@ export default function ClinicDetailScreen() {
             </ThemedText>
           ) : null}
 
-          <Pressable
-            onPress={() =>
-              openDirections({
-                googleMapsUrl: facility.google_maps_url,
-                latitude: facility.latitude,
-                longitude: facility.longitude,
-              })
-            }
-            accessibilityRole="button">
-            <Card style={styles.row} elevation="sm">
-              <Icon name="mappin.circle.fill" size={18} tintColor={theme.brand} />
-              <ThemedText type="body" style={styles.rowText}>
-                {facility.address}
-              </ThemedText>
-            </Card>
-          </Pressable>
+          <Card style={styles.infoCard} elevation="sm">
+            <Pressable
+              onPress={() =>
+                openDirections({
+                  googleMapsUrl: facility.google_maps_url,
+                  latitude: facility.latitude,
+                  longitude: facility.longitude,
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Get directions">
+              <View style={styles.infoRow}>
+                <Icon name="mappin.circle.fill" size={18} tintColor={theme.brand} />
+                <ThemedText type="callout" style={styles.infoText} numberOfLines={3}>
+                  {facility.address}
+                </ThemedText>
+                <Icon name="chevron.right" size={14} tintColor={theme.muted} />
+              </View>
+            </Pressable>
 
-          <Card style={styles.hoursCard} elevation="sm">
-            <ThemedText type="headline">Hours</ThemedText>
-            <View style={styles.hoursRow}>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Mon–Fri
-              </ThemedText>
-              <ThemedText type="footnote">{formatHours(facility.weekday_hours)}</ThemedText>
-            </View>
-            <View style={styles.hoursRow}>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                Sat–Sun
-              </ThemedText>
-              <ThemedText type="footnote">{formatHours(facility.weekend_hours)}</ThemedText>
-            </View>
+            {hasHours ? (
+              <>
+                <View style={[styles.infoDivider, { backgroundColor: theme.hairline }]} />
+                <View style={styles.infoRow}>
+                  <Icon name="clock.fill" size={18} tintColor={theme.brand} />
+                  <View style={styles.infoText}>
+                    {facility.weekday_hours ? (
+                      <View style={styles.hoursLine}>
+                        <ThemedText type="footnote" themeColor="textSecondary">
+                          Mon–Fri
+                        </ThemedText>
+                        <ThemedText type="footnote">{formatHours(facility.weekday_hours)}</ThemedText>
+                      </View>
+                    ) : null}
+                    {facility.weekend_hours ? (
+                      <View style={styles.hoursLine}>
+                        <ThemedText type="footnote" themeColor="textSecondary">
+                          Sat–Sun
+                        </ThemedText>
+                        <ThemedText type="footnote">{formatHours(facility.weekend_hours)}</ThemedText>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              </>
+            ) : null}
+
+            {feeRange ? (
+              <>
+                <View style={[styles.infoDivider, { backgroundColor: theme.hairline }]} />
+                <View style={styles.infoRow}>
+                  <Icon name="banknote" size={18} tintColor={theme.brand} />
+                  <ThemedText type="footnote" style={styles.infoText}>
+                    Consultation fee {feeRange}
+                  </ThemedText>
+                </View>
+              </>
+            ) : null}
           </Card>
 
           {facility.services.length ? (
@@ -150,12 +184,6 @@ export default function ClinicDetailScreen() {
                 ))}
               </View>
             </View>
-          ) : null}
-
-          {feeRange ? (
-            <ThemedText type="footnote" themeColor="textSecondary">
-              Consultation fee: {feeRange}
-            </ThemedText>
           ) : null}
 
           {facility.booking_url ? (
@@ -193,12 +221,13 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, gap: Space.md },
   photoWrap: { gap: Space.xs },
   photo: { width: '100%', height: 180, borderRadius: Radius.lg },
-  identity: { gap: Space.sm },
+  identity: { gap: Space.xs },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  rowText: { flex: 1 },
-  hoursCard: { gap: Space.xs },
-  hoursRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  infoCard: { gap: Space.md },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  infoText: { flex: 1, gap: Space.xs },
+  infoDivider: { height: StyleSheet.hairlineWidth },
+  hoursLine: { flexDirection: 'row', justifyContent: 'space-between' },
   sectionTitle: { marginBottom: Space.xs },
   bookButton: { marginTop: Space.md },
   actions: { flexDirection: 'row', gap: Space.md, marginTop: Space.md },

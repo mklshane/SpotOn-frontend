@@ -30,18 +30,39 @@ export function daysSince(iso: string): number {
   return Math.floor((Date.now() - d.getTime()) / 86_400_000);
 }
 
-/** Display name for a facility: hospitals with a confirmed dermatology
- * department get it appended as a clarification, e.g.
- * "Bethany Hospital (Dermatology Clinic)". The stored name is never mutated. */
-export function facilityDisplayName(f: {
+type FacilityNameSource = {
   name: string;
   department_info?: { has_derm_department?: boolean | null; department_name?: string | null } | null;
-}): string {
+};
+
+/** Splits collector names like "Alice L. Lacorte, MD@Lipa Medix Medical Center"
+ * into a person/practice title and the facility they practice at, and carries
+ * the confirmed dermatology department as a clarification. The stored name is
+ * never mutated. */
+export function facilityNameParts(f: FacilityNameSource): {
+  title: string;
+  affiliation: string | null;
+} {
+  const at = f.name.indexOf('@');
+  let title = f.name;
+  let affiliation: string | null = null;
+  if (at > 0 && at < f.name.length - 1) {
+    title = f.name.slice(0, at).trim().replace(/,\s*$/, '');
+    affiliation = f.name.slice(at + 1).trim();
+  }
   const d = f.department_info;
   if (d?.has_derm_department && d.department_name && !f.name.includes(d.department_name)) {
-    return `${f.name} (${d.department_name})`;
+    if (affiliation) affiliation = `${affiliation} (${d.department_name})`;
+    else title = `${title} (${d.department_name})`;
   }
-  return f.name;
+  return { title, affiliation };
+}
+
+/** One-line display name: "Alice L. Lacorte, MD · Lipa Medix Medical Center",
+ * "Bethany Hospital (Dermatology Clinic)". */
+export function facilityDisplayName(f: FacilityNameSource): string {
+  const { title, affiliation } = facilityNameParts(f);
+  return affiliation ? `${title} · ${affiliation}` : title;
 }
 
 /** "dermatology_clinic" -> "Dermatology Clinic". Used everywhere a raw taxonomy tag
