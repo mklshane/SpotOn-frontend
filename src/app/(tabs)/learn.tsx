@@ -20,8 +20,6 @@ const CANCER_TYPES = [
     articleId: 'melanoma',
     kind: 'melanoma',
     title: 'Melanoma',
-    severity: 'Most serious',
-    tagline: 'A new or changing mole — asymmetric, uneven border, mixed colors.',
     color: 'riskCritical',
     tint: 'riskCriticalBg',
   },
@@ -29,8 +27,6 @@ const CANCER_TYPES = [
     articleId: 'scc',
     kind: 'scc',
     title: 'Squamous Cell Carcinoma',
-    severity: 'Can spread',
-    tagline: 'A rough, scaly patch or a sore that crusts and won’t heal.',
     color: 'riskHigh',
     tint: 'riskHighBg',
   },
@@ -38,8 +34,6 @@ const CANCER_TYPES = [
     articleId: 'bcc',
     kind: 'bcc',
     title: 'Basal Cell Carcinoma',
-    severity: 'Most common',
-    tagline: 'A pearly, waxy bump that may bleed or scab easily.',
     color: 'riskModerate',
     tint: 'riskModerateBg',
   },
@@ -106,14 +100,16 @@ export default function LearnScreen() {
             The three most common types — tap one to learn what to look for.
           </ThemedText>
         </View>
-        <View style={styles.typeList}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.typeRow}
+          style={styles.typeScroll}>
           {CANCER_TYPES.map((t) => (
             <CancerTypeCard
               key={t.articleId}
               kind={t.kind}
               title={t.title}
-              severity={t.severity}
-              tagline={t.tagline}
               color={theme[t.color]}
               tint={theme[t.tint]}
               onPress={() =>
@@ -124,7 +120,7 @@ export default function LearnScreen() {
               }
             />
           ))}
-        </View>
+        </ScrollView>
 
         <View style={styles.section}>
           <ThemedText type="title2">All Topics</ThemedText>
@@ -159,7 +155,10 @@ const styles = StyleSheet.create({
     gap: Space.lg,
   },
   section: { gap: 2, marginBottom: -Space.sm },
-  typeList: { gap: Space.md },
+  // Bleed the horizontal rail to the screen edges so cards scroll under the
+  // body padding instead of clipping at it.
+  typeScroll: { marginHorizontal: -Space.xl },
+  typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
   grid: { gap: Space.base },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
   spacer: { flex: 1 },

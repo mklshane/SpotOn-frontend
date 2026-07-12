@@ -18,17 +18,14 @@ export type CancerTypeKind = 'melanoma' | 'scc' | 'bcc';
 export type CancerTypeCardProps = {
   kind: CancerTypeKind;
   title: string;
-  severity: string;
-  /** One-line "what to look for" description. */
-  tagline: string;
-  /** Saturated accent (risk-tier color) — severity pill + learn-more link. */
+  /** Saturated accent (risk-tier color) — the learn-more link. */
   color: string;
   /** Soft tint (risk-tier bg color) — card background. */
   tint: string;
   onPress: () => void;
 };
 
-const ART_SIZE = 96;
+const ART_SIZE = 84;
 
 /**
  * A circular "skin swatch" illustration per cancer type — abstract, not
@@ -138,29 +135,24 @@ function SkinSwatchArt({ kind }: { kind: CancerTypeKind }) {
   );
 }
 
-/** Full-width learn card: soft risk-tint surface, severity pill + title +
- * one-line "what to look for" on the left, circular skin-swatch artwork on
- * the right. The three cards read top-down as a severity scale. */
-export function CancerTypeCard({ kind, title, severity, tagline, color, tint, onPress }: CancerTypeCardProps) {
+/** Rail card for the horizontal Skin Cancer Types scroll: soft risk-tint
+ * surface, the skin-swatch artwork in a white medallion up top, title below,
+ * and a quiet learn-more link pinned to the bottom. Scrolled left-to-right
+ * the three cards read as a severity scale. */
+export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerTypeCardProps) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${title} — ${severity}`}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
       <View style={[styles.card, { backgroundColor: tint }]}>
-        <View style={styles.textCol}>
-          <View style={[styles.pill, { backgroundColor: color }]}>
-            <ThemedText style={styles.pillLabel}>{severity.toUpperCase()}</ThemedText>
-          </View>
-          <ThemedText type="title2" numberOfLines={2}>
-            {title}
-          </ThemedText>
-          <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
-            {tagline}
-          </ThemedText>
-          <View style={styles.learnRow}>
-            <ThemedText style={[styles.learnLabel, { color }]}>Learn more</ThemedText>
-            <Icon name="chevron.right" size={12} tintColor={color} />
-          </View>
+        <View style={styles.medallion}>
+          <SkinSwatchArt kind={kind} />
         </View>
-        <SkinSwatchArt kind={kind} />
+        <ThemedText type="headline" numberOfLines={2}>
+          {title}
+        </ThemedText>
+        <View style={styles.learnRow}>
+          <ThemedText style={[styles.learnLabel, { color }]}>Learn more</ThemedText>
+          <Icon name="chevron.right" size={11} tintColor={color} />
+        </View>
       </View>
     </Pressable>
   );
@@ -168,32 +160,34 @@ export function CancerTypeCard({ kind, title, severity, tagline, color, tint, on
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.base,
+    width: 168,
+    minHeight: 208,
     borderRadius: Radius.xl,
-    padding: Space.lg,
+    padding: Space.base,
+    paddingTop: Space.lg,
+    gap: Space.sm,
     ...Elevation.sm,
   },
-  textCol: { flex: 1, gap: Space.xs },
-  pill: {
-    alignSelf: 'flex-start',
+  // Soft white disc that lifts the artwork off the tinted card.
+  medallion: {
+    alignSelf: 'center',
+    width: ART_SIZE + Space.base,
+    height: ART_SIZE + Space.base,
     borderRadius: Radius.pill,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    marginBottom: 2,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Space.xs,
   },
-  pillLabel: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  learnRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 'auto',
   },
-  learnRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
   learnLabel: {
-    fontSize: Type.subhead.fontSize,
-    lineHeight: Type.subhead.lineHeight,
+    fontSize: Type.footnote.fontSize,
+    lineHeight: Type.footnote.lineHeight,
     fontWeight: '600',
   },
 });
