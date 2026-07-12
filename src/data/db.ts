@@ -26,10 +26,15 @@ CREATE TABLE IF NOT EXISTS facilities (
   status          TEXT,
   phone           TEXT,
   website         TEXT,
+  booking_url     TEXT,
+  facility_type   TEXT,
   google_maps_url TEXT,
   google_rating   REAL,
   weekday_hours   TEXT,
   weekend_hours   TEXT,
+  description     TEXT,
+  photo_url       TEXT,
+  photo_attribution TEXT,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_facilities_city ON facilities(city);
@@ -49,6 +54,7 @@ CREATE TABLE IF NOT EXISTS doctors (
   website             TEXT,
   google_maps_url     TEXT,
   photo_url           TEXT,
+  description         TEXT,
   updated_at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_doctors_city ON doctors(city);
@@ -65,6 +71,7 @@ CREATE TABLE IF NOT EXISTS booking_links (
   available_text     TEXT,
   is_active          INTEGER NOT NULL,
   last_verified      TEXT,
+  next_available     TEXT,
   created_at         TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_booking_links_doctor ON booking_links(doctor_id);
@@ -87,6 +94,39 @@ CREATE TABLE IF NOT EXISTS sync_meta (
 );
 `;
 
+// Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
+// stamped with the current version; existing databases replay the ALTERs.
+const SCHEMA_VERSION = 2;
+
+// version-2 columns (migration 011 server-side). Each statement is applied
+// individually and "duplicate column" is tolerated, so a partially-migrated
+// database (killed mid-upgrade) recovers on the next open.
+const MIGRATION_V2 = [
+  "ALTER TABLE facilities ADD COLUMN booking_url TEXT",
+  "ALTER TABLE facilities ADD COLUMN facility_type TEXT",
+  "ALTER TABLE facilities ADD COLUMN description TEXT",
+  "ALTER TABLE facilities ADD COLUMN photo_url TEXT",
+  "ALTER TABLE facilities ADD COLUMN photo_attribution TEXT",
+  "ALTER TABLE doctors ADD COLUMN description TEXT",
+  "ALTER TABLE booking_links ADD COLUMN next_available TEXT",
+];
+
+async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
+  const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
+  const version = row?.user_version ?? 0;
+  if (version >= SCHEMA_VERSION) return;
+  if (version < 2) {
+    for (const stmt of MIGRATION_V2) {
+      try {
+        await db.execAsync(stmt);
+      } catch (e) {
+        if (!String(e).includes("duplicate column")) throw e;
+      }
+    }
+  }
+  await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+}
+
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /** Open (once) and initialize the database. Safe to call from anywhere. */
@@ -96,6 +136,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
       const db = await SQLite.openDatabaseAsync(DB_NAME);
       await db.execAsync("PRAGMA journal_mode = WAL;");
       await db.execAsync(SCHEMA);
+      await migrate(db);
       return db;
     })();
   }

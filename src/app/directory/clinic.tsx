@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -10,7 +11,7 @@ import { Icon } from '@/components/ui/icon';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { StarRating } from '@/components/ui/star-rating';
-import { Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
 import type { FacilitySync } from '@/api/types';
 import { getFacility } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
@@ -71,6 +72,24 @@ export default function ClinicDetailScreen() {
         <ListState kind="error" title="Clinic not found" />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
+          {facility.photo_url ? (
+            <View style={styles.photoWrap}>
+              <Image
+                source={{ uri: facility.photo_url }}
+                style={styles.photo}
+                contentFit="cover"
+                cachePolicy="disk"
+                transition={200}
+                accessibilityLabel={`Photo of ${facility.name}`}
+              />
+              {facility.photo_attribution ? (
+                <ThemedText type="caption" themeColor="muted">
+                  Photo: {facility.photo_attribution}
+                </ThemedText>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.identity}>
             <ThemedText type="title1">{facility.name}</ThemedText>
             <View style={styles.badges}>
@@ -80,6 +99,12 @@ export default function ClinicDetailScreen() {
             </View>
             {facility.google_rating != null ? <StarRating rating={facility.google_rating} /> : null}
           </View>
+
+          {facility.description ? (
+            <ThemedText type="callout" themeColor="textSecondary">
+              {facility.description}
+            </ThemedText>
+          ) : null}
 
           <Pressable
             onPress={() =>
@@ -133,7 +158,16 @@ export default function ClinicDetailScreen() {
             </ThemedText>
           ) : null}
 
-          <View style={styles.actions}>
+          {facility.booking_url ? (
+            <Button
+              label="Book online"
+              icon="calendar"
+              onPress={() => openWebsite(facility.booking_url as string)}
+              style={styles.bookButton}
+            />
+          ) : null}
+
+          <View style={[styles.actions, facility.booking_url ? styles.actionsTight : null]}>
             {facility.phone ? (
               <Button label="Call" variant="outline" icon="phone.fill" onPress={() => callNumber(facility.phone as string)} />
             ) : null}
@@ -157,6 +191,8 @@ const styles = StyleSheet.create({
   },
   headerSpacer: { width: 20 },
   body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, gap: Space.md },
+  photoWrap: { gap: Space.xs },
+  photo: { width: '100%', height: 180, borderRadius: Radius.lg },
   identity: { gap: Space.sm },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
@@ -164,5 +200,7 @@ const styles = StyleSheet.create({
   hoursCard: { gap: Space.xs },
   hoursRow: { flexDirection: 'row', justifyContent: 'space-between' },
   sectionTitle: { marginBottom: Space.xs },
+  bookButton: { marginTop: Space.md },
   actions: { flexDirection: 'row', gap: Space.md, marginTop: Space.md },
+  actionsTight: { marginTop: 0 },
 });

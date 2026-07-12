@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { FacilitySync } from '@/api/types';
@@ -40,7 +41,20 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
           </View>
 
           <View style={styles.body}>
-            <ThemedText type="headline">{facility.name}</ThemedText>
+            <View style={styles.titleRow}>
+              <ThemedText type="headline" style={styles.title}>
+                {facility.name}
+              </ThemedText>
+              {facility.photo_url ? (
+                <Image
+                  source={{ uri: facility.photo_url }}
+                  style={styles.thumb}
+                  contentFit="cover"
+                  cachePolicy="disk"
+                  accessibilityLabel={`Photo of ${facility.name}`}
+                />
+              ) : null}
+            </View>
 
             <View style={styles.badges}>
               {facility.has_philhealth ? <Badge label="PhilHealth" /> : null}
@@ -115,6 +129,9 @@ const styles = StyleSheet.create({
   distance: { fontWeight: '700' },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   body: { flex: 1, gap: Space.xs },
+  titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
+  title: { flex: 1 },
+  thumb: { width: 48, height: 48, borderRadius: Radius.md },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   info: { gap: 2, marginTop: Space.xs },
   actions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.sm },

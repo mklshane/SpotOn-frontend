@@ -7,8 +7,8 @@
  * Upserts are idempotent, so re-seeing a row across pages is harmless. When all
  * collections are drained, store the response's `synced_at` as the next `since`.
  *
- * Change timestamps: doctors/facilities use updated_at; booking_links/platforms
- * use created_at (no updated_at on those tables). Hard deletes aren't tracked, so
+ * Change timestamps: doctors/facilities/booking_links use updated_at; platforms
+ * use created_at (no updated_at on that table). Hard deletes aren't tracked, so
  * a periodic full resync (clear the cursor) reconciles removals.
  */
 import { api } from "../api/client";
@@ -38,15 +38,18 @@ async function upsertFacilities(items: FacilitySync[]): Promise<void> {
     for (const f of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO facilities
-         (id,name,type,address,city,province,region,latitude,longitude,services,
-          has_philhealth,fee_min,fee_max,status,phone,website,google_maps_url,
-          google_rating,weekday_hours,weekend_hours,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         (id,name,type,facility_type,address,city,province,region,latitude,longitude,
+          services,has_philhealth,fee_min,fee_max,status,phone,website,booking_url,
+          google_maps_url,google_rating,weekday_hours,weekend_hours,description,
+          photo_url,photo_attribution,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          f.id, f.name, f.type, f.address, f.city, f.province, f.region,
-          f.latitude, f.longitude, json(f.services), bit(f.has_philhealth),
-          f.fee_min, f.fee_max, f.status, f.phone, f.website, f.google_maps_url,
-          f.google_rating, json(f.weekday_hours), json(f.weekend_hours), f.updated_at,
+          f.id, f.name, f.type, f.facility_type, f.address, f.city, f.province,
+          f.region, f.latitude, f.longitude, json(f.services), bit(f.has_philhealth),
+          f.fee_min, f.fee_max, f.status, f.phone, f.website, f.booking_url,
+          f.google_maps_url, f.google_rating, json(f.weekday_hours),
+          json(f.weekend_hours), f.description, f.photo_url, f.photo_attribution,
+          f.updated_at,
         ],
       );
     }
@@ -61,12 +64,12 @@ async function upsertDoctors(items: DoctorSync[]): Promise<void> {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctors
          (id,name,title,pds_certified,specialties,specialties_display,city,region,
-          phone,website,google_maps_url,photo_url,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          phone,website,google_maps_url,photo_url,description,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           d.id, d.name, d.title, bit(d.pds_certified), json(d.specialties),
           d.specialties_display, d.city, d.region, d.phone, d.website,
-          d.google_maps_url, d.photo_url, d.updated_at,
+          d.google_maps_url, d.photo_url, d.description, d.updated_at,
         ],
       );
     }
@@ -81,12 +84,13 @@ async function upsertBookingLinks(items: BookingLinkSync[]): Promise<void> {
       await db.runAsync(
         `INSERT OR REPLACE INTO booking_links
          (id,doctor_id,platform_id,url,consultation_fee,rating,review_count,
-          is_introductory_fee,available_text,is_active,last_verified,created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+          is_introductory_fee,available_text,is_active,last_verified,
+          next_available,created_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           b.id, b.doctor_id, b.platform_id, b.url, b.consultation_fee, b.rating,
           b.review_count, bit(b.is_introductory_fee), b.available_text,
-          bit(b.is_active), b.last_verified, b.created_at,
+          bit(b.is_active), b.last_verified, b.next_available, b.created_at,
         ],
       );
     }

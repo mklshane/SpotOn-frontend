@@ -7,6 +7,7 @@ export interface FacilitySync {
   id: string;
   name: string;
   type: string; // dermatology_clinic | pathology_lab | private_hospital | ...
+  facility_type: string | null; // advisory: medical | aesthetic | mixed | unknown
   address: string;
   city: string;
   province: string;
@@ -20,13 +21,15 @@ export interface FacilitySync {
   status: string | null; // verified | unverified | pending | rejected | excluded
   phone: string | null;
   website: string | null;
+  booking_url: string | null; // clinic-level online booking page
   google_maps_url: string | null;
   google_rating: number | null;
   weekday_hours: HoursPeriod | null;
   weekend_hours: HoursPeriod | null;
+  description: string | null;
+  photo_url: string | null;
+  photo_attribution: string | null; // must be displayed with the photo (Google policy)
   updated_at: string; // ISO 8601
-  // NOTE: booking_url / facility_type exist in the DB but are not yet exposed by
-  // the /sync schema — add them server-side when needed.
 }
 
 export interface DoctorSync {
@@ -42,6 +45,7 @@ export interface DoctorSync {
   website: string | null;
   google_maps_url: string | null;
   photo_url: string | null;
+  description: string | null; // short professional bio
   updated_at: string;
 }
 
@@ -57,7 +61,9 @@ export interface BookingLinkSync {
   available_text: string | null;
   is_active: boolean;
   last_verified: string | null;
+  next_available: string | null; // first bookable slot (ISO 8601)
   created_at: string;
+  updated_at: string | null; // change timestamp (server cursor)
 }
 
 export interface PlatformSync {

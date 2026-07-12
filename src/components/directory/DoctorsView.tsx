@@ -13,9 +13,11 @@ import { DoctorCard } from './DoctorCard';
 export type DoctorsViewProps = { query: string; topInset: number };
 
 const PDS_CHIP = 'PDS certified';
+const BOOKABLE_CHIP = 'Bookable online';
 
 export function DoctorsView({ query, topInset }: DoctorsViewProps) {
   const [pdsOnly, setPdsOnly] = useState(false);
+  const [bookableOnly, setBookableOnly] = useState(false);
   const [specialty, setSpecialty] = useState<string | null>(null);
   const [specialties, setSpecialties] = useState<string[]>([]);
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
@@ -24,7 +26,7 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
   // One-time broad fetch to derive the specialty facet chips.
   useEffect(() => {
     let cancelled = false;
-    listDoctors({ hasBookingLink: true, limit: 500 })
+    listDoctors({ limit: 500 })
       .then((all) => {
         if (cancelled) return;
         setSpecialties(Array.from(new Set(all.flatMap((d) => d.specialties))).sort());
@@ -41,7 +43,7 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
       q: query || undefined,
       pdsCertified: pdsOnly || undefined,
       specialty: specialty ?? undefined,
-      hasBookingLink: true,
+      hasBookingLink: bookableOnly || undefined,
       limit: 100,
     };
     listDoctors(q)
@@ -50,7 +52,7 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [query, pdsOnly, specialty]);
+  }, [query, pdsOnly, bookableOnly, specialty]);
 
   const onSelect = (id: string) => router.push({ pathname: '/directory/doctor', params: { id } });
 
@@ -65,12 +67,14 @@ export function DoctorsView({ query, topInset }: DoctorsViewProps) {
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={[PDS_CHIP, ...specialties]}
+            data={[PDS_CHIP, BOOKABLE_CHIP, ...specialties]}
             keyExtractor={(s) => s}
             contentContainerStyle={styles.chips}
             renderItem={({ item }) =>
               item === PDS_CHIP ? (
                 <Chip label={item} active={pdsOnly} onPress={() => setPdsOnly((v) => !v)} />
+              ) : item === BOOKABLE_CHIP ? (
+                <Chip label={item} active={bookableOnly} onPress={() => setBookableOnly((v) => !v)} />
               ) : (
                 <Chip
                   label={item}

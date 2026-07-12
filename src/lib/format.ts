@@ -16,6 +16,20 @@ export function formatDistance(meters: number): string {
   return `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
 }
 
+/** "2026-07-17T08:00:00Z" (or a plain date) -> "Jul 17, 2026". */
+export function formatShortDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** Whole days elapsed since an ISO date/timestamp (0 for today, NaN if unparsable). */
+export function daysSince(iso: string): number {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return Number.NaN;
+  return Math.floor((Date.now() - d.getTime()) / 86_400_000);
+}
+
 /** "dermatology_clinic" -> "Dermatology Clinic". Used everywhere a raw taxonomy tag
  * (facility type or service) would otherwise leak into the UI. */
 export function humanizeTag(tag: string): string {

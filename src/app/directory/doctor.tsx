@@ -14,8 +14,24 @@ import { StarRating } from '@/components/ui/star-rating';
 import { Space } from '@/constants/theme';
 import { getDoctor, getDoctorBookingLinks, type BookingLinkWithPlatform } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { formatFee, humanizeTag } from '@/lib/format';
+import { daysSince, formatFee, formatShortDate, humanizeTag } from '@/lib/format';
 import { openWebsite } from '@/lib/links';
+
+// Scraped availability text goes stale fast; past this age show the snapshot
+// date instead of presenting it as current ("Not available" from weeks ago
+// reads as a live fact).
+const AVAILABILITY_STALE_DAYS = 30;
+
+function availabilityLine(link: BookingLinkWithPlatform): string | null {
+  if (link.next_available && new Date(link.next_available).getTime() > Date.now()) {
+    return `Next slot: ${formatShortDate(link.next_available)}`;
+  }
+  if (!link.available_text) return null;
+  if (link.last_verified && daysSince(link.last_verified) > AVAILABILITY_STALE_DAYS) {
+    return `Availability as of ${formatShortDate(link.last_verified)}`;
+  }
+  return link.available_text;
+}
 
 export default function DoctorDetailScreen() {
   const theme = useTheme();
@@ -95,6 +111,12 @@ export default function DoctorDetailScreen() {
             </View>
           </View>
 
+          {doctor.description ? (
+            <ThemedText type="callout" themeColor="textSecondary">
+              {doctor.description}
+            </ThemedText>
+          ) : null}
+
           <View style={styles.sectionHeader}>
             <ThemedText type="title2">Book online</ThemedText>
             {links.length > 0 ? (
@@ -106,47 +128,55 @@ export default function DoctorDetailScreen() {
           {links.length === 0 ? (
             <ListState kind="empty" title="No booking links yet" subtitle="Check back later." />
           ) : (
-            links.map((link) => (
-              <Pressable key={link.id} onPress={() => openWebsite(link.url)} accessibilityRole="button">
-                <Card style={styles.linkCard} elevation="sm">
-                  <View style={styles.linkTop}>
-                    <IconCircle icon="calendar" size={40} variant="tint" />
-                    <View style={styles.linkText}>
-                      <ThemedText type="headline" numberOfLines={1}>
-                        {link.platform?.name ?? 'Booking platform'}
-                      </ThemedText>
-                      {link.rating != null ? (
-                        <StarRating rating={link.rating} reviewCount={link.review_count} />
-                      ) : null}
+            links.map((link) => {
+              const availability = availabilityLine(link);
+              return (
+                <Pressable key={link.id} onPress={() => openWebsite(link.url)} accessibilityRole="button">
+                  <Card style={styles.linkCard} elevation="sm">
+                    <View style={styles.linkTop}>
+                      <IconCircle icon="calendar" size={40} variant="tint" />
+                      <View style={styles.linkText}>
+                        <ThemedText type="headline" numberOfLines={1}>
+                          {link.platform?.name ?? 'Booking platform'}
+                        </ThemedText>
+                        {link.rating != null ? (
+                          <StarRating rating={link.rating} reviewCount={link.review_count} />
+                        ) : null}
+                      </View>
+                      <Icon name="arrow.up.right" size={16} tintColor={theme.brand} />
                     </View>
-                    <Icon name="arrow.up.right" size={16} tintColor={theme.brand} />
-                  </View>
 
-                  {link.consultation_fee != null || link.available_text ? (
-                    <View style={[styles.linkDetails, { borderTopColor: theme.hairline }]}>
-                      {link.consultation_fee != null ? (
-                        <View style={styles.metaRow}>
-                          <ThemedText type="subhead" style={styles.fee}>
-                            {formatFee(link.consultation_fee)}
+                    {link.consultation_fee != null || availability || link.last_verified ? (
+                      <View style={[styles.linkDetails, { borderTopColor: theme.hairline }]}>
+                        {link.consultation_fee != null ? (
+                          <View style={styles.metaRow}>
+                            <ThemedText type="subhead" style={styles.fee}>
+                              {formatFee(link.consultation_fee)}
+                            </ThemedText>
+                            <ThemedText type="footnote" themeColor="muted">
+                              {link.is_introductory_fee ? 'intro consultation fee' : 'consultation fee'}
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                        {availability ? (
+                          <View style={styles.metaRow}>
+                            <Icon name="clock.fill" size={12} tintColor={theme.muted} />
+                            <ThemedText type="footnote" themeColor="muted" numberOfLines={2} style={styles.availText}>
+                              {availability}
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                        {link.last_verified ? (
+                          <ThemedText type="caption" themeColor="muted">
+                            Verified {formatShortDate(link.last_verified)}
                           </ThemedText>
-                          <ThemedText type="footnote" themeColor="muted">
-                            {link.is_introductory_fee ? 'intro consultation fee' : 'consultation fee'}
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                      {link.available_text ? (
-                        <View style={styles.metaRow}>
-                          <Icon name="clock.fill" size={12} tintColor={theme.muted} />
-                          <ThemedText type="footnote" themeColor="muted" numberOfLines={2} style={styles.availText}>
-                            {link.available_text}
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </Card>
-              </Pressable>
-            ))
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </Card>
+                </Pressable>
+              );
+            })
           )}
         </ScrollView>
       )}

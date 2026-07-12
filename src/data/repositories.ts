@@ -15,20 +15,24 @@ import { getDb } from "./db";
 // ---- row shapes as stored in SQLite (arrays/json as TEXT, bools as 0/1) -------
 
 interface FacilityRow {
-  id: string; name: string; type: string; address: string; city: string;
+  id: string; name: string; type: string; facility_type: string | null;
+  address: string; city: string;
   province: string; region: string | null; latitude: number; longitude: number;
   services: string; has_philhealth: number | null; fee_min: number | null;
   fee_max: number | null; status: string | null; phone: string | null;
-  website: string | null; google_maps_url: string | null;
+  website: string | null; booking_url: string | null;
+  google_maps_url: string | null;
   google_rating: number | null; weekday_hours: string | null;
-  weekend_hours: string | null; updated_at: string;
+  weekend_hours: string | null; description: string | null;
+  photo_url: string | null; photo_attribution: string | null; updated_at: string;
 }
 
 interface DoctorRow {
   id: string; name: string; title: string | null; pds_certified: number | null;
   specialties: string; specialties_display: string | null; city: string | null;
   region: string | null; phone: string | null; website: string | null;
-  google_maps_url: string | null; photo_url: string | null; updated_at: string;
+  google_maps_url: string | null; photo_url: string | null;
+  description: string | null; updated_at: string;
 }
 
 const toBool = (v: number | null): boolean | null =>
@@ -54,13 +58,17 @@ const hours = (v: string | null): HoursPeriod | null => {
 
 function toFacility(r: FacilityRow): FacilitySync {
   return {
-    id: r.id, name: r.name, type: r.type, address: r.address, city: r.city,
+    id: r.id, name: r.name, type: r.type, facility_type: r.facility_type,
+    address: r.address, city: r.city,
     province: r.province, region: r.region, latitude: r.latitude,
     longitude: r.longitude, services: arr(r.services),
     has_philhealth: toBool(r.has_philhealth), fee_min: r.fee_min,
     fee_max: r.fee_max, status: r.status, phone: r.phone, website: r.website,
+    booking_url: r.booking_url,
     google_maps_url: r.google_maps_url, google_rating: r.google_rating,
     weekday_hours: hours(r.weekday_hours), weekend_hours: hours(r.weekend_hours),
+    description: r.description, photo_url: r.photo_url,
+    photo_attribution: r.photo_attribution,
     updated_at: r.updated_at,
   };
 }
@@ -71,7 +79,7 @@ function toDoctor(r: DoctorRow): DoctorSync {
     pds_certified: toBool(r.pds_certified), specialties: arr(r.specialties),
     specialties_display: r.specialties_display, city: r.city, region: r.region,
     phone: r.phone, website: r.website, google_maps_url: r.google_maps_url,
-    photo_url: r.photo_url, updated_at: r.updated_at,
+    photo_url: r.photo_url, description: r.description, updated_at: r.updated_at,
   };
 }
 
@@ -261,7 +269,9 @@ export async function getDoctorBookingLinks(
     available_text: (l.available_text as string) ?? null,
     is_active: !!(l.is_active as number),
     last_verified: (l.last_verified as string) ?? null,
+    next_available: (l.next_available as string) ?? null,
     created_at: l.created_at as string,
+    updated_at: (l.updated_at as string) ?? null,
     platform: byId.get(l.platform_id as string) ?? null,
   }));
 }
