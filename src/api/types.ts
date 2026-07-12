@@ -3,6 +3,13 @@ export interface HoursPeriod {
   close: string; // "HH:MM"
 }
 
+/** Hospital dermatology-department findings (hospitals only, else null). */
+export interface DepartmentInfo {
+  has_derm_department?: boolean | null;
+  department_name?: string | null;
+  opd_notes?: string | null;
+}
+
 export interface FacilitySync {
   id: string;
   name: string;
@@ -29,6 +36,7 @@ export interface FacilitySync {
   description: string | null;
   photo_url: string | null;
   photo_attribution: string | null; // must be displayed with the photo (Google policy)
+  department_info: DepartmentInfo | null;
   updated_at: string; // ISO 8601
 }
 

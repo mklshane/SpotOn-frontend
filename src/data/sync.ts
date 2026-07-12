@@ -41,15 +41,15 @@ async function upsertFacilities(items: FacilitySync[]): Promise<void> {
          (id,name,type,facility_type,address,city,province,region,latitude,longitude,
           services,has_philhealth,fee_min,fee_max,status,phone,website,booking_url,
           google_maps_url,google_rating,weekday_hours,weekend_hours,description,
-          photo_url,photo_attribution,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          photo_url,photo_attribution,department_info,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           f.id, f.name, f.type, f.facility_type, f.address, f.city, f.province,
           f.region, f.latitude, f.longitude, json(f.services), bit(f.has_philhealth),
           f.fee_min, f.fee_max, f.status, f.phone, f.website, f.booking_url,
           f.google_maps_url, f.google_rating, json(f.weekday_hours),
           json(f.weekend_hours), f.description, f.photo_url, f.photo_attribution,
-          f.updated_at,
+          json(f.department_info), f.updated_at,
         ],
       );
     }

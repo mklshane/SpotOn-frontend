@@ -5,6 +5,7 @@
  */
 import type {
   BookingLinkSync,
+  DepartmentInfo,
   DoctorSync,
   FacilitySync,
   HoursPeriod,
@@ -24,7 +25,8 @@ interface FacilityRow {
   google_maps_url: string | null;
   google_rating: number | null; weekday_hours: string | null;
   weekend_hours: string | null; description: string | null;
-  photo_url: string | null; photo_attribution: string | null; updated_at: string;
+  photo_url: string | null; photo_attribution: string | null;
+  department_info: string | null; updated_at: string;
 }
 
 interface DoctorRow {
@@ -56,6 +58,15 @@ const hours = (v: string | null): HoursPeriod | null => {
   }
 };
 
+const dept = (v: string | null): DepartmentInfo | null => {
+  if (!v) return null;
+  try {
+    return JSON.parse(v) as DepartmentInfo;
+  } catch {
+    return null;
+  }
+};
+
 function toFacility(r: FacilityRow): FacilitySync {
   return {
     id: r.id, name: r.name, type: r.type, facility_type: r.facility_type,
@@ -69,6 +80,7 @@ function toFacility(r: FacilityRow): FacilitySync {
     weekday_hours: hours(r.weekday_hours), weekend_hours: hours(r.weekend_hours),
     description: r.description, photo_url: r.photo_url,
     photo_attribution: r.photo_attribution,
+    department_info: dept(r.department_info),
     updated_at: r.updated_at,
   };
 }

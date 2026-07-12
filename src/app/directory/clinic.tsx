@@ -15,7 +15,7 @@ import { Radius, Space } from '@/constants/theme';
 import type { FacilitySync } from '@/api/types';
 import { getFacility } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { formatFeeRange, humanizeTag } from '@/lib/format';
+import { facilityDisplayName, formatFeeRange, humanizeTag } from '@/lib/format';
 import { formatHours, isOpenNow } from '@/lib/hours';
 import { callNumber, openDirections, openWebsite } from '@/lib/links';
 
@@ -91,7 +91,7 @@ export default function ClinicDetailScreen() {
           ) : null}
 
           <View style={styles.identity}>
-            <ThemedText type="title1">{facility.name}</ThemedText>
+            <ThemedText type="title1">{facilityDisplayName(facility)}</ThemedText>
             <View style={styles.badges}>
               <Badge label={humanizeTag(facility.type)} tone="brand" />
               {open != null ? <Badge label={open ? 'Open Now' : 'Closed'} /> : null}

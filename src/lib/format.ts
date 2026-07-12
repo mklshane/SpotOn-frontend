@@ -30,6 +30,20 @@ export function daysSince(iso: string): number {
   return Math.floor((Date.now() - d.getTime()) / 86_400_000);
 }
 
+/** Display name for a facility: hospitals with a confirmed dermatology
+ * department get it appended as a clarification, e.g.
+ * "Bethany Hospital (Dermatology Clinic)". The stored name is never mutated. */
+export function facilityDisplayName(f: {
+  name: string;
+  department_info?: { has_derm_department?: boolean | null; department_name?: string | null } | null;
+}): string {
+  const d = f.department_info;
+  if (d?.has_derm_department && d.department_name && !f.name.includes(d.department_name)) {
+    return `${f.name} (${d.department_name})`;
+  }
+  return f.name;
+}
+
 /** "dermatology_clinic" -> "Dermatology Clinic". Used everywhere a raw taxonomy tag
  * (facility type or service) would otherwise leak into the UI. */
 export function humanizeTag(tag: string): string {

@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDistance, humanizeTag } from '@/lib/format';
+import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHours, isOpenNow } from '@/lib/hours';
 import { callNumber, openDirections } from '@/lib/links';
 
@@ -43,7 +43,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
           <View style={styles.body}>
             <View style={styles.titleRow}>
               <ThemedText type="headline" style={styles.title}>
-                {facility.name}
+                {facilityDisplayName(facility)}
               </ThemedText>
               {facility.photo_url ? (
                 <Image

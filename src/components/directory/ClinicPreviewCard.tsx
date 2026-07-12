@@ -9,7 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDistance, humanizeTag } from '@/lib/format';
+import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHours, isOpenNow } from '@/lib/hours';
 
 export type ClinicPreviewCardProps = {
@@ -44,7 +44,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
     <View style={[styles.card, { backgroundColor: theme.surface }]}>
       <View style={styles.header}>
         <ThemedText type="headline" style={styles.name} numberOfLines={1}>
-          {facility.name}
+          {facilityDisplayName(facility)}
         </ThemedText>
         <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
           <Icon name="xmark" size={16} tintColor={theme.muted} />

@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS facilities (
   description     TEXT,
   photo_url       TEXT,
   photo_attribution TEXT,
+  department_info TEXT,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_facilities_city ON facilities(city);
@@ -96,7 +97,7 @@ CREATE TABLE IF NOT EXISTS sync_meta (
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -111,17 +112,22 @@ const MIGRATION_V2 = [
   "ALTER TABLE booking_links ADD COLUMN next_available TEXT",
 ];
 
+// v3 — hospital derm-department findings, rendered as "Name (Department)".
+const MIGRATION_V3 = ["ALTER TABLE facilities ADD COLUMN department_info TEXT"];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
   if (version >= SCHEMA_VERSION) return;
-  if (version < 2) {
-    for (const stmt of MIGRATION_V2) {
-      try {
-        await db.execAsync(stmt);
-      } catch (e) {
-        if (!String(e).includes("duplicate column")) throw e;
-      }
+  const pending = [
+    ...(version < 2 ? MIGRATION_V2 : []),
+    ...(version < 3 ? MIGRATION_V3 : []),
+  ];
+  for (const stmt of pending) {
+    try {
+      await db.execAsync(stmt);
+    } catch (e) {
+      if (!String(e).includes("duplicate column")) throw e;
     }
   }
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION}`);
