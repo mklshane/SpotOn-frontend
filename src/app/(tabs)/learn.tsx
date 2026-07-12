@@ -1,16 +1,46 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { SearchBar } from '@/components/directory/SearchBar';
+import { CancerTypeTile } from '@/components/learn/CancerTypeTile';
 import { LearnHeroBanner } from '@/components/learn/LearnHeroBanner';
 import { TopicCard } from '@/components/learn/TopicCard';
 import { ThemedText } from '@/components/themed-text';
-import { IconCircle } from '@/components/ui/icon-circle';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
 import { LEARN_TOPICS, type Topic } from '@/data/learn-content';
-import { useAuth } from '@/lib/auth';
+import { useTheme } from '@/hooks/use-theme';
+
+// The three cancer-type articles live under the 'types-of-skin-cancer' topic;
+// each card deep-links straight to its article. Ordered most-serious first,
+// with the accent mapped to the risk-tier palette so the section reads as a
+// severity scale.
+const TYPES_TOPIC_ID = 'types-of-skin-cancer';
+const CANCER_TYPES = [
+  {
+    articleId: 'melanoma',
+    kind: 'melanoma',
+    letter: 'M',
+    title: 'Melanoma',
+    severity: 'Most serious',
+    color: 'riskCritical',
+  },
+  {
+    articleId: 'scc',
+    kind: 'scc',
+    letter: 'S',
+    title: 'Squamous Cell Carcinoma',
+    severity: 'Can spread',
+    color: 'riskHigh',
+  },
+  {
+    articleId: 'bcc',
+    kind: 'bcc',
+    letter: 'B',
+    title: 'Basal Cell Carcinoma',
+    severity: 'Most common',
+    color: 'riskModerate',
+  },
+] as const;
 
 function onSelect(topic: Topic) {
   switch (topic.kind) {
@@ -48,36 +78,17 @@ function pairUp(topics: Topic[]): Topic[][] {
 }
 
 export default function LearnScreen() {
-  const { user } = useAuth();
-  const [query, setQuery] = useState('');
-  const firstName = user?.full_name?.split(' ')[0] ?? 'there';
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return LEARN_TOPICS;
-    return LEARN_TOPICS.filter(
-      (t) => t.title.toLowerCase().includes(q) || t.subtitle.toLowerCase().includes(q),
-    );
-  }, [query]);
-
+  const theme = useTheme();
   const warningSigns = LEARN_TOPICS.find((t) => t.id === 'warning-signs');
+  // The types topic is covered by the dedicated section above the grid.
+  const gridTopics = LEARN_TOPICS.filter((t) => t.id !== TYPES_TOPIC_ID);
 
   return (
     <Screen padded={false}>
       <ScrollView contentContainerStyle={styles.body}>
-        <View style={styles.header}>
-          <IconCircle icon="person.fill" variant="tint" size={48} />
-          <View style={styles.greeting}>
-            <ThemedText type="callout" themeColor="muted">
-              Hello,
-            </ThemedText>
-            <ThemedText type="title2">{firstName}</ThemedText>
-          </View>
-        </View>
+        <ThemedText type="largeTitle">Learn</ThemedText>
 
-        <SearchBar value={query} onChangeText={setQuery} placeholder="Search topics…" />
-
-        {!query && warningSigns ? (
+        {warningSigns ? (
           <LearnHeroBanner
             icon="exclamationmark.triangle.fill"
             title="Know the Warning Signs"
@@ -86,10 +97,40 @@ export default function LearnScreen() {
           />
         ) : null}
 
-        <ThemedText type="title2">All Topics</ThemedText>
+        <View style={styles.section}>
+          <ThemedText type="title2">Skin Cancer Types</ThemedText>
+          <ThemedText type="footnote" themeColor="textSecondary">
+            The three most common types — tap one to learn what to look for.
+          </ThemedText>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.typeRow}
+          style={styles.typeScroll}>
+          {CANCER_TYPES.map((t) => (
+            <CancerTypeTile
+              key={t.articleId}
+              kind={t.kind}
+              letter={t.letter}
+              title={t.title}
+              severity={t.severity}
+              color={theme[t.color]}
+              onPress={() =>
+                router.push({
+                  pathname: '/learn/article',
+                  params: { topicId: TYPES_TOPIC_ID, articleId: t.articleId },
+                })
+              }
+            />
+          ))}
+        </ScrollView>
 
+        <View style={styles.section}>
+          <ThemedText type="title2">All Topics</ThemedText>
+        </View>
         <View style={styles.grid}>
-          {pairUp(filtered).map((row, i) => (
+          {pairUp(gridTopics).map((row, i) => (
             <View key={i} style={styles.row}>
               {row.map((topic) => (
                 <TopicCard
@@ -117,8 +158,11 @@ const styles = StyleSheet.create({
     paddingBottom: Space.xxxl,
     gap: Space.lg,
   },
-  header: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
-  greeting: { gap: 2 },
+  section: { gap: 2, marginBottom: -Space.sm },
+  // Bleed the horizontal rail to the screen edges so tiles scroll under the
+  // body padding instead of clipping at it.
+  typeScroll: { marginHorizontal: -Space.xl },
+  typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
   grid: { gap: Space.base },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
   spacer: { flex: 1 },

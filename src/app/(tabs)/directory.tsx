@@ -64,7 +64,7 @@ export default function DirectoryScreen() {
         <SearchBar
           value={query}
           onChangeText={setQuery}
-          placeholder={segment === 'clinics' ? 'Search clinics or area…' : 'Search doctors…'}
+          placeholder={segment === 'clinics' ? 'Search clinics or area…' : 'Search...'}
           floating
         />
         {!isOnline ? (
