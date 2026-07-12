@@ -41,12 +41,7 @@ Reanimated.addWhitelistedNativeProps({ zoom: true });
 
 // Confidence hysteresis: a high bar to *create* the box, a low bar to *keep* it — so it appears
 // only when we're sure and doesn't flicker as the score hovers near a single threshold.
-// CREATE_SCORE calibrated from the offline detector eval (SpotOn-synthetic/synth/eval/detector_eval):
-// on real lesion anchors, dropping 0.35 -> 0.30 lifts detection recall ~0.69 -> ~0.72 with no
-// added non-skin false positives (the IQA skin gate backstops non-skin). The same eval showed
-// letterbox/stretch preprocessing does NOT beat the resize-plugin's center crop, so preprocessing
-// is left unchanged. A triage capture should favour recall (rarely miss a lesion).
-const CREATE_SCORE = 0.3; // score needed for the box to first appear (recall-favouring, eval-tuned)
+const CREATE_SCORE = 0.35; // score needed for the box to first appear (sensitive; near old 0.32)
 const KEEP_SCORE = 0.28; // once shown, the box stays while the score holds above this
 const FUSE_SCORE = 0.25; // anchors this confident (and near the best) are fused into the box
 const LOCK_SCORE = 0.5; // above this the box is "locked" (green + eligible for the ready coach)
