@@ -21,8 +21,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
-import { useScanDraft } from '@/lib/scan-draft';
-import { useScanHistory } from '@/lib/scan-history';
+import { useScreeningSession } from '@/lib/screening-session';
 
 const STEP_MS = 1300; // per-check reveal cadence
 const PROCEED_MS = 850; // beat before auto-advancing on a clean pass
@@ -39,8 +38,15 @@ export default function QualityScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
-  const { bodyMark, reset } = useScanDraft();
-  const { addEntry } = useScanHistory();
+  const { setImageUri, startClassification, questionnaireComplete } = useScreeningSession();
+
+  // Warm up the classifier while the IQA animation plays — the load (1–3s) is free here.
+  // Lazy import keeps the TFLite module off the app-startup path.
+  useEffect(() => {
+    import('@/lib/classifier/classifier-model')
+      .then((m) => m.getClassifierModel())
+      .catch((e) => console.warn('[classifier] warm-up failed', e));
+  }, []);
 
   const CARD = Math.min(width - Space.xl * 2, 216);
 
@@ -117,16 +123,13 @@ export default function QualityScreen() {
   const beamStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sweep.value * (CARD - 56) }] }));
 
   function proceed() {
-    if (proceeded.current) return;
+    if (proceeded.current || !uri) return;
     proceeded.current = true;
-    if (bodyMark) {
-      const entry = addEntry({ mark: bodyMark, imageUri: uri });
-      reset();
-      router.replace({ pathname: '/scan/result', params: { id: entry.id } });
-    } else {
-      reset();
-      router.replace('/(tabs)/home');
-    }
+    setImageUri(uri);
+    // Classification runs in the background while the user answers the questionnaire.
+    startClassification(uri);
+    // On a Safety-Floor rescan pass the answers already exist — go straight to analysis.
+    router.replace(questionnaireComplete ? '/scan/analysis' : '/scan/questionnaire');
   }
 
   function retake() {

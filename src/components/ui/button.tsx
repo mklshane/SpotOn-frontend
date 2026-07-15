@@ -31,6 +31,7 @@ export function Button({
   loading = false,
   icon,
   disabled,
+  style,
   ...rest
 }: ButtonProps) {
   const theme = useTheme();
@@ -65,7 +66,7 @@ export function Button({
       disabled={isDisabled}
       onPressIn={() => (scale.value = withSpring(0.97, { damping: 18, stiffness: 320 }))}
       onPressOut={() => (scale.value = withSpring(1, { damping: 18, stiffness: 320 }))}
-      style={[styles.base, isDisabled && styles.disabled, animatedStyle]}
+      style={[styles.base, isDisabled && styles.disabled, style, animatedStyle]}
       {...rest}>
       <View style={[styles.surface, surfaceStyle, filled && !isDisabled && Elevation.md]} />
       <View style={styles.row}>

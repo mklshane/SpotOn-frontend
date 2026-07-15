@@ -15,8 +15,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DevTools } from '@/components/ui/dev-tools';
 import { AuthProvider } from '@/lib/auth';
-import { ScanDraftProvider } from '@/lib/scan-draft';
 import { ScanHistoryProvider } from '@/lib/scan-history';
+import { ScreeningSessionProvider } from '@/lib/screening-session';
 
 // The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
 // intentional, correct pattern that Reanimated v4 strict mode over-flags. Disable strict mode
@@ -47,7 +47,7 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <ScanHistoryProvider>
-          <ScanDraftProvider>
+          <ScreeningSessionProvider>
             <ThemeProvider value={DefaultTheme}>
               <StatusBar style="dark" />
               <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF9F4' } }}>
@@ -62,7 +62,7 @@ export default function RootLayout() {
               </Stack>
               <DevTools />
             </ThemeProvider>
-          </ScanDraftProvider>
+          </ScreeningSessionProvider>
           </ScanHistoryProvider>
         </AuthProvider>
       </SafeAreaProvider>

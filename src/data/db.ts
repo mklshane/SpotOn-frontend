@@ -93,11 +93,42 @@ CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY NOT NULL,
   value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS screenings (
+  id                   TEXT PRIMARY KEY NOT NULL,
+  created_at           TEXT NOT NULL,
+  mark_x               REAL,
+  mark_y               REAL,
+  mark_z               REAL,
+  mark_region          TEXT,
+  mark_view            TEXT,
+  image_uri            TEXT NOT NULL,
+  source               TEXT NOT NULL,
+  answers_json         TEXT NOT NULL,
+  probs_json           TEXT NOT NULL,
+  top_class            TEXT NOT NULL,
+  top_confidence       REAL NOT NULL,
+  attempt              INTEGER NOT NULL,
+  model_version        TEXT NOT NULL,
+  input_size           INTEGER NOT NULL,
+  normalization        TEXT NOT NULL,
+  inference_ms         INTEGER NOT NULL,
+  first_attempt_json   TEXT,
+  class_weight         REAL NOT NULL,
+  cs                   REAL NOT NULL,
+  symptom_score_raw    REAL NOT NULL,
+  symptom_score        REAL NOT NULL,
+  tps                  REAL NOT NULL,
+  tier                 TEXT NOT NULL,
+  safety_floor_applied INTEGER NOT NULL,
+  confidence_qualifier INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -115,6 +146,13 @@ const MIGRATION_V2 = [
 // v3 — hospital derm-department findings, rendered as "Name (Department)".
 const MIGRATION_V3 = ["ALTER TABLE facilities ADD COLUMN department_info TEXT"];
 
+// v4 — on-device screening records (questionnaire + classification + triage audit
+// trail). The table lives in the base SCHEMA (CREATE IF NOT EXISTS is idempotent),
+// so upgrading databases just need the statements replayed.
+const MIGRATION_V4 = [
+  SCHEMA.slice(SCHEMA.indexOf("CREATE TABLE IF NOT EXISTS screenings")),
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -122,6 +160,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const pending = [
     ...(version < 2 ? MIGRATION_V2 : []),
     ...(version < 3 ? MIGRATION_V3 : []),
+    ...(version < 4 ? MIGRATION_V4 : []),
   ];
   for (const stmt of pending) {
     try {

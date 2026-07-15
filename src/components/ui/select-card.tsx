@@ -2,7 +2,7 @@ import { Icon } from '@/components/ui/icon';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 
-import { Radius, Space } from '@/constants/theme';
+import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
@@ -31,9 +31,10 @@ export function SelectCard({ title, subtitle, selected, onPress, style }: Select
       onPressOut={() => (scale.value = withSpring(1, { damping: 18, stiffness: 320 }))}
       style={[
         styles.base,
+        Elevation.sm,
         {
-          backgroundColor: selected ? theme.brandTint : theme.elementBg,
-          borderColor: selected ? theme.brand : 'transparent',
+          backgroundColor: selected ? theme.brandTint : theme.surface,
+          borderColor: selected ? theme.brand : theme.hairline,
         },
         animatedStyle,
         style,
@@ -53,7 +54,7 @@ export function SelectCard({ title, subtitle, selected, onPress, style }: Select
             ? { backgroundColor: theme.brand, borderColor: theme.brand }
             : { backgroundColor: 'transparent', borderColor: theme.hairline },
         ]}>
-        {selected ? <Icon name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
+        {selected ? <Icon name="checkmark" tintColor={theme.onBrand} size={14} /> : null}
       </View>
     </AnimatedPressable>
   );
@@ -61,11 +62,11 @@ export function SelectCard({ title, subtitle, selected, onPress, style }: Select
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 56,
-    borderRadius: Radius.md,
+    minHeight: 64,
+    borderRadius: Radius.lg,
     borderWidth: 1.5,
-    paddingHorizontal: Space.base,
-    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.base,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -73,9 +74,9 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1, gap: 2 },
   check: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',

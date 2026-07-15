@@ -3,7 +3,7 @@ import { Canvas, useThree } from '@react-three/fiber/native';
 import { useEffect } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
-import type { BodyMark } from '@/lib/scan-draft';
+import type { BodyMark } from '@/lib/triage/types';
 
 import { BodyModel } from './body-model';
 import { BodyLights, Marker } from './mannequin';

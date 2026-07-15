@@ -14,7 +14,10 @@ export default function BodyLesionsScreen() {
   const theme = useTheme();
   const { entries } = useScanHistory();
 
-  const markers = entries.map((e) => ({ id: e.id, point: e.mark.point }));
+  // Skipped-location screenings have no mark and can't be placed on the body model.
+  const markers = entries
+    .filter((e) => e.mark != null)
+    .map((e) => ({ id: e.id, point: e.mark!.point }));
 
   const onSelect = useCallback((id: string) => {
     router.push({ pathname: '/scan/result', params: { id } });

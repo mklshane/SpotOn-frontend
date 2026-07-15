@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -11,12 +11,18 @@ import { Screen } from '@/components/ui/screen';
 import { BodyViewer } from '@/components/scan/body-viewer';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useScanDraft } from '@/lib/scan-draft';
+import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
   const theme = useTheme();
-  const { bodyMark, setBodyMark } = useScanDraft();
+  const { bodyMark, setBodyMark, setSource, reset } = useScreeningSession();
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // This screen is the flow entry: clear any stale session from an abandoned run.
+  useEffect(() => {
+    reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function pickFromGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -28,7 +34,8 @@ export default function BodyAreaScreen() {
       quality: 0.9,
     });
     if (!result.canceled && result.assets[0]) {
-      // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
+      setSource('gallery');
+      // Hand off to the image-quality gate; it starts classification on pass / "use anyway".
       router.push({ pathname: '/scan/quality', params: { uri: result.assets[0].uri } });
     }
   }
@@ -83,7 +90,15 @@ export default function BodyAreaScreen() {
         title="Choose image source"
         onClose={() => setSheetOpen(false)}
         options={[
-          { key: 'camera', label: 'Camera', icon: 'camera.fill', onPress: () => router.push('/scan/capture') },
+          {
+            key: 'camera',
+            label: 'Camera',
+            icon: 'camera.fill',
+            onPress: () => {
+              setSource('camera');
+              router.push('/scan/capture');
+            },
+          },
           { key: 'gallery', label: 'Photo gallery', icon: 'photo.on.rectangle', onPress: pickFromGallery },
         ]}
       />

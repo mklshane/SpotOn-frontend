@@ -85,6 +85,18 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'cross.case.fill': { set: 'ionicons', name: 'medkit' },
   'square.grid.2x2.fill': { set: 'ionicons', name: 'grid' },
   'sun.max.fill': { set: 'ionicons', name: 'sunny' },
+  // screening questionnaire + results
+  'arrow.triangle.2.circlepath': { set: 'ionicons', name: 'sync' },
+  'bandage.fill': { set: 'mci', name: 'bandage' },
+  scribble: { set: 'mci', name: 'gesture' },
+  'drop.fill': { set: 'ionicons', name: 'water' },
+  allergens: { set: 'mci', name: 'blur' },
+  'ruler.fill': { set: 'mci', name: 'ruler' },
+  'circle.grid.2x2.fill': { set: 'ionicons', name: 'apps' },
+  'chart.bar.fill': { set: 'ionicons', name: 'stats-chart' },
+  'brain.head.profile': { set: 'mci', name: 'brain' },
+  'list.bullet.clipboard.fill': { set: 'ionicons', name: 'clipboard' },
+  'square.and.arrow.up': { set: 'ionicons', name: 'share-outline' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

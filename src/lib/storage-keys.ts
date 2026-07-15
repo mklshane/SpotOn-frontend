@@ -2,4 +2,5 @@
 export const STORAGE_KEYS = {
   hasSeenOnboarding: 'has_seen_onboarding',
   reengagementRemindersEnabled: 'reengagement_reminders_enabled',
+  selfCheckReminderDueAt: 'self_check_reminder_due_at',
 } as const;

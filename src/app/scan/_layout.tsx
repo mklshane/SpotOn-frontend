@@ -7,9 +7,12 @@ export default function ScanLayout() {
       <Stack.Screen name="capture" options={{ animation: 'fade' }} />
       <Stack.Screen name="crop" options={{ animation: 'fade' }} />
       <Stack.Screen name="quality" options={{ animation: 'fade' }} />
+      <Stack.Screen name="questionnaire" options={{ animation: 'fade', gestureEnabled: false }} />
+      <Stack.Screen name="analysis" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="instructions" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="history" />
       <Stack.Screen name="result" />
+      <Stack.Screen name="report" />
     </Stack>
   );
 }

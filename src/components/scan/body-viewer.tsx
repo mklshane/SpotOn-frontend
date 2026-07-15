@@ -8,7 +8,7 @@ import { type Box3, Raycaster, Vector2, type Camera, type Group } from 'three';
 
 import { ThemedText } from '@/components/themed-text';
 import { resolveRegionFromPoint } from '@/lib/body-regions';
-import type { BodyMark } from '@/lib/scan-draft';
+import type { BodyMark } from '@/lib/triage/types';
 
 import { BodyModel, type BodyModelStatus } from './body-model';
 import { BodyLights, Marker } from './mannequin';
