@@ -30,6 +30,7 @@ type Row = {
   model_version: string;
   input_size: number;
   normalization: string;
+  temperature: number;
   inference_ms: number;
   first_attempt_json: string | null;
   class_weight: number;
@@ -53,6 +54,7 @@ function toRecord(row: Row): ScreeningRecord {
     modelVersion: row.model_version,
     inputSize: row.input_size,
     normalization: row.normalization,
+    temperature: row.temperature,
     inferenceMs: row.inference_ms,
   };
   const triage: TriageResult = {
@@ -94,10 +96,10 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     `INSERT OR REPLACE INTO screenings (
        id, created_at, mark_x, mark_y, mark_z, mark_region, mark_view, image_uri, source,
        answers_json, probs_json, top_class, top_confidence, attempt, model_version,
-       input_size, normalization, inference_ms, first_attempt_json,
+       input_size, normalization, temperature, inference_ms, first_attempt_json,
        class_weight, cs, symptom_score_raw, symptom_score, tps, tier,
        safety_floor_applied, confidence_qualifier
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     record.id,
     record.createdAt,
     record.mark?.point[0] ?? null,
@@ -115,6 +117,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     record.classification.modelVersion,
     record.classification.inputSize,
     record.classification.normalization,
+    record.classification.temperature,
     record.classification.inferenceMs,
     record.firstAttempt ? JSON.stringify(record.firstAttempt) : null,
     record.triage.classWeight,

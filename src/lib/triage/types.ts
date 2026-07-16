@@ -40,6 +40,9 @@ export type ClassificationOutput = {
   modelVersion: string;
   inputSize: number;
   normalization: string;
+  /** Post-hoc temperature applied to logits before softmax; recorded so a later T change
+   *  doesn't make historical confidences (and the CS/TPS derived from them) un-auditable. */
+  temperature: number;
   inferenceMs: number;
 };
 

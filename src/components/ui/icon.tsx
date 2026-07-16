@@ -97,6 +97,7 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'brain.head.profile': { set: 'mci', name: 'brain' },
   'list.bullet.clipboard.fill': { set: 'ionicons', name: 'clipboard' },
   'square.and.arrow.up': { set: 'ionicons', name: 'share-outline' },
+  'arrow.up.left.and.arrow.down.right': { set: 'ionicons', name: 'expand' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

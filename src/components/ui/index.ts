@@ -6,6 +6,7 @@ export { Dots } from './dots';
 export { GradientBackground } from './gradient-background';
 export { IconCircle } from './icon-circle';
 export { IdentifierField } from './identifier-field';
+export { ImageViewer } from './image-viewer';
 export { Logo } from './logo';
 export { OnboardingHero } from './onboarding-hero';
 export { Screen } from './screen';

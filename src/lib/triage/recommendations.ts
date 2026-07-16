@@ -17,6 +17,8 @@ export type TierContent = {
   recommendation: string;
   /** Compact next-step framing, e.g. shown under the banner. */
   timeframe: string | null;
+  /** Single imperative shown in the "Priority action" callout on the result screen. */
+  priorityAction: string;
   // Tier → system actions (spec "System Action" column).
   showReport: boolean;
   showDirectory: boolean;
@@ -31,6 +33,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = {
     recommendation:
       'Your spot does not show strong signs of concern at this time. Keep checking it monthly using the ABCDE guide, and scan again — or visit a skin doctor — if you notice any changes.',
     timeframe: null,
+    priorityAction: 'Self-check monthly with the ABCDE guide',
     showReport: false,
     showDirectory: false,
     showEducation: true,
@@ -42,6 +45,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = {
     recommendation:
       'Your spot has some features worth having checked. There is no immediate cause for alarm — we recommend scheduling an appointment with a dermatologist or general doctor within the next four weeks.',
     timeframe: 'See a doctor within ~4 weeks',
+    priorityAction: 'Book a dermatologist visit within ~4 weeks',
     showReport: true,
     showDirectory: true,
     showEducation: false,
@@ -53,6 +57,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = {
     recommendation:
       'Your spot has features that suggest a professional evaluation is important. Please try to see a dermatologist within the next one to two weeks, and bring your screening summary to the visit.',
     timeframe: 'See a dermatologist within 1–2 weeks',
+    priorityAction: 'Dermatologist evaluation within 1–2 weeks',
     showReport: true,
     showDirectory: true,
     showEducation: false,
@@ -62,8 +67,9 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = {
     name: 'Priority',
     headline: 'Best to have this looked at soon',
     recommendation:
-      'Your spot has several features that doctors prefer to examine promptly. As a strong precaution — not a diagnosis — please arrange a dermatology consultation as soon as you can, ideally within the next few days. Showing your screening summary will help the doctor.',
+      'Your spot has several features that doctors prefer to examine promptly. As a strong precaution, please arrange a dermatology consultation as soon as you can, ideally within the next few days. Showing your screening summary will help the doctor.',
     timeframe: 'See a dermatologist as soon as you can',
+    priorityAction: 'See a dermatologist as soon as possible',
     showReport: true,
     showDirectory: true,
     showEducation: false,
@@ -92,11 +98,50 @@ export const RESCAN_PROMPT = {
 export const DISCLAIMER =
   'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation — always follow up with a dermatologist about anything that concerns you.';
 
-/** Lay-language display for each model class. Framed as visual patterns, not verdicts. */
-export const CLASS_DISPLAY: Record<LesionClass, { name: string; lay: string }> = {
-  MEL: { name: 'Melanoma-like', lay: 'a pattern with features similar to melanoma' },
-  SCC: { name: 'SCC-like', lay: 'a pattern with features similar to squamous cell carcinoma' },
-  BCC: { name: 'BCC-like', lay: 'a pattern with features similar to basal cell carcinoma' },
-  OTHER: { name: 'Unusual / pre-malignant', lay: 'an unusual or possibly pre-malignant pattern' },
-  BENIGN: { name: 'Likely benign', lay: 'a pattern that looks non-cancerous' },
+/**
+ * Lay-language display for each model class. Framed as visual patterns, not verdicts.
+ *  - `full`  : disease name for the result hero.
+ *  - `name`  : short "-like" label for the probability breakdown.
+ *  - `lay`   : sentence fragment ("a pattern with features similar to…").
+ *  - `about` : factual, non-alarming description of the condition (physician-reviewable).
+ */
+export const CLASS_DISPLAY: Record<
+  LesionClass,
+  { full: string; name: string; lay: string; about: string }
+> = {
+  MEL: {
+    full: 'Melanoma',
+    name: 'Melanoma-like',
+    lay: 'a pattern with features similar to melanoma',
+    about:
+      'Melanoma is the most serious form of skin cancer. It begins in the skin’s pigment-producing cells and can spread to other parts of the body if it is not treated early. Found early, it is highly treatable — which is why prompt evaluation matters. Warning signs include a mole that is asymmetric, has an irregular border, uneven color, is larger than about 6 mm, or is changing.',
+  },
+  SCC: {
+    full: 'Squamous Cell Carcinoma',
+    name: 'SCC-like',
+    lay: 'a pattern with features similar to squamous cell carcinoma',
+    about:
+      'Squamous cell carcinoma is the second most common skin cancer. It develops in the outer layer of the skin, often on sun-exposed areas, and can look like a firm, rough, or scaly bump that may crust or bleed. It usually grows slowly and is very treatable when found early, but it can spread if left untreated.',
+  },
+  BCC: {
+    full: 'Basal Cell Carcinoma',
+    name: 'BCC-like',
+    lay: 'a pattern with features similar to basal cell carcinoma',
+    about:
+      'Basal cell carcinoma is the most common skin cancer. It grows slowly and very rarely spreads, but it still needs treatment to stop local damage. It often appears as a pearly or waxy bump, a shiny patch, or a sore that heals and returns.',
+  },
+  OTHER: {
+    full: 'Uncertain Pattern',
+    name: 'Unusual / pre-malignant',
+    lay: 'an unusual or possibly pre-malignant pattern',
+    about:
+      'This pattern does not clearly match the common skin-cancer types. It may be a pre-cancerous change (such as an actinic keratosis) or another harmless skin condition. An in-person exam is the most reliable way to identify exactly what it is.',
+  },
+  BENIGN: {
+    full: 'Likely Benign',
+    name: 'Likely benign',
+    lay: 'a pattern that looks non-cancerous',
+    about:
+      'Benign spots are non-cancerous — for example ordinary moles, freckles, or age-related growths such as seborrhoeic keratoses. They are very common and usually harmless, though it is still worth watching any spot that changes in size, shape, or color over time.',
+  },
 };

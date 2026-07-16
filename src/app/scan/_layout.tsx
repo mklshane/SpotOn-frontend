@@ -11,6 +11,7 @@ export default function ScanLayout() {
       <Stack.Screen name="analysis" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="instructions" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
       <Stack.Screen name="history" />
+      <Stack.Screen name="all" />
       <Stack.Screen name="result" />
       <Stack.Screen name="report" />
     </Stack>

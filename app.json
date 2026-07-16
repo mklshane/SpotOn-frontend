@@ -41,12 +41,6 @@
       "@react-native-community/datetimepicker",
       "expo-asset",
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow SpotOn to use your camera to capture the skin spot for triage."
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Allow SpotOn to access your photos to upload a skin spot."

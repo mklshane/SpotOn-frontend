@@ -2,15 +2,25 @@ import { pickTopClass } from '../triage/tps-core';
 import type { ClassificationOutput, LesionClass } from '../triage/types';
 import { getClassifierModel, readClassifierLayout } from './classifier-model';
 import { asClassifierError, ClassifierError } from './errors';
-import { CLASS_ORDER, INFERENCE_TIMEOUT_MS, MODEL_VERSION, NORMALIZATION } from './model-config';
+import {
+  CLASS_ORDER,
+  CONFIDENCE_TEMPERATURE,
+  INFERENCE_TIMEOUT_MS,
+  MODEL_VERSION,
+  NORMALIZATION,
+} from './model-config';
 import { preprocessForClassifier } from './preprocess';
 
 const DEBUG = __DEV__;
 
-/** Numerically stable softmax (the exported graph ends in a Gemm — raw logits). */
-function softmax(logits: number[]): number[] {
-  const max = Math.max(...logits);
-  const exps = logits.map((l) => Math.exp(l - max));
+/**
+ * Numerically stable softmax with temperature scaling (the exported graph ends in a Gemm — raw
+ * logits). Dividing by T>1 softens the over-confident logits; it never changes the argmax.
+ */
+function softmax(logits: number[], temperature = 1): number[] {
+  const z = temperature === 1 ? logits : logits.map((l) => l / temperature);
+  const max = Math.max(...z);
+  const exps = z.map((l) => Math.exp(l - max));
   const sum = exps.reduce((a, b) => a + b, 0);
   return exps.map((e) => e / sum);
 }
@@ -59,8 +69,8 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
     if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
       throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
     }
-    // Tolerate a future export that bakes softmax in; otherwise apply it here.
-    const probs = looksLikeProbabilities(values) ? values : softmax(values);
+    // Tolerate a future export that bakes softmax in; otherwise apply calibrated softmax here.
+    const probs = looksLikeProbabilities(values) ? values : softmax(values, CONFIDENCE_TEMPERATURE);
 
     const probsByClass = {} as Record<LesionClass, number>;
     CLASS_ORDER.forEach((cls, i) => {
@@ -86,6 +96,7 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
       modelVersion: MODEL_VERSION,
       inputSize,
       normalization: NORMALIZATION,
+      temperature: CONFIDENCE_TEMPERATURE,
       inferenceMs,
     } satisfies ClassificationOutput;
   })();

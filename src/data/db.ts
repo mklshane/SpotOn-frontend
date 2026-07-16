@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   model_version        TEXT NOT NULL,
   input_size           INTEGER NOT NULL,
   normalization        TEXT NOT NULL,
+  temperature          REAL NOT NULL DEFAULT 1.0,
   inference_ms         INTEGER NOT NULL,
   first_attempt_json   TEXT,
   class_weight         REAL NOT NULL,
@@ -128,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -153,6 +154,12 @@ const MIGRATION_V4 = [
   SCHEMA.slice(SCHEMA.indexOf("CREATE TABLE IF NOT EXISTS screenings")),
 ];
 
+// v5 — record the confidence-calibration temperature per screening, so records made
+// under different T values stay auditable (T scales the confidence that drives CS/TPS).
+const MIGRATION_V5 = [
+  "ALTER TABLE screenings ADD COLUMN temperature REAL NOT NULL DEFAULT 1.0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -161,6 +168,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 2 ? MIGRATION_V2 : []),
     ...(version < 3 ? MIGRATION_V3 : []),
     ...(version < 4 ? MIGRATION_V4 : []),
+    ...(version < 5 ? MIGRATION_V5 : []),
   ];
   for (const stmt of pending) {
     try {

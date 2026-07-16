@@ -22,7 +22,7 @@ export function getClassifierModel(): Promise<ClassifierModel> {
       const src = Image.resolveAssetSource(MODEL_ASSET);
       let uri = src.uri;
       if (uri.startsWith('http')) {
-        const dest = `${FileSystem.cacheDirectory}spoton_classifier_float32.tflite`;
+        const dest = `${FileSystem.cacheDirectory}spoton_classifier_D3_float32.tflite`;
         await FileSystem.downloadAsync(uri, dest);
         uri = dest;
       }
