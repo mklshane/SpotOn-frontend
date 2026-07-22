@@ -8,7 +8,10 @@
     "scheme": "spotonfrontend",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "com.mklshane.SpotOn-frontend"
+      "bundleIdentifier": "com.mklshane.SpotOn-frontend",
+      "infoPlist": {
+        "NSCameraUsageDescription": "SpotOn uses your camera to detect and capture the skin spot for triage."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -17,7 +20,13 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.mklshane.SpotOnfrontend"
+      "package": "com.mklshane.SpotOnfrontend",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
+      ]
     },
     "web": {
       "output": "static",
@@ -64,6 +73,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "fd9deeae-3775-4662-810b-69da4b20f82f"
+      }
     }
   }
 }

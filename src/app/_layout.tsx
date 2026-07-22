@@ -27,19 +27,22 @@ LogBox.ignoreLogs(['Multiple instances of Three.js being imported.']);
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'Display-SemiBold': HankenGrotesk_600SemiBold,
     'Display-Bold': HankenGrotesk_700Bold,
   });
 
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontError) {
+      console.error('Font load failed, continuing without custom fonts:', fontError);
+    }
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded) {
-    return null; // keep the native splash visible until the display font is ready
+  if (!fontsLoaded && !fontError) {
+    return null; // keep the native splash visible until the display font is ready (or fails)
   }
 
   return (

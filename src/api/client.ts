@@ -46,6 +46,26 @@ function queryString(params?: QueryParams): string {
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
+// Render's free tier can take 30s+ to wake from sleep, and RN's fetch has no
+// built-in timeout — an unreachable/slow server would otherwise hang forever,
+// which on cold start blocks the splash screen from ever routing anywhere.
+const REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("timed out");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -58,7 +78,7 @@ async function request<T>(
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}${queryString(opts.params)}`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}${path}${queryString(opts.params)}`, {
     method,
     headers,
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
