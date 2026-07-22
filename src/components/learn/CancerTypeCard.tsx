@@ -141,7 +141,7 @@ function SkinSwatchArt({ kind }: { kind: CancerTypeKind }) {
  * the three cards read as a severity scale. */
 export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerTypeCardProps) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title}>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={styles.wrap}>
       <View style={[styles.card, { backgroundColor: tint }]}>
         <View style={styles.medallion}>
           <SkinSwatchArt kind={kind} />
@@ -159,9 +159,12 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
 }
 
 const styles = StyleSheet.create({
+  // Fixed width (horizontal rail item) but height comes from the row's
+  // alignItems: 'stretch' — see typeRow in learn.tsx — so every card matches
+  // the tallest sibling's height regardless of title line-wrap.
+  wrap: { width: 168 },
   card: {
-    width: 168,
-    minHeight: 208,
+    flex: 1,
     borderRadius: Radius.xl,
     padding: Space.base,
     paddingTop: Space.lg,
