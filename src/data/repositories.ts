@@ -117,11 +117,11 @@ function facilityWhere(query: FacilityQuery): { clause: string; params: (string 
   const params: (string | number)[] = [];
   if (!query.includeExcluded) where.push("(status IS NULL OR status != 'excluded')");
   if (query.q) {
-    // "Search clinics or area…" — match the facility's own name as well as
-    // where it's located, so typing a city/province (e.g. "Lipa", "Quezon")
-    // finds clinics there instead of only clinics literally named that.
-    where.push("(name LIKE ? OR city LIKE ? OR province LIKE ?)");
-    params.push(`%${query.q}%`, `%${query.q}%`, `%${query.q}%`);
+    // "Search clinics or area…" — match the clinic's own name/address as well
+    // as where it's located, so typing a place (e.g. "Lipa") finds clinics
+    // there, and typing a clinic's actual name or street still works too.
+    where.push("(name LIKE ? OR address LIKE ? OR city LIKE ? OR province LIKE ?)");
+    params.push(`%${query.q}%`, `%${query.q}%`, `%${query.q}%`, `%${query.q}%`);
   }
   if (query.city) {
     where.push("city LIKE ?");
