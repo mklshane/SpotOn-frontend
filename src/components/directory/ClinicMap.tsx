@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { Dimensions, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import type { FacilitySync } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -136,6 +136,7 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
         compass={false}
         scaleBar={false}
         onPress={() => {
+          Keyboard.dismiss();
           if (suppressNextMapPress.current) {
             suppressNextMapPress.current = false;
             return;
