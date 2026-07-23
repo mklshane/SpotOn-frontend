@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { Dimensions, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import type { FacilitySync } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
@@ -39,23 +39,48 @@ const MAX_ZOOM = 18;
 export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bottomInset, query }: ClinicMapProps) {
   const theme = useTheme();
   const cameraRef = useRef<CameraRef>(null);
-  // Re-center on search results: when `query` changes, flag that the *next* facilities
-  // update (the fetch triggered by that query) should fit the camera to it — not every
-  // facilities update, which also fires for unrelated filter/sort changes.
+  // Re-center on search results: fit the camera once per distinct non-empty query,
+  // as soon as that query's results have arrived — tracked by the query string
+  // itself so it converges correctly regardless of how many renders land in
+  // between. Filter/sort-only changes reuse the same query and are skipped
+  // since it's already marked fit.
+  //
+  // `facilities` (ClinicsView's async fetch result) and `query` (synchronous
+  // debounced state) land on DIFFERENT renders — on the render where `query`
+  // first changes, `facilities` is still the PREVIOUS query's stale results.
+  // Fitting to those under the new query's name would both show the wrong
+  // place and mark the new query as "already fit", permanently blocking the
+  // real (possibly empty) results from ever correcting it. `prevQueryRef`
+  // detects that render and defers fitting to the next one, where `facilities`
+  // has caught up.
+  const lastFitQueryRef = useRef<string | null>(null);
   const prevQueryRef = useRef(query);
-  const pendingFitRef = useRef(false);
 
   useEffect(() => {
-    if (query !== prevQueryRef.current) {
-      prevQueryRef.current = query;
-      if (query.trim()) pendingFitRef.current = true;
+    const trimmed = query.trim();
+    const queryJustChanged = query !== prevQueryRef.current;
+    prevQueryRef.current = query;
+
+    if (!trimmed) {
+      lastFitQueryRef.current = null; // cleared search — the next search should fit again
+      return;
     }
-  }, [query]);
+    if (lastFitQueryRef.current === trimmed) return;
+    if (queryJustChanged) return; // facilities is still the previous query's — wait for it to catch up
+    lastFitQueryRef.current = trimmed;
 
-  useEffect(() => {
-    if (!pendingFitRef.current) return;
-    pendingFitRef.current = false;
-    if (facilities.length === 0) return;
+    if (facilities.length === 0) {
+      // A confirmed-empty result for this exact query — reset to a wide view
+      // instead of leaving the camera parked wherever an earlier keystroke's
+      // (different, non-empty) search last left it, which reads as "recentered
+      // to the wrong place" rather than "no clinics found here".
+      cameraRef.current?.easeTo({
+        center: [MAP_DEFAULT.longitude, MAP_DEFAULT.latitude],
+        zoom: 5,
+        duration: 600,
+      });
+      return;
+    }
 
     if (facilities.length === 1) {
       const [only] = facilities;
@@ -75,7 +100,7 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
       padding: { top: 80, right: 60, bottom: 80, left: 60 },
       duration: 600,
     });
-  }, [facilities]);
+  }, [query, facilities]);
   // A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
   // stopPropagation() (native bubbling quirk) — GeoJSONSource fires first (it's the
   // child), so it flags the bubble here for Map.onPress to consume and ignore, exactly
@@ -136,6 +161,7 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
         compass={false}
         scaleBar={false}
         onPress={() => {
+          Keyboard.dismiss();
           if (suppressNextMapPress.current) {
             suppressNextMapPress.current = false;
             return;

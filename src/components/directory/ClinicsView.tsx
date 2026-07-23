@@ -65,7 +65,11 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   useEffect(() => {
     let cancelled = false;
     const params = { q: query || undefined, service: service ?? undefined, limit: 200 };
-    const fetcher = coords ? nearbyFacilities(coords.latitude, coords.longitude, params) : listFacilities(params);
+    // An active search is an explicit "look for this place", not "what's near
+    // me" — searching a city/province beyond the nearby radius must still find
+    // it, so only use the distance-bounded nearby fetch when there's no query.
+    const fetcher =
+      coords && !query.trim() ? nearbyFacilities(coords.latitude, coords.longitude, params) : listFacilities(params);
     fetcher
       .then((rows) => !cancelled && setFacilities(rows))
       .catch(() => !cancelled && setError(true));
