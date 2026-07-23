@@ -92,7 +92,11 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 hitSlop={4}
                 accessibilityRole="button">
                 <Icon name="arrow.triangle.turn.up.right.diamond.fill" size={14} tintColor={theme.onBrand} />
-                <ThemedText type="footnote" themeColor="onBrand" style={styles.actionLabel}>
+                <ThemedText
+                  type="footnote"
+                  themeColor="onBrand"
+                  style={styles.actionLabel}
+                  numberOfLines={1}>
                   Directions
                 </ThemedText>
               </Pressable>
@@ -111,7 +115,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 style={[styles.actionOutline, { borderColor: theme.hairline }]}
                 hitSlop={4}
                 accessibilityRole="button">
-                <ThemedText type="footnote" themeColor="text" style={styles.actionLabel}>
+                <ThemedText type="footnote" themeColor="text" style={styles.actionLabel} numberOfLines={1}>
                   Details
                 </ThemedText>
               </Pressable>
@@ -136,17 +140,26 @@ const styles = StyleSheet.create({
   thumb: { width: 48, height: 48, borderRadius: Radius.md },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   info: { gap: 2, marginTop: Space.xs },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm, marginTop: Space.sm },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.sm },
   actionFilled: {
     flexDirection: 'row',
+    flexShrink: 1,
     alignItems: 'center',
     gap: Space.xs,
     height: 36,
     paddingHorizontal: Space.base,
     borderRadius: Radius.pill,
   },
-  actionIcon: { width: 36, height: 36, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  actionIcon: {
+    flexShrink: 0,
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   actionOutline: {
+    flexShrink: 0,
     height: 36,
     paddingHorizontal: Space.base,
     borderRadius: Radius.pill,
