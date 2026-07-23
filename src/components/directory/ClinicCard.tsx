@@ -28,17 +28,19 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
     <Pressable onPress={onPress} accessible={false}>
       <Card style={styles.card} elevation="sm">
         <View style={styles.row}>
-          <View style={styles.rail}>
-            <View style={[styles.dot, { backgroundColor: theme.brand }]} />
-            {distance != null ? (
+          {distance != null ? (
+            // Open/closed is already shown as a badge below — this rail only earns its
+            // space when there's a distance to anchor it; otherwise it's just orphaned dots.
+            <View style={styles.rail}>
+              <View style={[styles.dot, { backgroundColor: theme.brand }]} />
               <ThemedText type="caption" themeColor="brand" style={styles.distance}>
                 {formatDistance(distance)}
               </ThemedText>
-            ) : null}
-            {open != null ? (
-              <View style={[styles.statusDot, { backgroundColor: open ? theme.riskLow : theme.muted }]} />
-            ) : null}
-          </View>
+              {open != null ? (
+                <View style={[styles.statusDot, { backgroundColor: open ? theme.riskLow : theme.muted }]} />
+              ) : null}
+            </View>
+          ) : null}
 
           <View style={styles.body}>
             <View style={styles.titleRow}>
