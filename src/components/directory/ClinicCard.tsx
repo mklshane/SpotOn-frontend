@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   thumb: { width: 48, height: 48, borderRadius: Radius.md },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   info: { gap: 2, marginTop: Space.xs },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.sm },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm, marginTop: Space.sm },
   actionFilled: {
     flexDirection: 'row',
     alignItems: 'center',
