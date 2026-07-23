@@ -100,6 +100,8 @@ export function DevTools() {
         normalization: 'imagenet',
         temperature: 1.0,
         inferenceMs: 0,
+        scaleUnstable: false,
+        refined: false,
       },
       triage: computeTriage(mock.topClass, mock.conf, answers, {
         applyFloor: mock.floor,

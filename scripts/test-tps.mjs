@@ -39,6 +39,8 @@ const {
   pickTopClass,
   computeMalignantScore,
   evaluateMalignantGate,
+  evaluateScaleConsistency,
+  combineReadability,
 } = core;
 
 let pass = 0;
@@ -194,6 +196,30 @@ check('invalid prob throws', throws(() => pickTopClass({ MEL: NaN, SCC: 0, BCC: 
 
 // ---- computeTPS rounding ----
 check('computeTPS rounds to 4dp', computeTPS(1.00005, 1.00005) === 2.0001);
+
+// ---- Scale-consistency rule ----
+check('scale: stable is ok (attempt 1)', evaluateScaleConsistency(false, 1) === 'ok');
+check('scale: stable is ok (attempt 2)', evaluateScaleConsistency(false, 2) === 'ok');
+check('scale: unstable prompts rescan on attempt 1', evaluateScaleConsistency(true, 1) === 'prompt-rescan');
+check('scale: unstable floors on attempt 2', evaluateScaleConsistency(true, 2) === 'apply-floor');
+
+// combineReadability: most conservative wins, rescan beats floor
+check('combine: all ok -> ok', combineReadability('ok', 'ok') === 'ok');
+check('combine: rescan beats ok', combineReadability('ok', 'prompt-rescan') === 'prompt-rescan');
+check('combine: rescan beats floor', combineReadability('apply-floor', 'prompt-rescan') === 'prompt-rescan');
+check('combine: floor beats ok', combineReadability('ok', 'apply-floor') === 'apply-floor');
+check('combine: order independent', combineReadability('prompt-rescan', 'apply-floor') === combineReadability('apply-floor', 'prompt-rescan'));
+check('combine: no verdicts -> ok', combineReadability() === 'ok');
+
+// A confident-but-framing-unstable photo must NOT pass just because the Safety Floor is happy.
+check(
+  'combine: confident + unstable still rescans',
+  combineReadability(evaluateSafetyFloor(0.95, 1), evaluateScaleConsistency(true, 1)) === 'prompt-rescan',
+);
+check(
+  'combine: confident + stable passes',
+  combineReadability(evaluateSafetyFloor(0.95, 1), evaluateScaleConsistency(false, 1)) === 'ok',
+);
 
 // ---- Malignant Gate ----
 // The threshold itself lives in classifier/model-config.ts (a model property, not a clinical

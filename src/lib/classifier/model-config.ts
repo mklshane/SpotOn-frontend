@@ -119,6 +119,81 @@ export const CONFIDENCE_TEMPERATURE = 1.0;
 export const TTA_ENABLED = true;
 
 /**
+ * Scale-consistency check. The classifier is only reliable over a band of lesion-fill fractions:
+ * `RandomResizedCrop(scale=(0.4, 1.0))` during training can crop *in* but never *out*, so a lesion
+ * that occupies a small part of the frame is out of distribution. Measured on a real benign mole
+ * (2026-07-24, D4 + TTA): stable BENIGN at 0.73–0.92 confidence across fill 0.27–0.54, flipping to
+ * MEL below fill ≈0.25 — and also destabilising at fill 0.81 (BENIGN 0.44 / MEL 0.40), so tight
+ * framing is out of distribution too. There is no single "correct" crop to standardise on.
+ *
+ * So instead of guessing a crop, we measure the instability: classify the image at several
+ * center-crop fractions and see whether the predicted class survives. If it does not, the photo's
+ * framing — not the lesion — is driving the answer, and the result is not clinically actionable.
+ * classify.ts reports that as `scaleUnstable`; analysis.tsx routes it into the same two-strike
+ * rescan path as the Safety Floor.
+ *
+ * 1.0 must stay first — it is the primary prediction and the one whose probabilities are returned.
+ * The extra fraction crops *in* toward the stable band, the direction that rescues a too-wide photo.
+ *
+ * The ladder was chosen by measurement, not intuition (dataset_real, 94 images, 2026-07-24).
+ * Cropping harder is actively worse: a 0.5 crop of an already-tight photo manufactures the same
+ * out-of-distribution framing the check exists to detect, so it flags good images too.
+ *
+ *   ladder            flags   accuracy of flagged / kept   catches the reported bug
+ *   [1.0, 0.7]         26%            29% / 59%                     yes
+ *   [1.0, 0.85, 0.7]   30%            36% / 58%                     yes
+ *   [1.0, 0.7, 0.5]    40%            42% / 57%                     yes
+ *   [1.0, 0.8]         20%            21% / 59%                     NO
+ *
+ * [1.0, 0.7] gives the widest gap between what it rejects and what it keeps (29% vs 59%, against a
+ * 51% baseline) at the lowest flag rate that still catches the wide-framing failure — and at two
+ * TTA passes rather than three. A flag rate of 26% is high, but those images are ones the model
+ * gets right less than a third of the time; asking for a better photo is the honest response.
+ */
+export const SCALE_CHECK_CROPS: readonly number[] = [1.0, 0.7];
+
+/**
+ * Superseded by the confidence-gated zoom refinement below, which *fixes* wide-framing errors
+ * instead of deferring them to a rescan. Kept behind this flag (default off) as an optional
+ * backstop; flip on to also route residual scale-instability to the rescan path.
+ */
+export const SCALE_CHECK_ENABLED = false;
+
+/**
+ * Confidence-gated zoom refinement — the real fix for small/wide-framed lesions.
+ *
+ * The training augmentation `RandomResizedCrop(scale=(0.4, 1.0))` only ever crops *in*, so a
+ * lesion that fills a small part of the frame is out of distribution and the model drifts toward
+ * MEL (a benign mole photographed from a distance read Melanoma@0.61 in the field, 2026-07-24).
+ * Rescanning can't fix a genuinely small or distant mole — it is small at every retake. Zooming
+ * the *existing* photo to the lesion can.
+ *
+ * Rule (validated on dataset_real, 94 images): when the full-frame prediction lands below
+ * REFINE_CONFIDENCE, locate the lesion (preprocess.ts `locateLesion`), crop to REFINE_TARGET_FILL,
+ * and re-classify; adopt the zoomed result. This is applied regardless of the predicted class —
+ * the reported failure was a *malignant* call at low confidence, so gating on "benign only" would
+ * miss it. Measured effect at 0.65: top-1 51.1% → 58.5% (+7.4 pts), 7 images corrected, and
+ * **zero** previously-correct images broken — because a confident prediction is confident precisely
+ * because it is already well framed, so the gate never touches it. The field case flips
+ * MEL@0.61 → BENIGN@0.85.
+ *
+ * 0.65 is the lowest gate that catches the field failure (its MEL call sat at 0.61); 0.60 misses
+ * it. Raising it further only adds cost without breaking anything, so 0.65 is the efficient point.
+ */
+export const REFINE_ENABLED = true;
+export const REFINE_CONFIDENCE = 0.65;
+/** Lesion diameter ÷ crop side the zoom aims for — the middle of the model's stable framing band. */
+export const REFINE_TARGET_FILL = 0.45;
+
+/**
+ * Target lesion-fill fraction for the manual crop guide (scan/crop.tsx). Deliberately the same
+ * value the auto-refinement zooms to, so the circle a user is asked to fill and the crop the model
+ * prefers are one number — telling the user "make the spot fill this circle" produces exactly the
+ * framing the classifier is most reliable on (stable band 0.27–0.54, measured 2026-07-24).
+ */
+export const LESION_TARGET_FILL = REFINE_TARGET_FILL;
+
+/**
  * Optional pixel-domain steps applied between JPEG decode and tensor packing
  * (e.g. a CLAHE pass if training/inference parity ever demands it). Empty by design.
  */

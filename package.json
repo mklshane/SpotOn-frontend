@@ -71,7 +71,8 @@
     "prebuild:clean": "expo prebuild --clean",
     "test:api": "node scripts/smoke-api.mjs",
     "test:iqa": "node scripts/test-image-quality.mjs",
-    "test:tps": "node scripts/test-tps.mjs"
+    "test:tps": "node scripts/test-tps.mjs",
+    "test:localizer": "node scripts/test-localizer.mjs"
   },
   "private": true
 }

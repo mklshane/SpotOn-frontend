@@ -124,14 +124,16 @@ CREATE TABLE IF NOT EXISTS screenings (
   safety_floor_applied INTEGER NOT NULL,
   confidence_qualifier INTEGER NOT NULL,
   malignant_score      REAL NOT NULL DEFAULT 0,
-  malignant_gate_applied INTEGER NOT NULL DEFAULT 0
+  malignant_gate_applied INTEGER NOT NULL DEFAULT 0,
+  scale_unstable       INTEGER NOT NULL DEFAULT 0,
+  classifier_refined   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 8;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -169,6 +171,19 @@ const MIGRATION_V6 = [
   "ALTER TABLE screenings ADD COLUMN malignant_gate_applied INTEGER NOT NULL DEFAULT 0",
 ];
 
+// v7 — scale-consistency check: whether the predicted class survived re-cropping. Drives the
+// rescan/floor path, so it belongs in the audit trail. Pre-v7 rows default to 0 ("not checked").
+const MIGRATION_V7 = [
+  "ALTER TABLE screenings ADD COLUMN scale_unstable INTEGER NOT NULL DEFAULT 0",
+];
+
+// v8 — confidence-gated zoom refinement: whether the result was re-classified on a lesion-centered
+// crop. Belongs in the audit trail (it changes which pixels produced the answer). Pre-v8 rows
+// default to 0 ("not refined").
+const MIGRATION_V8 = [
+  "ALTER TABLE screenings ADD COLUMN classifier_refined INTEGER NOT NULL DEFAULT 0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -179,6 +194,8 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 4 ? MIGRATION_V4 : []),
     ...(version < 5 ? MIGRATION_V5 : []),
     ...(version < 6 ? MIGRATION_V6 : []),
+    ...(version < 7 ? MIGRATION_V7 : []),
+    ...(version < 8 ? MIGRATION_V8 : []),
   ];
   for (const stmt of pending) {
     try {

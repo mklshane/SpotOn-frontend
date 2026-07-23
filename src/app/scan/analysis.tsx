@@ -25,7 +25,13 @@ import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
 import { MALIGNANT_THRESHOLD } from '@/lib/classifier/model-config';
 import { RESCAN_PROMPT } from '@/lib/triage/recommendations';
-import { computeMalignantScore, computeTriage, evaluateSafetyFloor } from '@/lib/triage/tps-core';
+import {
+  combineReadability,
+  computeMalignantScore,
+  computeTriage,
+  evaluateSafetyFloor,
+  evaluateScaleConsistency,
+} from '@/lib/triage/tps-core';
 import type { ClassificationOutput, SymptomAnswers } from '@/lib/triage/types';
 
 const MIN_BEAT_MS = 1500; // never flash the analyzing state, even when inference is already done
@@ -123,7 +129,12 @@ export default function AnalysisScreen() {
       try {
         const [output] = await Promise.all([session.getClassification(), beat]);
         if (!alive) return;
-        const verdict = evaluateSafetyFloor(output.topConfidence, session.attempt);
+        // Two independent readability checks: confidence (Safety Floor) and framing stability
+        // (scale check). Either one failing routes to a rescan, then to the Moderate floor.
+        const verdict = combineReadability(
+          evaluateSafetyFloor(output.topConfidence, session.attempt),
+          evaluateScaleConsistency(output.scaleUnstable, session.attempt),
+        );
         if (verdict === 'ok') {
           await finalize(output, false);
         } else if (verdict === 'prompt-rescan') {
@@ -155,15 +166,15 @@ export default function AnalysisScreen() {
   async function repickFromGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
+    // Send to our crop screen (with the lesion-framing guide) rather than the OS cropper — a
+    // too-wide rescan is exactly what got us here.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.9,
     });
     if (!result.canceled && result.assets[0]) {
       session.beginRescan();
-      router.replace({ pathname: '/scan/quality', params: { uri: result.assets[0].uri } });
+      router.replace({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
     }
   }
 

@@ -220,6 +220,33 @@ export function applyMalignantFloor(result: TriageResult): TriageResult {
 }
 
 /**
+ * Scale-consistency rule. When the classifier's top class changes as the photo is re-cropped, the
+ * answer is a property of the framing rather than of the lesion, and is not clinically actionable
+ * — the same conclusion the Safety Floor draws from a low confidence, reached by a different
+ * route. Handled identically (rescan first, floor on the second strike) so an unreadable photo can
+ * never be reported as a risk finding.
+ */
+export function evaluateScaleConsistency(
+  scaleUnstable: boolean,
+  attempt: 1 | 2,
+): 'ok' | 'prompt-rescan' | 'apply-floor' {
+  if (!scaleUnstable) return 'ok';
+  return attempt === 1 ? 'prompt-rescan' : 'apply-floor';
+}
+
+/**
+ * Combine the image-readability verdicts, taking the most conservative. Rescanning beats flooring
+ * (a better photo is always preferable to a hedged result), and any floor beats 'ok'.
+ */
+export function combineReadability(
+  ...verdicts: ('ok' | 'prompt-rescan' | 'apply-floor')[]
+): 'ok' | 'prompt-rescan' | 'apply-floor' {
+  if (verdicts.includes('prompt-rescan')) return 'prompt-rescan';
+  if (verdicts.includes('apply-floor')) return 'apply-floor';
+  return 'ok';
+}
+
+/**
  * Override a computed result to the Moderate floor. Only `tier` and the flags change —
  * the arithmetic components are preserved so the audit trail records both the computed
  * truth and the override.

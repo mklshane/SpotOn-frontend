@@ -10,21 +10,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
-import { Space } from '@/constants/theme';
+import { Colors, Space } from '@/constants/theme';
+import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 
 const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
 const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the image's short side
+// The guide circle's diameter as a fraction of the crop frame == the lesion-fill the classifier is
+// most reliable on. Fill this ring with the spot and the resulting crop lands in the model's stable
+// band. Single source of truth in model-config so the guide and the auto-refinement never drift.
+const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {
-  const { uri, detected, lx, ly, lw, lh } = useLocalSearchParams<{
+  const { uri, detected, source, lx, ly, lw, lh } = useLocalSearchParams<{
     uri: string;
     detected?: string;
+    source?: string;
     lx?: string;
     ly?: string;
     lw?: string;
     lh?: string;
   }>();
+  const fromGallery = source === 'gallery';
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
@@ -133,8 +140,12 @@ export default function CropScreen() {
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Retake">
-          <Icon name="arrow.counterclockwise" tintColor="#FFFFFF" size={22} />
+        <Pressable
+          hitSlop={12}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel={fromGallery ? 'Choose another photo' : 'Retake'}>
+          <Icon name={fromGallery ? 'photo.on.rectangle' : 'arrow.counterclockwise'} tintColor="#FFFFFF" size={22} />
         </Pressable>
         <ThemedText type="headline" style={styles.title}>
           Position the spot
@@ -152,15 +163,20 @@ export default function CropScreen() {
             </GestureDetector>
           ) : null}
 
-          {/* Center target — where the lesion should sit */}
+          {/* Framing target: fill this circle with the spot. Its diameter is the lesion-fill the
+              classifier reads most reliably, so "fill the circle" == "zoom to the right amount". */}
           <View style={styles.centerGuide} pointerEvents="none">
-            <View style={styles.centerRing} />
-            <View style={styles.crossH} />
-            <View style={styles.crossV} />
+            <View style={[styles.targetRing, { width: GUIDE_PCT }]}>
+              <View style={[styles.tick, styles.tickTop]} />
+              <View style={[styles.tick, styles.tickBottom]} />
+              <View style={[styles.tick, styles.tickLeft]} />
+              <View style={[styles.tick, styles.tickRight]} />
+            </View>
+            <View style={styles.centerDot} />
           </View>
         </View>
         <ThemedText type="footnote" style={styles.hint}>
-          Center the spot in the circle
+          Zoom so the spot fills the circle
         </ThemedText>
       </View>
 
@@ -168,7 +184,7 @@ export default function CropScreen() {
         <Button label="Use photo" variant="brand" loading={busy} onPress={confirm} />
         <Pressable hitSlop={10} onPress={() => router.back()} style={styles.retake}>
           <ThemedText type="headline" style={styles.retakeText}>
-            Retake
+            {fromGallery ? 'Choose another' : 'Retake'}
           </ThemedText>
         </Pressable>
       </View>
@@ -206,16 +222,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerRing: {
-    width: '44%',
+  targetRing: {
     aspectRatio: 1,
     borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 2.5,
+    borderColor: Colors.light.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Soft brand glow so the ring reads as the target against a busy photo.
+    shadowColor: Colors.light.brand,
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
   },
-  crossH: { position: 'absolute', width: 16, height: 1.5, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.85)' },
-  crossV: { position: 'absolute', width: 1.5, height: 16, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.85)' },
-  hint: { color: 'rgba(255,255,255,0.7)' },
+  // N/E/S/W ticks turn the ring into a framing reticle (medical-precise, not a plain circle).
+  tick: { position: 'absolute', backgroundColor: Colors.light.brand, borderRadius: 1 },
+  tickTop: { top: -5, width: 2, height: 8 },
+  tickBottom: { bottom: -5, width: 2, height: 8 },
+  tickLeft: { left: -5, width: 8, height: 2 },
+  tickRight: { right: -5, width: 8, height: 2 },
+  centerDot: { position: 'absolute', width: 5, height: 5, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.9)' },
+  hint: { color: 'rgba(255,255,255,0.75)' },
   footer: { paddingHorizontal: Space.xl, gap: Space.md, alignItems: 'center' },
   retake: { paddingVertical: Space.sm },
   retakeText: { color: 'rgba(255,255,255,0.85)' },

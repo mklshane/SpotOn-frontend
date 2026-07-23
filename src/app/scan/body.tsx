@@ -27,16 +27,16 @@ export default function BodyAreaScreen() {
   async function pickFromGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
+    // No allowsEditing: the OS cropper has no lesion-framing guide. Take the full image and send it
+    // to our own crop screen, which shows the target circle so the spot is framed at the fill the
+    // classifier reads best (an under-zoomed lesion is the wide-framing failure mode).
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
-      allowsEditing: true,
-      aspect: [1, 1],
       quality: 0.9,
     });
     if (!result.canceled && result.assets[0]) {
       setSource('gallery');
-      // Hand off to the image-quality gate; it starts classification on pass / "use anyway".
-      router.push({ pathname: '/scan/quality', params: { uri: result.assets[0].uri } });
+      router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
     }
   }
 

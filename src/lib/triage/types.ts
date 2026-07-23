@@ -44,6 +44,12 @@ export type ClassificationOutput = {
    *  doesn't make historical confidences (and the CS/TPS derived from them) un-auditable. */
   temperature: number;
   inferenceMs: number;
+  /** True when the predicted class changed across center-crop scales, i.e. the photo's framing
+   *  rather than the lesion drove the answer. Handled as an unreadable image, not as risk. */
+  scaleUnstable: boolean;
+  /** True when a low-confidence full-frame prediction was re-run on a lesion-centered zoom crop
+   *  and that zoomed result was adopted (see model-config.ts REFINE_*). */
+  refined: boolean;
 };
 
 /** A fully completed screening: image + questionnaire + classification + triage. */
