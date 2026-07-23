@@ -23,8 +23,9 @@ import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
+import { MALIGNANT_THRESHOLD } from '@/lib/classifier/model-config';
 import { RESCAN_PROMPT } from '@/lib/triage/recommendations';
-import { computeTriage, evaluateSafetyFloor } from '@/lib/triage/tps-core';
+import { computeMalignantScore, computeTriage, evaluateSafetyFloor } from '@/lib/triage/tps-core';
 import type { ClassificationOutput, SymptomAnswers } from '@/lib/triage/types';
 
 const MIN_BEAT_MS = 1500; // never flash the analyzing state, even when inference is already done
@@ -85,7 +86,11 @@ export default function AnalysisScreen() {
         output.topClass,
         output.topConfidence,
         s.answers as SymptomAnswers,
-        { applyFloor },
+        {
+          applyFloor,
+          malignantScore: computeMalignantScore(output.probs),
+          malignantThreshold: MALIGNANT_THRESHOLD,
+        },
       );
       const entry = await addEntry({
         mark: s.bodyMark,

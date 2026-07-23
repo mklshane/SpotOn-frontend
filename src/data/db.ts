@@ -122,14 +122,16 @@ CREATE TABLE IF NOT EXISTS screenings (
   tps                  REAL NOT NULL,
   tier                 TEXT NOT NULL,
   safety_floor_applied INTEGER NOT NULL,
-  confidence_qualifier INTEGER NOT NULL
+  confidence_qualifier INTEGER NOT NULL,
+  malignant_score      REAL NOT NULL DEFAULT 0,
+  malignant_gate_applied INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -160,6 +162,13 @@ const MIGRATION_V5 = [
   "ALTER TABLE screenings ADD COLUMN temperature REAL NOT NULL DEFAULT 1.0",
 ];
 
+// v6 — Malignant Gate: the summed MEL+SCC+BCC softmax mass and whether it floored the tier.
+// Pre-v6 rows default to 0/0, which reads correctly as "gate did not run" (it shipped with D4).
+const MIGRATION_V6 = [
+  "ALTER TABLE screenings ADD COLUMN malignant_score REAL NOT NULL DEFAULT 0",
+  "ALTER TABLE screenings ADD COLUMN malignant_gate_applied INTEGER NOT NULL DEFAULT 0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -169,6 +178,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 3 ? MIGRATION_V3 : []),
     ...(version < 4 ? MIGRATION_V4 : []),
     ...(version < 5 ? MIGRATION_V5 : []),
+    ...(version < 6 ? MIGRATION_V6 : []),
   ];
   for (const stmt of pending) {
     try {

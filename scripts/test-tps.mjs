@@ -37,6 +37,8 @@ const {
   applySafetyFloor,
   computeTriage,
   pickTopClass,
+  computeMalignantScore,
+  evaluateMalignantGate,
 } = core;
 
 let pass = 0;
@@ -192,6 +194,50 @@ check('invalid prob throws', throws(() => pickTopClass({ MEL: NaN, SCC: 0, BCC: 
 
 // ---- computeTPS rounding ----
 check('computeTPS rounds to 4dp', computeTPS(1.00005, 1.00005) === 2.0001);
+
+// ---- Malignant Gate ----
+// The threshold itself lives in classifier/model-config.ts (a model property, not a clinical
+// constant), so these vectors pin the *mechanism* against an explicit threshold argument.
+// THR below is an arbitrary fixed value for testing — deliberately NOT the shipping constant, so
+// re-tuning the model can never silently change what these assertions mean.
+const THR = 0.3454;
+const spread = { BENIGN: 0.45, BCC: 0.25, MEL: 0.15, SCC: 0.05, OTHER: 0.1 };
+
+check('malignant score sums MEL+SCC+BCC', close(computeMalignantScore(spread), 0.45));
+check('malignant score ignores BENIGN/OTHER', close(computeMalignantScore({ ...spread, BENIGN: 0, OTHER: 0 }), 0.45));
+check('malignant score rounds to 4dp', computeMalignantScore({ MEL: 0.100005, SCC: 0.1, BCC: 0.1, OTHER: 0, BENIGN: 0 }) === 0.3);
+check('invalid prob throws', throws(() => computeMalignantScore({ MEL: NaN, SCC: 0, BCC: 0, OTHER: 0, BENIGN: 0 })));
+
+check('gate fires at threshold (inclusive)', evaluateMalignantGate(THR, THR) === true);
+check('gate silent just below', evaluateMalignantGate(0.3453, THR) === false);
+check('gate score out of range throws', throws(() => evaluateMalignantGate(1.5, THR)));
+check('gate NaN score throws', throws(() => evaluateMalignantGate(NaN, THR)));
+
+// The motivating case: argmax says BENIGN (CS 0 → low), but 45% of the mass is malignant.
+r = computeTriage('BENIGN', 0.45, allNo, { malignantScore: 0.45, malignantThreshold: THR });
+check('gate floors low → moderate', r.tier === 'moderate' && r.malignantGateApplied === true);
+check('gate preserves TPS arithmetic', close(r.cs, 0) && close(r.tps, 0));
+check('gate records the score', close(r.malignantScore, 0.45));
+
+// Below threshold: untouched.
+r = computeTriage('BENIGN', 0.9, allNo, { malignantScore: 0.1, malignantThreshold: THR });
+check('gate silent below threshold', r.tier === 'low' && r.malignantGateApplied === false);
+
+// Never pulls a higher tier down, and never claims credit it did not earn.
+r = computeTriage('MEL', 0.95, allYes, { malignantScore: 0.95, malignantThreshold: THR });
+check('gate never lowers a critical', r.tier === 'critical' && r.malignantGateApplied === false);
+r = computeTriage('OTHER', 0.9, allNo, { malignantScore: 0.5, malignantThreshold: THR }); // CS 1.8 → low
+check('gate floors OTHER-argmax low → moderate', r.tier === 'moderate' && r.malignantGateApplied === true);
+
+// Omitting the gate inputs must leave the physician-validated path bit-for-bit unchanged.
+const ungated = computeTriage('BENIGN', 0.45, allNo);
+check('gate opt-out: tier unchanged', ungated.tier === 'low' && ungated.malignantGateApplied === false);
+check('gate opt-out: score defaults to 0', ungated.malignantScore === 0);
+
+// Interaction with the Safety Floor: both floor to Moderate, flags stay independently truthful.
+r = computeTriage('BENIGN', 0.35, allNo, { applyFloor: true, malignantScore: 0.5, malignantThreshold: THR });
+check('gate + safety floor: moderate', r.tier === 'moderate');
+check('gate + safety floor: both flagged', r.malignantGateApplied === true && r.safetyFloorApplied === true);
 
 if (fails.length) {
   console.error(`\ntps core: ${pass} passed, ${fails.length} FAILED`);

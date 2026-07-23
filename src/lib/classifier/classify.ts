@@ -8,8 +8,9 @@ import {
   INFERENCE_TIMEOUT_MS,
   MODEL_VERSION,
   NORMALIZATION,
+  TTA_ENABLED,
 } from './model-config';
-import { preprocessForClassifier } from './preprocess';
+import { preprocessForClassifier, ttaViews } from './preprocess';
 
 const DEBUG = __DEV__;
 
@@ -49,23 +50,35 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
     }
 
     const input = await preprocessForClassifier(uri, inputSize, NORMALIZATION);
+    // 4-view dihedral TTA (the configuration D4's operating point was selected under), or a
+    // single pass when disabled. Views run sequentially so only one input buffer is live at a time.
+    const views = TTA_ENABLED ? ttaViews(input, inputSize) : [input];
 
     const started = Date.now();
-    let outputs: ArrayBuffer[];
+    let logitSum: Float64Array | null = null;
     try {
-      // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
-      // proven detector path uses (capture.tsx runSync).
-      const buffer = input.buffer.slice(
-        input.byteOffset,
-        input.byteOffset + input.byteLength,
-      ) as ArrayBuffer;
-      outputs = await model.run([buffer]);
+      for (const view of views) {
+        // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
+        // proven detector path uses (capture.tsx runSync).
+        const buffer = view.buffer.slice(
+          view.byteOffset,
+          view.byteOffset + view.byteLength,
+        ) as ArrayBuffer;
+        const outputs = await model.run([buffer]);
+        const out = new Float32Array(outputs?.[0] ?? new ArrayBuffer(0));
+        if (out.length !== CLASS_ORDER.length) {
+          throw new ClassifierError('invalid-output', `bad output tensor (${out.length} values)`);
+        }
+        logitSum ??= new Float64Array(out.length);
+        for (let i = 0; i < out.length; i++) logitSum[i] += out[i];
+      }
     } catch (e) {
       throw asClassifierError(e, 'inference');
     }
     const inferenceMs = Date.now() - started;
 
-    const values = Array.from(new Float32Array(outputs?.[0] ?? new ArrayBuffer(0))).map(Number);
+    // Averaging in logit space is what the threshold was calibrated on — never average softmaxes.
+    const values = Array.from(logitSum ?? []).map((v) => v / views.length);
     if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
       throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
     }
@@ -84,7 +97,7 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
         `attempt=${attempt}`,
         `top=${topClass}@${topConfidence.toFixed(3)}`,
         CLASS_ORDER.map((c) => `${c}=${probsByClass[c].toFixed(3)}`).join(' '),
-        `${inferenceMs}ms @${inputSize}px`,
+        `${inferenceMs}ms @${inputSize}px ×${views.length}view`,
       );
     }
 

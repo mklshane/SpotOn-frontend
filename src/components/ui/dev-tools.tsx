@@ -10,7 +10,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { resetOnboarding } from '@/lib/onboarding';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
-import { MAJOR_QUESTIONS, MINOR_QUESTIONS, computeTriage } from '@/lib/triage/tps-core';
+import { MALIGNANT_THRESHOLD } from '@/lib/classifier/model-config';
+import {
+  MAJOR_QUESTIONS,
+  MINOR_QUESTIONS,
+  computeMalignantScore,
+  computeTriage,
+} from '@/lib/triage/tps-core';
 import type { Answer, LesionClass, QuestionId, SymptomAnswers } from '@/lib/triage/types';
 
 import { ThemedText } from '../themed-text';
@@ -95,7 +101,11 @@ export function DevTools() {
         temperature: 1.0,
         inferenceMs: 0,
       },
-      triage: computeTriage(mock.topClass, mock.conf, answers, { applyFloor: mock.floor }),
+      triage: computeTriage(mock.topClass, mock.conf, answers, {
+        applyFloor: mock.floor,
+        malignantScore: computeMalignantScore(probs),
+        malignantThreshold: MALIGNANT_THRESHOLD,
+      }),
     });
     router.replace({ pathname: '/scan/result', params: { id: entry.id } });
   }

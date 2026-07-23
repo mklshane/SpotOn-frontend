@@ -58,8 +58,15 @@ export default function ReportScreen() {
                 model.symptoms.filter((s) => s.answer !== 'No').map((s) => s.label).join(', ') || 'None'
               }
             />
+            <Row label="Combined cancer-type probability" value={`${model.malignantPct}%`} />
             {model.safetyFloorApplied ? (
               <Row label="Note" value="Precautionary result — photo could not be assessed confidently" />
+            ) : null}
+            {model.malignantGateApplied ? (
+              <Row
+                label="Note"
+                value="Urgency raised — cancer-type probability was spread across several types"
+              />
             ) : null}
           </Card>
         ) : null}

@@ -23,6 +23,9 @@ export type ReportModel = {
   bodyRegion: string | null;
   imageUri: string;
   safetyFloorApplied: boolean;
+  /** Summed MEL+SCC+BCC probability, as a percentage — the Malignant Gate's input. */
+  malignantPct: number;
+  malignantGateApplied: boolean;
 };
 
 /** Pure projection of a ScreeningRecord into report-ready fields. */
@@ -53,6 +56,8 @@ export function buildReportModel(record: ScreeningRecord): ReportModel {
     bodyRegion: record.mark?.region ?? null,
     imageUri: record.imageUri,
     safetyFloorApplied: record.triage.safetyFloorApplied,
+    malignantPct: Math.round(record.triage.malignantScore * 100),
+    malignantGateApplied: record.triage.malignantGateApplied,
   };
 }
 

@@ -84,6 +84,18 @@ export const CONFIDENCE_QUALIFIER = {
     'We could not read your photos clearly enough for a confident assessment, so we are recommending a check-up as a precaution. This reflects photo uncertainty — not a detected risk.',
 };
 
+/**
+ * Shown when the Malignant Gate raised the tier: the single best-matching pattern was not a
+ * cancer type, but enough of the model's certainty was spread across melanoma, SCC and BCC to
+ * warrant a check. Says why the headline pattern and the urgency appear to disagree, without
+ * implying a detection.
+ */
+export const MALIGNANT_GATE = {
+  title: 'Worth having checked',
+  body:
+    'The closest single match for your photo was not a cancer type, but a meaningful share of the assessment still pointed toward one. When that happens we raise the recommendation rather than rely on the closest match alone. This is a precaution, not a detection.',
+};
+
 /** Non-alarming retake prompt for a first low-confidence pass. */
 export const RESCAN_PROMPT = {
   title: 'Let’s try a clearer photo',

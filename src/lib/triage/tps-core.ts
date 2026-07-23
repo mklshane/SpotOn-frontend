@@ -46,6 +46,10 @@ export type TriageResult = {
   safetyFloorApplied: boolean;
   /** True when the UI must explain the result reflects image uncertainty, not risk. */
   confidenceQualifier: boolean;
+  /** Summed softmax mass over MEL+SCC+BCC, in [0, 1]. NaN-free; 0 when not supplied. */
+  malignantScore: number;
+  /** True when the Malignant Gate raised the tier above the computed TPS tier. */
+  malignantGateApplied: boolean;
 };
 
 /** NICE NG12 referral-urgency weights. The 2-point gap BENIGN→OTHER is deliberate. */
@@ -56,6 +60,23 @@ export const CLASS_WEIGHTS: Record<LesionClass, number> = {
   OTHER: 2,
   BENIGN: 0,
 };
+
+/**
+ * The three malignant classes. Their summed softmax mass is the Malignant Gate's input —
+ * a signal argmax throws away when probability is spread across several malignant classes.
+ */
+export const MALIGNANT_CLASSES: readonly LesionClass[] = ['MEL', 'SCC', 'BCC'];
+
+/** Tier severity order, low → critical. Used to compare tiers without ad-hoc string checks. */
+export const TIER_ORDER: readonly TriageTier[] = ['low', 'moderate', 'high', 'critical'];
+
+/**
+ * The tier the Malignant Gate floors to. Moderate, deliberately: the gate only fires when
+ * argmax *disagrees* with the summed malignant mass, which is enough to warrant a clinician
+ * but not enough to assert urgency on the argmax path's behalf. Same ceiling as the Safety
+ * Floor Rule, and for the same reason — a derived signal must not manufacture a High/Critical.
+ */
+export const MALIGNANT_GATE_FLOOR_TIER: TriageTier = 'moderate';
 
 /** Glasgow Major features: primary malignancy indicators across MEL/BCC/SCC. */
 export const MAJOR_QUESTIONS: readonly QuestionId[] = [
@@ -154,6 +175,51 @@ export function evaluateSafetyFloor(
 }
 
 /**
+ * Malignant score = summed softmax mass over MEL+SCC+BCC. Throws on a malformed distribution,
+ * matching pickTopClass — a fabricated 0 here would silently disarm the gate.
+ */
+export function computeMalignantScore(probs: Record<LesionClass, number>): number {
+  let sum = 0;
+  for (const cls of MALIGNANT_CLASSES) {
+    const p = probs[cls];
+    if (!Number.isFinite(p)) throw new Error(`tps: invalid probability for ${cls}`);
+    sum += p;
+  }
+  return round4(sum);
+}
+
+/**
+ * Malignant Gate. Fires when enough probability mass sits on the malignant classes, even if no
+ * single one wins the argmax — the failure mode the 5-class CS path is blind to (e.g. BENIGN .45
+ * beats BCC .25 / MEL .15 / SCC .05, yielding CS = 0 while 45% of the mass is malignant).
+ *
+ * The threshold is a property of the deployed model, not of the clinical spec, so it is passed in
+ * from `classifier/model-config.ts` (MALIGNANT_THRESHOLD) rather than pinned here — this file
+ * stays import-free and model-agnostic. Comparison is >= so the published operating point is
+ * inclusive.
+ */
+export function evaluateMalignantGate(malignantScore: number, threshold: number): boolean {
+  if (!Number.isFinite(malignantScore) || malignantScore < 0 || malignantScore > 1) {
+    throw new Error(`tps: malignant score out of range (${malignantScore})`);
+  }
+  if (!Number.isFinite(threshold)) throw new Error(`tps: invalid malignant threshold (${threshold})`);
+  return malignantScore >= threshold;
+}
+
+/**
+ * Raise a result to the Malignant Gate floor. Purely a floor: a computed High or Critical is
+ * never pulled down, and the TPS arithmetic (cs / symptomScore / tps) is preserved untouched so
+ * the audit trail records both the computed truth and the override.
+ */
+export function applyMalignantFloor(result: TriageResult): TriageResult {
+  const floor = MALIGNANT_GATE_FLOOR_TIER;
+  if (TIER_ORDER.indexOf(result.tier) >= TIER_ORDER.indexOf(floor)) {
+    return { ...result, malignantGateApplied: false };
+  }
+  return { ...result, tier: floor, malignantGateApplied: true };
+}
+
+/**
  * Override a computed result to the Moderate floor. Only `tier` and the flags change —
  * the arithmetic components are preserved so the audit trail records both the computed
  * truth and the override.
@@ -166,17 +232,21 @@ export function applySafetyFloor(result: TriageResult): TriageResult {
  * Facade: compute the full TriageResult for a classification + questionnaire pair.
  * `applyFloor` is decided by the caller via evaluateSafetyFloor (or when the user
  * chooses to continue with a low-confidence photo instead of retaking).
+ *
+ * When `malignantScore` and `malignantThreshold` are both supplied, the Malignant Gate runs
+ * before the Safety Floor. Both floor to Moderate, so the order never changes the tier — it only
+ * keeps the two flags independently truthful about which rule did the raising.
  */
 export function computeTriage(
   topClass: LesionClass,
   topConfidence: number,
   answers: SymptomAnswers,
-  opts: { applyFloor?: boolean } = {},
+  opts: { applyFloor?: boolean; malignantScore?: number; malignantThreshold?: number } = {},
 ): TriageResult {
   const { classWeight, cs } = computeCS(topClass, topConfidence);
   const { raw, scaled } = computeSymptomScore(answers);
   const tps = computeTPS(cs, scaled);
-  const result: TriageResult = {
+  let result: TriageResult = {
     classWeight,
     topConfidence,
     cs,
@@ -186,7 +256,16 @@ export function computeTriage(
     tier: assignTier(tps),
     safetyFloorApplied: false,
     confidenceQualifier: false,
+    malignantScore: opts.malignantScore ?? 0,
+    malignantGateApplied: false,
   };
+  if (
+    opts.malignantScore !== undefined &&
+    opts.malignantThreshold !== undefined &&
+    evaluateMalignantGate(opts.malignantScore, opts.malignantThreshold)
+  ) {
+    result = applyMalignantFloor(result);
+  }
   return opts.applyFloor ? applySafetyFloor(result) : result;
 }
 

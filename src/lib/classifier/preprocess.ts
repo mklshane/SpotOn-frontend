@@ -37,6 +37,43 @@ export function packRgbaToTensor(
 }
 
 /**
+ * Flip a packed NHWC RGB tensor in-plane. Used to build the 4-view TTA set without paying for
+ * four JPEG decodes: bilinear resize commutes with an axis flip, so flipping the already-resized
+ * tensor is equivalent to flipping the source image and resizing it.
+ */
+export function flipTensor(
+  t: Float32Array,
+  size: number,
+  { horizontal = false, vertical = false }: { horizontal?: boolean; vertical?: boolean },
+): Float32Array {
+  if (!horizontal && !vertical) return t;
+  const out = new Float32Array(t.length);
+  const rowStride = size * 3;
+  for (let y = 0; y < size; y++) {
+    const srcY = vertical ? size - 1 - y : y;
+    for (let x = 0; x < size; x++) {
+      const srcX = horizontal ? size - 1 - x : x;
+      const src = srcY * rowStride + srcX * 3;
+      const dst = y * rowStride + x * 3;
+      out[dst] = t[src];
+      out[dst + 1] = t[src + 1];
+      out[dst + 2] = t[src + 2];
+    }
+  }
+  return out;
+}
+
+/** The 4 dihedral views the D4 operating point was calibrated on, in a fixed order. */
+export function ttaViews(t: Float32Array, size: number): Float32Array[] {
+  return [
+    t,
+    flipTensor(t, size, { horizontal: true }),
+    flipTensor(t, size, { vertical: true }),
+    flipTensor(t, size, { horizontal: true, vertical: true }),
+  ];
+}
+
+/**
  * Full preprocessing chain for a still image: resize to the model's input size
  * *before* decoding (so jpeg-js only ever touches an inputSize² buffer, never the
  * 1024² crop — same recipe as image-quality.ts), then decode, run any configured

@@ -41,6 +41,8 @@ type Row = {
   tier: string;
   safety_floor_applied: number;
   confidence_qualifier: number;
+  malignant_score: number;
+  malignant_gate_applied: number;
 };
 
 function toRecord(row: Row): ScreeningRecord {
@@ -67,6 +69,8 @@ function toRecord(row: Row): ScreeningRecord {
     tier: row.tier as TriageResult["tier"],
     safetyFloorApplied: row.safety_floor_applied === 1,
     confidenceQualifier: row.confidence_qualifier === 1,
+    malignantScore: row.malignant_score ?? 0,
+    malignantGateApplied: row.malignant_gate_applied === 1,
   };
   return {
     id: row.id,
@@ -98,8 +102,8 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
        answers_json, probs_json, top_class, top_confidence, attempt, model_version,
        input_size, normalization, temperature, inference_ms, first_attempt_json,
        class_weight, cs, symptom_score_raw, symptom_score, tps, tier,
-       safety_floor_applied, confidence_qualifier
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       safety_floor_applied, confidence_qualifier, malignant_score, malignant_gate_applied
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     record.id,
     record.createdAt,
     record.mark?.point[0] ?? null,
@@ -128,6 +132,8 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     record.triage.tier,
     record.triage.safetyFloorApplied ? 1 : 0,
     record.triage.confidenceQualifier ? 1 : 0,
+    record.triage.malignantScore,
+    record.triage.malignantGateApplied ? 1 : 0,
   );
 }
 

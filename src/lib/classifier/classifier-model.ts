@@ -3,7 +3,7 @@ import { Image } from 'react-native';
 import { loadTensorflowModel } from 'react-native-fast-tflite';
 
 import { ClassifierError } from './errors';
-import { FALLBACK_INPUT_SIZE, MODEL_ASSET } from './model-config';
+import { FALLBACK_INPUT_SIZE, MODEL_ASSET, MODEL_VERSION } from './model-config';
 
 /** The loaded TFLite classifier handle (5-class lesion classifier). */
 export type ClassifierModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
@@ -22,7 +22,9 @@ export function getClassifierModel(): Promise<ClassifierModel> {
       const src = Image.resolveAssetSource(MODEL_ASSET);
       let uri = src.uri;
       if (uri.startsWith('http')) {
-        const dest = `${FileSystem.cacheDirectory}spoton_classifier_D3_float32.tflite`;
+        // Name the cache file after the model version so a model swap can't be served a stale
+        // download from a previous build.
+        const dest = `${FileSystem.cacheDirectory}${MODEL_VERSION}.tflite`;
         await FileSystem.downloadAsync(uri, dest);
         uri = dest;
       }

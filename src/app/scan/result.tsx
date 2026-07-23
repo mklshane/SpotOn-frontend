@@ -19,6 +19,7 @@ import {
   CLASS_DISPLAY,
   CONFIDENCE_QUALIFIER,
   DISCLAIMER,
+  MALIGNANT_GATE,
   TIER_CONTENT,
 } from '@/lib/triage/recommendations';
 import { CLASS_WEIGHTS } from '@/lib/triage/tps-core';
@@ -72,6 +73,9 @@ export default function ResultScreen() {
   const tier = TIER_CONTENT[triage.tier];
   const colors = tierColor(triage.tier);
   const qualifier = triage.confidenceQualifier;
+  // The gate raising the tier is only worth explaining when the photo *was* readable — otherwise
+  // the precautionary copy already covers why the urgency outruns the headline pattern.
+  const gated = triage.malignantGateApplied && !qualifier;
   const cls = CLASS_DISPLAY[classification.topClass];
   const pct = Math.round(classification.topConfidence * 100);
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
@@ -149,6 +153,10 @@ export default function ResultScreen() {
             {qualifier ? (
               <ThemedText type="body" themeColor="textSecondary">
                 {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
+              </ThemedText>
+            ) : gated ? (
+              <ThemedText type="body" themeColor="textSecondary">
+                {MALIGNANT_GATE.body} {tier.recommendation}
               </ThemedText>
             ) : (
               <ThemedText type="body" themeColor="textSecondary">
