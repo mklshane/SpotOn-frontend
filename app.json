@@ -68,7 +68,8 @@
           "cameraPermissionText": "SpotOn uses your camera to detect and capture the skin spot for triage.",
           "enableFrameProcessors": true
         }
-      ]
+      ],
+      "react-native-fast-tflite"
     ],
     "experiments": {
       "typedRoutes": true,

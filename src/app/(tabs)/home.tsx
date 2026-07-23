@@ -1,16 +1,33 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ScreeningRow } from '@/components/scan/screening-row';
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Screen } from '@/components/ui/screen';
-import { Space } from '@/constants/theme';
+import { Elevation, Gradients, Radius, Space } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { useScanHistory } from '@/lib/scan-history';
 
+/** "Good morning" / "Good afternoon" / "Good evening" based on the device clock. */
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+}
+
+const TODAY_LABEL = new Date().toLocaleDateString(undefined, {
+  weekday: 'long',
+  month: 'long',
+  day: 'numeric',
+});
+
 export default function HomeScreen() {
+  const theme = useTheme();
   const { user } = useAuth();
   const { entries, loading } = useScanHistory();
   const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
@@ -19,21 +36,53 @@ export default function HomeScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <ThemedText type="largeTitle">Hi, {firstName}</ThemedText>
-        <ThemedText type="body" themeColor="textSecondary">
-          Tap the camera to start a skin check.
-        </ThemedText>
+        <View style={[styles.headerGlow, { backgroundColor: theme.brandTint }]} pointerEvents="none" />
+
+        <View style={styles.headerRow}>
+          <View style={styles.headerText}>
+            <ThemedText type="largeTitle">
+              {getGreeting()}, {firstName}
+            </ThemedText>
+            <ThemedText type="footnote" themeColor="textSecondary">
+              {TODAY_LABEL}
+            </ThemedText>
+          </View>
+        </View>
       </View>
 
-      <Card style={styles.cta}>
-        <IconCircle icon="camera.viewfinder" variant="gradient" size={56} />
-        <View style={styles.ctaText}>
-          <ThemedText type="headline">New screening</ThemedText>
-          <ThemedText type="footnote" themeColor="textSecondary">
-            Snap a photo of a spot for an instant, on-device triage.
-          </ThemedText>
+      <Pressable
+        onPress={() => router.push('/scan/body')}
+        accessibilityRole="button"
+        accessibilityLabel="Start a new screening"
+        style={({ pressed }) => pressed && styles.pressed}>
+        <View style={styles.cta}>
+          <LinearGradient
+            colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
+            start={{ x: 0.1, y: 0 }}
+            end={{ x: 0.95, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.ctaOrb} pointerEvents="none" />
+          <View style={styles.ctaOrbSmall} pointerEvents="none" />
+
+          <IconCircle
+            icon="camera.viewfinder"
+            variant="tint"
+            tintBg="rgba(255,255,255,0.22)"
+            iconColor={theme.onBrand}
+            size={56}
+          />
+          <View style={styles.ctaText}>
+            <ThemedText type="headline" themeColor="onBrand">
+              New screening
+            </ThemedText>
+            <ThemedText type="footnote" themeColor="onBrand" style={styles.ctaSubtitle}>
+              Snap a photo of a spot for an instant, on-device triage.
+            </ThemedText>
+          </View>
+          <Icon name="chevron.right" tintColor={theme.onBrand} size={18} />
         </View>
-      </Card>
+      </Pressable>
 
       <View style={styles.sectionHead}>
         <ThemedText type="title2">Recent screenings</ThemedText>
@@ -67,9 +116,49 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { paddingTop: Space.lg, gap: Space.xs },
-  cta: { marginTop: Space.xl, flexDirection: 'row', alignItems: 'center', gap: Space.base },
+  header: { paddingTop: Space.xxl, gap: Space.sm },
+  headerGlow: {
+    position: 'absolute',
+    top: -36,
+    left: -44,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    opacity: 0.6,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
+  headerText: { flex: 1, gap: 2 },
+  headerSubtitle: { marginTop: Space.xs },
+  cta: {
+    marginTop: Space.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.base,
+    borderRadius: Radius.xl,
+    padding: Space.xl,
+    overflow: 'hidden',
+    ...Elevation.lg,
+  },
+  ctaOrb: {
+    position: 'absolute',
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    top: -50,
+    right: -35,
+  },
+  ctaOrbSmall: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    bottom: -20,
+    right: 60,
+  },
   ctaText: { flex: 1, gap: 2 },
+  ctaSubtitle: { opacity: 0.9 },
   sectionHead: {
     marginTop: Space.xxl,
     marginBottom: Space.sm,
