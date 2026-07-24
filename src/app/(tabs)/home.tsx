@@ -128,7 +128,6 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   headerText: { flex: 1, gap: 2 },
-  headerSubtitle: { marginTop: Space.xs },
   cta: {
     marginTop: Space.xl,
     flexDirection: 'row',
