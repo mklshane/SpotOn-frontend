@@ -76,7 +76,8 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "react-native-fast-tflite"
     ],
     "experiments": {
       "typedRoutes": true,
