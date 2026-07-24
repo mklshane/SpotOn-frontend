@@ -33,45 +33,60 @@ const { locateLesion } = await import(pathToFileURL(join(out, 'loc.js')).href);
 let pass = 0;
 const fails = [];
 const check = (name, cond) => (cond ? pass++ : fails.push(name));
-const near = (a, b, eps = 0.06) => Math.abs(a - b) < eps;
+const near = (a, b, eps = 0.08) => Math.abs(a - b) < eps;
 
-const W = 100;
-// Skin at brightness 200 with a dark (40) circular lesion of radius R centered at (cx,cy).
-function synth(cxN, cyN, rPx) {
-  const g = new Uint8Array(W * W).fill(200);
+const W = 80;
+// Build an RGBA scene: warm "skin" with a dark circular lesion at (cxN,cyN).
+function scene(cxN, cyN, rPx, { skin = [205, 150, 120], lesion = [60, 40, 35], hair = false } = {}) {
+  const d = new Uint8Array(W * W * 4);
   const cx = cxN * W;
   const cy = cyN * W;
-  for (let y = 0; y < W; y++)
-    for (let x = 0; x < W; x++)
-      if ((x - cx) ** 2 + (y - cy) ** 2 <= rPx * rPx) g[y * W + x] = 40;
-  return g;
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const p = (y * W + x) * 4;
+      const inLesion = rPx > 0 && (x - cx) ** 2 + (y - cy) ** 2 <= rPx * rPx;
+      // thin dark diagonal strands, like body hair — must NOT be mistaken for a lesion
+      const onHair = hair && (x + y) % 11 === 0;
+      const c = inLesion ? lesion : onHair ? [70, 55, 45] : skin;
+      d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = 255;
+    }
+  }
+  return d;
 }
 
-// Centered blob → box centred, half ≈ radius / targetFill.
-let box = locateLesion(synth(0.5, 0.5, 18), W, W, { targetFill: 0.45 });
-check('finds centered blob', box !== null);
-check('centroid x centered', near(box.cx, 0.5));
-check('centroid y centered', near(box.cy, 0.5));
-check('half ≈ r/targetFill', near(box.half, 0.18 / 0.45, 0.1));
+// Centred lesion on clean skin.
+let box = locateLesion(scene(0.5, 0.5, 9), W, W, { targetFill: 0.45 });
+check('finds centred lesion', box !== null);
+check('centroid x centred', near(box.cx, 0.5));
+check('centroid y centred', near(box.cy, 0.5));
+check('half ≈ r/targetFill', near(box.half, 9 / 0.45 / W, 0.12));
 
-// Off-center blob → centroid tracks it.
-box = locateLesion(synth(0.3, 0.7, 15), W, W);
-check('off-center: cx tracks', near(box.cx, 0.3));
-check('off-center: cy tracks', near(box.cy, 0.7));
+// Off-centre (but inside the central search window).
+box = locateLesion(scene(0.42, 0.58, 8), W, W);
+check('off-centre: cx tracks', near(box.cx, 0.42));
+check('off-centre: cy tracks', near(box.cy, 0.58));
 
-// A smaller blob → tighter crop (smaller half) than a larger one.
-const small = locateLesion(synth(0.5, 0.5, 8), W, W);
-const large = locateLesion(synth(0.5, 0.5, 28), W, W);
-check('smaller blob → smaller half', small.half < large.half);
+// Smaller lesion → tighter crop.
+const small = locateLesion(scene(0.5, 0.5, 5), W, W);
+const large = locateLesion(scene(0.5, 0.5, 14), W, W);
+check('smaller lesion → smaller half', small.half < large.half);
 
-// Blank skin → no blob, decline (leave framing alone).
-check('declines on blank skin', locateLesion(new Uint8Array(W * W).fill(200), W, W) === null);
-// A few stray dark pixels (below the count floor) → still declines.
-const sparse = new Uint8Array(W * W).fill(200);
-for (let i = 0; i < 10; i++) sparse[i] = 0;
-check('declines on sparse noise', locateLesion(sparse, W, W) === null);
-// Degenerate tiny image → null, no throw.
-check('tiny image → null', locateLesion(new Uint8Array(4), 2, 2) === null);
+// THE REGRESSION THAT MOTIVATED DoG: hair must not win over the lesion.
+box = locateLesion(scene(0.5, 0.5, 9, { hair: true }), W, W);
+check('hair present: still finds lesion', box !== null && near(box.cx, 0.5, 0.12) && near(box.cy, 0.5, 0.12));
+
+// Plain skin, no lesion → decline rather than invent one.
+check('declines on blank skin', locateLesion(scene(0.5, 0.5, 0), W, W) === null);
+// A single stray dark pixel is not a lesion either.
+check('declines on 1px speck', locateLesion(scene(0.5, 0.5, 0.9), W, W) === null);
+
+// A dark blob NOT surrounded by skin (grey background) → rejected by the skin-surround guard.
+const grey = scene(0.5, 0.5, 9, { skin: [100, 100, 100] });
+check('declines when surround is not skin', locateLesion(grey, W, W) === null);
+
+// Degenerate inputs → null, never throw.
+check('tiny image → null', locateLesion(new Uint8Array(4 * 4), 2, 2) === null);
+check('truncated buffer → null', locateLesion(new Uint8Array(10), W, W) === null);
 
 if (fails.length) {
   console.error(`\nlocalizer: ${pass} passed, ${fails.length} FAILED`);

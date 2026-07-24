@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image as RNImage, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { Colors, Space } from '@/constants/theme';
 import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
+import { locateLesionInImage } from '@/lib/classifier/preprocess';
 
 const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
@@ -38,6 +39,8 @@ export default function CropScreen() {
   const frame = width - Space.xl * 2;
   const [img, setImg] = useState<{ w: number; h: number } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Auto-framing is a one-shot on open — never re-run and yank the view out from under the user.
+  const preframed = useRef(false);
 
   const tx = useSharedValue(0);
   const ty = useSharedValue(0);
@@ -84,6 +87,50 @@ export default function CropScreen() {
     tx.value = (IW / 2 - cxPx) * eff;
     ty.value = (IH / 2 - cyPx) * eff;
   }, [img, lx, ly, lw, lh, frame, scale, tx, ty]);
+
+  // Auto-frame for uploads: there's no live detector box, so find the lesion in the photo itself
+  // (same dark-blob localizer the classifier's zoom refinement uses) and open the crop already
+  // zoomed to the target fill — the spot lands inside the guide ring instead of the user having to
+  // pinch it there. Best-effort: if no confident blob is found we leave the centered default.
+  // Skipped entirely when the camera handed us a box, which the effect above already used.
+  useEffect(() => {
+    if (!img || !uri || preframed.current) return;
+    const hasDetectorBox = [lx, ly, lw, lh]
+      .map((v) => parseFloat(v ?? ''))
+      .every(Number.isFinite);
+    if (hasDetectorBox) return;
+
+    // NB: the ref is set only once the transform is actually applied, never up-front. `frame`
+    // comes from useWindowDimensions, which commonly updates just after mount on iOS — marking
+    // early meant that re-render cancelled the in-flight localization and the retry then bailed on
+    // the ref, so the preframe silently never happened. Letting the re-run retry is the fix.
+    let alive = true;
+    locateLesionInImage(uri, { targetFill: LESION_TARGET_FILL })
+      .then((box) => {
+        if (!alive || !box || preframed.current) return;
+        preframed.current = true;
+        const { w: IW, h: IH } = img;
+        const shortSide = Math.min(IW, IH);
+        // box.cx/cy/half are fractions of the short edge, so they scale straight to source pixels.
+        const wanted = box.half * 2 * shortSide;
+        const cropSide = Math.min(shortSide, Math.max(shortSide * CROP_MIN_FRAC, wanted));
+        const s0local = frame / shortSide;
+        const scv = Math.min(4, shortSide / cropSide); // pinch caps zoom at 4x
+        const eff = s0local * scv;
+        // Mirror confirm()'s cropSize math so the preview and the actual crop stay centred alike.
+        const actualCrop = Math.min(shortSide, frame / eff);
+        const half = actualCrop / 2;
+        const cxPx = Math.min(IW - half, Math.max(half, box.cx * shortSide));
+        const cyPx = Math.min(IH - half, Math.max(half, box.cy * shortSide));
+        scale.value = scv;
+        tx.value = (IW / 2 - cxPx) * eff;
+        ty.value = (IH / 2 - cyPx) * eff;
+      })
+      .catch(() => {}); // localization is a convenience; a failure just leaves the default framing
+    return () => {
+      alive = false;
+    };
+  }, [img, uri, lx, ly, lw, lh, frame, scale, tx, ty]);
 
   const pan = Gesture.Pan()
     .onBegin(() => {

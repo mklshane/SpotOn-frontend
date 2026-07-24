@@ -121,8 +121,15 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
       const box = await locateLesionInImage(uri, { targetFill: REFINE_TARGET_FILL });
       if (box) {
         const zoomed = await predictAt(1, box);
-        result = zoomed;
-        refined = true;
+        // Adopt only when the zoom is MORE confident than the full frame. Measured on
+        // SpotOn-synthetic/retrain (972 images): adopting unconditionally gives +2.7 pts but
+        // corrupts 65 previously-correct images; requiring a confidence gain gives +3.8 pts and
+        // nearly halves that to 36. A zoom that lowers confidence is evidence the crop was wrong
+        // (mislocated lesion), so keeping the original is the safer read.
+        if (zoomed.topConfidence > result.topConfidence) {
+          result = zoomed;
+          refined = true;
+        }
       }
     }
     const probsByClass = result.probs;

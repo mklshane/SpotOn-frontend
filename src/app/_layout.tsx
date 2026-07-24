@@ -7,7 +7,7 @@ import { DefaultTheme, ThemeProvider } from 'expo-router';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
@@ -26,23 +26,36 @@ LogBox.ignoreLogs(['Multiple instances of Three.js being imported.']);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Longest we'll hold the whole app behind the display font. On a low-end Android, font
+// registration lands well inside this; if it doesn't, a few frames of the system face is a much
+// better outcome than a splash screen that looks like the app failed to start.
+const FONT_TIMEOUT_MS = 1000;
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'Display-SemiBold': HankenGrotesk_600SemiBold,
     'Display-Bold': HankenGrotesk_700Bold,
   });
+  const [fontsTimedOut, setFontsTimedOut] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setFontsTimedOut(true), FONT_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  const ready = fontsLoaded || !!fontError || fontsTimedOut;
 
   useEffect(() => {
     if (fontError) {
       console.error('Font load failed, continuing without custom fonts:', fontError);
     }
-    if (fontsLoaded || fontError) {
+    if (ready) {
       SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [ready, fontError]);
 
-  if (!fontsLoaded && !fontError) {
-    return null; // keep the native splash visible until the display font is ready (or fails)
+  if (!ready) {
+    return null; // keep the native splash visible until the display font is ready (or we give up)
   }
 
   return (

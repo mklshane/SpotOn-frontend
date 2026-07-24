@@ -1,8 +1,8 @@
 import { NitroModules } from 'react-native-nitro-modules';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { router } from 'expo-router';
+import { router, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
   useAnimatedProps,
@@ -18,19 +18,28 @@ import {
   Camera,
   runAtTargetFps,
   useCameraDevice,
+  useCameraFormat,
   useCameraPermission,
   useFrameProcessor,
 } from 'react-native-vision-camera';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
-import { useRunOnJS } from 'react-native-worklets-core';
+import { useRunOnJS, useSharedValue as useWorkletValue } from 'react-native-worklets-core';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
 import { CaptureCoach } from '@/components/scan/too-dark-overlay';
-import { DetectionBox, type DetectionBBox } from '@/components/scan/detection-box';
-import { getLesionModel, type LesionModel } from '@/lib/lesion-model';
+import {
+  DetectionBox,
+  resetDetectionBox,
+  trackDetectionBox,
+  useDetectionBoxValues,
+  type DetectionBBox,
+} from '@/components/scan/detection-box';
+import { PerfHud, PERF_ENABLED, usePerfCounters } from '@/components/scan/perf-hud';
+import { useDeviceTier } from '@/lib/device-tier';
+import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
 import { makeOneEuro } from '@/lib/one-euro';
 import { Space } from '@/constants/theme';
 
@@ -66,6 +75,23 @@ const BLUR_THRESHOLD = 0.0004; // mean gradient energy below this = genuinely bl
 const BLUR_SHOW = 5; // consecutive blurry frames before coaching (avoids flicker on plain/brief frames)
 const DEBUG = false; // set true to log [fp] best/sharp/lume for tuning
 
+// Detector cadence. Low-end devices can't sustain 12 passes/second alongside the preview, and
+// missing the budget costs far more (dropped preview frames, a janky JS thread) than a slower box.
+const TARGET_FPS_HIGH = 12;
+const TARGET_FPS_LOW = 6;
+
+// Photo capture. The still only ever feeds a centered crop into a 260² classifier, so a
+// full-sensor 12 MP capture buys nothing and costs a slow shutter plus an expensive decode in
+// every downstream step (crop → IQA → classifier).
+const PHOTO_TARGET = { width: 2048, height: 1536 };
+const PHOTO_LONG_EDGE = 2048; // cap applied when baking in the EXIF orientation
+
+/** Quality-gate verdicts, in the priority order the overlays are shown in. */
+const GATE_OK = 0;
+const GATE_DARK = 1;
+const GATE_BRIGHT = 2;
+const GATE_BLURRY = 3;
+
 export default function CaptureScreen() {
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -73,6 +99,32 @@ export default function CaptureScreen() {
   const camera = useRef<Camera>(null);
   const { resize } = useResizePlugin();
   const { width: SW, height: SH } = useWindowDimensions();
+  const tier = useDeviceTier();
+
+  // The Stack keeps this screen mounted underneath crop → quality → questionnaire → analysis.
+  // Without this gate the preview and the detector keep running through all of them, competing
+  // with the classifier for exactly the CPU it needs.
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(true);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => setAppActive(s === 'active'));
+    return () => sub.remove();
+  }, []);
+
+  // Cap both streams instead of taking the device default, which is typically the largest format
+  // it offers. `videoResolution` is what the resize plugin downsamples every frame — the biggest
+  // native cost in the frame processor — and the photo is what the whole diagnosis rests on, so
+  // photoResolution is ranked first: capping the analysis stream must never cost capture quality.
+  //
+  // 720p is the floor, on both tiers. The detector's square center crop of a 720-short-edge frame
+  // is 720², which still downsamples into the model's input; anything smaller would *upscale* into
+  // it and quietly cost detection recall. Low-end devices buy their headroom with cadence
+  // (`targetFps`) and by skipping box fusion, not by feeding the model a softer image.
+  const format = useCameraFormat(device, [
+    { photoResolution: PHOTO_TARGET },
+    { videoResolution: { width: 1280, height: 720 } },
+    { fps: 30 },
+  ]);
 
   const [model, setModel] = useState<LesionModel | null>(null);
   useEffect(() => {
@@ -90,16 +142,31 @@ export default function CaptureScreen() {
   const [torch, setTorch] = useState(false);
   const [aiCamera, setAiCamera] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [tooDark, setTooDark] = useState(false);
-  const [tooBright, setTooBright] = useState(false);
-  const [tooBlurry, setTooBlurry] = useState(false);
-  const [detection, setDetection] = useState<DetectionBBox | null>(null);
+  const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
+
+  // The ONLY per-frame-derived React state. Everything else the detector produces (the box pose,
+  // the raw metrics) is written to shared values or refs, so a new detection re-renders this
+  // screen exactly when the on-screen coaching copy has to change — not 12 times a second.
+  const [coach, setCoach] = useState<Coach | null>('search');
+  const coachRef = useRef<Coach | null>('search');
+  const gateRef = useRef<number>(GATE_OK);
   // Full-frame box metrics (normalized) used for the positional coaching (distance/centering).
   // `stable` = the box has barely moved for STABLE_FRAMES, i.e. the framing is settled.
-  const [frameMetrics, setFrameMetrics] = useState<
+  const metricsRef = useRef<
     { cx: number; cy: number; w: number; h: number; locked: boolean; stable: boolean } | null
   >(null);
-  const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
+  const aiCameraRef = useRef(aiCamera);
+
+  const boxValues = useDetectionBoxValues();
+  const perf = usePerfCounters();
+
+  /** Recompute the single coaching message from the latest gate + framing, and render only on change. */
+  const applyCoach = useCallback(() => {
+    const next = computeCoach(aiCameraRef.current, gateRef.current, metricsRef.current);
+    if (next === coachRef.current) return;
+    coachRef.current = next;
+    setCoach(next);
+  }, []);
 
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
   const minZoom = device?.minZoom ?? 1;
@@ -133,13 +200,14 @@ export default function CaptureScreen() {
   const clearTrack = () => {
     activeRef.current = false;
     stableStreak.current = 0;
-    setDetection(null);
-    setFrameMetrics(null);
+    resetDetectionBox(boxValues);
+    metricsRef.current = null;
     lastCenter.current = null;
     lastSize.current = null;
     lastImgBox.current = null;
     // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
     Object.values(euro).forEach((f) => f.reset());
+    applyCoach();
   };
   const onDetection = useRunOnJS(
     (d: { p: DetectionBBox; cx: number; cy: number; iw: number; ih: number; score: number; locked: boolean } | null) => {
@@ -181,7 +249,9 @@ export default function CaptureScreen() {
         stableStreak.current = moved < STABLE_EPS ? stableStreak.current + 1 : 0;
         lastCenter.current = { x: fx, y: fy };
         lastSize.current = { w: fw, h: fh };
-        setDetection({ x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh });
+        // Straight to the UI thread: the spring still interpolates these 12 Hz updates up to
+        // display rate, but React is not involved.
+        trackDetectionBox(boxValues, { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh });
 
         // Filter the forward-to-crop box in full-frame coords (also feeds positional coaching).
         const icx = euro.ix.filter(d.cx, t);
@@ -189,14 +259,15 @@ export default function CaptureScreen() {
         const iw = euro.iw.filter(d.iw, t);
         const ih = euro.ih.filter(d.ih, t);
         lastImgBox.current = { cx: icx, cy: icy, w: iw, h: ih };
-        setFrameMetrics({
+        metricsRef.current = {
           cx: icx,
           cy: icy,
           w: iw,
           h: ih,
           locked: d.locked,
           stable: stableStreak.current >= STABLE_FRAMES,
-        });
+        };
+        applyCoach();
       } else {
         detStreak.current = Math.max(0, detStreak.current - 1);
         stableStreak.current = 0;
@@ -205,42 +276,54 @@ export default function CaptureScreen() {
     },
     [],
   );
-  const onDark = useRunOnJS((d: boolean) => setTooDark(d), []);
-  const onBright = useRunOnJS((b: boolean) => setTooBright(b), []);
-  const blurStreak = useRef(0);
-  const onBlur = useRunOnJS((b: boolean) => {
-    if (b) {
-      blurStreak.current = Math.min(BLUR_SHOW + 2, blurStreak.current + 1);
-      if (blurStreak.current >= BLUR_SHOW) setTooBlurry(true);
-    } else {
-      blurStreak.current = 0;
-      setTooBlurry(false);
-    }
+  // Quality gates arrive as a single code, already debounced in the worklet, and only when the
+  // verdict actually changes — instead of three unconditional JS hops per frame.
+  const onGate = useRunOnJS((code: number) => {
+    gateRef.current = code;
+    applyCoach();
   }, []);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
+
+  // Worklet-side gate state, so the blur streak survives between frames and the emit can be
+  // change-gated without a JS round trip. `-1` forces the next frame to re-emit.
+  const blurStreakSV = useWorkletValue(0);
+  const lastGateSV = useWorkletValue(-1);
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
   // model (unbox inside the worklet) and read the output/input shapes here on the JS thread.
   const boxedModel = useMemo(() => (model != null ? NitroModules.box(model) : undefined), [model]);
-  const layout = useMemo(() => {
-    if (model == null) return null;
-    const shape = model.outputs[0].shape; // [1, d1, d2]
-    const d1 = shape[1];
-    const d2 = shape[2];
-    const chMajor = d1 < d2; // [1, channels, anchors]
-    const channels = chMajor ? d1 : d2;
-    const anchors = chMajor ? d2 : d1;
-    const inShape = model.inputs[0].shape;
-    const inputSize = inShape.length === 4 ? (inShape[3] === 3 ? inShape[1] : inShape[2]) : 640;
-    return { chMajor, channels, anchors, numClasses: channels - 4, inputSize };
-  }, [model]);
+  const layout = useMemo(() => (model == null ? null : readLayout(model)), [model]);
+
+  const targetFps = tier === 'low' ? TARGET_FPS_LOW : TARGET_FPS_HIGH;
+  // Weighted Boxes Fusion costs a second walk over the confident anchors to steady the box. The
+  // One-Euro filter already does most of that job, so low-end devices spend the budget on cadence.
+  const fuseBoxes = tier !== 'low';
+
+  // Re-arm the gate whenever the detector stops or starts, so a stale "too dark" overlay can't
+  // outlive the frames that produced it.
+  /* eslint-disable react-hooks/immutability -- worklet shared values are native-backed handles,
+     not React state; the compiler flags every write to one (same false positive the Reanimated
+     shared-value writes elsewhere in this file trip). */
+  useEffect(() => {
+    aiCameraRef.current = aiCamera;
+    lastGateSV.value = -1;
+    blurStreakSV.value = 0;
+    gateRef.current = GATE_OK;
+    if (!aiCamera || !isFocused) {
+      metricsRef.current = null;
+      resetDetectionBox(boxValues);
+    }
+    applyCoach();
+  }, [aiCamera, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV]);
+  /* eslint-enable react-hooks/immutability */
 
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
       if (boxedModel == null || layout == null) return;
-      runAtTargetFps(12, () => {
+      runAtTargetFps(targetFps, () => {
         'worklet';
+        const t0 = Date.now();
         const tflite = boxedModel.unbox();
         const input = resize(frame, {
           scale: { width: layout.inputSize, height: layout.inputSize },
@@ -269,12 +352,32 @@ export default function CaptureScreen() {
         }
         const lume = n > 0 ? sum / n : 1;
         const sharp = gc > 0 ? grad / gc : 1;
-        onDark(lume < DARK_THRESHOLD);
-        onBright(lume > BRIGHT_THRESHOLD);
-        // Only flag blur when the lighting is usable (not too dark or blown out) to focus on.
-        onBlur(lume >= DARK_THRESHOLD && lume <= BRIGHT_THRESHOLD && sharp < BLUR_THRESHOLD);
 
-        const inputBuffer = input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+        // Fold the three gates into one code, in the same priority order the overlays use, and
+        // debounce the blur streak here so the JS thread only hears about real changes.
+        let gate = GATE_OK;
+        if (lume < DARK_THRESHOLD) gate = GATE_DARK;
+        else if (lume > BRIGHT_THRESHOLD) gate = GATE_BRIGHT;
+        else if (sharp < BLUR_THRESHOLD) gate = GATE_BLURRY;
+        if (gate === GATE_BLURRY) {
+          blurStreakSV.value = Math.min(BLUR_SHOW + 2, blurStreakSV.value + 1);
+          if (blurStreakSV.value < BLUR_SHOW) gate = GATE_OK; // not yet enough consecutive blurry frames
+        } else {
+          blurStreakSV.value = 0;
+        }
+        if (gate !== lastGateSV.value) {
+          lastGateSV.value = gate;
+          onGate(gate);
+        }
+
+        // `resize` hands back a Float32Array over its own freshly allocated buffer, so the whole
+        // buffer IS the tensor — copying it would burn ~5 MB per frame for nothing. The guard
+        // keeps the copy as a fallback in case the plugin ever returns a view into a pool.
+        // (fast-tflite takes a raw ArrayBuffer, never a TypedArray.)
+        const inputBuffer =
+          input.byteOffset === 0 && input.byteLength === input.buffer.byteLength
+            ? input.buffer
+            : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
         const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
         const out = new Float32Array(outputs[0]);
         const chMajor = layout.chMajor;
@@ -282,18 +385,31 @@ export default function CaptureScreen() {
         const anchors = layout.anchors;
         const numClasses = layout.numClasses;
 
-        // Pass 1 — argmax: find the single highest-scoring anchor and its box (center in
-        // channels 0,1; w/h in channels 2,3, all normalized to the model input).
+        // Single pass — argmax + candidate collection. Find the highest-scoring anchor and its box
+        // (center in channels 0,1; w/h in channels 2,3, all normalized to the model input), and at
+        // the same time remember every anchor confident enough to be fused below. The fusion used
+        // to re-walk all ~8400 anchors and recompute the same per-anchor class max; collecting the
+        // handful of survivors here makes that second walk proportional to the candidates instead.
         let best = 0;
         let bcx = 0;
         let bcy = 0;
         let bbw = 0;
         let bbh = 0;
+        const candIdx: number[] = [];
+        const candScore: number[] = [];
         for (let i = 0; i < anchors; i++) {
           let score = 0;
-          for (let k = 0; k < numClasses; k++) {
-            const v = out[chMajor ? (4 + k) * anchors + i : i * channels + (4 + k)];
-            if (v > score) score = v;
+          if (chMajor) {
+            for (let k = 0; k < numClasses; k++) {
+              const v = out[(4 + k) * anchors + i];
+              if (v > score) score = v;
+            }
+          } else {
+            const base = i * channels;
+            for (let k = 0; k < numClasses; k++) {
+              const v = out[base + 4 + k];
+              if (v > score) score = v;
+            }
           }
           if (score > best) {
             best = score;
@@ -302,35 +418,35 @@ export default function CaptureScreen() {
             bbw = out[chMajor ? 2 * anchors + i : i * channels + 2];
             bbh = out[chMajor ? 3 * anchors + i : i * channels + 3];
           }
+          if (score >= FUSE_SCORE) {
+            candIdx.push(i);
+            candScore.push(score);
+          }
         }
 
-        // Pass 2 — Weighted Boxes Fusion: a single argmax anchor flickers frame-to-frame (a
-        // different anchor wins each frame), which makes the box jitter. Fuse all confident
-        // anchors near the best one (confidence-weighted average of cx,cy,w,h) into one steady
-        // box. The proximity gate keeps a second, distant lesion from being merged in.
+        // Weighted Boxes Fusion: a single argmax anchor flickers frame-to-frame (a different
+        // anchor wins each frame), which makes the box jitter. Fuse all confident anchors near
+        // the best one (confidence-weighted average of cx,cy,w,h) into one steady box. The
+        // proximity gate keeps a second, distant lesion from being merged in.
         let cx = bcx;
         let cy = bcy;
         let bw = bbw;
         let bh = bbh;
-        if (best >= KEEP_SCORE) {
-          const gate = Math.max(bbw, bbh) * 0.5;
+        if (fuseBoxes && best >= KEEP_SCORE) {
+          const near = Math.max(bbw, bbh) * 0.5;
           let ws = 0;
           let sx = 0;
           let sy = 0;
           let sw = 0;
           let sh = 0;
-          for (let i = 0; i < anchors; i++) {
-            let score = 0;
-            for (let k = 0; k < numClasses; k++) {
-              const v = out[chMajor ? (4 + k) * anchors + i : i * channels + (4 + k)];
-              if (v > score) score = v;
-            }
-            if (score < FUSE_SCORE) continue;
+          for (let c = 0; c < candIdx.length; c++) {
+            const i = candIdx[c];
             const ax = out[chMajor ? i : i * channels];
             const ay = out[chMajor ? anchors + i : i * channels + 1];
-            if (Math.abs(ax - bcx) > gate || Math.abs(ay - bcy) > gate) continue;
+            if (Math.abs(ax - bcx) > near || Math.abs(ay - bcy) > near) continue;
             const aw = out[chMajor ? 2 * anchors + i : i * channels + 2];
             const ah = out[chMajor ? 3 * anchors + i : i * channels + 3];
+            const score = candScore[c];
             ws += score;
             sx += score * ax;
             sy += score * ay;
@@ -379,9 +495,16 @@ export default function CaptureScreen() {
         } else {
           onDetection(null);
         }
+
+        if (PERF_ENABLED) {
+          const dt = Date.now() - t0;
+          perf.frames.value = perf.frames.value + 1;
+          perf.sumMs.value = perf.sumMs.value + dt;
+          if (dt > perf.maxMs.value) perf.maxMs.value = dt;
+        }
       });
     },
-    [boxedModel, layout, resize, onDetection, onDark, onBright, onBlur, onDebug],
+    [boxedModel, layout, resize, targetFps, fuseBoxes, onDetection, onGate, onDebug, blurStreakSV, lastGateSV, perf],
   );
 
   const pinch = useMemo(
@@ -402,15 +525,11 @@ export default function CaptureScreen() {
   const focusAt = useCallback(
     (x: number, y: number) => {
       const cam = camera.current;
-      console.log('[focus] tap', Math.round(x), Math.round(y), 'supportsFocus=', device?.supportsFocus);
       if (!cam) return;
       setFocusPt({ x, y, id: Date.now() });
-      cam
-        .focus({ x, y })
-        .then(() => console.log('[focus] ok'))
-        .catch((e) => console.log('[focus] err', String(e)));
+      cam.focus({ x, y }).catch((e) => console.log('[focus] err', String(e)));
     },
-    [device],
+    [],
   );
   const tap = useMemo(
     () =>
@@ -433,27 +552,13 @@ export default function CaptureScreen() {
     width: `${Math.round(((zoomSV.value - minZoom) / Math.max(0.001, maxZoom - minZoom)) * 100)}%`,
   }));
 
-  // Positional coaching — one message at a time, and only when lighting/focus are already OK so
-  // messages never stack. Narrows the user toward a good frame the way ID/document scanners do.
-  const positionalCoach = useMemo<CoachKind | null>(() => {
-    if (!aiCamera || tooDark || tooBright || tooBlurry) return null;
-    if (!frameMetrics) return 'search';
-    const size = Math.max(frameMetrics.w, frameMetrics.h);
-    if (size < FAR_MAX) return 'far';
-    if (size > CLOSE_MIN) return 'close';
-    if (Math.abs(frameMetrics.cx - 0.5) > OFFSET_MAX || Math.abs(frameMetrics.cy - 0.5) > OFFSET_MAX) return 'offcenter';
-    if (!frameMetrics.locked) return 'search';
-    // Framing is good — only call it "ready" once the box has settled (stable for N frames).
-    return frameMetrics.stable ? 'ready' : 'steady';
-  }, [aiCamera, tooDark, tooBright, tooBlurry, frameMetrics]);
-
   // One haptic tick the moment the frame becomes good, so a well-framed shot feels earned.
   const wasReady = useRef(false);
   useEffect(() => {
-    const ready = positionalCoach === 'ready';
+    const ready = coach === 'ready';
     if (ready && !wasReady.current) Vibration.vibrate(10);
     wasReady.current = ready;
-  }, [positionalCoach]);
+  }, [coach]);
 
   async function shoot() {
     if (!camera.current || busy) return;
@@ -466,17 +571,26 @@ export default function CaptureScreen() {
       const raw = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
       // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
-      const upright = await manipulateAsync(raw, [{ rotate: 0 }], { compress: 0.95, format: SaveFormat.JPEG });
+      // Cap the long edge in the same pass: everything downstream (crop, the IQA decode, the
+      // classifier's pre-decode resize) pays for every extra pixel, and none of them can use
+      // more than this. Capture is portrait-locked, so after `rotate: 0` the long edge is the
+      // height; if a device ever surprises us the image just stays larger, never distorted.
+      const actions: Parameters<typeof manipulateAsync>[1] = [{ rotate: 0 }];
+      if (Math.max(photo.width, photo.height) > PHOTO_LONG_EDGE) {
+        actions.push({ resize: { height: PHOTO_LONG_EDGE } });
+      }
+      const upright = await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
       // Carry the live detector's verdict + box forward. We can't re-run the model on the still
       // here — its interpreter is busy on the camera thread, and hitting it from JS crashes — so
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
       const box = lastImgBox.current;
+      const hadDetection = metricsRef.current != null;
       router.push({
         pathname: '/scan/crop',
         params: {
           uri: upright.uri,
-          detected: detection != null ? '1' : '0',
-          ...(box && detection != null
+          detected: hadDetection ? '1' : '0',
+          ...(box && hadDetection
             ? { lx: String(box.cx), ly: String(box.cy), lw: String(box.w), lh: String(box.h) }
             : {}),
         },
@@ -515,11 +629,13 @@ export default function CaptureScreen() {
             ref={camera}
             style={StyleSheet.absoluteFill}
             device={device}
-            isActive
+            format={format}
+            isActive={isFocused && appActive}
             photo
+            photoQualityBalance="speed"
             animatedProps={animatedProps}
             torch={torch ? 'on' : 'off'}
-            frameProcessor={aiCamera ? frameProcessor : undefined}
+            frameProcessor={aiCamera && isFocused ? frameProcessor : undefined}
           />
         </View>
       </GestureDetector>
@@ -535,20 +651,20 @@ export default function CaptureScreen() {
       </View>
 
       {/* AI camera = live lesion detector; the box tracks the detected lesion. */}
-      {aiCamera ? <DetectionBox bbox={detection} /> : null}
+      {aiCamera ? <DetectionBox values={boxValues} /> : null}
 
       {/* Hide the live coaches during capture — frames glitch dark/blurry as the shutter fires.
           Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
           preview stays visible and the user can watch it sharpen. */}
-      {busy ? null : tooDark ? (
+      {busy || coach == null ? null : coach === 'dark' ? (
         <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
-      ) : tooBright ? (
+      ) : coach === 'bright' ? (
         <CaptureCoach title="It's too bright" subtitle="Move out of direct light or glare" icon="sun.max" />
-      ) : tooBlurry ? (
-        <FocusBanner top={insets.top + Space.xxl} />
-      ) : positionalCoach ? (
-        <CoachPill kind={positionalCoach} top={insets.top + Space.xxl} />
-      ) : null}
+      ) : coach === 'blurry' ? (
+        <FocusBanner top={insets.top + Space.xxl} steady={tier !== 'low'} />
+      ) : (
+        <CoachPill kind={coach} top={insets.top + Space.xxl} />
+      )}
 
       {/* Close */}
       <Pressable
@@ -607,6 +723,11 @@ export default function CaptureScreen() {
           </ThemedText>
         </Pressable>
       </View>
+
+      <PerfHud
+        counters={perf}
+        formatLabel={format ? `${format.videoWidth}x${format.videoHeight} · ${format.photoWidth}x${format.photoHeight}` : 'default format'}
+      />
     </View>
   );
 }
@@ -633,11 +754,13 @@ function FocusReticle({ x, y }: { x: number; y: number }) {
  * Compact, non-blocking "hold steady" banner. Unlike the full-screen too-dark coach, it leaves
  * the preview visible so the user can watch the shot come into focus.
  */
-function FocusBanner({ top }: { top: number }) {
+function FocusBanner({ top, steady }: { top: number; steady: boolean }) {
   const pulse = useSharedValue(1);
   useEffect(() => {
-    pulse.value = withRepeat(withTiming(0.55, { duration: 650 }), -1, true);
-  }, [pulse]);
+    // The pulse is decoration; on a device already missing its frame budget it is one more
+    // thing competing for the UI thread while the user is trying to hold the phone still.
+    if (steady) pulse.value = withRepeat(withTiming(0.55, { duration: 650 }), -1, true);
+  }, [pulse, steady]);
   const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
   return (
     <View style={[focusStyles.bannerWrap, { top }]} pointerEvents="none">
@@ -651,7 +774,12 @@ function FocusBanner({ top }: { top: number }) {
   );
 }
 
+/** The positional half of the coaching vocabulary — one message at a time. */
 type CoachKind = 'search' | 'far' | 'close' | 'offcenter' | 'steady' | 'ready';
+
+/** Everything the capture screen can be telling the user right now, gates included. */
+type Coach = CoachKind | 'dark' | 'bright' | 'blurry';
+
 const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
   search: { text: 'Point at the spot', icon: 'camera.viewfinder' },
   far: { text: 'Move closer', icon: 'camera.viewfinder' },
@@ -660,6 +788,31 @@ const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
   steady: { text: 'Hold steady…', icon: 'camera.viewfinder' },
   ready: { text: 'Looks good — tap to capture', icon: 'checkmark.circle.fill' },
 };
+
+/**
+ * The whole coaching decision, as one pure function of the latest gate + framing.
+ *
+ * Lighting and focus outrank position so messages never stack — there's no point asking someone
+ * to center a spot they can't see. Below that, the positional ladder narrows toward a good frame
+ * the way ID/document scanners do, and only calls it "ready" once the box has actually settled.
+ */
+function computeCoach(
+  aiCamera: boolean,
+  gate: number,
+  m: { cx: number; cy: number; w: number; h: number; locked: boolean; stable: boolean } | null,
+): Coach | null {
+  if (gate === GATE_DARK) return 'dark';
+  if (gate === GATE_BRIGHT) return 'bright';
+  if (gate === GATE_BLURRY) return 'blurry';
+  if (!aiCamera) return null;
+  if (!m) return 'search';
+  const size = Math.max(m.w, m.h);
+  if (size < FAR_MAX) return 'far';
+  if (size > CLOSE_MIN) return 'close';
+  if (Math.abs(m.cx - 0.5) > OFFSET_MAX || Math.abs(m.cy - 0.5) > OFFSET_MAX) return 'offcenter';
+  if (!m.locked) return 'search';
+  return m.stable ? 'ready' : 'steady';
+}
 
 /**
  * Compact positional coach. Neutral guidance (point/move/center) shows in a dark pill; the

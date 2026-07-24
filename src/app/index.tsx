@@ -19,10 +19,14 @@ import { Logo } from '@/components/ui/logo';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { useDeviceTier } from '@/lib/device-tier';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import { isProfileComplete } from '@/lib/profile';
 
-const MIN_SPLASH_MS = 1100;
+// Enough of a beat that the brand lands and the route swap doesn't read as a flicker — but this
+// is a floor paid on *every* launch, so it stays short. It used to be 1100 ms, which on a fast
+// path was almost all of the perceived start-up time.
+const MIN_SPLASH_MS = 400;
 
 function LoadingDots() {
   const dots = [0, 1, 2];
@@ -56,6 +60,12 @@ function LoadingDot({ delay }: { delay: number }) {
 export default function SplashScreenRoute() {
   const theme = useTheme();
   const { user, loading } = useAuth();
+  // The splash runs at the single most contended moment in the process — JS bundle evaluation,
+  // font registration, SQLite open and the auth restore are all in flight. On a low-end device
+  // the decorative layers (four full-screen passes plus a 540px tinted PNG decode) are exactly
+  // the wrong thing to be doing then, so they're dropped there. The entrance animations stay:
+  // they're one-shot and they're the part the user actually reads as "the app is starting".
+  const rich = useDeviceTier() !== 'low';
 
   const markOpacity = useSharedValue(0);
   const markScale = useSharedValue(0.82);
@@ -84,6 +94,7 @@ export default function SplashScreenRoute() {
     // Wordmark + tagline rise in just behind it.
     textOpacity.value = withDelay(260, withTiming(1, { duration: 560 }));
     textShift.value = withDelay(260, withTiming(0, { duration: 560, easing: Easing.out(Easing.cubic) }));
+    if (!rich) return;
     // Glow breathes continuously.
     glow.value = withRepeat(
       withSequence(
@@ -99,7 +110,7 @@ export default function SplashScreenRoute() {
       ),
       -1,
     );
-  }, [markOpacity, markScale, textOpacity, textShift, glow, glowScale]);
+  }, [markOpacity, markScale, textOpacity, textShift, glow, glowScale, rich]);
 
   useEffect(() => {
     if (loading) return; // wait for the initial token/session restore
@@ -128,23 +139,27 @@ export default function SplashScreenRoute() {
       <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} />
 
       {/* Subtle decorative faint-white orbs & rings for depth. */}
-      <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <View style={[styles.orb, styles.orb1]} />
-        <View style={[styles.orb, styles.orb2]} />
-        <View style={[styles.orb, styles.orb3]} />
-        <View style={[styles.ring, styles.ring1]} />
-        <View style={[styles.ring, styles.ring2]} />
-      </View>
+      {rich ? (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <View style={[styles.orb, styles.orb1]} />
+          <View style={[styles.orb, styles.orb2]} />
+          <View style={[styles.orb, styles.orb3]} />
+          <View style={[styles.ring, styles.ring1]} />
+          <View style={[styles.ring, styles.ring2]} />
+        </View>
+      ) : null}
 
       {/* Soft light halo for depth (blue source PNG tinted warm-light). */}
-      <Animated.View style={[styles.glowWrap, glowStyle]} pointerEvents="none">
-        <Image
-          source={require('@/assets/images/logo-glow.png')}
-          style={styles.glow}
-          tintColor={theme.brandTint}
-          contentFit="contain"
-        />
-      </Animated.View>
+      {rich ? (
+        <Animated.View style={[styles.glowWrap, glowStyle]} pointerEvents="none">
+          <Image
+            source={require('@/assets/images/logo-glow.png')}
+            style={styles.glow}
+            tintColor={theme.brandTint}
+            contentFit="contain"
+          />
+        </Animated.View>
+      ) : null}
 
       <View style={styles.center}>
         {/* Hero: frosted-glass badge holding the SpotOn mark. */}
@@ -168,13 +183,16 @@ export default function SplashScreenRoute() {
         </ThemedText>
       </View>
 
-      {/* Edge vignette for focus & depth. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(180,70,20,0.22)', 'rgba(180,70,20,0)', 'rgba(180,70,20,0.26)']}
-        locations={[0, 0.4, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      {/* Edge vignette for focus & depth — a second full-screen gradient pass, so it goes first
+          on devices that can't afford it. */}
+      {rich ? (
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(180,70,20,0.22)', 'rgba(180,70,20,0)', 'rgba(180,70,20,0.26)']}
+          locations={[0, 0.4, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
     </View>
   );
 }
