@@ -11,7 +11,7 @@ import Svg, {
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
-import { Elevation, Radius, Space, Type } from '@/constants/theme';
+import { Radius, Space, Type } from '@/constants/theme';
 
 export type CancerTypeKind = 'melanoma' | 'scc' | 'bcc';
 
@@ -165,11 +165,15 @@ const styles = StyleSheet.create({
   // unreliable for a ScrollView's content-container children on native.
   wrap: { width: 168 },
   card: {
+    // No elevation here: on Android the `elevation` prop draws its own native
+    // gray shadow (ignoring shadowColor, which is iOS-only), and with these
+    // cards packed tightly in a horizontal rail that shadow bleeds into the
+    // rounded corners of neighboring cards. The tint color alone is enough
+    // to lift these off the screen.
     borderRadius: Radius.xl,
     padding: Space.base,
     paddingTop: Space.lg,
     gap: Space.sm,
-    ...Elevation.sm,
   },
   title: { height: Type.headline.lineHeight * 2 },
   // Soft white disc that lifts the artwork off the tinted card.
