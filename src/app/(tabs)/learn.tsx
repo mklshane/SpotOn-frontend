@@ -82,7 +82,10 @@ export default function LearnScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.body}>
+      {/* overScrollMode="never" — Android's default overscroll edge-glow uses the
+          app's accent color, showing as an orange flash over content near the
+          bottom tab bar when scrolling past the end. */}
+      <ScrollView contentContainerStyle={styles.body} overScrollMode="never">
         <ThemedText type="largeTitle">Learn</ThemedText>
 
         {warningSigns ? (

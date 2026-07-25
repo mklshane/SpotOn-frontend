@@ -145,7 +145,8 @@ export default function ProfileScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never">
           <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
             ACTIVITY
           </ThemedText>
