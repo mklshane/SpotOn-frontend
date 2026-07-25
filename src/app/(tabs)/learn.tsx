@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     // Clears the floating Scan button, which protrudes ~30px above the tab
     // bar's own top edge via a negative margin (a sibling view this screen's
     // layout doesn't otherwise know to leave room for).
-    paddingBottom: 72,
+    paddingBottom: 40,
     gap: Space.lg,
   },
   section: { gap: 2, marginBottom: -Space.sm },

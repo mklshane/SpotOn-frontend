@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
   // Clears the floating Scan button, which protrudes above the tab bar's own
   // top edge as a sibling view this screen's layout doesn't otherwise know
   // to leave room for.
-  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: 72 },
+  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: 40 },
   sectionLabel: { fontWeight: '700', letterSpacing: 0.6, marginBottom: Space.base },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   rowText: { flex: 1, gap: 2 },
