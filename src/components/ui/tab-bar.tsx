@@ -38,7 +38,6 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
     <View
       style={[
         styles.bar,
-        styles.shadow,
         {
           backgroundColor: theme.surface,
           paddingBottom: insets.bottom,
@@ -120,14 +119,6 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-  },
-  // soft warm shadow rising upward off the bar
-  shadow: {
-    shadowColor: '#7A4A2B',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 16,
   },
   item: { flex: 1, alignItems: 'center', gap: 5 },
   pressed: { opacity: 0.6 },
