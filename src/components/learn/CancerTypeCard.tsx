@@ -146,7 +146,7 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
         <View style={styles.medallion}>
           <SkinSwatchArt kind={kind} />
         </View>
-        <ThemedText type="headline" numberOfLines={2}>
+        <ThemedText type="headline" numberOfLines={2} style={styles.title}>
           {title}
         </ThemedText>
         <View style={styles.learnRow}>
@@ -159,18 +159,19 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
 }
 
 const styles = StyleSheet.create({
-  // Fixed width (horizontal rail item) but height comes from the row's
-  // alignItems: 'stretch' — see typeRow in learn.tsx — so every card matches
-  // the tallest sibling's height regardless of title line-wrap.
+  // Fixed width (horizontal rail item). Height comes out equal across cards
+  // because the title below reserves 2 lines' worth of space regardless of
+  // whether it actually wraps — not from cross-sibling flex stretch, which is
+  // unreliable for a ScrollView's content-container children on native.
   wrap: { width: 168 },
   card: {
-    flex: 1,
     borderRadius: Radius.xl,
     padding: Space.base,
     paddingTop: Space.lg,
     gap: Space.sm,
     ...Elevation.sm,
   },
+  title: { height: Type.headline.lineHeight * 2 },
   // Soft white disc that lifts the artwork off the tinted card.
   medallion: {
     alignSelf: 'center',

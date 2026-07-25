@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   // Bleed the horizontal rail to the screen edges so cards scroll under the
   // body padding instead of clipping at it.
   typeScroll: { marginHorizontal: -Space.xl },
-  typeRow: { alignItems: 'stretch', gap: Space.md, paddingHorizontal: Space.xl },
+  typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
   grid: { gap: Space.base },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
   spacer: { flex: 1 },
