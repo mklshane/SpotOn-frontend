@@ -145,7 +145,8 @@ export default function ProfileScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+          overScrollMode="never">
           <ThemedText type="caption" themeColor="brand" style={styles.sectionLabel}>
             ACTIVITY
           </ThemedText>
@@ -231,7 +232,10 @@ const styles = StyleSheet.create({
   statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.3)' },
   sheet: { flex: 1, marginTop: -Radius.xl, borderTopLeftRadius: Radius.xl, borderTopRightRadius: Radius.xl },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: Space.base },
+  // Clears the floating Scan button, which protrudes above the tab bar's own
+  // top edge as a sibling view this screen's layout doesn't otherwise know
+  // to leave room for.
+  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.xl, paddingBottom: 20 },
   sectionLabel: { fontWeight: '700', letterSpacing: 0.6, marginBottom: Space.base },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
   rowText: { flex: 1, gap: 2 },
