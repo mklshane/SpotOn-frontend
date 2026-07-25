@@ -154,13 +154,10 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.base,
-    // Generous clearance above the tab bar: the floating Scan button (part of
-    // CustomTabBar) protrudes ~30px above the bar's own top edge via a negative
-    // margin, visually overlapping the screen's content area as a sibling view
-    // rather than being accounted for in this screen's own layout. Padding this
-    // much ensures card content never sits close enough to visually interact
-    // with the bar or button at all, regardless of any shadow/glow on either.
-    paddingBottom: 120,
+    // Clears the floating Scan button, which protrudes ~30px above the tab
+    // bar's own top edge via a negative margin (a sibling view this screen's
+    // layout doesn't otherwise know to leave room for).
+    paddingBottom: 72,
     gap: Space.lg,
   },
   section: { gap: 2, marginBottom: -Space.sm },
