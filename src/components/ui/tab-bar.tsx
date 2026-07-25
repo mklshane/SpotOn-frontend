@@ -127,10 +127,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: -6 },
-    // Android's elevation ignores shadowColor and draws its own native gray
-    // shadow — at 16 that rendered as a thick pastel band sitting above the
-    // whole bar. Keep it modest, matching the design system's own Elevation.md.
-    elevation: 6,
+    elevation: 16,
   },
   item: { flex: 1, alignItems: 'center', gap: 5 },
   pressed: { opacity: 0.6 },
