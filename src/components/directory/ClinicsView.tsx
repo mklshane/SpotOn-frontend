@@ -1,36 +1,41 @@
-import BottomSheet, { BottomSheetFlatList } from '@gorhom/bottom-sheet';
-import { router } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Dimensions, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
+import { router } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Dimensions, Pressable, StyleSheet, View } from "react-native";
+import { ScrollView } from "react-native-gesture-handler";
 
-import type { FacilitySync } from '@/api/types';
-import { ThemedText } from '@/components/themed-text';
-import { Chip } from '@/components/ui/chip';
-import { Icon } from '@/components/ui/icon';
-import { ListState } from '@/components/ui/list-state';
-import { Space } from '@/constants/theme';
-import { listFacilities, nearbyFacilities, type FacilityWithDistance } from '@/data/repositories';
-import { useConnectivity } from '@/hooks/use-connectivity';
-import { useLocation } from '@/hooks/use-location';
-import { humanizeTag } from '@/lib/format';
-import { isOpenNow } from '@/lib/hours';
-import { downloadAreaPack } from '@/lib/map-offline';
-import { useTheme } from '@/hooks/use-theme';
+import type { FacilitySync } from "@/api/types";
+import { ThemedText } from "@/components/themed-text";
+import { Chip } from "@/components/ui/chip";
+import { Icon } from "@/components/ui/icon";
+import { ListState } from "@/components/ui/list-state";
+import { Space } from "@/constants/theme";
+import {
+  listFacilities,
+  nearbyFacilities,
+  type FacilityWithDistance,
+} from "@/data/repositories";
+import { useConnectivity } from "@/hooks/use-connectivity";
+import { useLocation } from "@/hooks/use-location";
+import { useTheme } from "@/hooks/use-theme";
+import { humanizeTag } from "@/lib/format";
+import { isOpenNow } from "@/lib/hours";
+import { downloadAreaPack } from "@/lib/map-offline";
 
-import { ClinicCard } from './ClinicCard';
-import { ClinicMap } from './ClinicMap';
+import { ClinicCard } from "./ClinicCard";
+import { ClinicMap } from "./ClinicMap";
 
 export type ClinicsViewProps = { query: string; topInset: number };
 
-type SortMode = 'distance' | 'rating' | 'name';
+type SortMode = "distance" | "rating" | "name";
 type Facility = FacilitySync | FacilityWithDistance;
 
-const SNAP_POINTS = ['32%', '64%', '92%'];
-const SCREEN_H = Dimensions.get('window').height;
+const SNAP_POINTS = ["32%", "64%", "92%"];
+const SCREEN_H = Dimensions.get("window").height;
 const COLLAPSED_BOTTOM_INSET = SCREEN_H * 0.32 + 12;
-const ALL_CHIP = 'All Clinics';
-const OPEN_CHIP = 'Open Now';
-const PHILHEALTH_CHIP = 'PhilHealth';
+const ALL_CHIP = "All Clinics";
+const OPEN_CHIP = "Open Now";
+const PHILHEALTH_CHIP = "PhilHealth";
 
 export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const theme = useTheme();
@@ -42,7 +47,7 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [service, setService] = useState<string | null>(null);
   const [openOnly, setOpenOnly] = useState(false);
   const [philhealthOnly, setPhilhealthOnly] = useState(false);
-  const [sort, setSort] = useState<SortMode>('name');
+  const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
   // Default sort to distance the first time location becomes known — adjusted
@@ -51,25 +56,35 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [hasDefaultedSort, setHasDefaultedSort] = useState(false);
   if (coords && !hasDefaultedSort) {
     setHasDefaultedSort(true);
-    if (sort === 'name') setSort('distance');
+    if (sort === "name") setSort("distance");
   }
 
   // Facet chips — one-time broad fetch.
   useEffect(() => {
     listFacilities({ limit: 1000 })
-      .then((all) => setServiceFacets(Array.from(new Set(all.flatMap((f) => f.services))).sort()))
+      .then((all) =>
+        setServiceFacets(
+          Array.from(new Set(all.flatMap((f) => f.services))).sort(),
+        ),
+      )
       .catch(() => {});
   }, []);
 
   // Main data fetch — stale-while-loading (no spinner flash on refilter).
   useEffect(() => {
     let cancelled = false;
-    const params = { q: query || undefined, service: service ?? undefined, limit: 200 };
+    const params = {
+      q: query || undefined,
+      service: service ?? undefined,
+      limit: 200,
+    };
     // An active search is an explicit "look for this place", not "what's near
     // me" — searching a city/province beyond the nearby radius must still find
     // it, so only use the distance-bounded nearby fetch when there's no query.
     const fetcher =
-      coords && !query.trim() ? nearbyFacilities(coords.latitude, coords.longitude, params) : listFacilities(params);
+      coords && !query.trim()
+        ? nearbyFacilities(coords.latitude, coords.longitude, params)
+        : listFacilities(params);
     fetcher
       .then((rows) => !cancelled && setFacilities(rows))
       .catch(() => !cancelled && setError(true));
@@ -86,17 +101,24 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const filtered = useMemo(() => {
     if (!facilities) return [];
     let rows = facilities;
-    if (openOnly) rows = rows.filter((f) => isOpenNow(f.weekday_hours, f.weekend_hours) === true);
+    if (openOnly)
+      rows = rows.filter(
+        (f) => isOpenNow(f.weekday_hours, f.weekend_hours) === true,
+      );
     if (philhealthOnly) rows = rows.filter((f) => f.has_philhealth);
 
     const sorted = [...rows];
-    if (sort === 'distance' && coords) {
+    if (sort === "distance" && coords) {
       // `distance_m` is only absent for one transient render right after coords
       // first resolves, before the nearby-fetch response lands — the Infinity
       // fallback makes that comparator a no-op (NaN) for that render instead of
       // throwing, and it self-corrects once `facilities` updates.
-      sorted.sort((a, b) => ('distance_m' in a ? a.distance_m : Infinity) - ('distance_m' in b ? b.distance_m : Infinity));
-    } else if (sort === 'rating') {
+      sorted.sort(
+        (a, b) =>
+          ("distance_m" in a ? a.distance_m : Infinity) -
+          ("distance_m" in b ? b.distance_m : Infinity),
+      );
+    } else if (sort === "rating") {
       sorted.sort((a, b) => (b.google_rating ?? 0) - (a.google_rating ?? 0));
     } else {
       sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -106,13 +128,14 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
   const cycleSort = useCallback(() => {
     setSort((s) => {
-      if (s === 'distance') return 'rating';
-      if (s === 'rating') return 'name';
-      return coords ? 'distance' : 'rating';
+      if (s === "distance") return "rating";
+      if (s === "rating") return "name";
+      return coords ? "distance" : "rating";
     });
   }, [coords]);
 
-  const sortLabel = sort === 'distance' ? 'distance' : sort === 'rating' ? 'rating' : 'name';
+  const sortLabel =
+    sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
   const chips = [ALL_CHIP, OPEN_CHIP, PHILHEALTH_CHIP, ...serviceFacets];
 
   return (
@@ -132,27 +155,38 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
         topInset={topInset}
         enableDynamicSizing={false}
         backgroundStyle={{ backgroundColor: theme.surface }}
-        handleIndicatorStyle={{ backgroundColor: theme.hairline }}>
+        handleIndicatorStyle={{ backgroundColor: theme.hairline }}
+      >
         <View style={styles.header}>
           <View style={styles.resultsRow}>
             <ThemedText type="subhead" themeColor="textSecondary">
-              {filtered.length} {filtered.length === 1 ? 'clinic' : 'clinics'} · by {sortLabel}
+              {filtered.length} {filtered.length === 1 ? "clinic" : "clinics"} ·
+              by {sortLabel}
             </ThemedText>
-            <Pressable onPress={cycleSort} accessibilityRole="button" accessibilityLabel="Change sort order" hitSlop={8}>
-              <Icon name="arrow.up.arrow.down" size={16} tintColor={theme.brand} />
+            <Pressable
+              onPress={cycleSort}
+              accessibilityRole="button"
+              accessibilityLabel="Change sort order"
+              hitSlop={8}
+            >
+              <Icon
+                name="arrow.up.arrow.down"
+                size={16}
+                tintColor={theme.brand}
+              />
             </Pressable>
           </View>
 
-          <FlatList
+          <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            data={chips}
-            keyExtractor={(s) => s}
             contentContainerStyle={styles.chips}
-            renderItem={({ item }) => {
+          >
+            {chips.map((item) => {
               if (item === ALL_CHIP) {
                 return (
                   <Chip
+                    key={item}
                     label={item}
                     active={!service && !openOnly && !philhealthOnly}
                     onPress={() => {
@@ -164,20 +198,35 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
                 );
               }
               if (item === OPEN_CHIP) {
-                return <Chip label={item} active={openOnly} onPress={() => setOpenOnly((v) => !v)} />;
+                return (
+                  <Chip
+                    key={item}
+                    label={item}
+                    active={openOnly}
+                    onPress={() => setOpenOnly((v) => !v)}
+                  />
+                );
               }
               if (item === PHILHEALTH_CHIP) {
-                return <Chip label={item} active={philhealthOnly} onPress={() => setPhilhealthOnly((v) => !v)} />;
+                return (
+                  <Chip
+                    key={item}
+                    label={item}
+                    active={philhealthOnly}
+                    onPress={() => setPhilhealthOnly((v) => !v)}
+                  />
+                );
               }
               return (
                 <Chip
+                  key={item}
                   label={humanizeTag(item)}
                   active={service === item}
                   onPress={() => setService((v) => (v === item ? null : item))}
                 />
               );
-            }}
-          />
+            })}
+          </ScrollView>
         </View>
 
         <BottomSheetFlatList
@@ -186,21 +235,38 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
           renderItem={({ item }) => (
             <ClinicCard
               facility={item}
-              onPress={() => router.push({ pathname: '/directory/clinic', params: { id: item.id } })}
+              onPress={() =>
+                router.push({
+                  pathname: "/directory/clinic",
+                  params: { id: item.id },
+                })
+              }
             />
           )}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             !isOnline && facilities === null ? (
-              <ListState kind="offline" title="You're offline" subtitle="Showing cached clinics only." />
+              <ListState
+                kind="offline"
+                title="You're offline"
+                subtitle="Showing cached clinics only."
+              />
             ) : facilities === null ? (
               error ? (
-                <ListState kind="error" title="Couldn't load clinics" subtitle="Check your connection and try again." />
+                <ListState
+                  kind="error"
+                  title="Couldn't load clinics"
+                  subtitle="Check your connection and try again."
+                />
               ) : (
                 <ListState kind="loading" title="Finding clinics…" />
               )
             ) : (
-              <ListState kind="empty" title="No clinics found" subtitle="Try a different search or filter." />
+              <ListState
+                kind="empty"
+                title="No clinics found"
+                subtitle="Try a different search or filter."
+              />
             )
           }
         />
@@ -211,8 +277,16 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  header: { paddingHorizontal: Space.xl, paddingBottom: Space.sm, gap: Space.sm },
-  resultsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  header: {
+    paddingHorizontal: Space.xl,
+    paddingBottom: Space.sm,
+    gap: Space.sm,
+  },
+  resultsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   chips: { gap: Space.sm },
   list: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
 });
