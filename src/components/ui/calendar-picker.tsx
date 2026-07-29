@@ -200,6 +200,7 @@ function DayGrid({ cursor, value, minDate, maxDate, today, onSelect }: DayGridPr
               key={date.toISOString()}
               disabled={disabled}
               accessibilityRole="button"
+              accessibilityState={{ selected, disabled }}
               onPress={() => onSelect(date)}
               style={styles.dayCellWrap}>
               <View
@@ -255,6 +256,7 @@ function MonthGrid({ year, value, minDate, maxDate, onSelect }: MonthGridProps) 
             key={label}
             disabled={disabled}
             accessibilityRole="button"
+            accessibilityState={{ selected, disabled }}
             onPress={() => onSelect(month)}
             style={styles.monthCellWrap}>
             <View style={[styles.monthCell, selected && { backgroundColor: theme.brand }]}>
@@ -292,7 +294,11 @@ function YearList({ years, selectedYear, onSelect }: YearListProps) {
       renderItem={({ item: year }) => {
         const selected = year === selectedYear;
         return (
-          <Pressable accessibilityRole="button" onPress={() => onSelect(year)} style={styles.yearRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            onPress={() => onSelect(year)}
+            style={styles.yearRow}>
             <View style={[styles.yearPill, selected && { backgroundColor: theme.brandTint }]}>
               <ThemedText
                 type="headline"
