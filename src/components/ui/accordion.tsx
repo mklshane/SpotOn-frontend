@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -48,7 +53,10 @@ export function Accordion<T extends string>({
 
   function setOpenAnimated(next: boolean) {
     setOpen(next);
-    progress.value = withTiming(next ? 1 : 0, { duration: 250 });
+    progress.value = withTiming(next ? 1 : 0, {
+      duration: 300,
+      easing: Easing.out(Easing.cubic),
+    });
   }
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -77,7 +85,7 @@ export function Accordion<T extends string>({
 
       <Animated.View style={[styles.optionsWrap, animatedStyle]}>
         <View style={[styles.options, { backgroundColor: theme.surface }, Elevation.sm]}>
-          {options.map((option, i) => {
+          {options.map((option) => {
             const isSelected = option.value === value;
             return (
               <Pressable
@@ -88,11 +96,7 @@ export function Accordion<T extends string>({
                   onChange(option.value);
                   setOpenAnimated(false);
                 }}
-                style={({ pressed }) => [
-                  styles.row,
-                  i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.hairline },
-                  pressed && { backgroundColor: theme.elementBg },
-                ]}>
+                style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.elementBg }]}>
                 <View style={styles.rowText}>
                   <ThemedText type="body" themeColor={isSelected ? 'brand' : 'text'}>
                     {option.label}
@@ -130,7 +134,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionsWrap: { overflow: 'hidden' },
-  options: { marginTop: Space.sm, borderRadius: Radius.md, overflow: 'hidden' },
+  options: {
+    marginTop: Space.sm,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    paddingVertical: Space.xs,
+  },
   row: {
     minHeight: 52,
     paddingHorizontal: Space.base,
