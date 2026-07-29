@@ -33,6 +33,7 @@
     },
     "plugins": [
       "./plugins/withDisableScriptSandboxing",
+      "./plugins/withAndroidAccentColor",
       "expo-router",
       [
         "expo-splash-screen",
