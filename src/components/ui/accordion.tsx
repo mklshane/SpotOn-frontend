@@ -45,6 +45,8 @@ export function Accordion<T extends string>({
 }: AccordionProps<T>) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [triggerHovered, setTriggerHovered] = useState(false);
+  const [hoveredValue, setHoveredValue] = useState<T | null>(null);
   const progress = useSharedValue(0);
 
   const selected = options.find((o) => o.value === value);
@@ -76,10 +78,16 @@ export function Accordion<T extends string>({
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         android_ripple={{ color: theme.hairline }}
+        onHoverIn={() => setTriggerHovered(true)}
+        onHoverOut={() => setTriggerHovered(false)}
         onPress={() => setOpenAnimated(!open)}
         style={({ pressed }) => [
           styles.field,
-          { backgroundColor: pressed ? theme.hairline : theme.elementBg, borderColor, borderWidth: 1.5 },
+          {
+            backgroundColor: pressed || triggerHovered ? theme.hairline : theme.elementBg,
+            borderColor,
+            borderWidth: 1.5,
+          },
         ]}>
         <ThemedText type="body" themeColor={selected ? 'text' : 'muted'}>
           {selected ? selected.label : placeholder}
@@ -97,6 +105,8 @@ export function Accordion<T extends string>({
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
                 android_ripple={{ color: theme.hairline }}
+                onHoverIn={() => setHoveredValue(option.value)}
+                onHoverOut={() => setHoveredValue((v) => (v === option.value ? null : v))}
                 onPress={() => {
                   onChange(option.value);
                   setOpenAnimated(false);
@@ -108,7 +118,8 @@ export function Accordion<T extends string>({
                     borderRadius: Radius.sm,
                     marginHorizontal: Space.xs,
                   },
-                  pressed && !isSelected && { backgroundColor: theme.hairline },
+                  (pressed || hoveredValue === option.value) &&
+                    !isSelected && { backgroundColor: theme.hairline },
                 ]}>
                 <View style={styles.rowText}>
                   <ThemedText
