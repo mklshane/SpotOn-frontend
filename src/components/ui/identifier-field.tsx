@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-na
 
 import { Radius, Space, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { sanitizeLocalPhone } from '@/lib/form-validation';
 
 import { ThemedText } from '../themed-text';
 
@@ -11,8 +12,7 @@ export type IdentifierMode = 'email' | 'phone';
 /** Build the value to send to the API. Phone → E.164 (+63…). */
 export function buildIdentifier(mode: IdentifierMode, value: string): string {
   if (mode === 'email') return value.trim();
-  const digits = value.replace(/\D/g, '').replace(/^0/, '');
-  return '+63' + digits;
+  return `+63${sanitizeLocalPhone(value)}`;
 }
 
 export type IdentifierFieldProps = {
@@ -60,7 +60,9 @@ export function IdentifierField({
           autoComplete={isPhone ? 'tel' : 'email'}
           textContentType={isPhone ? 'telephoneNumber' : 'emailAddress'}
           value={value}
-          onChangeText={onChangeValue}
+          onChangeText={(nextValue) =>
+            onChangeValue(isPhone ? sanitizeLocalPhone(nextValue) : nextValue)
+          }
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
         />

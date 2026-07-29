@@ -11,6 +11,7 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { normalizePhilippinePhone, sanitizePhone } from '@/lib/form-validation';
 import { saveProfile } from '@/lib/profile';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
@@ -29,13 +30,16 @@ export default function CompleteProfileScreen() {
   const [sex, setSex] = useState<Sex | null>(null);
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dob?: string; sex?: string }>({});
+  const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   function validate() {
     const next: typeof errors = {};
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
+    if (phone.trim() && !normalizePhilippinePhone(phone)) {
+      next.phone = 'Enter a valid PH mobile number (e.g. 0917 123 4567).';
+    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -45,7 +49,11 @@ export default function CompleteProfileScreen() {
     if (!validate() || !dob || !sex) return;
     setSubmitting(true);
     try {
-      await saveProfile({ dateOfBirth: dob, sex, phone: hasPhone ? undefined : phone });
+      await saveProfile({
+        dateOfBirth: dob,
+        sex,
+        phone: hasPhone || !phone.trim() ? undefined : normalizePhilippinePhone(phone) ?? undefined,
+      });
       router.replace('/home');
     } catch {
       setFormError("Couldn't save your details. Check your connection and try again.");
@@ -89,7 +97,8 @@ export default function CompleteProfileScreen() {
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(value) => setPhone(sanitizePhone(value))}
+                error={errors.phone}
               />
             )}
           </View>

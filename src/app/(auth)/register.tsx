@@ -22,6 +22,7 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { isValidLocalPhone, sanitizeName } from '@/lib/form-validation';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -53,8 +54,8 @@ export default function RegisterScreen() {
     const id = identifier.trim();
     if (mode === 'email') {
       if (!EMAIL_RE.test(id)) next.identifier = 'Enter a valid email address.';
-    } else if (id.replace(/\D/g, '').length < 10) {
-      next.identifier = 'Enter a valid phone number.';
+    } else if (!isValidLocalPhone(id)) {
+      next.identifier = 'Enter a valid PH mobile number starting with 9.';
     }
     if (password.length < 8) next.password = 'Use at least 8 characters.';
     if (!consent) next.consent = 'Please agree to continue.';
@@ -103,9 +104,11 @@ export default function RegisterScreen() {
               label="Full name"
               placeholder="Juan dela Cruz"
               autoCapitalize="words"
+              inputMode="text"
               textContentType="name"
               value={name}
               onChangeText={setName}
+              transformInput={sanitizeName}
               error={errors.name}
             />
 

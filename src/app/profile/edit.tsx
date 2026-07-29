@@ -21,6 +21,7 @@ import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { sanitizeName } from '@/lib/form-validation';
 import { saveProfile } from '@/lib/profile';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
@@ -44,25 +45,26 @@ export default function EditProfileScreen() {
   const theme = useTheme();
   const { user, setUser } = useAuth();
 
-  const [fullName, setFullName] = useState(user?.full_name ?? '');
+  const [fullName, setFullName] = useState(sanitizeName(user?.full_name ?? ''));
   const [dob, setDob] = useState<string | null>(user?.date_of_birth ?? null);
   const [sex, setSex] = useState<Sex | null>((user?.sex as Sex | null) ?? null);
-  const [phone, setPhone] = useState(user?.phone ?? '');
+  const phone = user?.phone ?? '';
   const [skinType, setSkinType] = useState<string | null>(
     user?.fitzpatrick_skin_type != null ? String(user.fitzpatrick_skin_type) : null,
   );
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{
+    fullName?: string;
+    dob?: string;
+    sex?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   function validate() {
     const next: typeof errors = {};
+    if (!fullName.trim()) next.fullName = 'Please enter your name.';
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
-    const trimmedPhone = phone.trim();
-    if (trimmedPhone && !/^(\+63|0)9\d{9}$/.test(trimmedPhone)) {
-      next.phone = 'Enter a valid PH mobile number (e.g. 09xx xxx xxxx).';
-    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -76,7 +78,6 @@ export default function EditProfileScreen() {
         fullName,
         dateOfBirth: dob,
         sex,
-        phone,
         fitzpatrickSkinType: skinType ? Number(skinType) : undefined,
       });
       setUser(saved);
@@ -110,7 +111,15 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.form}>
-            <TextField label="Full name" placeholder="Your name" value={fullName} onChangeText={setFullName} />
+            <TextField
+              label="Full name"
+              placeholder="Your name"
+              inputMode="text"
+              value={fullName}
+              onChangeText={setFullName}
+              transformInput={sanitizeName}
+              error={errors.fullName}
+            />
             <DateField label="Date of birth" value={dob} onChange={setDob} error={errors.dob} />
             <Accordion
               label="Sex"
@@ -126,8 +135,11 @@ export default function EditProfileScreen() {
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               value={phone}
-              onChangeText={setPhone}
-              error={errors.phone}
+              editable={false}
+              focusable={false}
+              pointerEvents="none"
+              accessibilityState={{ disabled: true }}
+              style={{ color: theme.muted }}
             />
             <Accordion
               label="Skin type"

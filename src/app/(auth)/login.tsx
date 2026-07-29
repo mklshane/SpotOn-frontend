@@ -21,6 +21,7 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { isValidLocalPhone } from '@/lib/form-validation';
 import { routeAfterAuth } from '@/lib/profile';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,8 +46,8 @@ export default function LoginScreen() {
     const id = identifier.trim();
     if (mode === 'email') {
       if (!EMAIL_RE.test(id)) next.identifier = 'Enter a valid email address.';
-    } else if (id.replace(/\D/g, '').length < 10) {
-      next.identifier = 'Enter a valid phone number.';
+    } else if (!isValidLocalPhone(id)) {
+      next.identifier = 'Enter a valid PH mobile number starting with 9.';
     }
     if (!password) next.password = 'Please enter your password.';
     setErrors(next);
