@@ -13,12 +13,14 @@ export function sanitizeName(value: string): string {
  */
 export function sanitizeLocalPhone(value: string): string {
   const digits = value.replace(/\D/g, '');
-  const localDigits = PH_COUNTRY_MOBILE_RE.test(digits)
+  const localDigits = digits.startsWith('63')
     ? digits.slice(2)
     : digits.startsWith('0')
       ? digits.slice(1)
       : digits;
 
+  // Philippine mobile numbers always start with 9 after the +63 prefix.
+  if (localDigits && !localDigits.startsWith('9')) return '';
   return localDigits.slice(0, 10);
 }
 
@@ -34,6 +36,15 @@ export function sanitizePhone(value: string): string {
 
 export function isValidLocalPhone(value: string): boolean {
   return PH_LOCAL_MOBILE_RE.test(sanitizeLocalPhone(value));
+}
+
+export function getLocalPhoneError(value: string): string | undefined {
+  const phone = sanitizeLocalPhone(value);
+
+  if (!phone) return 'Phone number is required.';
+  if (phone.length < 10) return 'Enter all 10 digits after +63.';
+  if (!PH_LOCAL_MOBILE_RE.test(phone)) return 'Enter a valid PH mobile number.';
+  return undefined;
 }
 
 /**
