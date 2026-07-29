@@ -4,10 +4,10 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 're
 
 import type { Sex } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
+import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
@@ -73,7 +73,7 @@ export default function CompleteProfileScreen() {
           <View style={styles.form}>
             <DateField label="Date of birth" onChange={setDob} error={errors.dob} />
 
-            <Select
+            <Accordion
               label="Sex"
               placeholder="Select"
               value={sex}
