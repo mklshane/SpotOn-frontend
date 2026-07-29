@@ -1,4 +1,5 @@
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -95,17 +96,47 @@ export default function ResultScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
         showsVerticalScrollIndicator={false}>
-        {/* 1 · The photo leads. It is what the user just captured, and it anchors everything
-            below — the tier badge floats on it so the verdict reads in the same glance. */}
-        <Animated.View entering={FadeInDown} style={styles.hero}>
+        {/* 1 · Hero — classified type, tier, confidence ring. A gradient + colored glow keyed to
+            the risk level so it lifts off the page while staying tonally on-tier. */}
+        <Animated.View entering={FadeInDown}>
+          <LinearGradient
+            colors={[mix(colors.fg, '#FFFFFF', 0.82), mix(colors.fg, '#FFFFFF', 0.5)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.hero, { shadowColor: colors.fg }]}>
+            <View style={styles.heroTop}>
+              <ThemedText type="title1" style={styles.heroTitle}>
+                {cls.full}
+              </ThemedText>
+              <View style={[styles.tierBadge, { backgroundColor: colors.fg, shadowColor: colors.fg }]}>
+                <ThemedText type="subhead" style={{ color: theme.onBrand }}>
+                  {qualifier ? 'Precautionary' : tier.name}
+                </ThemedText>
+              </View>
+            </View>
+            <View style={styles.heroBottom}>
+              <ConfidenceRing pct={pct} color={colors.fg} />
+              <View style={styles.heroConfText}>
+                <ThemedText type="headline">AI confidence</ThemedText>
+                <ThemedText type="subhead" themeColor="textSecondary">
+                  {pct}% probability for {classification.topClass} pattern.
+                </ThemedText>
+              </View>
+            </View>
+          </LinearGradient>
+        </Animated.View>
+
+        {/* 2 · The photo, straight under the verdict — it's what the user just captured, so it
+            belongs in the first screenful rather than buried below the explanations. */}
+        <Animated.View entering={FadeInDown.delay(60)} style={styles.photoBlock}>
           {record.imageUri ? (
             <Pressable
               onPress={() => setViewerOpen(true)}
               accessibilityRole="button"
               accessibilityLabel="View photo full screen"
-              style={({ pressed }) => [styles.heroPhotoPress, pressed && styles.pressed]}>
-              <Image source={{ uri: record.imageUri }} style={styles.heroPhoto} contentFit="cover" />
-              <View style={styles.heroExpand}>
+              style={({ pressed }) => [styles.photoPress, pressed && styles.pressed]}>
+              <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
+              <View style={styles.photoExpand}>
                 <Icon
                   name="arrow.up.left.and.arrow.down.right"
                   tintColor="#FFFFFF"
@@ -115,38 +146,23 @@ export default function ResultScreen() {
               </View>
             </Pressable>
           ) : (
-            <View style={[styles.heroPhoto, styles.heroPhotoEmpty, { backgroundColor: theme.elementBg }]}>
+            <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
               <Icon name="photo" tintColor={theme.muted} size={28} />
             </View>
           )}
-          <View style={[styles.tierBadge, { backgroundColor: colors.fg, shadowColor: colors.fg }]}>
-            <ThemedText type="subhead" style={{ color: theme.onBrand }}>
-              {qualifier ? 'Precautionary' : tier.name}
-            </ThemedText>
-          </View>
-        </Animated.View>
-
-        {/* 2 · Headline: what the pattern looks like, where it is, when it was checked. */}
-        <Animated.View entering={FadeInDown.delay(60)} style={styles.titleBlock}>
-          <ThemedText type="title1">{cls.full}</ThemedText>
           <ThemedText type="subhead" themeColor="textSecondary">
             {mark?.region ?? 'Location not marked'} · {date}
           </ThemedText>
         </Animated.View>
 
-        {/* 3 · Confidence and the single action to take, together — neither means much alone.
-            The disclaimer rides underneath as a light footnote rather than its own card. */}
-        <Animated.View entering={FadeInDown.delay(110)} style={styles.calloutBlock}>
-          <View style={[styles.callout, { backgroundColor: colors.bg }]}>
-            <ConfidenceRing pct={pct} color={colors.fg} size={60} />
-            <View style={styles.calloutText}>
-              <ThemedText type="headline" style={{ color: colors.fg }}>
-                {tier.priorityAction}
-              </ThemedText>
-              <ThemedText type="footnote" style={{ color: colors.fg }}>
-                {pct}% confidence · {classification.topClass} pattern
-              </ThemedText>
-            </View>
+        {/* 3 · The one action to take, with the disclaimer riding underneath as a light footnote
+            rather than a card of its own. */}
+        <Animated.View entering={FadeInDown.delay(110)} style={styles.priorityBlock}>
+          <View style={[styles.priority, { backgroundColor: colors.bg }]}>
+            <View style={[styles.priorityDot, { backgroundColor: colors.fg }]} />
+            <ThemedText type="subhead" style={[styles.priorityText, { color: colors.fg }]}>
+              Priority action: {tier.priorityAction}
+            </ThemedText>
           </View>
           <View style={styles.disclaimerRow}>
             <Icon name="info.circle" tintColor={theme.muted} size={14} />
@@ -272,8 +288,9 @@ function Header() {
 }
 
 /** Circular AI-confidence ring: tier-colored arc over a tint of that color, percentage centered. */
-function ConfidenceRing({ pct, color, size = 78 }: { pct: number; color: string; size?: number }) {
-  const stroke = size >= 72 ? 7 : 6;
+function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
+  const size = 78;
+  const stroke = 7;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
@@ -295,7 +312,7 @@ function ConfidenceRing({ pct, color, size = 78 }: { pct: number; color: string;
           transform={`rotate(-90 ${mid} ${mid})`}
         />
       </Svg>
-      <ThemedText type={size >= 72 ? 'headline' : 'subhead'}>{pct}%</ThemedText>
+      <ThemedText type="headline">{pct}%</ThemedText>
     </View>
   );
 }
@@ -432,6 +449,14 @@ function withAlpha(hex: string, alpha: number): string {
   return `${hex}${a}`;
 }
 
+/** Blend two #RRGGBB hex colors; t=0 → a, t=1 → b. Used to build the tier gradient stops. */
+function mix(a: string, b: string, t: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
+  const to = (x: number) => Math.round(x).toString(16).padStart(2, '0');
+  const l = (x: number, y: number) => x + (y - x) * Math.max(0, Math.min(1, t));
+  return `#${to(l(ch(a, 1), ch(b, 1)))}${to(l(ch(a, 3), ch(b, 3)))}${to(l(ch(a, 5), ch(b, 5)))}`;
+}
+
 const styles = StyleSheet.create({
   header: {
     height: 48,
@@ -445,13 +470,36 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm, gap: Space.base },
   center: { textAlign: 'center' },
-  // Hero — the lesion photo, with the tier badge floating over its top-right corner.
-  hero: { marginTop: Space.xs },
-  heroPhotoPress: { borderRadius: Radius.xl, overflow: 'hidden' },
+  // Hero — gradient is set inline from the tier color; shadowColor is the tier color too.
+  hero: {
+    borderRadius: Radius.xl,
+    padding: Space.xl,
+    gap: Space.lg,
+    shadowOpacity: 0.35,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
+  heroTitle: { flex: 1 },
+  tierBadge: {
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.pill,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  heroBottom: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  heroConfText: { flex: 1, gap: 2 },
+  // The lesion photo, with its location/date caption.
+  photoBlock: { gap: Space.md },
+  photoPress: { borderRadius: Radius.xl, overflow: 'hidden' },
   pressed: { opacity: 0.9 },
-  heroPhoto: { width: '100%', height: 220, borderRadius: Radius.xl },
-  heroPhotoEmpty: { alignItems: 'center', justifyContent: 'center' },
-  heroExpand: {
+  photo: { width: '100%', height: 200, borderRadius: Radius.xl },
+  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photoExpand: {
     position: 'absolute',
     right: Space.md,
     bottom: Space.md,
@@ -462,29 +510,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(33,26,21,0.55)',
   },
-  tierBadge: {
-    position: 'absolute',
-    top: Space.md,
-    right: Space.md,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.pill,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  titleBlock: { gap: Space.xs, marginTop: Space.xs },
-  // Confidence + priority action, with the disclaimer as a footnote beneath.
-  calloutBlock: { gap: Space.md },
-  callout: {
+  // Priority action, with the disclaimer as a footnote beneath.
+  priorityBlock: { gap: Space.md },
+  priority: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.base,
-    padding: Space.base,
-    borderRadius: Radius.lg,
+    gap: Space.md,
+    paddingHorizontal: Space.base,
+    paddingVertical: Space.base,
+    borderRadius: Radius.md,
   },
-  calloutText: { flex: 1, gap: 2 },
+  priorityDot: { width: 8, height: 8, borderRadius: 4 },
+  priorityText: { flex: 1 },
   disclaimerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
   disclaimerText: { flex: 1 },
   // Cards
