@@ -21,6 +21,7 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import { getLocalPhoneError } from '@/lib/form-validation';
 import { routeAfterAuth } from '@/lib/profile';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -34,21 +35,36 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
 
+  function getIdentifierError(value = identifier, identifierMode = mode) {
+    const id = value.trim();
+    if (identifierMode === 'phone') return getLocalPhoneError(id);
+    if (!id) return 'Email address is required.';
+    return EMAIL_RE.test(id) ? undefined : 'Enter a valid email address.';
+  }
+
+  function handleIdentifierChange(value: string) {
+    setIdentifier(value);
+    setFormError(null);
+    if (errors.identifier) {
+      setErrors((current) => ({
+        ...current,
+        identifier: getIdentifierError(value),
+      }));
+    }
+  }
+
   function toggleMode() {
-    setMode((m) => (m === 'email' ? 'phone' : 'email'));
+    setMode((currentMode) => (currentMode === 'email' ? 'phone' : 'email'));
     setIdentifier('');
+    setFormError(null);
     setErrors((e) => ({ ...e, identifier: undefined }));
   }
 
   function validate() {
     const next: typeof errors = {};
-    const id = identifier.trim();
-    if (mode === 'email') {
-      if (!EMAIL_RE.test(id)) next.identifier = 'Enter a valid email address.';
-    } else if (id.replace(/\D/g, '').length < 10) {
-      next.identifier = 'Enter a valid phone number.';
-    }
+    next.identifier = getIdentifierError();
     if (!password) next.password = 'Please enter your password.';
+    if (!next.identifier) delete next.identifier;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -91,8 +107,14 @@ export default function LoginScreen() {
             <IdentifierField
               mode={mode}
               value={identifier}
-              onChangeValue={setIdentifier}
+              onChangeValue={handleIdentifierChange}
               onToggleMode={toggleMode}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  identifier: getIdentifierError(),
+                }))
+              }
               error={errors.identifier}
               containerStyle={styles.identifier}
             />
@@ -103,7 +125,13 @@ export default function LoginScreen() {
               autoCapitalize="none"
               textContentType="password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                setFormError(null);
+                if (errors.password && value) {
+                  setErrors((current) => ({ ...current, password: undefined }));
+                }
+              }}
               error={errors.password}
             />
           </View>
