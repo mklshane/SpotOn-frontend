@@ -21,10 +21,12 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { getLocalPhoneError } from '@/lib/form-validation';
+import {
+  getEmailError,
+  getLocalPhoneError,
+  getLoginPasswordError,
+} from '@/lib/form-validation';
 import { routeAfterAuth } from '@/lib/profile';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -38,8 +40,7 @@ export default function LoginScreen() {
   function getIdentifierError(value = identifier, identifierMode = mode) {
     const id = value.trim();
     if (identifierMode === 'phone') return getLocalPhoneError(id);
-    if (!id) return 'Email address is required.';
-    return EMAIL_RE.test(id) ? undefined : 'Enter a valid email address.';
+    return getEmailError(id);
   }
 
   function handleIdentifierChange(value: string) {
@@ -63,8 +64,9 @@ export default function LoginScreen() {
   function validate() {
     const next: typeof errors = {};
     next.identifier = getIdentifierError();
-    if (!password) next.password = 'Please enter your password.';
+    next.password = getLoginPasswordError(password);
     if (!next.identifier) delete next.identifier;
+    if (!next.password) delete next.password;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -123,15 +125,26 @@ export default function LoginScreen() {
               placeholder="Your password"
               secure
               autoCapitalize="none"
+              autoComplete="current-password"
               textContentType="password"
+              maxLength={128}
               value={password}
               onChangeText={(value) => {
                 setPassword(value);
                 setFormError(null);
-                if (errors.password && value) {
-                  setErrors((current) => ({ ...current, password: undefined }));
+                if (errors.password) {
+                  setErrors((current) => ({
+                    ...current,
+                    password: getLoginPasswordError(value),
+                  }));
                 }
               }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  password: getLoginPasswordError(password),
+                }))
+              }
               error={errors.password}
             />
           </View>

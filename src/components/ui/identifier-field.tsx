@@ -65,7 +65,7 @@ export function IdentifierField({
           autoComplete={isPhone ? 'tel' : 'email'}
           textContentType={isPhone ? 'telephoneNumber' : 'emailAddress'}
           value={value}
-          maxLength={isPhone ? 10 : undefined}
+          maxLength={isPhone ? 10 : 254}
           onChangeText={(nextValue) => {
             const sanitizedValue = isPhone ? sanitizeLocalPhone(nextValue) : nextValue;
 
