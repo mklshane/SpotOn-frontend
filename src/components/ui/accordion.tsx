@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { Elevation, Radius, Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
@@ -94,20 +94,18 @@ export function Accordion<T extends string>({
       </Pressable>
 
       <Animated.View style={[styles.optionsWrap, animatedStyle]}>
-        <View style={[styles.optionsShadow, Elevation.sm]}>
-          <View style={[styles.options, { backgroundColor: theme.surface }]}>
-            {options.map((option) => (
-              <OptionRow
-                key={option.value}
-                option={option}
-                isSelected={option.value === value}
-                onSelect={() => {
-                  onChange(option.value);
-                  setOpenAnimated(false);
-                }}
-              />
-            ))}
-          </View>
+        <View style={[styles.options, { backgroundColor: theme.surface }]}>
+          {options.map((option) => (
+            <OptionRow
+              key={option.value}
+              option={option}
+              isSelected={option.value === value}
+              onSelect={() => {
+                onChange(option.value);
+                setOpenAnimated(false);
+              }}
+            />
+          ))}
         </View>
       </Animated.View>
 
@@ -197,8 +195,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionsWrap: { overflow: 'hidden' },
-  optionsShadow: { marginTop: Space.sm, borderRadius: Radius.md },
-  options: { borderRadius: Radius.md, overflow: 'hidden', paddingVertical: Space.sm },
+  options: {
+    marginTop: Space.sm,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    paddingVertical: Space.sm,
+  },
   row: {
     minHeight: 52,
     paddingHorizontal: Space.lg,
