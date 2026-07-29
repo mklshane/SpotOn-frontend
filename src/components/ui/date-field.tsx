@@ -1,7 +1,5 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Icon } from '@/components/ui/icon';
 import { useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Modal, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Radius, Space } from '@/constants/theme';
@@ -9,6 +7,8 @@ import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
 import { Button } from './button';
+import { CalendarPicker } from './calendar-picker';
+import { Icon } from './icon';
 
 export type DateFieldProps = {
   label?: string;
@@ -43,6 +43,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
   const [date, setDate] = useState<Date | null>(() => fromIso(value));
   const [temp, setTemp] = useState<Date>(() => fromIso(value) ?? DEFAULT_DATE);
   const [open, setOpen] = useState(false);
+  const [sheetKey, setSheetKey] = useState(0);
 
   const borderColor = error ? theme.riskCritical : 'transparent';
 
@@ -53,6 +54,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
 
   function openPicker() {
     setTemp(date ?? DEFAULT_DATE);
+    setSheetKey((k) => k + 1);
     setOpen(true);
   }
 
@@ -80,54 +82,40 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
         </ThemedText>
       ) : null}
 
-      {/* Android: native dialog shown imperatively. */}
-      {Platform.OS === 'android' && open ? (
-        <DateTimePicker
-          value={date ?? DEFAULT_DATE}
-          mode="date"
-          maximumDate={TODAY}
-          minimumDate={MIN_DATE}
-          onChange={(e, d) => {
-            setOpen(false);
-            if (e.type === 'set' && d) commit(d);
-          }}
-        />
-      ) : null}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+          <Pressable
+            style={[
+              styles.sheet,
+              { backgroundColor: theme.surface, paddingBottom: insets.bottom + Space.base },
+            ]}>
+            <View style={[styles.grabber, { backgroundColor: theme.hairline }]} />
 
-      {/* iOS: inline calendar in a bottom sheet with a Done action. */}
-      {Platform.OS === 'ios' ? (
-        <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
+            {/* Remounted (via key) each time the sheet opens, so its internal cursor/view state
+                resets — but it stays mounted while closing so the sheet fades out as one unit
+                instead of collapsing mid-animation. */}
+            <CalendarPicker key={sheetKey} value={temp} minDate={MIN_DATE} maxDate={TODAY} onChange={setTemp} />
+
+            <Button
+              label="Done"
+              variant="brand"
+              onPress={() => {
+                commit(temp);
+                setOpen(false);
+              }}
+              style={styles.doneButton}
+            />
             <Pressable
-              style={[
-                styles.sheet,
-                { backgroundColor: theme.surface, paddingBottom: insets.bottom + Space.base },
-              ]}>
-              <View style={[styles.grabber, { backgroundColor: theme.hairline }]} />
-              <DateTimePicker
-                value={temp}
-                mode="date"
-                display="inline"
-                maximumDate={TODAY}
-                minimumDate={MIN_DATE}
-                themeVariant="light"
-                accentColor={theme.brand}
-                onChange={(_e, d) => {
-                  if (d) setTemp(d);
-                }}
-              />
-              <Button
-                label="Done"
-                variant="brand"
-                onPress={() => {
-                  commit(temp);
-                  setOpen(false);
-                }}
-              />
+              accessibilityRole="button"
+              onPress={() => setOpen(false)}
+              style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}>
+              <ThemedText type="headline" themeColor="textSecondary">
+                Cancel
+              </ThemedText>
             </Pressable>
           </Pressable>
-        </Modal>
-      ) : null}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -151,5 +139,8 @@ const styles = StyleSheet.create({
     paddingTop: Space.md,
     gap: Space.sm,
   },
-  grabber: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center' },
+  grabber: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: Space.sm },
+  doneButton: { marginTop: Space.sm },
+  cancel: { height: 54, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.6 },
 });

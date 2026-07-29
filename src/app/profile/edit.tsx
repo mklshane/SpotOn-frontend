@@ -12,11 +12,11 @@ import {
 
 import type { Sex } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
+import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -31,13 +31,13 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ];
 
-const SKIN_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: '1', label: 'Type I — always burns, never tans' },
-  { value: '2', label: 'Type II — usually burns, tans minimally' },
-  { value: '3', label: 'Type III — sometimes burns, tans uniformly' },
-  { value: '4', label: 'Type IV — rarely burns, tans easily' },
-  { value: '5', label: 'Type V — very rarely burns, tans easily' },
-  { value: '6', label: 'Type VI — never burns' },
+const SKIN_TYPE_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: '1', label: 'Type I', description: 'Always burns, never tans' },
+  { value: '2', label: 'Type II', description: 'Usually burns, tans minimally' },
+  { value: '3', label: 'Type III', description: 'Sometimes burns, tans uniformly' },
+  { value: '4', label: 'Type IV', description: 'Rarely burns, tans easily' },
+  { value: '5', label: 'Type V', description: 'Very rarely burns, tans easily' },
+  { value: '6', label: 'Type VI', description: 'Never burns' },
 ];
 
 export default function EditProfileScreen() {
@@ -112,7 +112,7 @@ export default function EditProfileScreen() {
           <View style={styles.form}>
             <TextField label="Full name" placeholder="Your name" value={fullName} onChangeText={setFullName} />
             <DateField label="Date of birth" value={dob} onChange={setDob} error={errors.dob} />
-            <Select
+            <Accordion
               label="Sex"
               placeholder="Select"
               value={sex}
@@ -129,7 +129,7 @@ export default function EditProfileScreen() {
               onChangeText={setPhone}
               error={errors.phone}
             />
-            <Select
+            <Accordion
               label="Skin type"
               placeholder="Select"
               value={skinType}
