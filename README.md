@@ -82,14 +82,20 @@ Live preview (vision-camera)
 
 ### Screening Summary Report (offline, on-device)
 Generated entirely on-device with `expo-print` (HTML template → PDF) — **never uploaded**,
-since it embeds the lesion image and PII. Shared/saved via `expo-sharing`. Contents (per the
-sample at `image.png`):
-- **Header:** "Screening Summary Report" + date/time.
-- **Profile:** name, date of birth, sex, contact, address (from the local user profile).
+since it embeds the lesion image and PII. Shared/saved via `expo-sharing`. One A4 page,
+matching `screeningsummary.png`. Every asset is inlined as a base64 data URI and
+`assertNoRemoteRefs()` (`src/lib/report/report-html.ts`) throws if a remote reference ever
+reaches the template, so the print WebView cannot make a network request while rendering PII.
+Contents:
+- **Header:** SpotOn wordmark + "Screening Summary Report" + date/time (PHT).
+- **Profile:** name, date of birth (+ age), sex, contact (from the cached user profile;
+  missing fields print as a dash rather than blocking generation). No address row —
+  `UserProfile` has no address field.
 - **Lesion image + classification:** the captured photo, predicted class (e.g. Melanoma /
   MEL) and model confidence %.
 - **Reported symptoms:** the 8-feature questionnaire with the user's Yes/Unsure/No answers.
-- **Urgency level + recommendation:** the TPS risk tier (e.g. CRITICAL) + recommended action.
+- **Urgency level + recommendation:** the TPS risk tier, set in the same wording the app uses
+  (Low / Moderate / High / **Priority**), + the recommended action.
 - **Disclaimer:** triage-only; not a clinical diagnosis, referral, or transfer of care; not
   a substitute for a professional dermatologic consultation.
 

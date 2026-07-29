@@ -14,40 +14,8 @@ import { SettingsRow } from '@/components/ui/settings-row';
 import { Gradients, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { computeAge, SEX_LABELS, skinTypeLabel } from '@/lib/profile-format';
 import { useScanHistory } from '@/lib/scan-history';
-
-const SEX_LABELS: Record<string, string> = {
-  male: 'Male',
-  female: 'Female',
-  intersex: 'Intersex',
-  other: 'Other',
-  prefer_not_to_say: 'Prefer not to say',
-};
-
-const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
-
-function computeAge(dob: string | null): number | null {
-  if (!dob) return null;
-  // Parse "YYYY-MM-DD" as a local date, not `new Date(dob)`'s UTC-midnight
-  // parsing — the latter can roll the birth date back a day in timezones
-  // behind UTC once read back via local getMonth()/getDate().
-  const [y, m, d] = dob.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const birth = new Date(y, m - 1, d);
-  if (Number.isNaN(birth.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const hasHadBirthdayThisYear =
-    today.getMonth() > birth.getMonth() ||
-    (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
-  if (!hasHadBirthdayThisYear) age -= 1;
-  return age;
-}
-
-function skinTypeLabel(type: number | null): string {
-  if (type == null || type < 1 || type > 6) return '—';
-  return `Type ${SKIN_TYPE_ROMAN[type - 1]}`;
-}
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();

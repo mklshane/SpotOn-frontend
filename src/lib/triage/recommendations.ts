@@ -111,6 +111,43 @@ export const DISCLAIMER =
   'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation — always follow up with a dermatologist about anything that concerns you.';
 
 /**
+ * The Screening Summary Report's footer. Counterpart to DISCLAIMER: that one addresses the
+ * user, this one addresses the clinician who receives the printout, so the register is
+ * formal and the boundary (not a referral, not a transfer of care) is explicit.
+ */
+export const REPORT_DISCLAIMER =
+  'This Screening Summary Report is a system output and does NOT constitute a clinical diagnosis, medical referral, or transfer of care. Results are based on a CNN classification of a user-submitted image and patient self-reported symptoms. The attending clinician should conduct an independent clinical examination.';
+
+/**
+ * Sentence fragments for the report's urgency paragraph, assembled in summary-report.ts.
+ * Kept here so the whole report reads from the same copy module — a Tagalog translation
+ * stays a data change. The bold runs in the rendered sentence are structural (tier,
+ * confidence band, symptom burden), never a regex over physician-reviewed prose.
+ */
+export const REPORT_LEAD = {
+  prefix:
+    'Based on the classification result and reported symptoms, this assessment has been assigned a ',
+  urgencySuffix: ' urgency level. The system detected a ',
+  combined: ' classification combined with a ',
+  burdenSuffix: ' across ',
+  ofEight: ' of the 8 major and minor warning signs.',
+};
+
+/** Plain-language band for a model confidence percentage, used in the report's lead sentence. */
+export function confidenceBand(pct: number): string {
+  if (pct >= 85) return 'high-confidence';
+  if (pct >= 60) return 'moderate-confidence';
+  return 'low-confidence';
+}
+
+/** Plain-language band for how many of the 8 questions were answered "yes". */
+export function symptomBurden(yesCount: number): string {
+  if (yesCount >= 5) return 'high symptom burden';
+  if (yesCount >= 2) return 'moderate symptom burden';
+  return 'low symptom burden';
+}
+
+/**
  * Lay-language display for each model class. Framed as visual patterns, not verdicts.
  *  - `full`  : disease name for the result hero.
  *  - `name`  : short "-like" label for the probability breakdown.

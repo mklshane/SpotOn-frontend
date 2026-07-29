@@ -85,9 +85,13 @@ export function DevTools() {
         c === mock.topClass ? mock.conf : rest,
       ]),
     ) as Record<LesionClass, number>;
+    // Seed the bundled photo rather than '' — otherwise every mock result (and the Screening
+    // Summary Report generated from it) is photo-less, which is the degraded path, not the
+    // representative one.
+    const photo = await Asset.fromModule(TEST_PHOTO).downloadAsync();
     const entry = await addEntry({
       mark: { point: [0.2, 0.72, 0.34], region: 'Chest', view: 'front' },
-      imageUri: '',
+      imageUri: photo.localUri ?? photo.uri,
       source: 'camera',
       questionnaire: { answers, completedAt: new Date().toISOString() },
       classification: {
