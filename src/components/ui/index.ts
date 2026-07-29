@@ -1,4 +1,5 @@
 export { Button } from './button';
+export { CalendarPicker } from './calendar-picker';
 export { Card } from './card';
 export { Checkbox } from './checkbox';
 export { DateField } from './date-field';
