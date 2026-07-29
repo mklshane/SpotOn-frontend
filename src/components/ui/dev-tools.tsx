@@ -102,6 +102,7 @@ export function DevTools() {
         inferenceMs: 0,
         scaleUnstable: false,
         refined: false,
+        detectorUsed: false,
       },
       triage: computeTriage(mock.topClass, mock.conf, answers, {
         applyFloor: mock.floor,

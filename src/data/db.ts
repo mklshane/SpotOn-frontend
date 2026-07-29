@@ -126,14 +126,15 @@ CREATE TABLE IF NOT EXISTS screenings (
   malignant_score      REAL NOT NULL DEFAULT 0,
   malignant_gate_applied INTEGER NOT NULL DEFAULT 0,
   scale_unstable       INTEGER NOT NULL DEFAULT 0,
-  classifier_refined   INTEGER NOT NULL DEFAULT 0
+  classifier_refined   INTEGER NOT NULL DEFAULT 0,
+  detector_used        INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -184,6 +185,12 @@ const MIGRATION_V8 = [
   "ALTER TABLE screenings ADD COLUMN classifier_refined INTEGER NOT NULL DEFAULT 0",
 ];
 
+// v9 — detector-canonical crop: whether the YOLO detector localized the lesion and the classifier
+// ran on its crop (vs the full-frame fallback). Part of the audit trail; pre-v9 rows default to 0.
+const MIGRATION_V9 = [
+  "ALTER TABLE screenings ADD COLUMN detector_used INTEGER NOT NULL DEFAULT 0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -196,6 +203,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 6 ? MIGRATION_V6 : []),
     ...(version < 7 ? MIGRATION_V7 : []),
     ...(version < 8 ? MIGRATION_V8 : []),
+    ...(version < 9 ? MIGRATION_V9 : []),
   ];
   for (const stmt of pending) {
     try {

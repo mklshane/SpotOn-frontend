@@ -6,6 +6,7 @@ import {
   CLASS_ORDER,
   CONFIDENCE_TEMPERATURE,
   INFERENCE_TIMEOUT_MS,
+  DETECTOR_CROP_ENABLED,
   MODEL_VERSION,
   NORMALIZATION,
   REFINE_CONFIDENCE,
@@ -15,6 +16,7 @@ import {
   SCALE_CHECK_ENABLED,
   TTA_ENABLED,
 } from './model-config';
+import { detectLesionBox, lesionBoxToCrop } from './lesion-detector';
 import {
   type CropBox,
   locateLesionInImage,
@@ -107,28 +109,42 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
     };
 
     const started = Date.now();
-    // The full-frame prediction. Its probabilities are the result unless the zoom refinement below
-    // adopts a better-framed one.
-    let result = await predictAt(1);
-    const fullFrame = result;
 
-    // Confidence-gated zoom refinement: a low-confidence full-frame call is usually a lesion framed
-    // too wide (out of distribution — training only ever crops in). Locate the lesion, crop to it,
-    // and re-classify; adopt the zoomed prediction. Only fires below the gate, so a confident
-    // (well-framed) prediction is never disturbed. See model-config.ts for the validation.
+    // 1) Detector-canonical crop (primary). Run the YOLO detector, re-crop to the training geometry,
+    // and classify that. This removes the user's framing from the input, so the answer depends on
+    // the lesion, not the zoom — and reproduces the crop the model was trained on. See model-config.
+    let result: Awaited<ReturnType<typeof predictAt>> | null = null;
+    let detectorUsed = false;
+    if (DETECTOR_CROP_ENABLED) {
+      const detBox = await detectLesionBox(uri).catch((e) => {
+        if (DEBUG) console.warn('[classifier] detector failed', e);
+        return null;
+      });
+      if (detBox) {
+        result = await predictAt(1, lesionBoxToCrop(detBox));
+        detectorUsed = true;
+      }
+    }
+
+    // 2) Fallback for images the detector can't localize: the full frame, then the confidence-gated
+    // DoG zoom refinement (a low-confidence full-frame call is usually a lesion framed too wide).
     let refined = false;
-    if (REFINE_ENABLED && result.topConfidence < REFINE_CONFIDENCE) {
-      const box = await locateLesionInImage(uri, { targetFill: REFINE_TARGET_FILL });
-      if (box) {
-        const zoomed = await predictAt(1, box);
-        // Adopt only when the zoom is MORE confident than the full frame. Measured on
-        // SpotOn-synthetic/retrain (972 images): adopting unconditionally gives +2.7 pts but
-        // corrupts 65 previously-correct images; requiring a confidence gain gives +3.8 pts and
-        // nearly halves that to 36. A zoom that lowers confidence is evidence the crop was wrong
-        // (mislocated lesion), so keeping the original is the safer read.
-        if (zoomed.topConfidence > result.topConfidence) {
-          result = zoomed;
-          refined = true;
+    let fullFrame = result;
+    if (!result) {
+      result = await predictAt(1);
+      fullFrame = result;
+      if (REFINE_ENABLED && result.topConfidence < REFINE_CONFIDENCE) {
+        const box = await locateLesionInImage(uri, { targetFill: REFINE_TARGET_FILL });
+        if (box) {
+          const zoomed = await predictAt(1, box);
+          // Adopt only when the zoom is MORE confident than the full frame. Measured on
+          // SpotOn-synthetic/retrain (972 images): adopting unconditionally gives +2.7 pts but
+          // corrupts 65 previously-correct images; requiring a confidence gain gives +3.8 pts and
+          // nearly halves that to 36. A zoom that lowers confidence is evidence the crop was wrong.
+          if (zoomed.topConfidence > result.topConfidence) {
+            result = zoomed;
+            refined = true;
+          }
         }
       }
     }
@@ -154,7 +170,8 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
         `top=${topClass}@${topConfidence.toFixed(3)}`,
         CLASS_ORDER.map((c) => `${c}=${probsByClass[c].toFixed(3)}`).join(' '),
         `${inferenceMs}ms @${inputSize}px ×${result.views}view`,
-        refined ? `refined(from ${fullFrame.topClass}@${fullFrame.topConfidence.toFixed(2)})` : '',
+        detectorUsed ? 'crop=detector' : 'crop=fullframe',
+        refined && fullFrame ? `refined(from ${fullFrame.topClass}@${fullFrame.topConfidence.toFixed(2)})` : '',
         SCALE_CHECK_ENABLED && scaleUnstable ? 'scaleUNSTABLE' : '',
       );
     }
@@ -171,6 +188,7 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
       inferenceMs,
       scaleUnstable,
       refined,
+      detectorUsed,
     } satisfies ClassificationOutput;
   })();
 

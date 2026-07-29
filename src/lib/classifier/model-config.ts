@@ -180,6 +180,22 @@ export const SCALE_CHECK_ENABLED = false;
  * 0.65 is the lowest gate that catches the field failure (its MEL call sat at 0.61); 0.60 misses
  * it. Raising it further only adds cost without breaking anything, so 0.65 is the efficient point.
  */
+/**
+ * Detector-canonical crop — the structural fix for zoom-dependence and capture/upload disagreement.
+ *
+ * The classifier is intrinsically scale-sensitive (training only ever cropped inward), so the
+ * inference patches below (DoG locate + zoom refine) reduce but cannot remove the dependence on how
+ * the user framed the shot. This removes the user's framing from the input entirely: run the YOLO
+ * detector on the still, re-crop to the training geometry (lesion-detector.ts), and classify that.
+ * Measured 2026-07-25 — one benign mole across 7 simulated zoom levels: raw classification flips
+ * MEL↔BENIGN; the detector re-crop stays BENIGN at every level. It is also the training-match
+ * (YOLO box + crop_pad 0.45), which on the 94-image real set lifts top-1 51% → 61%.
+ *
+ * When the detector finds no lesion, classify.ts falls back to the full frame + the DoG zoom
+ * refinement below, so nothing regresses on images the detector can't localize.
+ */
+export const DETECTOR_CROP_ENABLED = true;
+
 export const REFINE_ENABLED = true;
 export const REFINE_CONFIDENCE = 0.65;
 /** Lesion diameter ÷ crop side the zoom aims for — the middle of the model's stable framing band. */

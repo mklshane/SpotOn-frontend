@@ -45,6 +45,7 @@ type Row = {
   malignant_gate_applied: number;
   scale_unstable: number;
   classifier_refined: number;
+  detector_used: number;
 };
 
 function toRecord(row: Row): ScreeningRecord {
@@ -62,6 +63,7 @@ function toRecord(row: Row): ScreeningRecord {
     inferenceMs: row.inference_ms,
     scaleUnstable: row.scale_unstable === 1,
     refined: row.classifier_refined === 1,
+    detectorUsed: row.detector_used === 1,
   };
   const triage: TriageResult = {
     classWeight: row.class_weight,
@@ -107,8 +109,8 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
        input_size, normalization, temperature, inference_ms, first_attempt_json,
        class_weight, cs, symptom_score_raw, symptom_score, tps, tier,
        safety_floor_applied, confidence_qualifier, malignant_score, malignant_gate_applied,
-       scale_unstable, classifier_refined
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       scale_unstable, classifier_refined, detector_used
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     record.id,
     record.createdAt,
     record.mark?.point[0] ?? null,
@@ -141,6 +143,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     record.triage.malignantGateApplied ? 1 : 0,
     record.classification.scaleUnstable ? 1 : 0,
     record.classification.refined ? 1 : 0,
+    record.classification.detectorUsed ? 1 : 0,
   );
 }
 

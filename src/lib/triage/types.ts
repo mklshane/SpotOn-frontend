@@ -50,6 +50,9 @@ export type ClassificationOutput = {
   /** True when a low-confidence full-frame prediction was re-run on a lesion-centered zoom crop
    *  and that zoomed result was adopted (see model-config.ts REFINE_*). */
   refined: boolean;
+  /** True when the YOLO detector localized the lesion and the classifier ran on the detector's
+   *  canonical crop (training geometry) rather than the full frame. */
+  detectorUsed: boolean;
 };
 
 /** A fully completed screening: image + questionnaire + classification + triage. */

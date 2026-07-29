@@ -73,7 +73,7 @@ const DARK_THRESHOLD = 0.2; // mean luminance below which we coach "too dark"
 const BRIGHT_THRESHOLD = 0.82; // mean luminance above which we coach "too bright"
 const BLUR_THRESHOLD = 0.0004; // mean gradient energy below this = genuinely blurry (normal use ≥~0.001)
 const BLUR_SHOW = 5; // consecutive blurry frames before coaching (avoids flicker on plain/brief frames)
-const DEBUG = false; // set true to log [fp] best/sharp/lume for tuning
+const DEBUG = true; // set true to log [fp] best/sharp/lume for tuning
 
 // Detector cadence. Low-end devices can't sustain 12 passes/second alongside the preview, and
 // missing the budget costs far more (dropped preview frames, a janky JS thread) than a slower box.
