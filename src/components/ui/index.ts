@@ -1,4 +1,6 @@
+export { Accordion } from './accordion';
 export { Button } from './button';
+export { CalendarPicker } from './calendar-picker';
 export { Card } from './card';
 export { Checkbox } from './checkbox';
 export { DateField } from './date-field';
@@ -11,7 +13,6 @@ export { Logo } from './logo';
 export { OnboardingHero } from './onboarding-hero';
 export { Screen } from './screen';
 export { Segmented } from './segmented';
-export { Select } from './select';
 export { SettingsRow } from './settings-row';
 export { StubScreen } from './stub-screen';
 export { Switch } from './switch';

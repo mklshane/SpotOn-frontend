@@ -38,7 +38,6 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
     <View
       style={[
         styles.bar,
-        styles.shadow,
         {
           backgroundColor: theme.surface,
           paddingBottom: insets.bottom,
@@ -121,14 +120,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
   },
-  // soft warm shadow rising upward off the bar
-  shadow: {
-    shadowColor: '#7A4A2B',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: -6 },
-    elevation: 16,
-  },
   item: { flex: 1, alignItems: 'center', gap: 5 },
   pressed: { opacity: 0.6 },
   label: { ...Type.caption },
@@ -147,7 +138,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 10,
+    // Android elevation renders as an ambient shadow spreading in all
+    // directions (not just the declared offset), and this ring floats
+    // (marginTop: -30) up into the content area above the bar — at 10 it
+    // washed a wide orange glow over cards sitting near the tab bar.
+    elevation: 4,
   },
   centerCircle: {
     width: CIRCLE,

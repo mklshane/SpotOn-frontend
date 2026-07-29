@@ -82,7 +82,10 @@ export default function LearnScreen() {
 
   return (
     <Screen padded={false}>
-      <ScrollView contentContainerStyle={styles.body}>
+      {/* overScrollMode="never" — Android's default overscroll edge-glow uses the
+          app's accent color, showing as an orange flash over content near the
+          bottom tab bar when scrolling past the end. */}
+      <ScrollView contentContainerStyle={styles.body} overScrollMode="never">
         <ThemedText type="largeTitle">Learn</ThemedText>
 
         {warningSigns ? (
@@ -151,14 +154,17 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.base,
-    paddingBottom: Space.xxxl,
+    // Clears the floating Scan button, which protrudes ~30px above the tab
+    // bar's own top edge via a negative margin (a sibling view this screen's
+    // layout doesn't otherwise know to leave room for).
+    paddingBottom: 20,
     gap: Space.lg,
   },
   section: { gap: 2, marginBottom: -Space.sm },
   // Bleed the horizontal rail to the screen edges so cards scroll under the
   // body padding instead of clipping at it.
   typeScroll: { marginHorizontal: -Space.xl },
-  typeRow: { alignItems: 'stretch', gap: Space.md, paddingHorizontal: Space.xl },
+  typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
   grid: { gap: Space.base },
   row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
   spacer: { flex: 1 },

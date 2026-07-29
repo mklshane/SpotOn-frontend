@@ -22,8 +22,13 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import {
+  getEmailError,
+  getFullNameError,
+  getLocalPhoneError,
+  getRegistrationPasswordError,
+  sanitizeName,
+} from '@/lib/form-validation';
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
@@ -41,23 +46,39 @@ export default function RegisterScreen() {
     consent?: string;
   }>({});
 
+  function getIdentifierError(value = identifier, identifierMode = mode) {
+    const id = value.trim();
+    if (identifierMode === 'phone') return getLocalPhoneError(id);
+    return getEmailError(id);
+  }
+
+  function handleIdentifierChange(value: string) {
+    setIdentifier(value);
+    setFormError(null);
+    if (errors.identifier) {
+      setErrors((current) => ({
+        ...current,
+        identifier: getIdentifierError(value),
+      }));
+    }
+  }
+
   function toggleMode() {
-    setMode((m) => (m === 'email' ? 'phone' : 'email'));
+    setMode((currentMode) => (currentMode === 'email' ? 'phone' : 'email'));
     setIdentifier('');
+    setFormError(null);
     setErrors((e) => ({ ...e, identifier: undefined }));
   }
 
   function validate() {
     const next: typeof errors = {};
-    if (!name.trim()) next.name = 'Please enter your name.';
-    const id = identifier.trim();
-    if (mode === 'email') {
-      if (!EMAIL_RE.test(id)) next.identifier = 'Enter a valid email address.';
-    } else if (id.replace(/\D/g, '').length < 10) {
-      next.identifier = 'Enter a valid phone number.';
-    }
-    if (password.length < 8) next.password = 'Use at least 8 characters.';
+    next.name = getFullNameError(name);
+    next.identifier = getIdentifierError();
+    next.password = getRegistrationPasswordError(password);
     if (!consent) next.consent = 'Please agree to continue.';
+    if (!next.name) delete next.name;
+    if (!next.identifier) delete next.identifier;
+    if (!next.password) delete next.password;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -69,7 +90,7 @@ export default function RegisterScreen() {
     const id = buildIdentifier(mode, identifier);
     const { error } = await signUp({
       password,
-      full_name: name,
+      full_name: name.trim(),
       consent,
       ...(mode === 'email' ? { email: id } : { phone: id }),
     });
@@ -103,17 +124,42 @@ export default function RegisterScreen() {
               label="Full name"
               placeholder="Juan dela Cruz"
               autoCapitalize="words"
+              autoComplete="name"
+              inputMode="text"
               textContentType="name"
+              maxLength={100}
               value={name}
-              onChangeText={setName}
+              onChangeText={(value) => {
+                setName(value);
+                setFormError(null);
+                if (errors.name) {
+                  setErrors((current) => ({
+                    ...current,
+                    name: getFullNameError(value),
+                  }));
+                }
+              }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  name: getFullNameError(name),
+                }))
+              }
+              transformInput={sanitizeName}
               error={errors.name}
             />
 
             <IdentifierField
               mode={mode}
               value={identifier}
-              onChangeValue={setIdentifier}
+              onChangeValue={handleIdentifierChange}
               onToggleMode={toggleMode}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  identifier: getIdentifierError(),
+                }))
+              }
               error={errors.identifier}
               containerStyle={styles.identifier}
             />
@@ -123,16 +169,40 @@ export default function RegisterScreen() {
               placeholder="At least 8 characters"
               secure
               autoCapitalize="none"
+              autoComplete="new-password"
               textContentType="newPassword"
+              maxLength={128}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                setFormError(null);
+                if (errors.password) {
+                  setErrors((current) => ({
+                    ...current,
+                    password: getRegistrationPasswordError(value),
+                  }));
+                }
+              }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  password: getRegistrationPasswordError(password),
+                }))
+              }
               error={errors.password}
             />
           </View>
 
           <View style={styles.actions}>
             <View style={styles.consent}>
-              <Checkbox checked={consent} onChange={setConsent}>
+              <Checkbox
+                checked={consent}
+                onChange={(checked) => {
+                  setConsent(checked);
+                  if (checked) {
+                    setErrors((current) => ({ ...current, consent: undefined }));
+                  }
+                }}>
                 <ThemedText type="footnote" themeColor="textSecondary">
                   I agree to SpotOn’s{' '}
                   <ThemedText type="footnote" themeColor="brand" style={styles.inlineLink}>

@@ -21,9 +21,12 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
+import {
+  getEmailError,
+  getLocalPhoneError,
+  getLoginPasswordError,
+} from '@/lib/form-validation';
 import { routeAfterAuth } from '@/lib/profile';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
@@ -34,21 +37,36 @@ export default function LoginScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ identifier?: string; password?: string }>({});
 
+  function getIdentifierError(value = identifier, identifierMode = mode) {
+    const id = value.trim();
+    if (identifierMode === 'phone') return getLocalPhoneError(id);
+    return getEmailError(id);
+  }
+
+  function handleIdentifierChange(value: string) {
+    setIdentifier(value);
+    setFormError(null);
+    if (errors.identifier) {
+      setErrors((current) => ({
+        ...current,
+        identifier: getIdentifierError(value),
+      }));
+    }
+  }
+
   function toggleMode() {
-    setMode((m) => (m === 'email' ? 'phone' : 'email'));
+    setMode((currentMode) => (currentMode === 'email' ? 'phone' : 'email'));
     setIdentifier('');
+    setFormError(null);
     setErrors((e) => ({ ...e, identifier: undefined }));
   }
 
   function validate() {
     const next: typeof errors = {};
-    const id = identifier.trim();
-    if (mode === 'email') {
-      if (!EMAIL_RE.test(id)) next.identifier = 'Enter a valid email address.';
-    } else if (id.replace(/\D/g, '').length < 10) {
-      next.identifier = 'Enter a valid phone number.';
-    }
-    if (!password) next.password = 'Please enter your password.';
+    next.identifier = getIdentifierError();
+    next.password = getLoginPasswordError(password);
+    if (!next.identifier) delete next.identifier;
+    if (!next.password) delete next.password;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -91,8 +109,14 @@ export default function LoginScreen() {
             <IdentifierField
               mode={mode}
               value={identifier}
-              onChangeValue={setIdentifier}
+              onChangeValue={handleIdentifierChange}
               onToggleMode={toggleMode}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  identifier: getIdentifierError(),
+                }))
+              }
               error={errors.identifier}
               containerStyle={styles.identifier}
             />
@@ -101,9 +125,26 @@ export default function LoginScreen() {
               placeholder="Your password"
               secure
               autoCapitalize="none"
+              autoComplete="current-password"
               textContentType="password"
+              maxLength={128}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(value) => {
+                setPassword(value);
+                setFormError(null);
+                if (errors.password) {
+                  setErrors((current) => ({
+                    ...current,
+                    password: getLoginPasswordError(value),
+                  }));
+                }
+              }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  password: getLoginPasswordError(password),
+                }))
+              }
               error={errors.password}
             />
           </View>

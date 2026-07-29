@@ -33,6 +33,7 @@
     },
     "plugins": [
       "./plugins/withDisableScriptSandboxing",
+      "./plugins/withAndroidAccentColor",
       "expo-router",
       [
         "expo-splash-screen",
@@ -46,7 +47,6 @@
       ],
       "expo-sqlite",
       "expo-secure-store",
-      "@react-native-community/datetimepicker",
       "expo-asset",
       [
         "expo-image-picker",

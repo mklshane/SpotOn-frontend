@@ -12,15 +12,16 @@ import {
 
 import type { Sex } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
+import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
-import { Select } from '@/components/ui/select';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { sanitizeName } from '@/lib/form-validation';
 import { saveProfile } from '@/lib/profile';
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
@@ -31,38 +32,39 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
 ];
 
-const SKIN_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: '1', label: 'Type I — always burns, never tans' },
-  { value: '2', label: 'Type II — usually burns, tans minimally' },
-  { value: '3', label: 'Type III — sometimes burns, tans uniformly' },
-  { value: '4', label: 'Type IV — rarely burns, tans easily' },
-  { value: '5', label: 'Type V — very rarely burns, tans easily' },
-  { value: '6', label: 'Type VI — never burns' },
+const SKIN_TYPE_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: '1', label: 'Type I', description: 'Always burns, never tans' },
+  { value: '2', label: 'Type II', description: 'Usually burns, tans minimally' },
+  { value: '3', label: 'Type III', description: 'Sometimes burns, tans uniformly' },
+  { value: '4', label: 'Type IV', description: 'Rarely burns, tans easily' },
+  { value: '5', label: 'Type V', description: 'Very rarely burns, tans easily' },
+  { value: '6', label: 'Type VI', description: 'Never burns' },
 ];
 
 export default function EditProfileScreen() {
   const theme = useTheme();
   const { user, setUser } = useAuth();
 
-  const [fullName, setFullName] = useState(user?.full_name ?? '');
+  const [fullName, setFullName] = useState(sanitizeName(user?.full_name ?? ''));
   const [dob, setDob] = useState<string | null>(user?.date_of_birth ?? null);
   const [sex, setSex] = useState<Sex | null>((user?.sex as Sex | null) ?? null);
-  const [phone, setPhone] = useState(user?.phone ?? '');
+  const phone = user?.phone ?? '';
   const [skinType, setSkinType] = useState<string | null>(
     user?.fitzpatrick_skin_type != null ? String(user.fitzpatrick_skin_type) : null,
   );
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{
+    fullName?: string;
+    dob?: string;
+    sex?: string;
+  }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   function validate() {
     const next: typeof errors = {};
+    if (!fullName.trim()) next.fullName = 'Please enter your name.';
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
-    const trimmedPhone = phone.trim();
-    if (trimmedPhone && !/^(\+63|0)9\d{9}$/.test(trimmedPhone)) {
-      next.phone = 'Enter a valid PH mobile number (e.g. 09xx xxx xxxx).';
-    }
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -76,7 +78,6 @@ export default function EditProfileScreen() {
         fullName,
         dateOfBirth: dob,
         sex,
-        phone,
         fitzpatrickSkinType: skinType ? Number(skinType) : undefined,
       });
       setUser(saved);
@@ -110,9 +111,17 @@ export default function EditProfileScreen() {
           </View>
 
           <View style={styles.form}>
-            <TextField label="Full name" placeholder="Your name" value={fullName} onChangeText={setFullName} />
+            <TextField
+              label="Full name"
+              placeholder="Your name"
+              inputMode="text"
+              value={fullName}
+              onChangeText={setFullName}
+              transformInput={sanitizeName}
+              error={errors.fullName}
+            />
             <DateField label="Date of birth" value={dob} onChange={setDob} error={errors.dob} />
-            <Select
+            <Accordion
               label="Sex"
               placeholder="Select"
               value={sex}
@@ -126,10 +135,13 @@ export default function EditProfileScreen() {
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               value={phone}
-              onChangeText={setPhone}
-              error={errors.phone}
+              editable={false}
+              focusable={false}
+              pointerEvents="none"
+              accessibilityState={{ disabled: true }}
+              style={{ color: theme.muted }}
             />
-            <Select
+            <Accordion
               label="Skin type"
               placeholder="Select"
               value={skinType}
