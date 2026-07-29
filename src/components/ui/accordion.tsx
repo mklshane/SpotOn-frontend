@@ -76,7 +76,10 @@ export function Accordion<T extends string>({
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => setOpenAnimated(!open)}
-        style={[styles.field, { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 }]}>
+        style={({ pressed }) => [
+          styles.field,
+          { backgroundColor: pressed ? theme.hairline : theme.elementBg, borderColor, borderWidth: 1.5 },
+        ]}>
         <ThemedText type="body" themeColor={selected ? 'text' : 'muted'}>
           {selected ? selected.label : placeholder}
         </ThemedText>
