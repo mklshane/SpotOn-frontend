@@ -128,31 +128,39 @@ export default function ResultScreen() {
 
         {/* 2 · The photo, straight under the verdict — it's what the user just captured, so it
             belongs in the first screenful rather than buried below the explanations. */}
-        <Animated.View entering={FadeInDown.delay(60)} style={styles.photoBlock}>
-          {record.imageUri ? (
-            <Pressable
-              onPress={() => setViewerOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="View photo full screen"
-              style={({ pressed }) => [styles.photoPress, pressed && styles.pressed]}>
-              <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
-              <View style={styles.photoExpand}>
-                <Icon
-                  name="arrow.up.left.and.arrow.down.right"
-                  tintColor="#FFFFFF"
-                  size={12}
-                  weight="semibold"
-                />
+        <Animated.View entering={FadeInDown.delay(60)}>
+          <Card padded={false} style={styles.photoCard}>
+            {record.imageUri ? (
+              <Pressable
+                onPress={() => setViewerOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="View photo full screen"
+                style={({ pressed }) => pressed && styles.pressed}>
+                <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
+                <View style={styles.photoExpand}>
+                  <Icon
+                    name="arrow.up.left.and.arrow.down.right"
+                    tintColor="#FFFFFF"
+                    size={12}
+                    weight="semibold"
+                  />
+                </View>
+              </Pressable>
+            ) : (
+              <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
+                <Icon name="photo" tintColor={theme.muted} size={28} />
               </View>
-            </Pressable>
-          ) : (
-            <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
-              <Icon name="photo" tintColor={theme.muted} size={28} />
+            )}
+            <View style={[styles.photoCaption, { borderTopColor: theme.hairline }]}>
+              <Icon name="mappin.circle.fill" tintColor={theme.brand} size={18} />
+              <View style={styles.photoCaptionText}>
+                <ThemedText type="headline">{mark?.region ?? 'Location not marked'}</ThemedText>
+                <ThemedText type="subhead" themeColor="textSecondary">
+                  Checked on {date}
+                </ThemedText>
+              </View>
             </View>
-          )}
-          <ThemedText type="subhead" themeColor="textSecondary">
-            {mark?.region ?? 'Location not marked'} · {date}
-          </ThemedText>
+          </Card>
         </Animated.View>
 
         {/* 3 · The one action to take, with the disclaimer riding underneath as a light footnote
@@ -190,7 +198,7 @@ export default function ResultScreen() {
                 <ThemedText type="body" style={{ color: colors.fg }}>
                   {PATTERN_WORD[classification.topClass]} pattern ({classification.topClass})
                 </ThemedText>{' '}
-                based on your photo and your symptom answers.{' '}
+                based on your photo.{' '}
                 <ThemedText type="body">It is not a confirmed diagnosis.</ThemedText>{' '}
                 {tier.recommendation}
               </ThemedText>
@@ -254,7 +262,7 @@ export default function ResultScreen() {
           ) : null}
           {tier.showEducation ? (
             <Button
-              label="Learn the ABCDE self-check"
+              label="Learn more about skin cancer"
               variant="brand"
               icon="book.fill"
               onPress={() => router.push('/(tabs)/learn')}
@@ -493,11 +501,11 @@ const styles = StyleSheet.create({
   },
   heroBottom: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   heroConfText: { flex: 1, gap: 2 },
-  // The lesion photo, with its location/date caption.
-  photoBlock: { gap: Space.md },
-  photoPress: { borderRadius: Radius.xl, overflow: 'hidden' },
+  // The lesion photo: fills the card's top edge-to-edge (hence padded={false} + overflow
+  // hidden), with the location/date caption as a divided row inside the same card.
+  photoCard: { overflow: 'hidden' },
   pressed: { opacity: 0.9 },
-  photo: { width: '100%', height: 200, borderRadius: Radius.xl },
+  photo: { width: '100%', height: 200 },
   photoEmpty: { alignItems: 'center', justifyContent: 'center' },
   photoExpand: {
     position: 'absolute',
@@ -510,6 +518,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(33,26,21,0.55)',
   },
+  photoCaption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    padding: Space.base,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  photoCaptionText: { flex: 1, gap: 2 },
   // Priority action, with the disclaimer as a footnote beneath.
   priorityBlock: { gap: Space.md },
   priority: {
