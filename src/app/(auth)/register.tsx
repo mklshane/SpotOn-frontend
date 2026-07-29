@@ -22,9 +22,13 @@ import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
 import { useAuth } from '@/lib/auth';
-import { getLocalPhoneError, sanitizeName } from '@/lib/form-validation';
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import {
+  getEmailError,
+  getFullNameError,
+  getLocalPhoneError,
+  getRegistrationPasswordError,
+  sanitizeName,
+} from '@/lib/form-validation';
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
@@ -45,8 +49,7 @@ export default function RegisterScreen() {
   function getIdentifierError(value = identifier, identifierMode = mode) {
     const id = value.trim();
     if (identifierMode === 'phone') return getLocalPhoneError(id);
-    if (!id) return 'Email address is required.';
-    return EMAIL_RE.test(id) ? undefined : 'Enter a valid email address.';
+    return getEmailError(id);
   }
 
   function handleIdentifierChange(value: string) {
@@ -69,11 +72,13 @@ export default function RegisterScreen() {
 
   function validate() {
     const next: typeof errors = {};
-    if (!name.trim()) next.name = 'Please enter your name.';
+    next.name = getFullNameError(name);
     next.identifier = getIdentifierError();
-    if (password.length < 8) next.password = 'Use at least 8 characters.';
+    next.password = getRegistrationPasswordError(password);
     if (!consent) next.consent = 'Please agree to continue.';
+    if (!next.name) delete next.name;
     if (!next.identifier) delete next.identifier;
+    if (!next.password) delete next.password;
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -119,16 +124,27 @@ export default function RegisterScreen() {
               label="Full name"
               placeholder="Juan dela Cruz"
               autoCapitalize="words"
+              autoComplete="name"
               inputMode="text"
               textContentType="name"
+              maxLength={100}
               value={name}
               onChangeText={(value) => {
                 setName(value);
                 setFormError(null);
-                if (errors.name && value.trim()) {
-                  setErrors((current) => ({ ...current, name: undefined }));
+                if (errors.name) {
+                  setErrors((current) => ({
+                    ...current,
+                    name: getFullNameError(value),
+                  }));
                 }
               }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  name: getFullNameError(name),
+                }))
+              }
               transformInput={sanitizeName}
               error={errors.name}
             />
@@ -153,15 +169,26 @@ export default function RegisterScreen() {
               placeholder="At least 8 characters"
               secure
               autoCapitalize="none"
+              autoComplete="new-password"
               textContentType="newPassword"
+              maxLength={128}
               value={password}
               onChangeText={(value) => {
                 setPassword(value);
                 setFormError(null);
-                if (errors.password && value.length >= 8) {
-                  setErrors((current) => ({ ...current, password: undefined }));
+                if (errors.password) {
+                  setErrors((current) => ({
+                    ...current,
+                    password: getRegistrationPasswordError(value),
+                  }));
                 }
               }}
+              onBlur={() =>
+                setErrors((current) => ({
+                  ...current,
+                  password: getRegistrationPasswordError(password),
+                }))
+              }
               error={errors.password}
             />
           </View>

@@ -1,10 +1,35 @@
 const PH_LOCAL_MOBILE_RE = /^9\d{9}$/;
 const PH_TRUNK_MOBILE_RE = /^09\d{9}$/;
 const PH_COUNTRY_MOBILE_RE = /^639\d{9}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** Remove digits from a person's name while preserving letters, punctuation, and spacing. */
+/** Keep letters and common name separators while rejecting digits, emoji, and symbols. */
 export function sanitizeName(value: string): string {
-  return value.replace(/\d/g, '');
+  return value.replace(/[^\p{L}\p{M}\s.'’,\-]/gu, '');
+}
+
+export function getFullNameError(value: string): string | undefined {
+  const name = value.trim();
+  if (!name) return 'Full name is required.';
+
+  const letterCount = name.match(/\p{L}/gu)?.length ?? 0;
+  if (letterCount < 2) return 'Enter your full name.';
+  return undefined;
+}
+
+export function getEmailError(value: string): string | undefined {
+  const email = value.trim();
+  if (!email) return 'Email address is required.';
+  return EMAIL_RE.test(email) ? undefined : 'Enter a valid email address.';
+}
+
+export function getLoginPasswordError(value: string): string | undefined {
+  return value ? undefined : 'Password is required.';
+}
+
+export function getRegistrationPasswordError(value: string): string | undefined {
+  if (!value) return 'Password is required.';
+  return value.length >= 8 ? undefined : 'Use at least 8 characters.';
 }
 
 /**
