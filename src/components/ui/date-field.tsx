@@ -43,6 +43,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
   const [date, setDate] = useState<Date | null>(() => fromIso(value));
   const [temp, setTemp] = useState<Date>(() => fromIso(value) ?? DEFAULT_DATE);
   const [open, setOpen] = useState(false);
+  const [sheetKey, setSheetKey] = useState(0);
 
   const borderColor = error ? theme.riskCritical : 'transparent';
 
@@ -53,6 +54,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
 
   function openPicker() {
     setTemp(date ?? DEFAULT_DATE);
+    setSheetKey((k) => k + 1);
     setOpen(true);
   }
 
@@ -89,10 +91,10 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
             ]}>
             <View style={[styles.grabber, { backgroundColor: theme.hairline }]} />
 
-            {/* Mounted only while open, so its internal cursor/view state resets each time. */}
-            {open ? (
-              <CalendarPicker value={temp} minDate={MIN_DATE} maxDate={TODAY} onChange={setTemp} />
-            ) : null}
+            {/* Remounted (via key) each time the sheet opens, so its internal cursor/view state
+                resets — but it stays mounted while closing so the sheet fades out as one unit
+                instead of collapsing mid-animation. */}
+            <CalendarPicker key={sheetKey} value={temp} minDate={MIN_DATE} maxDate={TODAY} onChange={setTemp} />
 
             <Button
               label="Done"
