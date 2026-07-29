@@ -96,9 +96,20 @@ export function Accordion<T extends string>({
                   onChange(option.value);
                   setOpenAnimated(false);
                 }}
-                style={({ pressed }) => [styles.row, pressed && { backgroundColor: theme.elementBg }]}>
+                style={({ pressed }) => [
+                  styles.row,
+                  isSelected && {
+                    backgroundColor: theme.brandTint,
+                    borderRadius: Radius.sm,
+                    marginHorizontal: Space.xs,
+                  },
+                  pressed && !isSelected && { backgroundColor: theme.elementBg },
+                ]}>
                 <View style={styles.rowText}>
-                  <ThemedText type="body" themeColor={isSelected ? 'brand' : 'text'}>
+                  <ThemedText
+                    type="body"
+                    themeColor="text"
+                    style={isSelected && styles.rowLabelSelected}>
                     {option.label}
                   </ThemedText>
                   {option.description ? (
@@ -150,5 +161,6 @@ const styles = StyleSheet.create({
     gap: Space.md,
   },
   rowText: { flex: 1, gap: 2 },
+  rowLabelSelected: { fontWeight: '700' },
   error: { marginTop: Space.xs },
 });
