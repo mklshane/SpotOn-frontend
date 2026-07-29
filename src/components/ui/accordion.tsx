@@ -26,9 +26,9 @@ export type AccordionProps<T extends string> = {
 };
 
 /** Per-option height budget for the open-state cap: SelectCard's ~64px min-height
- *  plus its Space.sm gap, rounded up to comfortably fit a two-line title+description
- *  row without clipping. */
-const ROW_HEIGHT = 80;
+ *  plus its Space.sm gap, rounded up generously to survive font-scaling on
+ *  two-line title+description rows without clipping. */
+const ROW_HEIGHT = 100;
 
 export function Accordion<T extends string>({
   label,
@@ -67,6 +67,7 @@ export function Accordion<T extends string>({
 
       <Pressable
         accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
         onPress={() => setOpenAnimated(!open)}
         style={[styles.field, { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 }]}>
         <ThemedText type="body" themeColor={selected ? 'text' : 'muted'}>
