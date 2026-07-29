@@ -1,3 +1,4 @@
+export { Accordion } from './accordion';
 export { Button } from './button';
 export { CalendarPicker } from './calendar-picker';
 export { Card } from './card';
