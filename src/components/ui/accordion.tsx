@@ -77,7 +77,6 @@ export function Accordion<T extends string>({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        android_ripple={{ color: theme.hairline }}
         onHoverIn={() => setTriggerHovered(true)}
         onHoverOut={() => setTriggerHovered(false)}
         onPress={() => setOpenAnimated(!open)}
@@ -104,7 +103,6 @@ export function Accordion<T extends string>({
                 key={option.value}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
-                android_ripple={{ color: theme.hairline }}
                 onHoverIn={() => setHoveredValue(option.value)}
                 onHoverOut={() => setHoveredValue((v) => (v === option.value ? null : v))}
                 onPress={() => {
@@ -113,13 +111,12 @@ export function Accordion<T extends string>({
                 }}
                 style={({ pressed }) => [
                   styles.row,
-                  isSelected && {
-                    backgroundColor: theme.brandTint,
-                    borderRadius: Radius.sm,
-                    marginHorizontal: Space.xs,
-                  },
-                  (pressed || hoveredValue === option.value) &&
-                    !isSelected && { backgroundColor: theme.hairline },
+                  isSelected && [styles.rowInset, { backgroundColor: theme.brandTint }],
+                  !isSelected &&
+                    (pressed || hoveredValue === option.value) && [
+                      styles.rowInset,
+                      { backgroundColor: theme.hairline },
+                    ],
                 ]}>
                 <View style={styles.rowText}>
                   <ThemedText
@@ -176,6 +173,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Space.md,
   },
+  rowInset: { borderRadius: Radius.sm, marginHorizontal: Space.xs },
   rowText: { flex: 1, gap: 2 },
   rowLabelSelected: { fontWeight: '700' },
   error: { marginTop: Space.xs },
