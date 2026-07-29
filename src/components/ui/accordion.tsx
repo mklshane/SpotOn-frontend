@@ -75,6 +75,7 @@ export function Accordion<T extends string>({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        android_ripple={{ color: theme.hairline }}
         onPress={() => setOpenAnimated(!open)}
         style={({ pressed }) => [
           styles.field,
@@ -95,6 +96,7 @@ export function Accordion<T extends string>({
                 key={option.value}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
+                android_ripple={{ color: theme.hairline }}
                 onPress={() => {
                   onChange(option.value);
                   setOpenAnimated(false);
@@ -106,7 +108,7 @@ export function Accordion<T extends string>({
                     borderRadius: Radius.sm,
                     marginHorizontal: Space.xs,
                   },
-                  pressed && !isSelected && { backgroundColor: theme.elementBg },
+                  pressed && !isSelected && { backgroundColor: theme.hairline },
                 ]}>
                 <View style={styles.rowText}>
                   <ThemedText
