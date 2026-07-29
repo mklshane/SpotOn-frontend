@@ -46,7 +46,6 @@ export function Accordion<T extends string>({
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
-  const [hoveredValue, setHoveredValue] = useState<T | null>(null);
   const progress = useSharedValue(0);
 
   const selected = options.find((o) => o.value === value);
@@ -96,45 +95,17 @@ export function Accordion<T extends string>({
 
       <Animated.View style={[styles.optionsWrap, animatedStyle]}>
         <View style={[styles.options, { backgroundColor: theme.surface }, Elevation.sm]}>
-          {options.map((option) => {
-            const isSelected = option.value === value;
-            return (
-              <Pressable
-                key={option.value}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                onHoverIn={() => setHoveredValue(option.value)}
-                onHoverOut={() => setHoveredValue((v) => (v === option.value ? null : v))}
-                onPress={() => {
-                  onChange(option.value);
-                  setOpenAnimated(false);
-                }}
-                style={({ pressed }) => [
-                  styles.row,
-                  isSelected && [styles.rowInset, { backgroundColor: theme.brandTint }],
-                  !isSelected &&
-                    (pressed || hoveredValue === option.value) && [
-                      styles.rowInset,
-                      { backgroundColor: theme.hairline },
-                    ],
-                ]}>
-                <View style={styles.rowText}>
-                  <ThemedText
-                    type="body"
-                    themeColor="text"
-                    style={isSelected && styles.rowLabelSelected}>
-                    {option.label}
-                  </ThemedText>
-                  {option.description ? (
-                    <ThemedText type="footnote" themeColor="textSecondary">
-                      {option.description}
-                    </ThemedText>
-                  ) : null}
-                </View>
-                {isSelected ? <Icon name="checkmark" tintColor={theme.brand} size={16} /> : null}
-              </Pressable>
-            );
-          })}
+          {options.map((option) => (
+            <OptionRow
+              key={option.value}
+              option={option}
+              isSelected={option.value === value}
+              onSelect={() => {
+                onChange(option.value);
+                setOpenAnimated(false);
+              }}
+            />
+          ))}
         </View>
       </Animated.View>
 
@@ -144,6 +115,72 @@ export function Accordion<T extends string>({
         </ThemedText>
       ) : null}
     </View>
+  );
+}
+
+type OptionRowProps<T extends string> = {
+  option: AccordionOption<T>;
+  isSelected: boolean;
+  onSelect: () => void;
+};
+
+/** A single option row, split out so each gets its own animated highlight value
+ *  (Reanimated shared values must come from a hook, so this can't live inline
+ *  inside the parent's `.map()`). */
+function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRowProps<T>) {
+  const theme = useTheme();
+  const hovered = useSharedValue(false);
+  const highlight = useSharedValue(0);
+
+  function setHighlighted(active: boolean) {
+    if (isSelected) return;
+    highlight.value = withTiming(active ? 1 : 0, { duration: 150 });
+  }
+
+  const highlightStyle = useAnimatedStyle(() => ({ opacity: highlight.value }));
+
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected: isSelected }}
+      onHoverIn={() => {
+        hovered.value = true;
+        setHighlighted(true);
+      }}
+      onHoverOut={() => {
+        hovered.value = false;
+        setHighlighted(false);
+      }}
+      onPressIn={() => setHighlighted(true)}
+      onPressOut={() => setHighlighted(hovered.value)}
+      onPress={onSelect}
+      style={styles.row}>
+      {isSelected ? (
+        <View style={[StyleSheet.absoluteFill, styles.rowInset, { backgroundColor: theme.brandTint }]} />
+      ) : (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            styles.rowInset,
+            { backgroundColor: theme.hairline },
+            highlightStyle,
+          ]}
+        />
+      )}
+
+      <View style={styles.rowText}>
+        <ThemedText type="body" themeColor="text" style={isSelected && styles.rowLabelSelected}>
+          {option.label}
+        </ThemedText>
+        {option.description ? (
+          <ThemedText type="footnote" themeColor="textSecondary">
+            {option.description}
+          </ThemedText>
+        ) : null}
+      </View>
+      {isSelected ? <Icon name="checkmark" tintColor={theme.brand} size={16} /> : null}
+    </Pressable>
   );
 }
 
@@ -162,18 +199,18 @@ const styles = StyleSheet.create({
     marginTop: Space.sm,
     borderRadius: Radius.md,
     overflow: 'hidden',
-    paddingVertical: Space.xs,
+    paddingVertical: Space.sm,
   },
   row: {
     minHeight: 52,
-    paddingHorizontal: Space.base,
+    paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: Space.md,
   },
-  rowInset: { borderRadius: Radius.sm, marginHorizontal: Space.xs },
+  rowInset: { borderRadius: Radius.sm, marginHorizontal: Space.sm, marginVertical: Space.xs },
   rowText: { flex: 1, gap: 2 },
   rowLabelSelected: { fontWeight: '700' },
   error: { marginTop: Space.xs },
