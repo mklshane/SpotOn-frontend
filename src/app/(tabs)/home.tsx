@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   activityValue: {
     fontSize: 24,
     lineHeight: 28,
-    marginTop: Space.xs,
+    marginTop: Space.sm,
   },
   activityCaption: {
     flexShrink: 1,
