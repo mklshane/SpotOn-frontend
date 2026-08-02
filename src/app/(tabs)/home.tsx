@@ -207,7 +207,11 @@ export default function HomeScreen() {
               <Icon name="clock.arrow.circlepath" tintColor={theme.brand} size={23} />
             </View>
             <View style={styles.activityText}>
-              <ThemedText type="caption" themeColor="brand" style={styles.activityLabel}>
+              <ThemedText
+                type="caption"
+                themeColor="brand"
+                numberOfLines={2}
+                style={styles.activityLabel}>
                 TOTAL SCREENINGS
               </ThemedText>
               <ThemedText type="title2" style={styles.activityValue}>
@@ -216,7 +220,7 @@ export default function HomeScreen() {
               <ThemedText
                 type="footnote"
                 themeColor="textSecondary"
-                numberOfLines={1}
+                numberOfLines={2}
                 style={styles.activityCaption}>
                 Completed screenings
               </ThemedText>
@@ -230,7 +234,11 @@ export default function HomeScreen() {
               <Icon name="calendar" tintColor={theme.brand} size={23} />
             </View>
             <View style={styles.activityText}>
-              <ThemedText type="caption" themeColor="brand" style={styles.activityLabel}>
+              <ThemedText
+                type="caption"
+                themeColor="brand"
+                numberOfLines={2}
+                style={styles.activityLabel}>
                 LAST SCREENING
               </ThemedText>
               <ThemedText
@@ -244,7 +252,7 @@ export default function HomeScreen() {
               <ThemedText
                 type="footnote"
                 themeColor="textSecondary"
-                numberOfLines={1}
+                numberOfLines={2}
                 style={styles.activityCaption}>
                 {lastScreening ? 'Most recent activity' : 'No screenings yet'}
               </ThemedText>
@@ -376,13 +384,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   activityCard: {
-    minHeight: 112,
+    minHeight: 118,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: Radius.xl,
     borderWidth: 1,
     paddingVertical: Space.base,
-    paddingHorizontal: Space.md,
+    paddingHorizontal: Space.sm,
     overflow: 'hidden',
     ...Elevation.sm,
   },
@@ -397,14 +405,16 @@ const styles = StyleSheet.create({
   },
   activityColumn: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: Space.sm,
   },
   activityIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -414,6 +424,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   activityLabel: {
+    flexShrink: 1,
     fontSize: 9,
     lineHeight: 12,
     fontWeight: '700',
@@ -424,13 +435,14 @@ const styles = StyleSheet.create({
     lineHeight: 28,
   },
   activityCaption: {
+    flexShrink: 1,
     fontSize: 10,
     lineHeight: 14,
   },
   activityDivider: {
     width: StyleSheet.hairlineWidth,
     alignSelf: 'stretch',
-    marginHorizontal: Space.md,
+    marginHorizontal: Space.sm,
   },
   screeningCard: {
     minHeight: 82,
