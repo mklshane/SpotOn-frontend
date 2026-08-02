@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   activityCard: {
     minHeight: 118,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'stretch',
     borderRadius: Radius.xl,
     borderWidth: 1,
     paddingVertical: Space.base,
