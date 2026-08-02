@@ -1,7 +1,16 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
@@ -113,13 +122,42 @@ export default function HomeScreen() {
   const theme = useTheme();
   const { user } = useAuth();
   const { entries, loading } = useScanHistory();
+  const dashboardOpacity = useSharedValue(0);
+  const dashboardTranslateY = useSharedValue(14);
   const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
   const recent = entries.slice(0, 2);
   const lastScreening = entries[0];
 
+  useFocusEffect(
+    useCallback(() => {
+      dashboardOpacity.set(0);
+      dashboardTranslateY.set(14);
+
+      const animationConfig = {
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      };
+
+      dashboardOpacity.set(withTiming(1, animationConfig));
+      dashboardTranslateY.set(withTiming(0, animationConfig));
+
+      return () => {
+        cancelAnimation(dashboardOpacity);
+        cancelAnimation(dashboardTranslateY);
+      };
+    }, [dashboardOpacity, dashboardTranslateY])
+  );
+
+  const dashboardAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: dashboardOpacity.value,
+    transform: [{ translateY: dashboardTranslateY.value }],
+  }));
+
   return (
     <Screen padded={false}>
-      <ScrollView
+      <Animated.ScrollView
+        style={dashboardAnimatedStyle}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         contentInsetAdjustmentBehavior="automatic">
@@ -322,7 +360,7 @@ export default function HomeScreen() {
             </ThemedText>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </Screen>
   );
 }
