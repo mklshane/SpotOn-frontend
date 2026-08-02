@@ -220,7 +220,9 @@ export default function HomeScreen() {
               <ThemedText
                 type="footnote"
                 themeColor="textSecondary"
-                numberOfLines={2}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
                 style={styles.activityCaption}>
                 Completed screenings
               </ThemedText>
@@ -252,7 +254,9 @@ export default function HomeScreen() {
               <ThemedText
                 type="footnote"
                 themeColor="textSecondary"
-                numberOfLines={2}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
                 style={styles.activityCaption}>
                 {lastScreening ? 'Most recent activity' : 'No screenings yet'}
               </ThemedText>
