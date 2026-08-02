@@ -30,7 +30,7 @@ const TODAY_LABEL = new Date().toLocaleDateString(undefined, {
 function formatActivityDate(value?: string): string {
   if (!value) return '—';
   return new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
+    month: 'long',
     day: 'numeric',
   });
 }
@@ -197,39 +197,58 @@ export default function HomeScreen() {
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
+          <View
+            style={[styles.activityOrb, { backgroundColor: theme.brandTint }]}
+            pointerEvents="none"
+          />
 
           <View style={styles.activityColumn}>
-            <View style={styles.activityLabelRow}>
-              <View style={[styles.activityIcon, { backgroundColor: theme.brandTint }]}>
-                <Icon name="arrow.counterclockwise" tintColor={theme.brand} size={18} />
-              </View>
+            <View style={[styles.activityIcon, { backgroundColor: theme.brandTint }]}>
+              <Icon name="clock.arrow.circlepath" tintColor={theme.brand} size={23} />
+            </View>
+            <View style={styles.activityText}>
               <ThemedText type="caption" themeColor="brand" style={styles.activityLabel}>
                 TOTAL SCREENINGS
               </ThemedText>
+              <ThemedText type="title2" style={styles.activityValue}>
+                {loading ? '—' : entries.length}
+              </ThemedText>
+              <ThemedText
+                type="footnote"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                style={styles.activityCaption}>
+                Completed screenings
+              </ThemedText>
             </View>
-            <ThemedText type="title1">{loading ? '—' : entries.length}</ThemedText>
-            <ThemedText type="footnote" themeColor="textSecondary">
-              Completed screenings
-            </ThemedText>
           </View>
 
           <View style={[styles.activityDivider, { backgroundColor: theme.hairline }]} />
 
           <View style={styles.activityColumn}>
-            <View style={styles.activityLabelRow}>
-              <View style={[styles.activityIcon, { backgroundColor: theme.brandTint }]}>
-                <Icon name="calendar" tintColor={theme.brand} size={18} />
-              </View>
+            <View style={[styles.activityIcon, { backgroundColor: theme.brandTint }]}>
+              <Icon name="calendar" tintColor={theme.brand} size={23} />
+            </View>
+            <View style={styles.activityText}>
               <ThemedText type="caption" themeColor="brand" style={styles.activityLabel}>
                 LAST SCREENING
               </ThemedText>
+              <ThemedText
+                type="title2"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+                style={styles.activityValue}>
+                {loading ? '—' : formatActivityDate(lastScreening?.createdAt)}
+              </ThemedText>
+              <ThemedText
+                type="footnote"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                style={styles.activityCaption}>
+                {lastScreening ? 'Most recent activity' : 'No screenings yet'}
+              </ThemedText>
             </View>
-            <ThemedText type="headline" numberOfLines={1}>
-              {loading ? '—' : formatActivityDate(lastScreening?.createdAt)}
-            </ThemedText>
-            <ThemedText type="footnote" themeColor="textSecondary">
-              {lastScreening ? 'Most recent activity' : 'No screenings yet'}
-            </ThemedText>
           </View>
         </View>
 
@@ -357,39 +376,61 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   activityCard: {
-    minHeight: 154,
+    minHeight: 112,
     flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Space.lg,
+    paddingVertical: Space.base,
+    paddingHorizontal: Space.md,
     overflow: 'hidden',
     ...Elevation.sm,
   },
+  activityOrb: {
+    position: 'absolute',
+    right: -32,
+    top: 8,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    opacity: 0.55,
+  },
   activityColumn: {
     flex: 1,
-    justifyContent: 'space-between',
-    gap: Space.sm,
-  },
-  activityLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    gap: 10,
   },
   activityIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  activityLabel: {
+  activityText: {
     flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  activityLabel: {
+    fontSize: 9,
+    lineHeight: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.25,
+  },
+  activityValue: {
+    fontSize: 24,
+    lineHeight: 28,
+  },
+  activityCaption: {
+    fontSize: 10,
+    lineHeight: 14,
   },
   activityDivider: {
     width: StyleSheet.hairlineWidth,
-    marginHorizontal: Space.base,
+    alignSelf: 'stretch',
+    marginHorizontal: Space.md,
   },
   screeningCard: {
     minHeight: 82,
