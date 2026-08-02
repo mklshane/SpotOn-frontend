@@ -417,6 +417,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    transform: [{ translateY: -4 }],
   },
   activityText: {
     flex: 1,
