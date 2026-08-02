@@ -212,7 +212,7 @@ export default function HomeScreen() {
                 themeColor="brand"
                 numberOfLines={2}
                 style={styles.activityLabel}>
-                TOTAL SCREENINGS
+                {'TOTAL\nSCREENINGS'}
               </ThemedText>
               <ThemedText type="title2" style={styles.activityValue}>
                 {loading ? '—' : entries.length}
@@ -239,7 +239,7 @@ export default function HomeScreen() {
                 themeColor="brand"
                 numberOfLines={2}
                 style={styles.activityLabel}>
-                LAST SCREENING
+                {'LAST\nSCREENING'}
               </ThemedText>
               <ThemedText
                 type="title2"
@@ -425,10 +425,10 @@ const styles = StyleSheet.create({
   },
   activityLabel: {
     flexShrink: 1,
-    fontSize: 9,
-    lineHeight: 12,
-    fontWeight: '700',
-    letterSpacing: 0.25,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '800',
+    letterSpacing: 0.35,
   },
   activityValue: {
     fontSize: 24,
