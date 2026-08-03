@@ -5,21 +5,30 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_classifier_D4_float32.tflite (litert interpreter, 2026-07-23):
+ * Verified against the bundled spoton_classifier_D7_float32.tflite (flatbuffer inspection,
+ * 2026-07-30) — byte-for-byte the same graph shape as the D3/D4 exports (686 tensors,
+ * 397 operators, `onnx2tf flatbuffer_direct`), so the swap is drop-in:
  *   input  "input"  [1, 260, 260, 3] float32 NHWC  (EfficientNet-B2)
  *   output "logits" [1, 5]           float32       (Gemm head — NO softmax in the graph;
  *                                                   classify.ts applies softmax on-device)
  */
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
-// D4 (2026-07-23): retrained on the hard-benign/confident-error set (see
-// SpotOn-synthetic/retrain_hard_benign/WHY_CONFIDENT_ERRORS.md). Same B2 backbone and I/O layout
-// as D3, but the saturated-logit defect is largely gone — it no longer needs a temperature
-// band-aid. Use float32 — the float16 export can't run (TFLite CONV_2D rejects float16 input).
-export const MODEL_ASSET = require('../../../assets/models/spoton_classifier_D4_float32.tflite');
+// D7 (2026-07-30, `D7_zoomout_mm.pt` → SpotOn_D7_export_threshold_temperature.ipynb): the
+// scale-INVARIANT retrain. D4's core defect is that its augmentation (`RandomResizedCrop`) can only
+// crop *in*, so a lesion that fills a small part of the frame is out of distribution and the class
+// flips with framing (~57% flip-rate across zoom levels). D7 adds
+// `RandomZoomOut(padding_mode="edge")` *before* the crop — zooming out into real skin tone rather
+// than the solid-colour fill that made the D5 attempt a shortcut — over loose base crops (~0.36
+// fill) so there is margin to zoom into, and adds OHSU MoleMapper benign nevi train-only (capped,
+// deduped, self-reported so never in val/test). Same B2 backbone and I/O layout as D3/D4.
+// Crucially D7 was validated on *deployment geometry* (detector crop_pad 0.45, ~0.69 fill — the
+// exact crop lesion-detector.ts produces), so DETECTOR_CROP_ENABLED below must stay on for its
+// numbers to hold. Use float32 — the float16 export can't run (TFLite CONV_2D rejects float16 input).
+export const MODEL_ASSET = require('../../../assets/models/spoton_classifier_D7_float32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_classifier_D4_float32';
+export const MODEL_VERSION = 'spoton_classifier_D7_float32';
 
 /**
  * Index → class mapping of the output logits. The training pipeline used
@@ -37,6 +46,45 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
 /**
  * Decision threshold on the malignant score (BCC+MEL+SCC softmax sum), consumed by the Malignant
  * Gate in tps-core.ts (`evaluateMalignantGate`), which floors the tier at Moderate when it fires.
+ *
+ * REFIT FOR D7, 2026-07-30 (scratchpad `refit_d7_threshold.py`). Derived by the same protocol the
+ * D4 value was — converge several independent rules on `dataset_real`, then bootstrap to state how
+ * precisely 94 images can pin it down — with one deliberate change: fitted at DEPLOYMENT geometry
+ * (detector crop, the app default since DETECTOR_CROP_ENABLED went true) rather than the raw full
+ * frame the D4 value used. That difference alone moves D4's own optimum from 0.28 to 0.536, so the
+ * jump below is mostly geometry, not the model.
+ *
+ * Youden's J, F1, and the 90%-sensitivity point all converge on 0.5183 (sens 91.7% / spec 86.2%).
+ * Shipping 0.50 rather than that optimum, for the same reason D4 shipped 0.28 rather than 0.2801:
+ * rounding down is the conservative direction, and 0.52 tips a fourth malignancy into the missed
+ * column. At 0.50: sens 91.7% / spec 84.5%, 3 of 36 malignancies missed (2 MEL, 1 SCC), 9 of 58
+ * benign lesions floored to Moderate.
+ *
+ * WHY THIS IS AN IMPROVEMENT, not just a rescaling. Against the previously shipped D4 @ 0.28 —
+ * measured on the same 94 images through the same pipeline — D7 @ 0.50 misses the *same number* of
+ * malignancies (3) while flagging 9 benign lesions instead of 14. Same sensitivity in absolute
+ * terms, a third fewer false alarms. (Only 1 of the 3 missed lesions is common to both, so this is
+ * a different 3, not a strictly nested improvement.)
+ *
+ * WHY NOT 0.28 ON D7. It yields sens 100% / spec 67.2% — every malignancy caught, but 19 of 58
+ * benign lesions floored to Moderate. At `dataset_real`'s 38% malignant prevalence that reads as a
+ * fair trade; at a real screening population's few percent, specificity dominates the false-alarm
+ * count and a Moderate tier that fires on a third of benign lesions stops carrying information.
+ * Same argument the D4 note makes against dropping to 0.093.
+ *
+ * PRECISION WARNING — 2000-resample out-of-bag bootstrap: the Youden-rule threshold has a 90% range
+ * of [0.364, 0.755] (median 0.518), and out-of-bag sensitivity averages 85.0% ±12.7 against 91.7%
+ * in-sample. As with D4, treat 0.50 as the centre of a broad plateau, not a precise value, and do
+ * not re-tune it on this set. Two caveats specific to D7, both unresolved:
+ *   - `dataset_real` may not be held out for D7 at all. ZOOM_OUT_RETRAIN.md says to hold it out, but
+ *     the export notebook splits `stage3` on Drive 70/15/15 without excluding it. If these 94 images
+ *     are in `stage3`, ~70% of them were in D7's train set and the numbers above are optimistic.
+ *     Check: print `sorted(tr)` in the notebook and grep for `dataset_real` basenames.
+ *   - Cell 3 of `~/Downloads/SpotOn_D7_export_threshold_temperature.ipynb` derives this on D7's own
+ *     val split. Its outputs were never saved, so it has not been cross-checked against this value.
+ *     Prefer the notebook's number if the two disagree — its split is genuinely held out.
+ *
+ * --- provenance of the superseded D4 value (0.28), kept for the reasoning ---
  *
  * DERIVED, not supplied. The model owner's two operating points (0.3454 "90%-sensitivity" and
  * 0.6173 "F1-optimal") do not reproduce those labels on our held-out set — 0.3454 measures 77.8%
@@ -75,7 +123,7 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.28;
+export const MALIGNANT_THRESHOLD = 0.5;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -103,8 +151,22 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  * confidence honest so the <40% Safety Floor and Triage Priority Score behave correctly.
  *
  * COUPLED TO THE BUNDLED MODEL FILE — refit whenever the bundled .tflite changes.
- * D4 ships calibrated (label smoothing during retraining), so no post-hoc rescaling is applied —
- * the model owner specifies T = 1.0 and the old D3 band-aid of 5.289 is dropped. Confirmed on
+ *
+ * D7 (2026-07-30): MEASURED AND DELIBERATELY LEFT AT 1.0. D7 is already better calibrated than D4
+ * at T = 1.0 on `dataset_real` at deployment geometry — ECE 0.275 (D4) → 0.197 (D7), mean confidence
+ * 0.757 → 0.675, at identical top-1 (59.6%). Fitting T by NLL on those 94 images gives T = 1.42
+ * (NLL 1.157 → 1.110, ECE 0.197 → 0.162). Not adopted, for three reasons:
+ *   1. It would be fitted and evaluated on the same 94 images — circular, and the gain is modest.
+ *   2. T is coupled to *two* behaviours, not one. It rescales the malignant score (so
+ *      MALIGNANT_THRESHOLD would have to move with it: at T = 1.42 the converged optimum is 0.5484)
+ *      AND it lowers mean confidence to 0.572, which changes how often the <40% Safety Floor fires.
+ *      That is a second behavioural change I am not willing to infer from n=94.
+ *   3. Cell 3 of the export notebook fits T on D7's own val split. That number should win.
+ * So exactly one constant moved for D7 (the threshold). If you adopt a fitted T later, refit the
+ * threshold in the same commit — the two are not independent.
+ *
+ * D4 shipped calibrated (label smoothing during retraining), so no post-hoc rescaling is applied —
+ * the model owner specified T = 1.0 and the old D3 band-aid of 5.289 was dropped. Confirmed on
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */

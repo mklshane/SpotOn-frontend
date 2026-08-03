@@ -13,7 +13,9 @@ export interface DepartmentInfo {
 export interface FacilitySync {
   id: string;
   name: string;
-  type: string; // dermatology_clinic | pathology_lab | private_hospital | ...
+  type: string; // dermatology_clinic | private_hospital | government_hospital | medical_center
+  // Legacy rows may still carry retired kinds (pathology_lab, oncology_center); those
+  // are status='excluded' and filtered out before they ever reach a screen.
   facility_type: string | null; // advisory: medical | aesthetic | mixed | unknown
   address: string;
   city: string;

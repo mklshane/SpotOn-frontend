@@ -9,6 +9,10 @@ function to12h(hhmm: string): string {
 
 export function formatHours(period: HoursPeriod | null): string {
   if (!period) return 'Hours unavailable';
+  // open === close encodes always-open (hospitals Google reports as "Open 24
+  // hours"). isOpenNow already reads it correctly via the overnight-wrap branch;
+  // without this it would render as the nonsense "12 AM – 12 AM".
+  if (period.open === period.close) return 'Open 24 hours';
   return `${to12h(period.open)} – ${to12h(period.close)}`;
 }
 
