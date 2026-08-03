@@ -3,11 +3,15 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { CancerTypeCard } from '@/components/learn/CancerTypeCard';
 import { LearnHeroBanner } from '@/components/learn/LearnHeroBanner';
-import { TopicCard } from '@/components/learn/TopicCard';
+import { LearnRecommendationCard } from '@/components/learn/LearnRecommendationCard';
 import { ThemedText } from '@/components/themed-text';
+import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
+import { SettingsRow } from '@/components/ui/settings-row';
 import { Space } from '@/constants/theme';
-import { LEARN_TOPICS, type Topic } from '@/data/learn-content';
+import { getDailyLearnRecommendation, LEARN_TOPICS, type Topic } from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
 
 // The three cancer-type articles live under the 'types-of-skin-cancer' topic;
@@ -63,22 +67,12 @@ function badgeFor(topic: Topic): string | undefined {
   return undefined;
 }
 
-/** Chunks topics into rows of 2 so each row's two cards can stretch to match
- * each other's height, instead of the taller card in a wrapped flex grid
- * leaving mismatched blank space in shorter neighbors. */
-function pairUp(topics: Topic[]): Topic[][] {
-  const rows: Topic[][] = [];
-  for (let i = 0; i < topics.length; i += 2) {
-    rows.push(topics.slice(i, i + 2));
-  }
-  return rows;
-}
-
 export default function LearnScreen() {
   const theme = useTheme();
   const warningSigns = LEARN_TOPICS.find((t) => t.id === 'warning-signs');
-  // The types topic is covered by the dedicated section above the grid.
-  const gridTopics = LEARN_TOPICS.filter((t) => t.id !== TYPES_TOPIC_ID);
+  const recommendation = getDailyLearnRecommendation();
+  // The types topic is covered by the dedicated horizontal section above the topic list.
+  const allTopics = LEARN_TOPICS.filter((t) => t.id !== TYPES_TOPIC_ID);
 
   return (
     <Screen padded={false}>
@@ -96,6 +90,19 @@ export default function LearnScreen() {
             onPress={() => onSelect(warningSigns)}
           />
         ) : null}
+
+        <View style={styles.section}>
+          <ThemedText type="title2">Recommended for you</ThemedText>
+          <ThemedText type="footnote" themeColor="textSecondary">
+            One practical skin-health reminder, refreshed daily.
+          </ThemedText>
+        </View>
+        <LearnRecommendationCard
+          image={require('@/assets/images/learn/recommended-sun-protection.jpg')}
+          title={recommendation.title}
+          summary={recommendation.summary}
+          onPress={() => router.push({ pathname: '/learn/article', params: { topicId: recommendation.topicId } })}
+        />
 
         <View style={styles.section}>
           <ThemedText type="title2">Skin Cancer Types</ThemedText>
@@ -128,23 +135,31 @@ export default function LearnScreen() {
         <View style={styles.section}>
           <ThemedText type="title2">All Topics</ThemedText>
         </View>
-        <View style={styles.grid}>
-          {pairUp(gridTopics).map((row, i) => (
-            <View key={i} style={styles.row}>
-              {row.map((topic) => (
-                <TopicCard
-                  key={topic.id}
-                  icon={topic.icon}
-                  title={topic.title}
-                  subtitle={topic.subtitle}
-                  badge={badgeFor(topic)}
-                  onPress={() => onSelect(topic)}
-                />
-              ))}
-              {row.length === 1 ? <View style={styles.spacer} /> : null}
-            </View>
-          ))}
-        </View>
+        <Card padded={false} style={[styles.topicList, { borderColor: theme.hairline }]}>
+          {allTopics.map((topic, index) => {
+            const badge = badgeFor(topic);
+
+            return (
+              <View key={topic.id}>
+                {index > 0 ? <View style={[styles.topicDivider, { backgroundColor: theme.hairline }]} /> : null}
+                <View style={styles.topicRow}>
+                  <SettingsRow
+                    icon={topic.icon}
+                    label={topic.title}
+                    sublabel={topic.subtitle}
+                    onPress={() => onSelect(topic)}
+                    accessory={
+                      <View style={styles.topicAccessory}>
+                        {badge ? <Badge label={badge} /> : null}
+                        <Icon name="chevron.right" tintColor={theme.muted} size={18} />
+                      </View>
+                    }
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </Card>
       </ScrollView>
     </Screen>
   );
@@ -165,7 +180,8 @@ const styles = StyleSheet.create({
   // body padding instead of clipping at it.
   typeScroll: { marginHorizontal: -Space.xl },
   typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
-  grid: { gap: Space.base },
-  row: { flexDirection: 'row', alignItems: 'stretch', gap: Space.base },
-  spacer: { flex: 1 },
+  topicList: { borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
+  topicRow: { paddingHorizontal: Space.base },
+  topicDivider: { height: StyleSheet.hairlineWidth, marginLeft: 76 },
+  topicAccessory: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
 });

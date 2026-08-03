@@ -17,6 +17,64 @@ export type Topic =
   | { id: string; title: string; subtitle: string; icon: IconName; kind: 'subtopics'; subtopics: Article[] }
   | { id: string; title: string; subtitle: string; icon: IconName; kind: 'comingSoon' };
 
+export type LearnRecommendation = {
+  title: string;
+  summary: string;
+  topicId: string;
+};
+
+/**
+ * Short, actionable tips that rotate by local calendar date. Each tip links
+ * into the existing Philippines-specific UV protection article, keeping the
+ * recommendation useful offline and avoiding a separate content flow.
+ */
+export const LEARN_RECOMMENDATIONS = [
+  {
+    title: 'Protect easy-to-miss areas',
+    summary: 'Apply sunscreen to your ears, neck, hands, and feet before going outdoors.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Reapply sunscreen outdoors',
+    summary: 'Reapply broad-spectrum SPF 30+ every two hours, or sooner after sweating or swimming.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Cloudy days still need protection',
+    summary: 'UV rays can still reach your skin on cloudy or cool days, so keep protecting exposed skin.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Plan around peak UV hours',
+    summary: 'When possible, seek shade between 10 AM and 4 PM, when UV rays are strongest.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Make daily commutes sun-safe',
+    summary: 'Use sunscreen, a hat, or protective clothing for walks and rides, not only beach days.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Choose broad-spectrum protection',
+    summary: 'Look for water-resistant, broad-spectrum sunscreen with SPF 30+ and follow its label directions.',
+    topicId: 'prevention',
+  },
+  {
+    title: 'Pair sunscreen with shade and clothing',
+    summary: 'Sunscreen works best alongside shade, protective clothing, a hat, and sunglasses.',
+    topicId: 'prevention',
+  },
+] as const satisfies readonly LearnRecommendation[];
+
+export function getDailyLearnRecommendation(date = new Date()): LearnRecommendation {
+  const yearStart = Date.UTC(date.getFullYear(), 0, 0);
+  const localDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const dayOfYear = Math.floor((localDay - yearStart) / 86_400_000);
+  const index = (dayOfYear - 1) % LEARN_RECOMMENDATIONS.length;
+
+  return LEARN_RECOMMENDATIONS[index] ?? LEARN_RECOMMENDATIONS[0];
+}
+
 export const LEARN_TOPICS: Topic[] = [
   {
     id: 'what-is-skin-cancer',

@@ -1,12 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { LearnArticleHero } from '@/components/learn/LearnArticleHero';
 import { ThemedText } from '@/components/themed-text';
+import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
-import { IconCircle } from '@/components/ui/icon-circle';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
-import { Elevation, Radius, Space } from '@/constants/theme';
+import { MaxContentWidth, Radius, Space } from '@/constants/theme';
 import { getArticle } from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -22,7 +23,7 @@ export default function LearnArticleScreen() {
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          {article?.title ?? 'Article'}
+          Education
         </ThemedText>
         <View style={styles.headerSpacer} />
       </View>
@@ -30,32 +31,50 @@ export default function LearnArticleScreen() {
       {!article ? (
         <ListState kind="error" title="Article not found" />
       ) : (
-        <ScrollView contentContainerStyle={styles.body}>
-          <View style={[styles.identityCard, { backgroundColor: theme.surface }, Elevation.sm]}>
-            <IconCircle icon={article.icon} variant="gradient" size={56} />
-            <View style={styles.identityText}>
-              <ThemedText type="title2">{article.title}</ThemedText>
-              <ThemedText type="footnote" themeColor="textSecondary">
-                {article.sections.length} {article.sections.length === 1 ? 'section' : 'sections'}
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={styles.scrollContent}>
+          <View style={styles.body}>
+            <LearnArticleHero
+              articleId={article.id}
+              icon={article.icon}
+              title={article.title}
+              sectionCount={article.sections.length}
+            />
+
+            <Card padded={false} style={[styles.article, { borderColor: theme.hairline }]}>
+              {article.sections.map((section, i) => (
+                <View key={i}>
+                  {i > 0 ? <View style={[styles.divider, { backgroundColor: theme.hairline }]} /> : null}
+                  <View style={styles.section}>
+                    {section.heading ? (
+                      <View style={styles.sectionHeading}>
+                        <View style={[styles.headingAccent, { backgroundColor: theme.brand }]} />
+                        <ThemedText type="headline" style={styles.headingText}>
+                          {section.heading}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                    <View style={styles.paragraphs}>
+                      {section.paragraphs.map((paragraph, j) => (
+                        <ThemedText key={j} type="body" themeColor="textSecondary">
+                          {paragraph}
+                        </ThemedText>
+                      ))}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </Card>
+
+            <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
+              <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
+              <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
+                This guide supports skin-health awareness and does not replace advice from a dermatologist.
               </ThemedText>
             </View>
           </View>
-
-          {article.sections.map((section, i) => (
-            <View key={i} style={[styles.sectionRow, { backgroundColor: theme.surface }, Elevation.sm]}>
-              <View style={[styles.sectionIcon, { backgroundColor: theme.brandTint }]}>
-                <Icon name="doc.text.fill" size={16} tintColor={theme.brand} />
-              </View>
-              <View style={styles.sectionText}>
-                {section.heading ? <ThemedText type="headline">{section.heading}</ThemedText> : null}
-                {section.paragraphs.map((p, j) => (
-                  <ThemedText key={j} type="body" themeColor="textSecondary">
-                    {p}
-                  </ThemedText>
-                ))}
-              </View>
-            </View>
-          ))}
         </ScrollView>
       )}
     </Screen>
@@ -71,16 +90,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSpacer: { width: 20 },
-  body: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl, gap: Space.md },
-  identityCard: {
+  scrollContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
+  body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.lg },
+  article: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
+  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Space.lg },
+  section: { padding: Space.lg, gap: Space.md },
+  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  headingAccent: { width: 4, height: 20, borderRadius: 2 },
+  headingText: { flex: 1 },
+  paragraphs: { gap: Space.sm },
+  educationNote: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.base,
-    borderRadius: Radius.xl,
-    padding: Space.lg,
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    padding: Space.base,
   },
-  identityText: { flex: 1, gap: 2 },
-  sectionRow: { flexDirection: 'row', gap: Space.base, borderRadius: Radius.lg, padding: Space.base },
-  sectionIcon: { width: 36, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  sectionText: { flex: 1, gap: Space.xs },
+  educationNoteText: { flex: 1 },
 });
