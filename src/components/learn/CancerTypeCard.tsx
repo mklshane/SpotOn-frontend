@@ -34,9 +34,9 @@ const ART_SIZE = 84;
  * unevenly colored mole (the A/B/C of ABCDE); SCC = a rough, scaly,
  * crusted patch; BCC = a smooth pearly bump with a fine surface vessel.
  */
-function SkinSwatchArt({ kind }: { kind: CancerTypeKind }) {
+export function CancerTypeArtwork({ kind, size = ART_SIZE }: { kind: CancerTypeKind; size?: number }) {
   return (
-    <Svg width={ART_SIZE} height={ART_SIZE} viewBox="0 0 96 96">
+    <Svg width={size} height={size} viewBox="0 0 96 96">
       <Defs>
         <RadialGradient id="skin" cx="38%" cy="32%" r="80%">
           <Stop offset="0%" stopColor="#F2C29B" />
@@ -144,7 +144,7 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={styles.wrap}>
       <View style={[styles.card, { backgroundColor: tint }]}>
         <View style={styles.medallion}>
-          <SkinSwatchArt kind={kind} />
+          <CancerTypeArtwork kind={kind} />
         </View>
         <ThemedText type="headline" numberOfLines={2} style={styles.title}>
           {title}
