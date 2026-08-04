@@ -1,4 +1,5 @@
 import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, View } from "react-native";
@@ -9,7 +10,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
 import { Icon } from "@/components/ui/icon";
 import { ListState } from "@/components/ui/list-state";
-import { Space } from "@/constants/theme";
+import { Elevation, Radius, Space } from "@/constants/theme";
 import {
   listFacilities,
   nearbyFacilities,
@@ -30,7 +31,6 @@ export type ClinicsViewProps = { query: string; topInset: number };
 type SortMode = "distance" | "rating" | "name";
 type Facility = FacilitySync | FacilityWithDistance;
 
-const SNAP_POINTS = ["32%", "64%", "92%"];
 const SCREEN_H = Dimensions.get("window").height;
 const COLLAPSED_BOTTOM_INSET = SCREEN_H * 0.32 + 12;
 const ALL_CHIP = "All Clinics";
@@ -50,16 +50,13 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
-  // Default sort to distance the first time location becomes known — adjusted
-  // during render (not an effect) so it fires exactly once regardless of how
-  // many times `coords` changes, same pattern as ClinicPreviewCard's reset.
+
   const [hasDefaultedSort, setHasDefaultedSort] = useState(false);
   if (coords && !hasDefaultedSort) {
     setHasDefaultedSort(true);
     if (sort === "name") setSort("distance");
   }
 
-  // Facet chips — one-time broad fetch.
   useEffect(() => {
     listFacilities({ limit: 1000 })
       .then((all) =>
@@ -70,7 +67,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
       .catch(() => {});
   }, []);
 
-  // Main data fetch — stale-while-loading (no spinner flash on refilter).
   useEffect(() => {
     let cancelled = false;
     const params = {
@@ -78,9 +74,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
       service: service ?? undefined,
       limit: 200,
     };
-    // An active search is an explicit "look for this place", not "what's near
-    // me" — searching a city/province beyond the nearby radius must still find
-    // it, so only use the distance-bounded nearby fetch when there's no query.
     const fetcher =
       coords && !query.trim()
         ? nearbyFacilities(coords.latitude, coords.longitude, params)
@@ -93,7 +86,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
     };
   }, [query, service, coords]);
 
-  // Cache map tiles for the area once we have a fix and a connection.
   useEffect(() => {
     if (coords && isOnline) downloadAreaPack(coords).catch(() => {});
   }, [coords, isOnline]);
@@ -109,10 +101,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
     const sorted = [...rows];
     if (sort === "distance" && coords) {
-      // `distance_m` is only absent for one transient render right after coords
-      // first resolves, before the nearby-fetch response lands — the Infinity
-      // fallback makes that comparator a no-op (NaN) for that render instead of
-      // throwing, and it self-corrects once `facilities` updates.
       sorted.sort(
         (a, b) =>
           ("distance_m" in a ? a.distance_m : Infinity) -
@@ -138,6 +126,17 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
     sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
   const chips = [ALL_CHIP, OPEN_CHIP, PHILHEALTH_CHIP, ...serviceFacets];
 
+  // OVERHERE FOR SNAP CHANGE: If you want to change the snap points, do it here, top snap is the initial when you open the page
+  // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
+  const snapPoints = useMemo(
+    () => [
+      "25%",
+      "64%",
+      Math.max(SCREEN_H * 0.5, SCREEN_H - topInset - Space.md),
+    ],
+    [topInset],
+  );
+
   return (
     <View style={styles.fill}>
       <ClinicMap
@@ -151,27 +150,62 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
       <BottomSheet
         index={0}
-        snapPoints={SNAP_POINTS}
+        snapPoints={snapPoints}
         topInset={topInset}
         enableDynamicSizing={false}
         backgroundStyle={{ backgroundColor: theme.surface }}
         handleIndicatorStyle={{ backgroundColor: theme.hairline }}
       >
         <View style={styles.header}>
-          <View style={styles.resultsRow}>
-            <ThemedText type="subhead" themeColor="textSecondary">
-              {filtered.length} {filtered.length === 1 ? "clinic" : "clinics"} ·
-              by {sortLabel}
-            </ThemedText>
+          <View
+            style={[
+              styles.resultsCard,
+              { backgroundColor: theme.surface, borderColor: theme.brandTint },
+            ]}
+          >
+            <LinearGradient
+              colors={["rgba(255,255,255,0)", "rgba(255,233,218,0.6)"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View
+              style={[styles.resultsIcon, { backgroundColor: theme.brandTint }]}
+            >
+              <Icon name="cross.case.fill" tintColor={theme.brand} size={20} />
+            </View>
+
+            <View style={styles.resultsText}>
+              <ThemedText type="title2" style={styles.resultsCount}>
+                {filtered.length}
+              </ThemedText>
+              <ThemedText
+                type="footnote"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.8}
+              >
+                {filtered.length === 1 ? "clinic" : "clinics"} · sorted by{" "}
+                {sortLabel}
+              </ThemedText>
+            </View>
+
             <Pressable
               onPress={cycleSort}
               accessibilityRole="button"
               accessibilityLabel="Change sort order"
               hitSlop={8}
+              style={({ pressed }) => [
+                styles.sortButton,
+                { backgroundColor: theme.brandTint },
+                pressed && styles.pressed,
+              ]}
             >
               <Icon
                 name="arrow.up.arrow.down"
-                size={16}
+                size={15}
                 tintColor={theme.brand}
               />
             </Pressable>
@@ -280,13 +314,47 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Space.xl,
     paddingBottom: Space.sm,
-    gap: Space.sm,
+    gap: Space.md,
   },
-  resultsRow: {
+  resultsCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: Space.md,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.base,
+    overflow: "hidden",
+    ...Elevation.sm,
+  },
+  resultsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  resultsText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  resultsCount: {
+    fontSize: 20,
+    lineHeight: 24,
+  },
+  sortButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   chips: { gap: Space.sm },
   list: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
+  pressed: {
+    opacity: 0.84,
+  },
 });
