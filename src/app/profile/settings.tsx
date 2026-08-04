@@ -1,16 +1,16 @@
-import { ApiError } from '@/api/client';
-import { ActionSheet } from '@/components/ui/action-sheet';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Icon } from '@/components/ui/icon';
-import { Screen } from '@/components/ui/screen';
-import { SettingsRow } from '@/components/ui/settings-row';
-import { TextField } from '@/components/ui/text-field';
-import { ThemedText } from '@/components/themed-text';
-import Constants from 'expo-constants';
-import * as Linking from 'expo-linking';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { ApiError } from "@/api/client";
+import { ThemedText } from "@/components/themed-text";
+import { ActionSheet } from "@/components/ui/action-sheet";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icon";
+import { Screen } from "@/components/ui/screen";
+import { SettingsRow } from "@/components/ui/settings-row";
+import { TextField } from "@/components/ui/text-field";
+import Constants from "expo-constants";
+import * as Linking from "expo-linking";
+import { router } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -19,27 +19,29 @@ import {
   ScrollView,
   StyleSheet,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { Space } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { useAuth } from '@/lib/auth';
-import { clearAllLocalData } from '@/lib/auth-api';
-import { getRemindersEnabled, setRemindersEnabled } from '@/lib/notifications';
+import { Space } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/lib/auth";
+import { clearAllLocalData } from "@/lib/auth-api";
+import { getRemindersEnabled, setRemindersEnabled } from "@/lib/notifications";
 import {
   changePassword,
   deleteAccount,
   isNotDeployed,
   requestDataExport,
-} from '@/lib/settings-api';
+} from "@/lib/settings-api";
 
-const SUPPORT_EMAIL = 'help.spoton@gmail.com';
+const SUPPORT_EMAIL = "help.spoton@gmail.com";
 
-function formatConsentStatus(user: { consent_data_privacy: boolean; consent_at: string | null } | null): string {
-  if (!user?.consent_data_privacy) return 'Not granted';
-  if (!user.consent_at) return 'Granted';
+function formatConsentStatus(
+  user: { consent_data_privacy: boolean; consent_at: string | null } | null,
+): string {
+  if (!user?.consent_data_privacy) return "Not granted";
+  if (!user.consent_at) return "Granted";
   const d = new Date(user.consent_at);
-  return `Granted on ${d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}`;
+  return `Granted on ${d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
 }
 
 export default function SettingsScreen() {
@@ -59,24 +61,24 @@ export default function SettingsScreen() {
 
   // Change password (inline form)
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   async function handleChangePassword() {
     setPasswordError(null);
     if (!currentPassword || !newPassword) {
-      setPasswordError('Enter both your current and new password.');
+      setPasswordError("Enter both your current and new password.");
       return;
     }
     setPasswordSubmitting(true);
     try {
       await changePassword(currentPassword, newPassword);
-      setCurrentPassword('');
-      setNewPassword('');
+      setCurrentPassword("");
+      setNewPassword("");
       setShowPasswordForm(false);
-      Alert.alert('Password changed', 'Your password has been updated.');
+      Alert.alert("Password changed", "Your password has been updated.");
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
@@ -100,15 +102,15 @@ export default function SettingsScreen() {
       await deleteAccount();
       await clearAllLocalData();
       await signOut();
-      router.replace('/(auth)/login');
+      router.replace("/(auth)/login");
     } catch (e) {
       Alert.alert(
-        'Could not delete account',
+        "Could not delete account",
         isNotDeployed(e)
           ? "This isn't available yet — check back soon."
           : e instanceof ApiError
             ? e.detail
-            : 'Something went wrong. Please try again.',
+            : "Something went wrong. Please try again.",
       );
       setDeleting(false);
     }
@@ -121,44 +123,61 @@ export default function SettingsScreen() {
     setExporting(true);
     try {
       await requestDataExport();
-      Alert.alert('Export requested', "We'll email your data export within a few days.");
+      Alert.alert(
+        "Export requested",
+        "We'll email your data export within a few days.",
+      );
     } catch (e) {
       Alert.alert(
-        'Could not request export',
+        "Could not request export",
         isNotDeployed(e)
           ? "Data export isn't available yet — check back soon."
           : e instanceof ApiError
             ? e.detail
-            : 'Something went wrong. Please try again.',
+            : "Something went wrong. Please try again.",
       );
     } finally {
       setExporting(false);
     }
   }
 
-  const appVersion = Constants.expoConfig?.version ?? 'Unknown';
+  const appVersion = Constants.expoConfig?.version ?? "Unknown";
 
   return (
     <Screen padded={false}>
       <View style={styles.header}>
-        <Pressable
-          hitSlop={12}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back">
-          <Icon name="chevron.left" tintColor={theme.brand} size={20} />
-        </Pressable>
-        <ThemedText type="headline" themeColor="textSecondary">
-          Settings
+        <View
+          style={[styles.headerGlow, { backgroundColor: theme.brandTint }]}
+          pointerEvents="none"
+        />
+        <View style={styles.headerTop}>
+          <Pressable
+            hitSlop={12}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Icon name="chevron.left" tintColor={theme.brand} size={20} />
+          </Pressable>
+        </View>
+        <ThemedText type="largeTitle">Settings</ThemedText>
+        <ThemedText type="footnote" themeColor="textSecondary">
+          Manage your account and preferences
         </ThemedText>
-        <View style={styles.headerSpacer} />
       </View>
 
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
-            ACCOUNT & SECURITY
-          </ThemedText>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.sectionHead}>
+            <ThemedText type="title2">Account & Security</ThemedText>
+          </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="key.fill"
@@ -199,15 +218,17 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="trash.fill"
-              label={deleting ? 'Deleting…' : 'Delete account'}
+              label={deleting ? "Deleting…" : "Delete account"}
               destructive
-              onPress={deleting ? undefined : () => setConfirmDeleteVisible(true)}
+              onPress={
+                deleting ? undefined : () => setConfirmDeleteVisible(true)
+              }
             />
           </Card>
 
-          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
-            NOTIFICATIONS
-          </ThemedText>
+          <View style={styles.sectionHead}>
+            <ThemedText type="title2">Notifications</ThemedText>
+          </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="bell.fill"
@@ -219,9 +240,9 @@ export default function SettingsScreen() {
             />
           </Card>
 
-          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
-            PRIVACY & DATA
-          </ThemedText>
+          <View style={styles.sectionHead}>
+            <ThemedText type="title2">Privacy & Data</ThemedText>
+          </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="shield.fill"
@@ -234,16 +255,21 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label={exporting ? 'Requesting export…' : 'Request data export'}
+              label={exporting ? "Requesting export…" : "Request data export"}
               onPress={exporting ? undefined : handleDataExport}
             />
           </Card>
 
-          <ThemedText type="caption" themeColor="brand" style={styles.sectionTitle}>
-            ABOUT & SUPPORT
-          </ThemedText>
+          <View style={styles.sectionHead}>
+            <ThemedText type="title2">About & Support</ThemedText>
+          </View>
           <Card style={styles.section}>
-            <SettingsRow icon="info.circle.fill" label="App version" sublabel={appVersion} accessory={null} />
+            <SettingsRow
+              icon="info.circle.fill"
+              label="App version"
+              sublabel={appVersion}
+              accessory={null}
+            />
           </Card>
 
           <Card style={[styles.section, styles.sectionSpaced]}>
@@ -259,7 +285,7 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="doc.text.fill"
               label="Terms of Service"
-              onPress={() => router.push('/profile/terms')}
+              onPress={() => router.push("/profile/terms")}
             />
           </Card>
 
@@ -267,7 +293,7 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="lock.fill"
               label="Privacy Policy"
-              onPress={() => router.push('/profile/privacy')}
+              onPress={() => router.push("/profile/privacy")}
             />
           </Card>
         </ScrollView>
@@ -279,8 +305,8 @@ export default function SettingsScreen() {
         onClose={() => setConfirmDeleteVisible(false)}
         options={[
           {
-            key: 'delete',
-            label: 'Delete account',
+            key: "delete",
+            label: "Delete account",
             destructive: true,
             onPress: handleDeleteAccount,
           },
@@ -293,16 +319,41 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   header: {
-    height: 48,
+    paddingTop: Space.xxl,
     paddingHorizontal: Space.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingBottom: Space.base,
+    gap: 2,
   },
-  headerSpacer: { width: 20 },
-  content: { paddingHorizontal: Space.xl, paddingTop: Space.base, paddingBottom: Space.xxl },
-  sectionTitle: { fontWeight: '700', letterSpacing: 0.6, marginTop: Space.xl, marginBottom: Space.base },
+  headerGlow: {
+    position: "absolute",
+    top: -36,
+    right: -44,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    opacity: 0.6,
+  },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: Space.sm,
+  },
+  content: {
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.sm,
+    paddingBottom: Space.xxl,
+  },
+  sectionHead: {
+    marginTop: Space.xxl,
+    marginBottom: Space.md,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   section: { gap: 0, paddingVertical: Space.sm },
   sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
+  pressed: {
+    opacity: 0.84,
+  },
 });

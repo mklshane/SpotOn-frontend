@@ -35,7 +35,6 @@ const SCREEN_H = Dimensions.get("window").height;
 const COLLAPSED_BOTTOM_INSET = SCREEN_H * 0.32 + 12;
 const ALL_CHIP = "All Clinics";
 const OPEN_CHIP = "Open Now";
-const PHILHEALTH_CHIP = "PhilHealth";
 
 export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const theme = useTheme();
@@ -46,7 +45,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [error, setError] = useState(false);
   const [service, setService] = useState<string | null>(null);
   const [openOnly, setOpenOnly] = useState(false);
-  const [philhealthOnly, setPhilhealthOnly] = useState(false);
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
@@ -97,7 +95,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
       rows = rows.filter(
         (f) => isOpenNow(f.weekday_hours, f.weekend_hours) === true,
       );
-    if (philhealthOnly) rows = rows.filter((f) => f.has_philhealth);
 
     const sorted = [...rows];
     if (sort === "distance" && coords) {
@@ -112,7 +109,7 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
       sorted.sort((a, b) => a.name.localeCompare(b.name));
     }
     return sorted;
-  }, [facilities, openOnly, philhealthOnly, sort, coords]);
+  }, [facilities, openOnly, sort, coords]);
 
   const cycleSort = useCallback(() => {
     setSort((s) => {
@@ -124,7 +121,7 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
   const sortLabel =
     sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
-  const chips = [ALL_CHIP, OPEN_CHIP, PHILHEALTH_CHIP, ...serviceFacets];
+  const chips = [ALL_CHIP, OPEN_CHIP, ...serviceFacets];
 
   // OVERHERE FOR SNAP CHANGE: If you want to change the snap points, do it here, top snap is the initial when you open the page
   // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
@@ -222,11 +219,10 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
                   <Chip
                     key={item}
                     label={item}
-                    active={!service && !openOnly && !philhealthOnly}
+                    active={!service && !openOnly}
                     onPress={() => {
                       setService(null);
                       setOpenOnly(false);
-                      setPhilhealthOnly(false);
                     }}
                   />
                 );
@@ -238,16 +234,6 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
                     label={item}
                     active={openOnly}
                     onPress={() => setOpenOnly((v) => !v)}
-                  />
-                );
-              }
-              if (item === PHILHEALTH_CHIP) {
-                return (
-                  <Chip
-                    key={item}
-                    label={item}
-                    active={philhealthOnly}
-                    onPress={() => setPhilhealthOnly((v) => !v)}
                   />
                 );
               }
