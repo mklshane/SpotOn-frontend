@@ -235,6 +235,24 @@ export function evaluateScaleConsistency(
 }
 
 /**
+ * Cross-image agreement, for a multi-photo screening. When two photos of the SAME lesion produce
+ * different *confident* predictions, the answer is a property of the photograph — angle, lighting,
+ * framing — rather than of the lesion, and is not clinically actionable. That is the identical
+ * conclusion evaluateScaleConsistency draws about re-cropping, reached by a different route, so it
+ * is handled identically: rescan on the first strike, Moderate floor on the second.
+ *
+ * Whether this routes at all is gated by IMAGE_AGREEMENT_CHECK_ENABLED (model-config.ts), which
+ * ships false — see synth/eval/MULTIVIEW_EVAL.md for the flag-rate/accuracy measurement behind that.
+ */
+export function evaluateImageAgreement(
+  imageDisagreement: boolean,
+  attempt: 1 | 2,
+): 'ok' | 'prompt-rescan' | 'apply-floor' {
+  if (!imageDisagreement) return 'ok';
+  return attempt === 1 ? 'prompt-rescan' : 'apply-floor';
+}
+
+/**
  * Combine the image-readability verdicts, taking the most conservative. Rescanning beats flooring
  * (a better photo is always preferable to a hedged result), and any floor beats 'ok'.
  */
@@ -315,4 +333,87 @@ export function pickTopClass(probs: Record<LesionClass, number>): {
     }
   }
   return { topClass, topConfidence };
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * Follow-up scans: which answers may be carried forward
+ * ------------------------------------------------------------------------------------------- */
+
+/**
+ * The questionnaire measures symptoms that CHANGE — which is the entire reason a lesion is worth
+ * tracking — so carrying every answer forward makes a follow-up TPS a record of the past rather
+ * than of today. The eight items split into three classes by how they behave over time.
+ *
+ * ALWAYS_REASK — defined over a time window, so a carried answer asserts an observation the user
+ *   never made. `evolution` ("changed over the past few weeks or months") and `bleeding_nonhealing`
+ *   ("for more than three weeks") are MAJOR items at +2 each — 4 of the 11 raw points — so
+ *   staleness here is the single largest way a follow-up score can be wrong. `spontaneous_bleeding`
+ *   is episodic for the same reason.
+ *
+ * RATCHET — monotone in time. `persistent_2mo` ("present for more than two months") can only go
+ *   no → yes as the lesion ages. A carried "no" under-triages by exactly the elapsed time, so a
+ *   prior "yes" is kept but a prior "no" is re-asked once enough time has passed for it to flip.
+ *
+ * CARRY — morphology (border, texture, size, ugly-duckling). These change slowly, and re-asking
+ *   all of them at every check is what makes people stop doing follow-ups. Prefilled, shown for
+ *   confirmation in one step, individually editable.
+ */
+export const FOLLOWUP_ALWAYS_REASK: readonly QuestionId[] = [
+  'evolution',
+  'bleeding_nonhealing',
+  'spontaneous_bleeding',
+];
+export const FOLLOWUP_RATCHET: readonly QuestionId[] = ['persistent_2mo'];
+export const FOLLOWUP_CARRY: readonly QuestionId[] = [
+  'irregular_border',
+  'rough_scaly',
+  'larger_7mm',
+  'ugly_duckling',
+];
+
+/** Days after which a "no" on a RATCHET item could have become a "yes" (persistent_2mo ≈ 2 months). */
+export const RATCHET_REASK_DAYS = 60;
+
+export type CarryForward = {
+  /** Answers safe to reuse, already in SymptomAnswers shape. */
+  prefilled: Partial<SymptomAnswers>;
+  /** Questions the follow-up questionnaire must actually ask, in canonical order. */
+  mustAsk: QuestionId[];
+};
+
+/**
+ * Apply the follow-up policy to a previous screening's answers.
+ *
+ * `daysSincePrior` only affects RATCHET items: a prior "yes" is always kept (the condition cannot
+ * un-happen within one lesion's history), and a prior "no" is carried while it is still too soon to
+ * have flipped, then re-asked.
+ *
+ * Returns every ALWAYS_REASK item in `mustAsk` regardless of what the prior answers said.
+ */
+export function carryForwardAnswers(
+  prior: Partial<SymptomAnswers>,
+  opts: { daysSincePrior: number },
+): CarryForward {
+  const prefilled: Partial<SymptomAnswers> = {};
+  const mustAsk: QuestionId[] = [];
+  const days = Number.isFinite(opts.daysSincePrior) ? Math.max(0, opts.daysSincePrior) : 0;
+
+  for (const q of ALL_QUESTIONS) {
+    const prev = (prior as Record<string, unknown>)[q];
+    const valid = isAnswer(prev) ? prev : undefined;
+
+    if (FOLLOWUP_ALWAYS_REASK.includes(q) || valid === undefined) {
+      mustAsk.push(q);
+      continue;
+    }
+    if (FOLLOWUP_RATCHET.includes(q)) {
+      // "yes" is permanent; "no" survives only until it could plausibly have changed.
+      if (valid === 'yes') prefilled[q] = 'yes';
+      else if (days < RATCHET_REASK_DAYS) prefilled[q] = valid;
+      else mustAsk.push(q);
+      continue;
+    }
+    prefilled[q] = valid; // CARRY
+  }
+  return { prefilled, mustAsk };
 }

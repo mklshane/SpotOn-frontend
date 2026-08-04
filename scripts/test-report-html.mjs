@@ -141,6 +141,10 @@ function record({
 
 const PHOTO = { wordmark: 'data:image/png;base64,AAA/BBB+CCC=', photo: 'data:image/jpeg;base64,//9k=' };
 const NO_ASSETS = { wordmark: null, photo: null };
+const MULTI = {
+  ...PHOTO,
+  extraPhotos: ['data:image/jpeg;base64,//4A=', 'data:image/jpeg;base64,//4B='],
+};
 
 // ---------------------------------------------------------------- cases
 
@@ -217,6 +221,39 @@ for (const c of CASES) {
   check('missing photo renders a placeholder', html.includes('photoMissing'));
   check('missing photo emits no <img', !html.includes('<img class="photo"'));
   check('missing profile renders em dashes', (html.match(/—/g) ?? []).length >= 4);
+}
+
+
+// Additional views — the multi-photo strip must be strictly additive: absent for one photo,
+// present and captioned for several, and never able to reach the network.
+{
+  const single = buildReportHtml(CASES[0].model, PHOTO);
+  check('single photo emits no additional-views block', !single.includes('class="views"'));
+  // Match the ELEMENT, not the class name — `.viewThumb` is always present in the stylesheet.
+  check('single photo emits no view thumbnails', !single.includes('<img class="viewThumb"'));
+
+  const multi = buildReportHtml(CASES[0].model, MULTI);
+  check('extra photos render the additional-views block', multi.includes('class="views"'));
+  check('one thumbnail per extra photo', (multi.match(/class="viewThumb"/g) ?? []).length === 2);
+  check('extra photos are inlined as data URIs', multi.includes('data:image/jpeg;base64,//4A='));
+  // The caption is load-bearing: the classifier reads the primary photo only, and a clinician
+  // must not infer that these views contributed to the number printed above them.
+  check('strip states the views are not classified', multi.includes('not used for classification'));
+  // The primary photo keeps its full-size slot; the extras never replace it.
+  check('primary photo still renders at full size', multi.includes('<img class="photo"'));
+  check('additional views survive the offline guarantee', (() => {
+    try { assertNoRemoteRefs(multi); return true; } catch { return false; }
+  })());
+
+  // An empty array is the same as no array — a screening whose extra photos all failed to load
+  // must not print an empty captioned box.
+  const emptyExtras = buildReportHtml(CASES[0].model, { ...PHOTO, extraPhotos: [] });
+  check('empty extraPhotos renders nothing', !emptyExtras.includes('class="views"'));
+
+  // Extras with no primary: the placeholder still shows, and the strip still renders.
+  const noPrimary = buildReportHtml(CASES[0].model, { ...NO_ASSETS, extraPhotos: MULTI.extraPhotos });
+  check('missing primary still shows the placeholder', noPrimary.includes('photoMissing'));
+  check('missing primary does not suppress the extras', noPrimary.includes('viewThumb'));
 }
 
 // Answer styling

@@ -48,7 +48,7 @@ export class ReportError extends Error {
 export async function generateReportPdf(model: ReportModel): Promise<GeneratedReport> {
   let html: string;
   try {
-    const assets = await loadReportAssets(model.imageUri);
+    const assets = await loadReportAssets(model.imageUris);
     html = buildReportHtml(model, assets);
   } catch (e) {
     throw new ReportError('render-failed', 'The summary could not be prepared.', e);

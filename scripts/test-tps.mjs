@@ -38,6 +38,12 @@ const {
   computeTriage,
   pickTopClass,
   computeMalignantScore,
+  evaluateImageAgreement,
+  carryForwardAnswers,
+  FOLLOWUP_ALWAYS_REASK,
+  FOLLOWUP_RATCHET,
+  FOLLOWUP_CARRY,
+  RATCHET_REASK_DAYS,
   evaluateMalignantGate,
   evaluateScaleConsistency,
   combineReadability,
@@ -264,6 +270,75 @@ check('gate opt-out: score defaults to 0', ungated.malignantScore === 0);
 r = computeTriage('BENIGN', 0.35, allNo, { applyFloor: true, malignantScore: 0.5, malignantThreshold: THR });
 check('gate + safety floor: moderate', r.tier === 'moderate');
 check('gate + safety floor: both flagged', r.malignantGateApplied === true && r.safetyFloorApplied === true);
+
+/* ------------------------------------------------------------------ cross-image agreement */
+// Mirrors evaluateScaleConsistency exactly: an unreadable-because-of-the-photograph verdict must
+// prompt a retake first and only floor on the second strike — never manufacture risk.
+check('agreement: agreeing images are ok', evaluateImageAgreement(false, 1) === 'ok');
+check('agreement: agreeing images ok on attempt 2', evaluateImageAgreement(false, 2) === 'ok');
+check('agreement: disagreement prompts rescan first', evaluateImageAgreement(true, 1) === 'prompt-rescan');
+check('agreement: disagreement floors on second strike', evaluateImageAgreement(true, 2) === 'apply-floor');
+
+/* ------------------------------------------------------------------ follow-up answer policy */
+// The three buckets must partition the questionnaire — an item in none of them would be silently
+// dropped from a follow-up, and an item in two would be both carried and re-asked.
+const allQ = [...MAJOR_QUESTIONS, ...MINOR_QUESTIONS];
+const buckets = [...FOLLOWUP_ALWAYS_REASK, ...FOLLOWUP_RATCHET, ...FOLLOWUP_CARRY];
+check('follow-up: buckets cover every question', allQ.every((q) => buckets.includes(q)));
+check('follow-up: buckets do not overlap', buckets.length === new Set(buckets).size);
+check('follow-up: buckets add up to 8', buckets.length === allQ.length);
+
+// Both time-window MAJOR items must be re-asked: at +2 each they are 4 of the 11 raw points, so a
+// stale answer here is the largest single way a follow-up score can be wrong.
+check('follow-up: evolution is always re-asked', FOLLOWUP_ALWAYS_REASK.includes('evolution'));
+check('follow-up: bleeding_nonhealing is always re-asked', FOLLOWUP_ALWAYS_REASK.includes('bleeding_nonhealing'));
+
+const prior = {
+  evolution: 'no', bleeding_nonhealing: 'no', irregular_border: 'yes',
+  spontaneous_bleeding: 'no', rough_scaly: 'yes', larger_7mm: 'no',
+  ugly_duckling: 'unsure', persistent_2mo: 'no',
+};
+
+let cf = carryForwardAnswers(prior, { daysSincePrior: 7 });
+check('carry: re-asks exactly the ALWAYS_REASK set when recent',
+  cf.mustAsk.length === FOLLOWUP_ALWAYS_REASK.length &&
+  FOLLOWUP_ALWAYS_REASK.every((q) => cf.mustAsk.includes(q)));
+check('carry: morphology answers are preserved verbatim',
+  cf.prefilled.irregular_border === 'yes' && cf.prefilled.rough_scaly === 'yes' &&
+  cf.prefilled.larger_7mm === 'no' && cf.prefilled.ugly_duckling === 'unsure');
+check('carry: never both carries and re-asks an item',
+  cf.mustAsk.every((q) => cf.prefilled[q] === undefined));
+check('carry: prefilled + mustAsk covers all 8',
+  cf.mustAsk.length + Object.keys(cf.prefilled).length === allQ.length);
+check('carry: a recent "no" ratchet is still carried', cf.prefilled.persistent_2mo === 'no');
+
+// The ratchet is the one that is actively wrong if carried: persistent_2mo can only go no -> yes,
+// so a stale "no" under-triages by exactly the elapsed time.
+cf = carryForwardAnswers(prior, { daysSincePrior: RATCHET_REASK_DAYS });
+check('carry: a stale "no" ratchet is re-asked', cf.mustAsk.includes('persistent_2mo'));
+check('carry: stale ratchet is not also prefilled', cf.prefilled.persistent_2mo === undefined);
+
+cf = carryForwardAnswers({ ...prior, persistent_2mo: 'yes' }, { daysSincePrior: 999 });
+check('carry: a "yes" ratchet is permanent', cf.prefilled.persistent_2mo === 'yes');
+check('carry: permanent ratchet is not re-asked', !cf.mustAsk.includes('persistent_2mo'));
+
+// A partial prior (an interrupted or pre-migration record) must degrade to asking, never to
+// inventing an answer computeSymptomScore would then score.
+cf = carryForwardAnswers({ irregular_border: 'yes' }, { daysSincePrior: 1 });
+check('carry: missing answers are re-asked', cf.mustAsk.length === allQ.length - 1);
+check('carry: partial prior still carries what it has', cf.prefilled.irregular_border === 'yes');
+cf = carryForwardAnswers({ irregular_border: 'banana' }, { daysSincePrior: 1 });
+check('carry: invalid answers are re-asked, not carried',
+  cf.mustAsk.includes('irregular_border') && cf.prefilled.irregular_border === undefined);
+check('carry: negative elapsed days are treated as 0',
+  carryForwardAnswers(prior, { daysSincePrior: -5 }).prefilled.persistent_2mo === 'no');
+
+// The whole point: prefilled + freshly-asked answers must reconstitute a scoreable questionnaire.
+cf = carryForwardAnswers(prior, { daysSincePrior: 7 });
+const merged = { ...cf.prefilled };
+for (const q of cf.mustAsk) merged[q] = 'no';
+check('carry: merged answers score without throwing', computeSymptomScore(merged).raw === 3);
+
 
 if (fails.length) {
   console.error(`\ntps core: ${pass} passed, ${fails.length} FAILED`);

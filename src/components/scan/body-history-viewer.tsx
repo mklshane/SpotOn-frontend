@@ -18,7 +18,8 @@ const RADIUS_MIN = 3.6;
 const RADIUS_MAX = 9.5;
 const MARKER = '#FF7A3C';
 
-export type HistoryMarker = { id: string; point: [number, number, number] };
+/** `color` tints the marker by triage tier, turning the body model into a risk map. */
+export type HistoryMarker = { id: string; point: [number, number, number]; color?: string };
 
 type SceneRefs = { camera: Camera; width: number; height: number };
 
@@ -123,7 +124,12 @@ export function BodyHistoryViewer({
           {markers.map((m) => (
             <mesh key={m.id} position={m.point} userData={{ id: m.id }}>
               <sphereGeometry args={[0.13, 20, 20]} />
-              <meshStandardMaterial color={MARKER} emissive={MARKER} emissiveIntensity={0.6} roughness={0.35} />
+              <meshStandardMaterial
+                color={m.color ?? MARKER}
+                emissive={m.color ?? MARKER}
+                emissiveIntensity={0.6}
+                roughness={0.35}
+              />
             </mesh>
           ))}
         </group>

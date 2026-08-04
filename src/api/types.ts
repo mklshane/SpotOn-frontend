@@ -40,6 +40,7 @@ export interface FacilitySync {
   photo_attribution: string | null; // must be displayed with the photo (Google policy)
   department_info: DepartmentInfo | null;
   updated_at: string; // ISO 8601
+  deleted_at?: string | null; // tombstone: purge locally (014)
 }
 
 export interface DoctorSync {
@@ -49,6 +50,7 @@ export interface DoctorSync {
   pds_certified: boolean | null;
   specialties: string[];
   specialties_display: string | null;
+  status: string | null; // 'excluded' rows are hidden from the directory (013)
   city: string | null;
   region: string | null;
   phone: string | null;
@@ -57,6 +59,18 @@ export interface DoctorSync {
   photo_url: string | null;
   description: string | null; // short professional bio
   updated_at: string;
+  deleted_at?: string | null; // tombstone: purge locally (014)
+}
+
+/** Which facilities a doctor practises at (server table: doctor_facility). */
+export interface DoctorFacilitySync {
+  id: string;
+  doctor_id: string;
+  facility_id: string;
+  is_primary: boolean | null;
+  schedule: string | null; // free text, e.g. "Monday to Saturday | 10:00 AM - 07:00 PM"
+  updated_at: string;
+  deleted_at?: string | null; // tombstone: purge locally (014)
 }
 
 export interface BookingLinkSync {
@@ -74,6 +88,7 @@ export interface BookingLinkSync {
   next_available: string | null; // first bookable slot (ISO 8601)
   created_at: string;
   updated_at: string | null; // change timestamp (server cursor)
+  deleted_at?: string | null; // tombstone: purge locally (014)
 }
 
 export interface PlatformSync {
@@ -86,6 +101,7 @@ export interface PlatformSync {
   is_dedicated_derma: boolean;
   is_active: boolean;
   created_at: string;
+  deleted_at?: string | null; // tombstone: purge locally (014)
 }
 
 export interface SyncCollection<T> {
@@ -98,6 +114,7 @@ export interface SyncResponse {
   synced_at: string;
   doctors: SyncCollection<DoctorSync>;
   facilities: SyncCollection<FacilitySync>;
+  doctor_facilities: SyncCollection<DoctorFacilitySync>;
   booking_links: SyncCollection<BookingLinkSync>;
   telemedicine_platforms: SyncCollection<PlatformSync>;
 }

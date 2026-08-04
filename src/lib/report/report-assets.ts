@@ -3,7 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import type { ReportAssets } from './report-html';
-import { PHOTO_PX } from './report-tokens';
+import { EXTRA_PHOTO_PX, PHOTO_PX } from './report-tokens';
 
 /**
  * Base64 image payloads for the Screening Summary Report.
@@ -25,9 +25,18 @@ const PNG_DATA_URI = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 /** Resolved once per app session — the bundled asset never changes. */
 let wordmarkPromise: Promise<string | null> | null = null;
 
-export async function loadReportAssets(imageUri: string): Promise<ReportAssets> {
-  const [wordmark, photo] = await Promise.all([loadWordmark(), loadPhoto(imageUri)]);
-  return { wordmark, photo };
+/**
+ * `imageUris` is the screening's photos, primary first. Extra views load at a smaller size and
+ * are dropped individually on failure — a missing third angle must never cost the patient a report.
+ */
+export async function loadReportAssets(imageUris: string | string[]): Promise<ReportAssets> {
+  const uris = Array.isArray(imageUris) ? imageUris : [imageUris];
+  const [wordmark, photo, extras] = await Promise.all([
+    loadWordmark(),
+    loadPhoto(uris[0] ?? ''),
+    Promise.all(uris.slice(1).map((u) => loadPhoto(u, EXTRA_PHOTO_PX))),
+  ]);
+  return { wordmark, photo, extraPhotos: extras.filter((p): p is string => p != null) };
 }
 
 function loadWordmark(): Promise<string | null> {
@@ -56,7 +65,7 @@ async function readWordmark(): Promise<string | null> {
   }
 }
 
-async function loadPhoto(uri: string): Promise<string | null> {
+async function loadPhoto(uri: string, widthPx: number = PHOTO_PX): Promise<string | null> {
   // The DevTools seeder stores '', and a user can clear app storage out from under a record.
   if (!uri) return null;
   try {
@@ -64,7 +73,7 @@ async function loadPhoto(uri: string): Promise<string | null> {
     if (!info.exists) return null;
     // Downscale before base64: the print box is 200pt, so 640px is ~230 dpi — visually
     // identical at print size, and it keeps the PDF a few hundred KB rather than several MB.
-    const out = await manipulateAsync(uri, [{ resize: { width: PHOTO_PX } }], {
+    const out = await manipulateAsync(uri, [{ resize: { width: widthPx } }], {
       compress: 0.85,
       format: SaveFormat.JPEG,
       base64: true,

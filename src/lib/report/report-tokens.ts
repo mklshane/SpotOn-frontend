@@ -55,3 +55,7 @@ export const PHOTO_PT = 186;
 
 /** Source pixels fed into the data URI: 640px in a 216pt box is ~213 dpi. */
 export const PHOTO_PX = 640;
+
+/** Additional-view thumbnails print at 58pt, so 240px is ~300 dpi — sharp, and ~15 KB each. */
+export const EXTRA_PHOTO_PT = 58;
+export const EXTRA_PHOTO_PX = 240;

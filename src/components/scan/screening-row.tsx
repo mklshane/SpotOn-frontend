@@ -1,7 +1,7 @@
-import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
@@ -46,11 +46,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
       accessibilityLabel={`${cls.full} screening from ${date}`}
       style={({ pressed }) => pressed && styles.pressed}>
       <Card padded={false} style={styles.row}>
-        {item.imageUri ? (
-          <Image source={{ uri: item.imageUri }} style={styles.thumb} contentFit="cover" />
-        ) : (
-          <View style={[styles.thumb, styles.thumbEmpty, { backgroundColor: theme.elementBg }]} />
-        )}
+        <ScreeningThumbnail uri={item.imageUri} style={styles.thumb} />
         <View style={styles.rowText}>
           <View style={styles.rowTitle}>
             <View style={[styles.tierDot, { backgroundColor: fg }]} />
@@ -82,7 +78,6 @@ const styles = StyleSheet.create({
     padding: Space.md,
   },
   thumb: { width: 56, height: 56, borderRadius: Radius.md },
-  thumbEmpty: { alignItems: 'center', justifyContent: 'center' },
   rowText: { flex: 1, gap: 2 },
   rowTitle: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   rowTitleText: { flex: 1 },

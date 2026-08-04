@@ -45,7 +45,7 @@ export default function ResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getById, loading } = useScanHistory();
   const record = id ? getById(id) : undefined;
-  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const tierColor = (tier: TriageTier) =>
     tier === 'low'
@@ -132,7 +132,7 @@ export default function ResultScreen() {
           <Card padded={false} style={styles.photoCard}>
             {record.imageUri ? (
               <Pressable
-                onPress={() => setViewerOpen(true)}
+                onPress={() => setViewerUri(record.imageUri)}
                 accessibilityRole="button"
                 accessibilityLabel="View photo full screen"
                 style={({ pressed }) => pressed && styles.pressed}>
@@ -151,12 +151,32 @@ export default function ResultScreen() {
                 <Icon name="photo" tintColor={theme.muted} size={28} />
               </View>
             )}
+            {/* Extra angles, when the user took more than one. The main photo above is what the
+                classifier read and what the report carries; these are the fuller record. */}
+            {record.images.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thumbStrip}>
+                {record.images.map((img) => (
+                  <Pressable
+                    key={img.uri}
+                    onPress={() => setViewerUri(img.uri)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View photo ${img.index + 1} of ${record.images.length}`}
+                    style={({ pressed }) => pressed && styles.pressed}>
+                    <Image source={{ uri: img.uri }} style={styles.thumbSmall} contentFit="cover" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
             <View style={[styles.photoCaption, { borderTopColor: theme.hairline }]}>
               <Icon name="mappin.circle.fill" tintColor={theme.brand} size={18} />
               <View style={styles.photoCaptionText}>
                 <ThemedText type="headline">{mark?.region ?? 'Location not marked'}</ThemedText>
                 <ThemedText type="subhead" themeColor="textSecondary">
                   Checked on {date}
+                  {record.images.length > 1 ? ` · ${record.images.length} photos` : ''}
                 </ThemedText>
               </View>
             </View>
@@ -268,10 +288,17 @@ export default function ResultScreen() {
               onPress={() => router.push('/(tabs)/learn')}
             />
           ) : null}
+          <Button
+            label="See this spot over time"
+            variant={tier.showReport || tier.showEducation ? 'outline' : 'brand'}
+            icon="clock.arrow.circlepath"
+            onPress={() => router.push({ pathname: '/scan/lesion', params: { id: record.lesionId! } })}
+            disabled={!record.lesionId}
+          />
           {tier.offerReminder ? <ReminderRow /> : null}
         </Animated.View>
       </ScrollView>
-      <ImageViewer visible={viewerOpen} uri={record.imageUri} onClose={() => setViewerOpen(false)} />
+      <ImageViewer visible={viewerUri != null} uri={viewerUri ?? ''} onClose={() => setViewerUri(null)} />
     </Screen>
   );
 }
@@ -525,6 +552,8 @@ const styles = StyleSheet.create({
     padding: Space.base,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  thumbStrip: { gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md },
+  thumbSmall: { width: 56, height: 56, borderRadius: Radius.sm },
   photoCaptionText: { flex: 1, gap: 2 },
   // Priority action, with the disclaimer as a footnote beneath.
   priorityBlock: { gap: Space.md },

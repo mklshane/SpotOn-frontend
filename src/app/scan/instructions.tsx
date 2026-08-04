@@ -37,9 +37,17 @@ const SLIDES: Slide[] = [
     image: require('@/assets/images/instructions/locate.svg'),
   },
   {
+    key: 'light',
+    title: 'Find good light',
+    description: 'Face a window or a bright lamp. Avoid harsh shadows and direct glare on the spot.',
+    image: require('@/assets/images/instructions/lighting.svg'),
+  },
+  {
     key: 'photo',
     title: 'Take a clear, detailed photo',
-    description: 'Keep within about 10 cm, use bright light, and keep other objects out of the frame.',
+    // Lighting moved to its own slide above, so the bright-light clause is dropped here rather
+    // than saying the same thing twice one page apart.
+    description: 'Keep within about 10 cm and keep other objects out of the frame.',
     image: require('@/assets/images/instructions/photo.svg'),
   },
   {

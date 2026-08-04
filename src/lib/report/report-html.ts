@@ -1,5 +1,5 @@
 import { h } from './escape';
-import { A4, PHOTO_PT, PrintColors as C, PrintTier } from './report-tokens';
+import { A4, PHOTO_PT, PrintColors as C, PrintTier, EXTRA_PHOTO_PT } from './report-tokens';
 import type { ReportModel, ReportSymptom, RichText } from './summary-report';
 
 /**
@@ -23,6 +23,11 @@ export type ReportAssets = {
   wordmark: string | null;
   /** "data:image/jpeg;base64,…" — the lesion photo, or null when unavailable. */
   photo: string | null;
+  /**
+   * Additional views of the SAME lesion, in capture order, excluding the primary. Absent or empty
+   * for a single-photo screening, in which case the printed layout is byte-for-byte unchanged.
+   */
+  extraPhotos?: string[];
 };
 
 const EM_DASH = '—';
@@ -70,7 +75,7 @@ export function buildReportHtml(model: ReportModel, assets: ReportAssets): strin
       <div class="clsConf">Model Confidence: <b>${h(model.confidenceLabel)}</b></div>
     </div>
   </div>
-
+${extraViews(assets.extraPhotos)}
   <div class="sec">Reported Symptoms (Patient Self-Report)</div>
   <table class="sym">
     <thead><tr><th class="q">Symptom / Sign</th><th class="a">Response</th></tr></thead>
@@ -119,6 +124,27 @@ function lowerFirst(s: string): string {
 
 function rich(runs: RichText): string {
   return runs.map((r) => (r.bold ? `<b>${h(r.text)}</b>` : h(r.text))).join('');
+}
+
+/**
+ * The additional-views strip. Renders nothing at all when the screening has one photo, so the
+ * approved single-photo layout is untouched for the overwhelming majority of reports.
+ *
+ * These are documentation, not evidence the model used: the classifier reads the primary photo
+ * only (model-config MULTI_IMAGE_AGGREGATION_ENABLED ships false), and the caption says so. A
+ * clinician reading this needs to know which pixels produced the number above it.
+ */
+function extraViews(photos: string[] | undefined): string {
+  if (!photos?.length) return '';
+  return `
+  <div class="views">
+    <div class="viewsLabel">Additional views of the same lesion (not used for classification)</div>
+    <div class="viewsRow">
+      ${photos
+        .map((p, i) => `<img class="viewThumb" src="${p}" alt="Additional lesion view ${i + 2}">`)
+        .join('')}
+    </div>
+  </div>`;
 }
 
 function symptomRow(s: ReportSymptom): string {
@@ -188,6 +214,16 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   .clsName { font-size: 19pt; font-weight: 700; color: ${C.ink}; margin: 5pt 0 4pt; letter-spacing: -.2pt; }
   .clsConf { font-size: 11pt; color: ${C.body}; }
   .clsConf b { font-weight: 700; }
+
+  /* 3b — additional views (only present on multi-photo screenings) */
+  .views { margin-top: 10pt; page-break-inside: avoid; }
+  .viewsLabel { font-size: 8pt; font-weight: 700; color: ${C.labelMuted}; margin-bottom: 5pt; }
+  .viewsRow { display: flex; gap: 8pt; }
+  .viewThumb {
+    width: ${EXTRA_PHOTO_PT}pt; height: ${EXTRA_PHOTO_PT}pt; flex: 0 0 ${EXTRA_PHOTO_PT}pt;
+    object-fit: cover; display: block;
+    background: ${C.photoPlaceholderBg}; border: .5pt solid ${C.hairlineSoft};
+  }
 
   /* 4 — symptom table */
   table.sym { width: 100%; border-collapse: collapse; table-layout: fixed; }

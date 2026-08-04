@@ -1,5 +1,6 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
@@ -21,10 +22,36 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
+import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
+import { decideQuality, nextStepAfterQuality } from '@/lib/triage/scan-flow';
+import {
+  combineReadability,
+  evaluateSafetyFloor,
+  evaluateScaleConsistency,
+} from '@/lib/triage/tps-core';
 
 const STEP_MS = 1300; // per-check reveal cadence
-const PROCEED_MS = 850; // beat before auto-advancing on a clean pass
+/**
+ * A clean pass used to auto-advance after a short beat. It no longer does.
+ *
+ * Once this screen started offering a second photo, the timer stopped being a convenience and
+ * became a race: it fired before the offer could be read, so the choice was theoretical. An
+ * explicit Proceed costs the single-photo path one tap and is the honest trade — the screen is
+ * showing the user a verdict about their photo, which is a reasonable moment to ask for a decision.
+ */
+/**
+ * Grace period, after the IQA rows have finished revealing, to wait for the first classification
+ * pass before giving up and advancing anyway.
+ *
+ * The point of this screen is that every "this photo won't work" verdict lands HERE, next to the
+ * IQA result — not eight questions later. Confidence is a readability signal exactly like blur is,
+ * and telling someone to retake after they have answered the whole questionnaire wastes their
+ * effort. Inference starts on mount and the rows take ~3.9s to reveal, so on most devices the
+ * result is already in by then and this grace is never spent. When it IS exceeded we advance as
+ * before and analysis.tsx catches it — degraded to today's behaviour, never worse.
+ */
+const READABILITY_GRACE_MS = 2000;
 
 type RowStatus = 'pending' | 'ok' | 'warn';
 const ROW_META: { label: string; icon: IconName }[] = [
@@ -38,7 +65,8 @@ export default function QualityScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
-  const { setImageUri, startClassification, questionnaireComplete } = useScreeningSession();
+  const session = useScreeningSession();
+  const { setImageUri, questionnaireComplete } = session;
 
   // Warm up the classifier while the IQA animation plays — the load (1–3s) is free here.
   // Lazy import keeps the TFLite module off the app-startup path.
@@ -58,7 +86,52 @@ export default function QualityScreen() {
   const [step, setStep] = useState(0);
   const [checks, setChecks] = useState<IqaChecks | null>(null);
   const [error, setError] = useState(false);
+  const [readability, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
   const proceeded = useRef(false);
+
+  // Start inference the moment the photo lands, not at proceed(): that is what lets the
+  // low-confidence verdict be shown on THIS screen instead of after the questionnaire. The index
+  // is the one addImage() will assign in proceed(); enqueueImage is keyed on (index, uri), so a
+  // retake replaces this run rather than inheriting it.
+  const pendingIndex = session.images.length;
+  useEffect(() => {
+    if (!uri) return;
+    session.enqueueImage(uri, pendingIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri]);
+
+  // Join the first pass as soon as it settles and apply the same Safety Floor rule analysis.tsx
+  // uses, so the two screens can never disagree about whether a photo is readable.
+  useEffect(() => {
+    if (session.classificationState !== 'done' && session.classificationState !== 'error') return;
+    let alive = true;
+    session
+      .getClassification()
+      .then((out) => {
+        if (!alive) return;
+        const verdict = combineReadability(
+          evaluateSafetyFloor(out.topConfidence, session.attempt),
+          evaluateScaleConsistency(out.scaleUnstable, session.attempt),
+        );
+        setReadability(verdict === 'ok' ? 'ok' : 'unreadable');
+      })
+      // A hard classifier failure is analysis.tsx's error state to own, not a retake prompt here.
+      .catch(() => alive && setReadability('ok'));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.classificationState]);
+
+  // Bound the wait: once the rows have revealed, give inference a short grace, then move on.
+  useEffect(() => {
+    if (readability !== 'pending') return;
+    const t = setTimeout(
+      () => setReadability((r) => (r === 'pending' ? 'timeout' : r)),
+      ROW_META.length * STEP_MS + READABILITY_GRACE_MS,
+    );
+    return () => clearTimeout(t);
+  }, [readability]);
 
   useEffect(() => {
     let alive = true;
@@ -83,7 +156,6 @@ export default function QualityScreen() {
   }, []);
 
   const settled = checks != null || error;
-  const analyzing = step < ROW_META.length || !settled;
 
   const brightnessOk = checks?.brightness.ok ?? false;
   const sharpOk = checks?.sharpness.ok ?? false;
@@ -91,7 +163,19 @@ export default function QualityScreen() {
   // Gallery uploads have no live detector, so they fall back to skin-colour presence. Skin coverage
   // is always a hard "is this skin?" guard on top of the carried lesion verdict.
   const lesionOk = (lesionKnown ? lesionFound : skinOk) && skinOk;
-  const pass = !error && brightnessOk && sharpOk && lesionOk;
+  const iqaPass = !error && brightnessOk && sharpOk && lesionOk;
+  const readableOk = readability !== 'unreadable';
+  // The verdict itself lives in scan-flow.ts so every branch is pinned by npm run test:flow.
+  const { pass, analyzing } = decideQuality({
+    iqaPass,
+    read: readability,
+    checksSettled: step >= ROW_META.length && settled,
+  });
+
+  // Offer a second angle only where it makes sense: a clean camera photo, still under the cap, with
+  // no gallery selection queued behind it. `images` doesn't include this photo yet — it is added by
+  // proceed()/addAnotherAngle() — hence the +1.
+  const canAddAngle = pass && !analyzing && session.images.length + 1 < MAX_IMAGES_PER_SCREENING;
 
   const reasons = useMemo(() => {
     if (error) return ['We couldn’t analyze this photo.'];
@@ -109,12 +193,15 @@ export default function QualityScreen() {
     if (!sharpOk) out.push('The photo looks blurry — move closer and tap to focus.');
     if (!skinOk) out.push('This doesn’t look like a photo of skin.');
     else if (!lesionOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
+    // Confidence is a readability signal like blur is — surfaced here rather than after the
+    // questionnaire, so a retake costs the user a photo and not eight answers.
+    if (!readableOk) out.push('We couldn’t get a clear read of this spot — a sharper, closer photo usually fixes it.');
     // Shadow is advisory: it never blocks, but when we're already asking for a retake, surface it.
     if (checks.shadow && !checks.shadow.ok) {
       out.push('Tip: even out the lighting — avoid casting a shadow across the spot.');
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, skinOk, lesionOk]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, lesionOk, readableOk]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {
@@ -125,23 +212,63 @@ export default function QualityScreen() {
   function proceed() {
     if (proceeded.current || !uri) return;
     proceeded.current = true;
-    setImageUri(uri);
-    // Classification runs in the background while the user answers the questionnaire.
-    startClassification(uri);
-    // On a Safety-Floor rescan pass the answers already exist — go straight to analysis.
-    router.replace(questionnaireComplete ? '/scan/analysis' : '/scan/questionnaire');
+    // The user has now SEEN the low-confidence warning here. Asking again after the questionnaire
+    // would be the exact double-prompt this change exists to remove, so analysis applies the
+    // Safety Floor directly instead (same outcome as its own "continue anyway").
+    if (readability === 'unreadable') session.acceptLowConfidence();
+
+    const index = session.addImage({
+      uri,
+      source: session.source,
+      qualityPassed: pass,
+      detected: lesionKnown ? lesionOk : undefined,
+    });
+    if (index === 0) setImageUri(uri);
+    // Inference starts HERE, not at the analysis screen: by the time the user has cropped the next
+    // photo and answered the questionnaire, this one is usually already done.
+    session.enqueueImage(uri, index);
+
+    const step = nextStepAfterQuality({ questionnaireComplete });
+    router.replace(`/scan/${step.kind}`);
+  }
+
+  /**
+   * Accept this photo and go straight back to the camera for another angle of the SAME spot.
+   * Deliberately not a separate review screen: the user is already looking at the photo they just
+   * took, so the decision belongs here.
+   */
+  async function addAnotherAngle() {
+    if (proceeded.current || !uri) return;
+    proceeded.current = true;
+    const index = session.addImage({
+      uri,
+      source: session.source,
+      qualityPassed: pass,
+      detected: lesionKnown ? lesionOk : undefined,
+    });
+    if (index === 0) setImageUri(uri);
+    session.enqueueImage(uri, index);
+
+    // Return to whichever source they used, so "another angle" costs one action, not a re-pick of
+    // camera-vs-upload they already made.
+    if (session.source === 'gallery') {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9 });
+      if (result.canceled || !result.assets[0]) {
+        proceeded.current = false; // they backed out — this photo is already accepted, so just move on
+        return;
+      }
+      router.replace({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
+      return;
+    }
+    router.replace('/scan/capture');
   }
 
   function retake() {
+    // Drop this photo's pending/settled run so the retake is classified fresh. (enqueueImage is
+    // keyed on (index, uri) as a second guard, but not leaving orphans is cheaper than relying on it.)
+    if (uri) session.removeImage(uri);
     router.back();
   }
-
-  useEffect(() => {
-    if (!analyzing && pass) {
-      const t = setTimeout(proceed, PROCEED_MS);
-      return () => clearTimeout(t);
-    }
-  }, [analyzing, pass]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function statusFor(i: number): RowStatus {
     const ready = step > i && settled;
@@ -155,7 +282,10 @@ export default function QualityScreen() {
   const subtitle = analyzing
     ? 'Scanning lighting, focus and skin…'
     : pass
-      ? 'Preparing your result…'
+      ? canAddAngle
+        ? 'Proceed, or add another photo of the same spot.'
+        : // At the photo cap — "preparing your result" would be a lie now that nothing auto-advances.
+          `That's ${MAX_IMAGES_PER_SCREENING} photos — ready when you are.`
       : 'You can still continue if you’d like';
 
   const rows = useMemo(
@@ -239,6 +369,25 @@ export default function QualityScreen() {
           </Animated.View>
         ) : null}
       </ScrollView>
+
+      {/* The whole multi-photo offer: one line, on the screen the user is already on, only when a
+          second angle is actually possible. Ignoring it advances as normal — it never blocks. */}
+      {/* Clean pass: Proceed is the primary action, with the second-photo offer beneath it. There is
+          no auto-advance — a timer that fires before the offer can be read isn't an offer. */}
+      {!analyzing && pass ? (
+        <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
+          <Button label="Proceed" variant="brand" onPress={proceed} style={styles.useAnyway} />
+          {canAddAngle ? (
+            <Button
+              label="Add another photo"
+              variant="outline"
+              icon="plus.viewfinder"
+              onPress={addAnotherAngle}
+              style={styles.useAnyway}
+            />
+          ) : null}
+        </Animated.View>
+      ) : null}
 
       {showFooter ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>

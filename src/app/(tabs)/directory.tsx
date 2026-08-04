@@ -10,7 +10,7 @@ import { ClinicsView } from '@/components/directory/ClinicsView';
 import { DoctorsView } from '@/components/directory/DoctorsView';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
-import { needsInitialSync, runSync } from '@/data/sync';
+import { needsInitialSync, needsReconcile, runSync } from '@/data/sync';
 import { useConnectivity } from '@/hooks/use-connectivity';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
@@ -37,6 +37,10 @@ export default function DirectoryScreen() {
         // First-ever sync — if this fails offline-first screens fall back to an
         // empty local DB with no distinct "sync failed" signal, so at least log it.
         await runSync({ full: true }).catch((err) => console.warn('[directory] initial sync failed', err));
+      } else if (await needsReconcile()) {
+        // One-off full pass so an install that predates delete-sweeping drops
+        // rows removed server-side (deleted pathology labs were still listed).
+        runSync({ full: true }).catch((err) => console.warn('[directory] reconcile sync failed', err));
       } else {
         runSync().catch(() => {});
       }

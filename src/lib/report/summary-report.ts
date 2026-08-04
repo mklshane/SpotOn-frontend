@@ -91,7 +91,13 @@ export type ReportModel = {
 
   tps: string;
   bodyRegion: string | null;
+  /** The primary photo — the one the classifier read and the one printed at full size. */
   imageUri: string;
+  /**
+   * Every photo of this lesion, primary first. Length 1 for a single-photo screening (and for
+   * every pre-v11 record), so the printed layout is unchanged unless the user actually took more.
+   */
+  imageUris: string[];
   safetyFloorApplied: boolean;
   /** Summed MEL+SCC+BCC probability, as a percentage — the Malignant Gate's input. */
   malignantPct: number;
@@ -195,6 +201,7 @@ export function buildReportModel(
     tps: record.triage.tps.toFixed(2),
     bodyRegion: record.mark?.region ?? null,
     imageUri: record.imageUri,
+    imageUris: record.images?.length ? record.images.map((i) => i.uri) : [record.imageUri],
     safetyFloorApplied: record.triage.safetyFloorApplied,
     malignantPct: Math.round(record.triage.malignantScore * 100),
     malignantGateApplied: record.triage.malignantGateApplied,

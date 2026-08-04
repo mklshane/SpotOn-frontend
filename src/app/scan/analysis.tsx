@@ -23,12 +23,17 @@ import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
-import { MALIGNANT_THRESHOLD } from '@/lib/classifier/model-config';
+import {
+  IMAGE_AGREEMENT_CHECK_ENABLED,
+  MALIGNANT_THRESHOLD,
+} from '@/lib/classifier/model-config';
 import { RESCAN_PROMPT } from '@/lib/triage/recommendations';
+import { decideAnalysis } from '@/lib/triage/scan-flow';
 import {
   combineReadability,
   computeMalignantScore,
   computeTriage,
+  evaluateImageAgreement,
   evaluateSafetyFloor,
   evaluateScaleConsistency,
 } from '@/lib/triage/tps-core';
@@ -99,8 +104,10 @@ export default function AnalysisScreen() {
         },
       );
       const entry = await addEntry({
-        mark: s.bodyMark,
-        imageUri: s.imageUri ?? '',
+        // On a follow-up the lesion owns the location, so the user is never asked to re-place it.
+        mark: s.followUp?.lesion.mark ?? s.bodyMark,
+        imageUri: s.images[0]?.uri ?? s.imageUri ?? '',
+        images: s.images.length ? s.images : undefined,
         source: s.source,
         questionnaire: {
           answers: s.answers as SymptomAnswers,
@@ -109,6 +116,12 @@ export default function AnalysisScreen() {
         classification: output,
         firstAttempt: s.firstAttempt ?? undefined,
         triage,
+        // Null mints a new lesion in scan-history, so every screening is trackable without the
+        // user having to opt in at scan time.
+        lesionId: s.followUp?.lesion.id ?? null,
+        followUpOf: s.followUp?.priorScreening.id,
+        answersCarried: s.followUp != null,
+        answersSourceId: s.followUp?.priorScreening.id,
       });
       s.reset();
       router.replace({ pathname: '/scan/result', params: { id: entry.id } });
@@ -129,19 +142,27 @@ export default function AnalysisScreen() {
       try {
         const [output] = await Promise.all([session.getClassification(), beat]);
         if (!alive) return;
-        // Two independent readability checks: confidence (Safety Floor) and framing stability
-        // (scale check). Either one failing routes to a rescan, then to the Moderate floor.
+        // Independent readability checks: confidence (Safety Floor), framing stability (scale
+        // check), and cross-image agreement. Any one failing routes to a rescan, then to the
+        // Moderate floor. The agreement check is off by default — it is recorded on every record
+        // either way, but the measured flag-rate/accuracy trade did not justify the friction
+        // (model-config IMAGE_AGREEMENT_CHECK_ENABLED, synth/eval/MULTIVIEW_EVAL.md).
         const verdict = combineReadability(
           evaluateSafetyFloor(output.topConfidence, session.attempt),
           evaluateScaleConsistency(output.scaleUnstable, session.attempt),
+          IMAGE_AGREEMENT_CHECK_ENABLED
+            ? evaluateImageAgreement(output.imageDisagreement ?? false, session.attempt)
+            : 'ok',
         );
-        if (verdict === 'ok') {
-          await finalize(output, false);
-        } else if (verdict === 'prompt-rescan') {
+        const action = decideAnalysis({
+          verdict,
+          acceptedLowConfidence: session.acceptedLowConfidence,
+        });
+        if (action.kind === 'prompt-retake') {
           pendingOutput.current = output;
           setStage('retake');
         } else {
-          await finalize(output, true); // second low-confidence pass → Moderate floor
+          await finalize(output, action.applyFloor);
         }
       } catch (e) {
         console.warn('[analysis] classification failed', e);
@@ -219,6 +240,14 @@ export default function AnalysisScreen() {
                 />
               </Animated.View>
             </View>
+            {session.images.length > 1 ? (
+              <View style={[styles.countChip, { backgroundColor: theme.elementBg }]}>
+                <Icon name="square.stack.3d.up.fill" tintColor={theme.textSecondary} size={13} />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {session.images.length} photos
+                </ThemedText>
+              </View>
+            ) : null}
             <Animated.View key={statusIdx} entering={FadeIn} style={styles.header}>
               <ThemedText type="title2" style={styles.center}>
                 Analyzing
@@ -310,6 +339,14 @@ const styles = StyleSheet.create({
   dim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(20,16,13,0.18)' },
   beam: { position: 'absolute', left: 0, right: 0, top: 0, height: 56 },
   header: { alignItems: 'center', gap: Space.xs },
+  countChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+  },
   center: { textAlign: 'center' },
   stateWrap: { alignItems: 'center', gap: Space.base },
   tipCard: { alignSelf: 'stretch', gap: Space.md, marginTop: Space.sm },

@@ -15,7 +15,8 @@ import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
   const theme = useTheme();
-  const { bodyMark, setBodyMark, setSource, reset } = useScreeningSession();
+  const session = useScreeningSession();
+  const { bodyMark, setBodyMark, setSource, reset } = session;
   const [sheetOpen, setSheetOpen] = useState(false);
 
   // This screen is the flow entry: clear any stale session from an abandoned run.
@@ -34,10 +35,11 @@ export default function BodyAreaScreen() {
       mediaTypes: 'images',
       quality: 0.9,
     });
-    if (!result.canceled && result.assets[0]) {
-      setSource('gallery');
-      router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
-    }
+    if (result.canceled || !result.assets[0]) return;
+    // One photo, like the camera. A second angle is offered on the quality screen once this one has
+    // actually passed its checks — asking up front would make every single-photo upload pay for it.
+    session.setSource('gallery');
+    router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
   }
 
   return (

@@ -5,6 +5,7 @@ opened from the "Instructions" pill on the capture screen. Flat/semi-flat "sunse
 matching `assets/images/onboarding/*.svg`; rendered through `expo-image`.
 
 - `locate.svg` — Locate your lesion (body + sunset marker + rotate arrows)
+- `lighting.svg` — Find good light (window + sun, daylight falling across the arm and spot)
 - `photo.svg` — Take a clear, detailed photo (hand + phone framing a spot on the arm)
 - `assess.svg` — Get a quick assessment (concentric risk gauge, green/amber/burnt-orange)
 - `schedule.svg` — Plan your self-checks (calendar with checkmarks + pen)

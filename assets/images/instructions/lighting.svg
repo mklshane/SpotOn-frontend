@@ -1,0 +1,54 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="li-arm" x1="60" y1="250" x2="330" y2="380" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E6AE80"/>
+      <stop offset="1" stop-color="#B97E4F"/>
+    </linearGradient>
+    <linearGradient id="li-pane" x1="96" y1="40" x2="248" y2="196" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF6EF"/>
+      <stop offset="1" stop-color="#FFD7C0"/>
+    </linearGradient>
+    <linearGradient id="li-ray" x1="150" y1="150" x2="300" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFC29C" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFE3CE" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="li-shadow" x="70" y="30" width="220" height="220" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#7A4A2B" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <!-- light spilling from the window, down and to the right -->
+  <path d="M104 176 L232 176 L336 356 L150 356 Z" fill="url(#li-ray)"/>
+  <g stroke="#FFA468" stroke-width="6" stroke-linecap="round" opacity="0.35">
+    <path d="M150 196 L212 300"/>
+    <path d="M190 196 L262 290"/>
+    <path d="M228 190 L300 272"/>
+  </g>
+
+  <!-- window -->
+  <g filter="url(#li-shadow)">
+    <rect x="96" y="40" width="152" height="140" rx="14" fill="#FFF1E8"/>
+    <rect x="108" y="52" width="128" height="116" rx="8" fill="url(#li-pane)"/>
+    <g stroke="#EFE0D4" stroke-width="8" stroke-linecap="round">
+      <path d="M172 52 L172 168"/>
+      <path d="M108 110 L236 110"/>
+    </g>
+    <!-- sun just past the glass -->
+    <circle cx="140" cy="84" r="17" fill="#FFA468"/>
+    <g stroke="#FFA468" stroke-width="5" stroke-linecap="round" opacity="0.7">
+      <path d="M140 54 v-8"/>
+      <path d="M113 84 h-8"/>
+      <path d="M119 63 l-6 -6"/>
+      <path d="M161 63 l6 -6"/>
+    </g>
+  </g>
+
+  <!-- forearm, lit along the ray direction (same motif as photo.svg) -->
+  <path d="M40 322 Q140 292 252 258 Q312 258 314 308 Q214 348 106 372 Q46 372 40 322 Z" fill="url(#li-arm)"/>
+  <path d="M64 316 Q152 292 246 268" stroke="#FFE3CE" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.5"/>
+  <path d="M100 362 Q206 336 302 306" stroke="#834E2C" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.16"/>
+
+  <!-- the spot, with a soft highlight showing it is evenly lit -->
+  <circle cx="214" cy="300" r="13" fill="#5E3A1C"/>
+  <circle cx="209" cy="295" r="4" fill="#FFF6EF" opacity="0.45"/>
+</svg>

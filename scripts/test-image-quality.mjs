@@ -10,7 +10,7 @@
  * test_iqa_parity.py (which reads image-quality-core.ts directly).
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -23,7 +23,7 @@ execFileSync(
   { cwd: ROOT, stdio: 'inherit' },
 );
 const core = await import(pathToFileURL(join(out, 'image-quality-core.js')).href);
-const { analyzeRgba } = core;
+const { analyzeRgba, SIZE } = core;
 
 const S = 64;
 const buf = (fn) => {
@@ -77,6 +77,24 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
 // A one-sided luminance ramp (shadow) must NOT block the pass — shadow is advisory.
 r = analyzeRgba(buf((x, y) => { const n = noise(x, y); const f = 1 - (x / S) * 0.5; return [(190 + n) * f, (140 + n) * f, (120 + n) * f]; }), S, S);
 check('shadow advisory: still passes exposure+focus+skin', r.brightness.ok && r.sharpness.ok && r.skin.ok);
+
+/* ---------------------------------------------------------- cross-file coupling ---------- */
+// image-quality.ts skips the manipulateAsync re-encode when the source is already SIZE x SIZE,
+// which is true for real traffic only because crop.tsx emits exactly OUTPUT = SIZE. If either
+// value moves independently the gate silently falls back to the slow path — still CORRECT, but the
+// saved JPEG encode quietly disappears and nothing else would notice. Pin the relationship.
+{
+  const cropSrc = readFileSync(join(ROOT, 'src/app/scan/crop.tsx'), 'utf8');
+  const m = /const OUTPUT = (\d+)/.exec(cropSrc);
+  check('crop.tsx declares OUTPUT', m != null);
+  if (m) {
+    check(
+      `crop OUTPUT (${m[1]}) === image-quality SIZE (${SIZE}) — keeps the no-re-encode fast path live`,
+      Number(m[1]) === SIZE,
+    );
+  }
+}
+
 
 if (fails.length) {
   console.error(`\nimage-quality core: ${pass} passed, ${fails.length} FAILED`);

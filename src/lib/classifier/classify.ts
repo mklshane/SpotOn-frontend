@@ -1,12 +1,24 @@
 import { pickTopClass } from '../triage/tps-core';
-import type { ClassificationOutput, LesionClass } from '../triage/types';
-import { getClassifierModel, readClassifierLayout } from './classifier-model';
+import {
+  detectDisagreementAmong,
+  looksLikeProbabilities,
+  meanLogits as meanLogitsCore,
+  softmaxT,
+} from './aggregate-core';
+import type { ClassificationOutput, LesionClass, PerImageResult } from '../triage/types';
+import {
+  type ClassifierModel,
+  getClassifierModel,
+  readClassifierLayout,
+} from './classifier-model';
 import { asClassifierError, ClassifierError } from './errors';
 import {
   CLASS_ORDER,
   CONFIDENCE_TEMPERATURE,
+  IMAGE_AGREEMENT_MIN_CONFIDENCE,
   INFERENCE_TIMEOUT_MS,
   DETECTOR_CROP_ENABLED,
+  MULTI_IMAGE_AGGREGATION_ENABLED,
   MODEL_VERSION,
   NORMALIZATION,
   REFINE_CONFIDENCE,
@@ -26,21 +38,197 @@ import {
 
 const DEBUG = __DEV__;
 
+// The pure arithmetic lives in aggregate-core.ts so scripts/test-multiview.mjs can pin it without
+// a device (this file require()s the bundled .tflite and cannot be compiled standalone).
+const softmax = softmaxT;
+
 /**
- * Numerically stable softmax with temperature scaling (the exported graph ends in a Gemm — raw
- * logits). Dividing by T>1 softens the over-confident logits; it never changes the argmax.
+ * One prediction at one crop: the TTA-averaged model output plus everything derived from it.
+ *
+ * `logits` is the mean of the per-view RAW logits — the space MALIGNANT_THRESHOLD and
+ * CONFIDENCE_TEMPERATURE were calibrated in (see model-config.ts). It is carried here so that
+ * pooling *across images* can happen in that same space; averaging softmaxes instead would
+ * silently invalidate the calibrated operating point. Nothing on the single-image path reads it.
  */
-function softmax(logits: number[], temperature = 1): number[] {
-  const z = temperature === 1 ? logits : logits.map((l) => l / temperature);
-  const max = Math.max(...z);
-  const exps = z.map((l) => Math.exp(l - max));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  return exps.map((e) => e / sum);
+export type Prediction = {
+  logits: number[];
+  probs: Record<LesionClass, number>;
+  topClass: LesionClass;
+  topConfidence: number;
+  views: number;
+  /** True when the graph already emitted probabilities (a future softmax-baked export). */
+  probsFromModel: boolean;
+};
+
+/** Everything one image's pipeline produces, before it is shaped into a ClassificationOutput. */
+export type SingleImageResult = {
+  prediction: Prediction;
+  detectorUsed: boolean;
+  refined: boolean;
+  scaleUnstable: boolean;
+  inferenceMs: number;
+  /** The full-frame prediction the DoG zoom replaced, when it did. Dev logging only. */
+  fullFrame: Prediction | null;
+};
+
+export type LoadedModel = { model: ClassifierModel; inputSize: number };
+
+/** Load the interpreter and verify the graph matches the class contract. */
+export async function prepareModel(): Promise<LoadedModel> {
+  const model = await getClassifierModel();
+  const { inputSize, numClasses } = readClassifierLayout(model);
+  if (numClasses !== CLASS_ORDER.length) {
+    throw new ClassifierError(
+      'invalid-output',
+      `model reports ${numClasses} classes, expected ${CLASS_ORDER.length}`,
+    );
+  }
+  return { model, inputSize };
 }
 
-function looksLikeProbabilities(values: number[]): boolean {
-  const sum = values.reduce((a, b) => a + b, 0);
-  return Math.abs(sum - 1) <= 0.01 && values.every((v) => v >= 0 && v <= 1);
+/**
+ * Run the full per-image pipeline on one still: detector-canonical crop, or the full frame plus a
+ * confidence-gated zoom refinement. Crop selection compares softmax confidence exactly as before —
+ * the added `logits` on each Prediction is inert here.
+ *
+ * Callers own the timeout race and the ClassificationOutput shaping.
+ */
+export async function classifyOne(
+  uri: string,
+  model: ClassifierModel,
+  inputSize: number,
+): Promise<SingleImageResult> {
+  /** One full prediction at a given crop: preprocess → TTA → averaged logits → softmax. */
+  const predictAt = async (cropFraction: number, cropBox?: CropBox): Promise<Prediction> => {
+    const input = await preprocessForClassifier(
+      uri,
+      inputSize,
+      NORMALIZATION,
+      cropFraction,
+      cropBox,
+    );
+    // 4-view dihedral TTA (the configuration D4's operating point was selected under), or a
+    // single pass when disabled. Views run sequentially so only one buffer is live at a time.
+    const views = TTA_ENABLED ? ttaViews(input, inputSize) : [input];
+    let logitSum: Float64Array | null = null;
+    try {
+      for (const view of views) {
+        // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
+        // proven detector path uses (capture.tsx runSync).
+        const buffer = view.buffer.slice(
+          view.byteOffset,
+          view.byteOffset + view.byteLength,
+        ) as ArrayBuffer;
+        const outputs = await model.run([buffer]);
+        const out = new Float32Array(outputs?.[0] ?? new ArrayBuffer(0));
+        if (out.length !== CLASS_ORDER.length) {
+          throw new ClassifierError('invalid-output', `bad output tensor (${out.length} values)`);
+        }
+        logitSum ??= new Float64Array(out.length);
+        for (let i = 0; i < out.length; i++) logitSum[i] += out[i];
+      }
+    } catch (e) {
+      throw asClassifierError(e, 'inference');
+    }
+
+    // Averaging in logit space is what the threshold was calibrated on — never average softmaxes.
+    const values = Array.from(logitSum ?? []).map((v) => v / views.length);
+    if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
+      throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
+    }
+    // Tolerate a future export that bakes softmax in; otherwise apply calibrated softmax here.
+    const probsFromModel = looksLikeProbabilities(values);
+    const p = probsFromModel ? values : softmax(values, CONFIDENCE_TEMPERATURE);
+    const byClass = {} as Record<LesionClass, number>;
+    CLASS_ORDER.forEach((cls, i) => {
+      byClass[cls] = p[i];
+    });
+    return {
+      logits: values,
+      probs: byClass,
+      ...pickTopClass(byClass),
+      views: views.length,
+      probsFromModel,
+    };
+  };
+
+  const started = Date.now();
+
+  // 1) Detector-canonical crop (primary). Run the YOLO detector, re-crop to the training geometry,
+  // and classify that. This removes the user's framing from the input, so the answer depends on
+  // the lesion, not the zoom — and reproduces the crop the model was trained on. See model-config.
+  let result: Prediction | null = null;
+  let detectorUsed = false;
+  if (DETECTOR_CROP_ENABLED) {
+    const detBox = await detectLesionBox(uri).catch((e) => {
+      if (DEBUG) console.warn('[classifier] detector failed', e);
+      return null;
+    });
+    if (detBox) {
+      result = await predictAt(1, lesionBoxToCrop(detBox));
+      detectorUsed = true;
+    }
+  }
+
+  // 2) Fallback for images the detector can't localize: the full frame, then the confidence-gated
+  // DoG zoom refinement (a low-confidence full-frame call is usually a lesion framed too wide).
+  let refined = false;
+  let fullFrame: Prediction | null = null;
+  if (!result) {
+    result = await predictAt(1);
+    fullFrame = result;
+    if (REFINE_ENABLED && result.topConfidence < REFINE_CONFIDENCE) {
+      const box = await locateLesionInImage(uri, { targetFill: REFINE_TARGET_FILL });
+      if (box) {
+        const zoomed = await predictAt(1, box);
+        // Adopt only when the zoom is MORE confident than the full frame. Measured on
+        // SpotOn-synthetic/retrain (972 images): adopting unconditionally gives +2.7 pts but
+        // corrupts 65 previously-correct images; requiring a confidence gain gives +3.8 pts and
+        // nearly halves that to 36. A zoom that lowers confidence is evidence the crop was wrong.
+        if (zoomed.topConfidence > result.topConfidence) {
+          result = zoomed;
+          refined = true;
+        }
+      }
+    }
+  }
+
+  // Optional scale-consistency backstop (default off — superseded by the refinement above).
+  // A class that changes across center-crops is driven by framing, not the lesion; when enabled
+  // this routes such cases to the rescan path (analysis.tsx), never treating them as risk.
+  let scaleUnstable = false;
+  if (SCALE_CHECK_ENABLED) {
+    for (const fraction of SCALE_CHECK_CROPS.slice(1)) {
+      const alt = await predictAt(fraction);
+      if (alt.topClass !== result.topClass) scaleUnstable = true;
+    }
+  }
+
+  return {
+    prediction: result,
+    detectorUsed,
+    refined,
+    scaleUnstable,
+    inferenceMs: Date.now() - started,
+    fullFrame: refined ? fullFrame : null,
+  };
+}
+
+/** Dev diagnostic for one image's pipeline. */
+function logImageResult(r: SingleImageResult, inputSize: number, prefix: string) {
+  const { probs, topClass, topConfidence, views } = r.prediction;
+  console.log(
+    '[classifier]',
+    prefix,
+    `top=${topClass}@${topConfidence.toFixed(3)}`,
+    CLASS_ORDER.map((c) => `${c}=${probs[c].toFixed(3)}`).join(' '),
+    `${r.inferenceMs}ms @${inputSize}px ×${views}view`,
+    r.detectorUsed ? 'crop=detector' : 'crop=fullframe',
+    r.refined && r.fullFrame
+      ? `refined(from ${r.fullFrame.topClass}@${r.fullFrame.topConfidence.toFixed(2)})`
+      : '',
+    SCALE_CHECK_ENABLED && r.scaleUnstable ? 'scaleUNSTABLE' : '',
+  );
 }
 
 /**
@@ -52,152 +240,35 @@ function looksLikeProbabilities(values: number[]): boolean {
  */
 export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<ClassificationOutput> {
   const run = (async () => {
-    const model = await getClassifierModel();
-    const { inputSize, numClasses } = readClassifierLayout(model);
-    if (numClasses !== CLASS_ORDER.length) {
-      throw new ClassifierError(
-        'invalid-output',
-        `model reports ${numClasses} classes, expected ${CLASS_ORDER.length}`,
-      );
-    }
+    const { model, inputSize } = await prepareModel();
+    const r = await classifyOne(uri, model, inputSize);
 
-    /** One full prediction at a given crop: preprocess → TTA → averaged softmax. */
-    const predictAt = async (cropFraction: number, cropBox?: CropBox) => {
-      const input = await preprocessForClassifier(
-        uri,
-        inputSize,
-        NORMALIZATION,
-        cropFraction,
-        cropBox,
-      );
-      // 4-view dihedral TTA (the configuration D4's operating point was selected under), or a
-      // single pass when disabled. Views run sequentially so only one buffer is live at a time.
-      const views = TTA_ENABLED ? ttaViews(input, inputSize) : [input];
-      let logitSum: Float64Array | null = null;
-      try {
-        for (const view of views) {
-          // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
-          // proven detector path uses (capture.tsx runSync).
-          const buffer = view.buffer.slice(
-            view.byteOffset,
-            view.byteOffset + view.byteLength,
-          ) as ArrayBuffer;
-          const outputs = await model.run([buffer]);
-          const out = new Float32Array(outputs?.[0] ?? new ArrayBuffer(0));
-          if (out.length !== CLASS_ORDER.length) {
-            throw new ClassifierError('invalid-output', `bad output tensor (${out.length} values)`);
-          }
-          logitSum ??= new Float64Array(out.length);
-          for (let i = 0; i < out.length; i++) logitSum[i] += out[i];
-        }
-      } catch (e) {
-        throw asClassifierError(e, 'inference');
-      }
-
-      // Averaging in logit space is what the threshold was calibrated on — never average softmaxes.
-      const values = Array.from(logitSum ?? []).map((v) => v / views.length);
-      if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
-        throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
-      }
-      // Tolerate a future export that bakes softmax in; otherwise apply calibrated softmax here.
-      const p = looksLikeProbabilities(values) ? values : softmax(values, CONFIDENCE_TEMPERATURE);
-      const byClass = {} as Record<LesionClass, number>;
-      CLASS_ORDER.forEach((cls, i) => {
-        byClass[cls] = p[i];
-      });
-      return { probs: byClass, ...pickTopClass(byClass), views: views.length };
-    };
-
-    const started = Date.now();
-
-    // 1) Detector-canonical crop (primary). Run the YOLO detector, re-crop to the training geometry,
-    // and classify that. This removes the user's framing from the input, so the answer depends on
-    // the lesion, not the zoom — and reproduces the crop the model was trained on. See model-config.
-    let result: Awaited<ReturnType<typeof predictAt>> | null = null;
-    let detectorUsed = false;
-    if (DETECTOR_CROP_ENABLED) {
-      const detBox = await detectLesionBox(uri).catch((e) => {
-        if (DEBUG) console.warn('[classifier] detector failed', e);
-        return null;
-      });
-      if (detBox) {
-        result = await predictAt(1, lesionBoxToCrop(detBox));
-        detectorUsed = true;
-      }
-    }
-
-    // 2) Fallback for images the detector can't localize: the full frame, then the confidence-gated
-    // DoG zoom refinement (a low-confidence full-frame call is usually a lesion framed too wide).
-    let refined = false;
-    let fullFrame = result;
-    if (!result) {
-      result = await predictAt(1);
-      fullFrame = result;
-      if (REFINE_ENABLED && result.topConfidence < REFINE_CONFIDENCE) {
-        const box = await locateLesionInImage(uri, { targetFill: REFINE_TARGET_FILL });
-        if (box) {
-          const zoomed = await predictAt(1, box);
-          // Adopt only when the zoom is MORE confident than the full frame. Measured on
-          // SpotOn-synthetic/retrain (972 images): adopting unconditionally gives +2.7 pts but
-          // corrupts 65 previously-correct images; requiring a confidence gain gives +3.8 pts and
-          // nearly halves that to 36. A zoom that lowers confidence is evidence the crop was wrong.
-          if (zoomed.topConfidence > result.topConfidence) {
-            result = zoomed;
-            refined = true;
-          }
-        }
-      }
-    }
-    const probsByClass = result.probs;
-    const { topClass, topConfidence } = result;
-
-    // Optional scale-consistency backstop (default off — superseded by the refinement above).
-    // A class that changes across center-crops is driven by framing, not the lesion; when enabled
-    // this routes such cases to the rescan path (analysis.tsx), never treating them as risk.
-    let scaleUnstable = false;
-    if (SCALE_CHECK_ENABLED) {
-      for (const fraction of SCALE_CHECK_CROPS.slice(1)) {
-        const alt = await predictAt(fraction);
-        if (alt.topClass !== topClass) scaleUnstable = true;
-      }
-    }
-    const inferenceMs = Date.now() - started;
-
-    if (DEBUG) {
-      console.log(
-        '[classifier]',
-        `attempt=${attempt}`,
-        `top=${topClass}@${topConfidence.toFixed(3)}`,
-        CLASS_ORDER.map((c) => `${c}=${probsByClass[c].toFixed(3)}`).join(' '),
-        `${inferenceMs}ms @${inputSize}px ×${result.views}view`,
-        detectorUsed ? 'crop=detector' : 'crop=fullframe',
-        refined && fullFrame ? `refined(from ${fullFrame.topClass}@${fullFrame.topConfidence.toFixed(2)})` : '',
-        SCALE_CHECK_ENABLED && scaleUnstable ? 'scaleUNSTABLE' : '',
-      );
-    }
+    if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt}`);
 
     return {
-      probs: probsByClass,
-      topClass,
-      topConfidence,
+      probs: r.prediction.probs,
+      topClass: r.prediction.topClass,
+      topConfidence: r.prediction.topConfidence,
       attempt,
       modelVersion: MODEL_VERSION,
       inputSize,
       normalization: NORMALIZATION,
       temperature: CONFIDENCE_TEMPERATURE,
-      inferenceMs,
-      scaleUnstable,
-      refined,
-      detectorUsed,
+      inferenceMs: r.inferenceMs,
+      scaleUnstable: r.scaleUnstable,
+      refined: r.refined,
+      detectorUsed: r.detectorUsed,
     } satisfies ClassificationOutput;
   })();
 
+  return withTimeout(run, INFERENCE_TIMEOUT_MS);
+}
+
+/** Race a run against a ClassifierError('timeout'), without leaking an unhandled late rejection. */
+async function withTimeout<T>(run: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new ClassifierError('timeout', `inference exceeded ${INFERENCE_TIMEOUT_MS}ms`)),
-      INFERENCE_TIMEOUT_MS,
-    );
+    timer = setTimeout(() => reject(new ClassifierError('timeout', `inference exceeded ${ms}ms`)), ms);
   });
   try {
     return await Promise.race([run, timeout]);
@@ -206,4 +277,157 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
     // Keep a late rejection from surfacing as an unhandled promise after a timeout won the race.
     run.catch(() => {});
   }
+}
+
+/** True when confident per-image predictions disagree. Near-ties are the Safety Floor's job. */
+export function detectDisagreement(results: readonly PerImageResult[]): boolean {
+  return detectDisagreementAmong(results, IMAGE_AGREEMENT_MIN_CONFIDENCE);
+}
+
+/**
+ * Classify 1–3 photos of the SAME lesion into one ClassificationOutput.
+ *
+ * POOLING IS A UNIFORM MEAN OF THE PER-IMAGE LOGIT VECTORS, then a single softmax — arithmetically
+ * the same operation the 4-view dihedral TTA above already performs, so an N-image run is a
+ * 4N-view logit average. Averaging softmaxes instead would compress confidence toward 1/K and
+ * rescale the malignant score against a threshold fitted on logit-mean output.
+ *
+ * Whether pooling happens at all is MULTI_IMAGE_AGGREGATION_ENABLED, which ships FALSE on measured
+ * evidence (see model-config and synth/eval/MULTIVIEW_EVAL.md). With it off, every image is still
+ * classified and recorded in `perImage`, but the reported result is the primary image's — bit-identical
+ * to the single-photo path, so the shipped operating point is untouched.
+ *
+ * Images run SEQUENTIALLY, never in parallel: there is one native interpreter, so concurrent runs
+ * would serialize anyway while tripling peak memory.
+ */
+export async function classifyLesionSet(
+  uris: readonly string[],
+  attempt: 1 | 2,
+  opts?: { onImageDone?: (r: PerImageResult) => void },
+): Promise<ClassificationOutput> {
+  if (uris.length === 0) throw new ClassifierError('preprocess', 'no images to classify');
+  const { model, inputSize } = await prepareModel();
+  const parts: SetPart[] = [];
+  for (let index = 0; index < uris.length; index++) {
+    const part = await classifyImageAt(uris[index], index, model, inputSize, attempt, uris.length);
+    parts.push(part);
+    opts?.onImageDone?.(part.entry);
+  }
+  return composeSetResult(parts, attempt, inputSize);
+}
+
+/** One image's contribution to a set: the audit record plus the raw result, when it succeeded. */
+export type SetPart = { entry: PerImageResult; result: SingleImageResult | null; error?: unknown };
+
+/**
+ * Classify one image of a set, converting a failure into an excluded `PerImageResult` rather than
+ * throwing. One bad photo must not cost the user the whole screening.
+ */
+export async function classifyImageAt(
+  uri: string,
+  index: number,
+  model: ClassifierModel,
+  inputSize: number,
+  attempt: 1 | 2,
+  total = 1,
+): Promise<SetPart> {
+  try {
+    const r = await withTimeout(classifyOne(uri, model, inputSize), INFERENCE_TIMEOUT_MS);
+    if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt} image=${index + 1}/${total}`);
+    return {
+      result: r,
+      entry: {
+        index,
+        uri,
+        logits: r.prediction.logits,
+        probs: r.prediction.probs,
+        topClass: r.prediction.topClass,
+        topConfidence: r.prediction.topConfidence,
+        detectorUsed: r.detectorUsed,
+        refined: r.refined,
+        inferenceMs: r.inferenceMs,
+      },
+    };
+  } catch (e) {
+    const kind = (e as { kind?: string })?.kind ?? 'inference';
+    if (DEBUG) console.warn(`[classifier] image ${index} excluded (${kind})`, e);
+    return {
+      result: null,
+      error: e,
+      entry: {
+        index,
+        uri,
+        logits: null,
+        probs: null,
+        topClass: null,
+        topConfidence: null,
+        detectorUsed: false,
+        refined: false,
+        inferenceMs: 0,
+        excludedReason: kind,
+      },
+    };
+  }
+}
+
+/**
+ * Fold per-image results into one ClassificationOutput.
+ *
+ * With MULTI_IMAGE_AGGREGATION_ENABLED off (the shipped default) the reported result is the primary
+ * image's, bit-identical to the single-photo path — the other images are still classified and kept
+ * in `perImage` for the audit trail and for a future refit. Throws only when EVERY image failed, so
+ * analysis.tsx's error state behaves exactly as before.
+ */
+export function composeSetResult(
+  parts: readonly SetPart[],
+  attempt: 1 | 2,
+  inputSize: number,
+): ClassificationOutput {
+  const ordered = [...parts].sort((a, b) => a.entry.index - b.entry.index);
+  const perImage = ordered.map((p) => p.entry);
+  const usable = ordered.filter((p) => p.result).map((p) => p.result!);
+  if (usable.length === 0) {
+    throw asClassifierError(ordered.find((p) => p.error)?.error, 'inference');
+  }
+
+  const shouldPool = MULTI_IMAGE_AGGREGATION_ENABLED && usable.length > 1;
+  let probs: Record<LesionClass, number>;
+  let topClass: LesionClass;
+  let topConfidence: number;
+  if (shouldPool) {
+    const values = meanLogitsCore(usable.map((r) => r.prediction.logits));
+    // A future softmax-baked export is already in probability space; don't re-softmax it.
+    const p = usable[0].prediction.probsFromModel ? values : softmax(values, CONFIDENCE_TEMPERATURE);
+    probs = {} as Record<LesionClass, number>;
+    CLASS_ORDER.forEach((cls, i) => {
+      probs[cls] = p[i];
+    });
+    ({ topClass, topConfidence } = pickTopClass(probs));
+  } else {
+    const primary = usable[0].prediction; // the first image that classified successfully
+    probs = primary.probs;
+    topClass = primary.topClass;
+    topConfidence = primary.topConfidence;
+  }
+
+  return {
+    probs,
+    topClass,
+    topConfidence,
+    attempt,
+    modelVersion: MODEL_VERSION,
+    inputSize,
+    normalization: NORMALIZATION,
+    temperature: CONFIDENCE_TEMPERATURE,
+    inferenceMs: usable.reduce((sum, r) => sum + r.inferenceMs, 0),
+    // Only the images that actually produced the answer may set these flags.
+    scaleUnstable: shouldPool ? usable.some((r) => r.scaleUnstable) : usable[0].scaleUnstable,
+    refined: shouldPool ? usable.some((r) => r.refined) : usable[0].refined,
+    // D7's validated numbers hold only at detector geometry, so ALL is the honest reading.
+    detectorUsed: shouldPool ? usable.every((r) => r.detectorUsed) : usable[0].detectorUsed,
+    imageCount: shouldPool ? usable.length : 1,
+    aggregate: shouldPool ? 'logit-mean' : 'single',
+    perImage,
+    imageDisagreement: detectDisagreement(perImage),
+  } satisfies ClassificationOutput;
 }

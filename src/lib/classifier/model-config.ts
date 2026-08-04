@@ -282,3 +282,66 @@ export type PreprocessStep = (img: {
 }) => { data: Uint8Array; width: number; height: number };
 
 export const PREPROCESS_STEPS: readonly PreprocessStep[] = [];
+
+/* ---------------------------------------------------------------------------------------------
+ * Multi-image screenings (1–3 photos of one lesion)
+ * ------------------------------------------------------------------------------------------- */
+
+/** Hard cap. More photos is more wall clock and more storage for diminishing variance reduction. */
+export const MAX_IMAGES_PER_SCREENING = 3;
+
+/**
+ * Whether the classifier POOLS several photos into one prediction, or classifies the primary photo
+ * only. **Default false, on measured evidence** — see synth/eval/MULTIVIEW_EVAL.md.
+ *
+ * The pooling rule itself (uniform mean of per-image logits, then one softmax) is the only
+ * defensible one: it is arithmetically what the 4-view dihedral TTA above already does, so an
+ * N-image run is a 4N-view logit average. Averaging softmaxes instead would compress confidence
+ * toward 1/K and rescale the malignant score against a threshold fitted on logit-mean output.
+ *
+ * WHY IT SHIPS OFF. Measured N=1 vs N=2 vs N=3 through the deployment pipeline on 61 real two-view
+ * pairs and on 94 + 270 lesions with simulated capture views (2026-08-03):
+ *   - top-1 moved by under a point in either direction; McNemar p = 1.000 on the real pairs
+ *   - malignant AUROC was flat-to-slightly-better (0.847 → 0.854 on the 270-lesion set)
+ *   - BUT sensitivity at 0.50 fell 81.1% → 79.1% on that same set, and the bootstrapped Youden
+ *     optimum MOVED with N — down on one dataset (0.563 → 0.385), UP on the other (0.518 → 0.610),
+ *     with 0.50 falling outside the N=3 plateau [0.516, 0.701].
+ * A threshold drift that reverses sign between datasets is not a stable property of pooling; it
+ * means MALIGNANT_THRESHOLD is not pinned down finely enough to survive a change in how the
+ * probabilities are produced. And it cannot simply be refit per N: synth/eval/ANCHOR.md shows the
+ * original D7 fit is not even reproducible from the artifacts on disk, so there is nothing to refit
+ * against. Capture and storage ship; pooling waits for a held-out refit.
+ *
+ * Per-image classifications are computed and recorded either way (per_image_json), so the field
+ * data a future refit needs accumulates from day one at no behavioural cost.
+ */
+export const MULTI_IMAGE_AGGREGATION_ENABLED = false;
+
+/**
+ * Minimum per-image confidence for a cross-image disagreement to count. Two 0.30-confidence coin
+ * flips landing on different classes is the Safety Floor's job, not evidence that the lesion is
+ * unreadable — without this gate the check would fire on near-ties constantly.
+ */
+export const IMAGE_AGREEMENT_MIN_CONFIDENCE = 0.5;
+
+/**
+ * Whether a cross-image disagreement ROUTES to the rescan/floor path (tps-core
+ * `evaluateImageAgreement`). Default false, for the same reason SCALE_CHECK_ENABLED is:
+ * measured, the separation does not justify the friction.
+ *
+ * From MULTIVIEW_EVAL.md — disagreeing sets are less accurate, but by 9–14 points, against the
+ * 30-point gap the scale check achieved (29% flagged vs 59% kept), and that check ships disabled.
+ * At N=3 this would prompt a retake on 12–22% of sessions; on one dataset at N=2 the flagged set
+ * was actually *more* accurate than the kept set (53% vs 51%), i.e. no signal at all.
+ *
+ * `imageDisagreement` is computed and recorded regardless, so the real-world flag rate becomes
+ * measurable without shipping the behaviour.
+ */
+export const IMAGE_AGREEMENT_CHECK_ENABLED = false;
+
+/**
+ * Whole-set backstop. INFERENCE_TIMEOUT_MS stays the per-IMAGE ceiling (so a one-photo run behaves
+ * exactly as before, and one hung image is dropped rather than holding the whole screening); this
+ * only bounds the pathological case where all three photos are captured faster than they classify.
+ */
+export const SET_INFERENCE_TIMEOUT_MS = 45_000;

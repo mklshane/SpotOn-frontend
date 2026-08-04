@@ -175,7 +175,10 @@ export default function CropScreen() {
           { crop: { originX, originY, width: cropSize, height: cropSize } },
           { resize: { width: OUTPUT, height: OUTPUT } },
         ],
-        { compress: 0.9, format: SaveFormat.JPEG },
+        // compress 1.0, not 0.9: the sensor JPEG is already lossy at 0.92, so re-encoding at 0.9
+        // here put the classifier's input through a SECOND lossy pass. Two rounds of JPEG smear
+        // exactly the fine texture the model reads, and at 1024² the file-size saving is trivial.
+        { compress: 1, format: SaveFormat.JPEG },
       );
       // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
       router.replace({ pathname: '/scan/quality', params: { uri: result.uri, detected } });

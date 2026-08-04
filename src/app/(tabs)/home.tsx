@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,6 +12,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { LesionCard } from '@/components/scan/lesion-card';
+import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
@@ -90,12 +92,7 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
         },
         pressed && styles.pressed,
       ]}>
-      <Image
-        source={{ uri: item.imageUri }}
-        contentFit="cover"
-        transition={180}
-        style={styles.thumbnail}
-      />
+      <ScreeningThumbnail uri={item.imageUri} style={styles.thumbnail} iconSize={22} />
 
       <View style={styles.screeningInfo}>
         <ThemedText type="headline" numberOfLines={1}>
@@ -121,12 +118,27 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
 export default function HomeScreen() {
   const theme = useTheme();
   const { user } = useAuth();
-  const { entries, loading } = useScanHistory();
+  const { entries, lesions, loading } = useScanHistory();
   const dashboardOpacity = useSharedValue(0);
   const dashboardTranslateY = useSharedValue(14);
   const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
   const recent = entries.slice(0, 2);
   const lastScreening = entries[0];
+
+  // Archived spots are hidden but never deleted — same predicate the Spots list uses (all.tsx).
+  const spots = useMemo(
+    () =>
+      lesions
+        .filter((l) => !l.archived)
+        .slice()
+        .sort((a, b) => (b.lastScreenedAt ?? '').localeCompare(a.lastScreenedAt ?? ''))
+        .slice(0, 6),
+    [lesions]
+  );
+
+  // One pass over the screenings keyed by id, so each card resolves its photo by lookup. Calling
+  // screeningsForLesion() per card would re-filter the entire history once for every card.
+  const screeningById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
   useFocusEffect(
     useCallback(() => {
@@ -307,7 +319,9 @@ export default function HomeScreen() {
           {entries.length > recent.length ? (
             <Pressable
               hitSlop={8}
-              onPress={() => router.push('/scan/all')}
+              // Lands on "All scans" rather than the screen's default "Spots" tab — a "See all"
+              // beside a list of screenings should open the list of screenings.
+              onPress={() => router.push({ pathname: '/scan/all', params: { tab: 'scans' } })}
               accessibilityRole="button"
               accessibilityLabel="See all screenings"
               style={({ pressed }) => pressed && styles.pressed}>
@@ -348,6 +362,45 @@ export default function HomeScreen() {
             ))}
           </View>
         )}
+
+        {/* Tracked spots — the repeat-check loop tracking exists for, which until now was only
+            reachable by digging into /scan/all. Hidden entirely when empty: every scan mints a
+            lesion, so "screenings but no spots" isn't a state worth an empty card. */}
+        {spots.length > 0 ? (
+          <>
+            <View style={styles.sectionHead}>
+              <ThemedText type="title2">Tracked spots</ThemedText>
+              <Pressable
+                hitSlop={8}
+                onPress={() => router.push({ pathname: '/scan/all', params: { tab: 'lesions' } })}
+                accessibilityRole="button"
+                accessibilityLabel="See all tracked spots"
+                style={({ pressed }) => pressed && styles.pressed}>
+                <ThemedText type="subhead" themeColor="brand">
+                  See all
+                </ThemedText>
+              </Pressable>
+            </View>
+
+            {/* Negative margin cancels the page gutter so cards scroll off the screen edge
+                instead of stopping short inside it; the gutter comes back as content padding. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.spotStrip}
+              contentContainerStyle={styles.spotStripContent}>
+              {spots.map((lesion) => (
+                <LesionCard
+                  key={lesion.id}
+                  lesion={lesion}
+                  latest={
+                    lesion.lastScreeningId ? screeningById.get(lesion.lastScreeningId) : undefined
+                  }
+                />
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
 
         <View style={[styles.privacyBanner, { backgroundColor: theme.brandTint }]}>
           <View style={[styles.privacyIcon, { backgroundColor: theme.surface }]}>
@@ -425,6 +478,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // The strip bleeds past the page gutter on both sides; contentContainer restores it as padding,
+  // so the first card still aligns to the section header while the last scrolls off the edge.
+  spotStrip: { marginHorizontal: -Space.xl },
+  spotStripContent: { paddingHorizontal: Space.xl, paddingVertical: Space.xs, gap: Space.base },
   activityCard: {
     minHeight: 118,
     flexDirection: 'row',

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import type { DoctorSync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { IconCircle } from "@/components/ui/icon-circle";
@@ -15,16 +16,19 @@ import { Space } from "@/constants/theme";
 import {
   getDoctor,
   getDoctorBookingLinks,
+  getDoctorPractices,
   type BookingLinkWithPlatform,
+  type DoctorPractice,
 } from "@/data/repositories";
 import { useTheme } from "@/hooks/use-theme";
 import {
   daysSince,
+  facilityDisplayName,
   formatFee,
   formatShortDate,
   humanizeTag,
 } from "@/lib/format";
-import { openWebsite } from "@/lib/links";
+import { callNumber, openWebsite } from "@/lib/links";
 
 // Scraped availability text goes stale fast; past this age show the snapshot
 // date instead of presenting it as current ("Not available" from weeks ago
@@ -53,6 +57,7 @@ export default function DoctorDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [doctor, setDoctor] = useState<DoctorSync | null>(null);
   const [links, setLinks] = useState<BookingLinkWithPlatform[]>([]);
+  const [practices, setPractices] = useState<DoctorPractice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   // Reset loading/error during render when `id` changes (not synchronously in
@@ -67,11 +72,12 @@ export default function DoctorDetailScreen() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    Promise.all([getDoctor(id), getDoctorBookingLinks(id)])
-      .then(([d, l]) => {
+    Promise.all([getDoctor(id), getDoctorBookingLinks(id), getDoctorPractices(id)])
+      .then(([d, l, p]) => {
         if (cancelled) return;
         setDoctor(d);
         setLinks(l);
+        setPractices(p);
       })
       .catch(() => !cancelled && setError(true))
       .finally(() => !cancelled && setLoading(false));
@@ -154,6 +160,84 @@ export default function DoctorDetailScreen() {
             <ThemedText type="callout" themeColor="textSecondary">
               {doctor.description}
             </ThemedText>
+          ) : null}
+
+          {doctor.phone || doctor.website ? (
+            <View style={styles.actions}>
+              {doctor.phone ? (
+                <Button
+                  label="Call"
+                  variant="outline"
+                  icon="phone.fill"
+                  onPress={() => callNumber(doctor.phone as string)}
+                />
+              ) : null}
+              {doctor.website ? (
+                <Button
+                  label="Website"
+                  variant="outline"
+                  icon="globe"
+                  onPress={() => openWebsite(doctor.website as string)}
+                />
+              ) : null}
+            </View>
+          ) : null}
+
+          {practices.length > 0 ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <ThemedText type="title2">Practices at</ThemedText>
+                <ThemedText type="footnote" themeColor="muted">
+                  {practices.length === 1 ? "1 clinic" : `${practices.length} clinics`}
+                </ThemedText>
+              </View>
+              {practices.map((p) => (
+                <Pressable
+                  key={p.facility.id}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/directory/clinic",
+                      params: { id: p.facility.id },
+                    })
+                  }
+                  accessibilityRole="button"
+                >
+                  <Card style={styles.linkCard} elevation="sm">
+                    <View style={styles.linkTop}>
+                      <IconCircle icon="building.2.fill" size={40} variant="tint" />
+                      <View style={styles.linkText}>
+                        <ThemedText type="headline" numberOfLines={2}>
+                          {facilityDisplayName(p.facility)}
+                        </ThemedText>
+                        <ThemedText
+                          type="footnote"
+                          themeColor="muted"
+                          numberOfLines={1}
+                        >
+                          {[p.facility.city, p.facility.province]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </ThemedText>
+                        {p.schedule ? (
+                          <View style={styles.metaRow}>
+                            <Icon name="clock.fill" size={12} tintColor={theme.muted} />
+                            <ThemedText
+                              type="footnote"
+                              themeColor="muted"
+                              numberOfLines={2}
+                              style={styles.availText}
+                            >
+                              {p.schedule}
+                            </ThemedText>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Icon name="chevron.right" size={16} tintColor={theme.brand} />
+                    </View>
+                  </Card>
+                </Pressable>
+              ))}
+            </>
           ) : null}
 
           <View style={styles.sectionHeader}>
@@ -294,6 +378,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: Space.md,
   },
+  actions: { flexDirection: "row", gap: Space.sm, marginTop: Space.xs },
   linkCard: { gap: Space.base },
   linkTop: { flexDirection: "row", alignItems: "center", gap: Space.md },
   linkText: { flex: 1, gap: 2 },

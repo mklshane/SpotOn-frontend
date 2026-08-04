@@ -1,6 +1,6 @@
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   FadeIn,
@@ -32,14 +32,24 @@ export default function QuestionnaireScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { answers, setAnswer, questionnaireComplete, reset } = useScreeningSession();
+  const { answers, setAnswer, questionnaireComplete, reset, followUp, questionsToReask } =
+    useScreeningSession();
+
+  // A follow-up only asks what the carry-forward policy could not safely reuse (tps-core
+  // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers — the carried ones
+  // are already in `answers`, so computeSymptomScore keeps scoring a complete questionnaire and the
+  // TPS engine is untouched. Only the asked subset changes.
+  const questions = useMemo(
+    () => (followUp ? QUESTIONS.filter((q) => questionsToReask.includes(q.id)) : QUESTIONS),
+    [followUp, questionsToReask],
+  );
 
   const listRef = useRef<FlatList<QuestionDef>>(null);
   const [index, setIndex] = useState(0);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isLast = index === QUESTIONS.length - 1;
-  const current = QUESTIONS[index];
+  const isLast = index === questions.length - 1;
+  const current = questions[index];
   const currentAnswered = answers[current.id] !== undefined;
 
   const goTo = useCallback((i: number) => {
@@ -50,8 +60,8 @@ export default function QuestionnaireScreen() {
   function select(q: QuestionDef, value: Answer) {
     setAnswer(q.id, value);
     if (advanceTimer.current) clearTimeout(advanceTimer.current);
-    const i = QUESTIONS.indexOf(q);
-    if (i < QUESTIONS.length - 1) {
+    const i = questions.indexOf(q);
+    if (i < questions.length - 1) {
       advanceTimer.current = setTimeout(() => goTo(i + 1), ADVANCE_MS);
     }
   }
@@ -90,7 +100,7 @@ export default function QuestionnaireScreen() {
           <View style={styles.headerSpacer} />
         )}
         <ThemedText type="headline" themeColor="textSecondary">
-          Question {index + 1} of {QUESTIONS.length}
+          Question {index + 1} of {questions.length}
         </ThemedText>
         <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel="Exit questionnaire">
           <Icon name="xmark" tintColor={theme.muted} size={18} />
@@ -98,11 +108,11 @@ export default function QuestionnaireScreen() {
       </View>
 
       {/* Progress: thin brand bar under the header, filled to the current question */}
-      <ProgressBar progress={(index + 1) / QUESTIONS.length} />
+      <ProgressBar progress={(index + 1) / questions.length} />
 
       <FlatList
         ref={listRef}
-        data={QUESTIONS as QuestionDef[]}
+        data={questions as QuestionDef[]}
         keyExtractor={(q) => q.id}
         horizontal
         pagingEnabled

@@ -4,6 +4,7 @@ export {
   runSync,
   getLastSyncedAt,
   needsInitialSync,
+  needsReconcile,
   type SyncResult,
 } from "./sync";
 export {

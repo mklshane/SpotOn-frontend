@@ -31,7 +31,8 @@ interface FacilityRow {
 
 interface DoctorRow {
   id: string; name: string; title: string | null; pds_certified: number | null;
-  specialties: string; specialties_display: string | null; city: string | null;
+  specialties: string; specialties_display: string | null; status: string | null;
+  city: string | null;
   region: string | null; phone: string | null; website: string | null;
   google_maps_url: string | null; photo_url: string | null;
   description: string | null; updated_at: string;
@@ -93,7 +94,8 @@ function toDoctor(r: DoctorRow): DoctorSync {
   return {
     id: r.id, name: r.name, title: r.title,
     pds_certified: toBool(r.pds_certified), specialties: arr(r.specialties),
-    specialties_display: r.specialties_display, city: r.city, region: r.region,
+    specialties_display: r.specialties_display, status: r.status,
+    city: r.city, region: r.region,
     phone: r.phone, website: r.website, google_maps_url: r.google_maps_url,
     photo_url: r.photo_url, description: r.description, updated_at: r.updated_at,
   };
@@ -162,10 +164,11 @@ export async function countFacilities(query: FacilityQuery = {}): Promise<number
   return row?.n ?? 0;
 }
 
+/** One facility by id, or null if it is excluded (see getDoctor for why). */
 export async function getFacility(id: string): Promise<FacilitySync | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<FacilityRow>(
-    "SELECT * FROM facilities WHERE id = ?",
+    "SELECT * FROM facilities WHERE id = ? AND (status IS NULL OR status != 'excluded')",
     id,
   );
   return row ? toFacility(row) : null;
@@ -231,6 +234,7 @@ export interface DoctorQuery {
   city?: string;
   pdsCertified?: boolean;
   hasBookingLink?: boolean; // only doctors with ≥1 active booking link
+  includeExcluded?: boolean; // default false — hide status='excluded'
   limit?: number;
   offset?: number;
 }
@@ -239,6 +243,9 @@ export async function listDoctors(query: DoctorQuery = {}): Promise<DoctorSync[]
   const db = await getDb();
   const where: string[] = [];
   const params: (string | number)[] = [];
+  // Same predicate as facilityWhere: the collector filed 258 clinics as doctors,
+  // and they are soft-excluded rather than deleted.
+  if (!query.includeExcluded) where.push("(status IS NULL OR status != 'excluded')");
   if (query.q) { where.push("name LIKE ?"); params.push(`%${query.q}%`); }
   if (query.city) { where.push("city LIKE ?"); params.push(`%${query.city}%`); }
   if (query.specialty) { where.push("specialties LIKE ?"); params.push(`%"${query.specialty}"%`); }
@@ -256,10 +263,57 @@ export async function listDoctors(query: DoctorQuery = {}): Promise<DoctorSync[]
   return rows.map(toDoctor);
 }
 
+/**
+ * One doctor by id, or null if it is excluded.
+ *
+ * The list already filters, but a deep link or a stale navigation param can
+ * carry an id straight here — the detail screen renders "Doctor not found",
+ * which is the right answer for a record the directory has hidden.
+ */
 export async function getDoctor(id: string): Promise<DoctorSync | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<DoctorRow>("SELECT * FROM doctors WHERE id = ?", id);
+  const row = await db.getFirstAsync<DoctorRow>(
+    "SELECT * FROM doctors WHERE id = ? AND (status IS NULL OR status != 'excluded')",
+    id,
+  );
   return row ? toDoctor(row) : null;
+}
+
+/** A facility a doctor practises at, plus the schedule recorded for that pairing. */
+export interface DoctorPractice {
+  facility: FacilitySync;
+  is_primary: boolean | null;
+  schedule: string | null;
+}
+
+/**
+ * Facilities a doctor practises at, primary first.
+ *
+ * Excluded facilities are filtered out with the same rule the clinic list uses,
+ * so a doctor never links through to a clinic the directory has hidden.
+ */
+export async function getDoctorPractices(doctorId: string): Promise<DoctorPractice[]> {
+  const db = await getDb();
+  // f.* keeps the row shape identical to every other facility read, so the same
+  // toFacility() parses it; the two df_* aliases carry the edge's own columns.
+  type PracticeRow = FacilityRow & {
+    df_is_primary: number | null;
+    df_schedule: string | null;
+  };
+  const rows = await db.getAllAsync<PracticeRow>(
+    `SELECT f.*, df.is_primary AS df_is_primary, df.schedule AS df_schedule
+       FROM doctor_facility df
+       JOIN facilities f ON f.id = df.facility_id
+      WHERE df.doctor_id = ?
+        AND (f.status IS NULL OR f.status != 'excluded')
+      ORDER BY (df.is_primary IS NULL OR df.is_primary = 0), f.name`,
+    doctorId,
+  );
+  return rows.map((r) => ({
+    facility: toFacility(r),
+    is_primary: toBool(r.df_is_primary),
+    schedule: r.df_schedule ?? null,
+  }));
 }
 
 export interface BookingLinkWithPlatform extends BookingLinkSync {

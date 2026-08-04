@@ -77,9 +77,16 @@
     "test:api": "node scripts/smoke-api.mjs",
     "test:iqa": "node scripts/test-image-quality.mjs",
     "test:tps": "node scripts/test-tps.mjs",
+    "test:migration": "node --no-warnings scripts/test-migration.mjs",
+    "test:image-paths": "node scripts/test-image-paths.mjs",
+    "test:glyphs": "node scripts/test-body-glyphs.mjs",
+    "preview:glyphs": "node scripts/preview-body-glyphs.mjs",
     "test:report": "node scripts/test-report-html.mjs",
     "test:localizer": "node scripts/test-localizer.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test:multiview": "node scripts/test-multiview.mjs",
+    "test:flow": "node scripts/test-scan-flow.mjs",
+    "test:capture": "node scripts/test-capture.mjs"
   },
   "private": true
 }
