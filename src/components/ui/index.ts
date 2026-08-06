@@ -3,6 +3,7 @@ export { Button } from './button';
 export { CalendarPicker } from './calendar-picker';
 export { Card } from './card';
 export { Checkbox } from './checkbox';
+export { ConfirmDialog } from './confirm-dialog';
 export { DateField } from './date-field';
 export { Dots } from './dots';
 export { GradientBackground } from './gradient-background';

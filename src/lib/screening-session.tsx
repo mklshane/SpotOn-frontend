@@ -34,6 +34,13 @@ type ScreeningSessionValue = {
 
   answers: Partial<Record<QuestionId, Answer>>;
   setAnswer: (id: QuestionId, answer: Answer) => void;
+  /**
+   * The questionnaire skip: record every still-unanswered question as 'unsure'. Answers the user
+   * already gave (and any carried forward by a follow-up) are kept as-is. This leaves the
+   * questionnaire complete, so scoring stays a full 8-item TPS — 'unsure' is a real, weighted
+   * answer in tps-core (major 0.5, minor 0), not a missing one.
+   */
+  skipRemaining: () => void;
   questionnaireComplete: boolean;
 
   attempt: 1 | 2;
@@ -117,6 +124,20 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
 
   const setAnswer = useCallback((id: QuestionId, answer: Answer) => {
     setAnswers((prev) => (prev[id] === answer ? prev : { ...prev, [id]: answer }));
+  }, []);
+
+  const skipRemaining = useCallback(() => {
+    setAnswers((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const id of ALL_QUESTIONS) {
+        if (next[id] === undefined) {
+          next[id] = 'unsure';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
   }, []);
 
   /** Load the interpreter once per session; every image's run awaits the same promise. */
@@ -288,6 +309,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       setSource,
       answers,
       setAnswer,
+      skipRemaining,
       questionnaireComplete,
       attempt,
       firstAttempt,
@@ -313,6 +335,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       source,
       answers,
       setAnswer,
+      skipRemaining,
       questionnaireComplete,
       attempt,
       firstAttempt,

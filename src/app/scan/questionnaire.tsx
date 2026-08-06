@@ -12,7 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { Button, Screen, SelectCard } from '@/components/ui';
+import { Button, ConfirmDialog, Screen, SelectCard } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -32,8 +32,15 @@ export default function QuestionnaireScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { answers, setAnswer, questionnaireComplete, reset, followUp, questionsToReask } =
-    useScreeningSession();
+  const {
+    answers,
+    setAnswer,
+    skipRemaining,
+    questionnaireComplete,
+    reset,
+    followUp,
+    questionsToReask,
+  } = useScreeningSession();
 
   // A follow-up only asks what the carry-forward policy could not safely reuse (tps-core
   // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers — the carried ones
@@ -46,11 +53,19 @@ export default function QuestionnaireScreen() {
 
   const listRef = useRef<FlatList<QuestionDef>>(null);
   const [index, setIndex] = useState(0);
+  const [skipOpen, setSkipOpen] = useState(false);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isLast = index === questions.length - 1;
   const current = questions[index];
   const currentAnswered = answers[current.id] !== undefined;
+
+  // Counted over all 8 items, not just the asked subset: a follow-up carries answers forward, and
+  // those are already answered — only what is genuinely blank becomes "I’m not sure".
+  const unanswered = useMemo(
+    () => QUESTIONS.filter((q) => answers[q.id] === undefined).length,
+    [answers],
+  );
 
   const goTo = useCallback((i: number) => {
     listRef.current?.scrollToIndex({ index: i, animated: true });
@@ -72,6 +87,14 @@ export default function QuestionnaireScreen() {
     } else if (currentAnswered) {
       goTo(index + 1);
     }
+  }
+
+  /** Skip: every blank answer becomes "I’m not sure", then straight on to the result. */
+  function confirmSkip() {
+    if (advanceTimer.current) clearTimeout(advanceTimer.current);
+    setSkipOpen(false);
+    skipRemaining();
+    router.replace('/scan/analysis');
   }
 
   function confirmExit() {
@@ -164,7 +187,36 @@ export default function QuestionnaireScreen() {
           onPress={next}
           style={styles.cta}
         />
+        {unanswered > 0 ? (
+          <Pressable
+            hitSlop={10}
+            onPress={() => setSkipOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Skip the remaining questions">
+            {({ pressed }) => (
+              <ThemedText
+                type="subhead"
+                themeColor="textSecondary"
+                style={[styles.skip, pressed && styles.skipPressed]}>
+                Skip these questions
+              </ThemedText>
+            )}
+          </Pressable>
+        ) : null}
       </View>
+
+      <ConfirmDialog
+        visible={skipOpen}
+        icon="questionmark.circle.fill"
+        title="Skip the questions?"
+        message={`We’ll record your ${unanswered} remaining ${
+          unanswered === 1 ? 'answer' : 'answers'
+        } as “I’m not sure.” That’s okay — but the more you can answer, the more accurate your result.`}
+        confirmLabel="Skip anyway"
+        cancelLabel="Keep answering"
+        onConfirm={confirmSkip}
+        onCancel={() => setSkipOpen(false)}
+      />
     </Screen>
   );
 }
@@ -257,4 +309,6 @@ const styles = StyleSheet.create({
   },
   reassure: { textAlign: 'center' },
   cta: { alignSelf: 'stretch' },
+  skip: { textAlign: 'center', textDecorationLine: 'underline' },
+  skipPressed: { opacity: 0.6 },
 });
