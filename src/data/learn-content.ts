@@ -32,6 +32,7 @@ export type ArticleBlock =
     }
   | { kind: 'bodyAreas'; heading?: string; intro?: string; areas: BodyArea[] }
   | { kind: 'notice'; tone: 'info' | 'caution'; title?: string; text: string }
+  | { kind: 'subtypes'; heading?: string; intro?: string; items: Subtype[] }
   | { kind: 'sources'; sources: SourceId[]; pending?: PendingSourceId[] };
 
 /**
@@ -62,6 +63,33 @@ export type CompareItem = {
   photos: { typical: ClinicalImageId; concern: ClinicalImageId };
   /** Quiet line under the pair, e.g. where the measurements came from. */
   footnote?: string;
+};
+
+/**
+ * A recognised variant of a skin cancer type. Names come from the reference
+ * cited on the article, never from memory, and each carries its own photo slot
+ * so a card can never show a generic example of the parent type.
+ */
+export type Subtype = {
+  id: string;
+  name: string;
+  /** One line, shown on the collapsed card. */
+  summary: string;
+  photo: ClinicalImageId;
+  /**
+   * Set when the photograph is a broader example than the subtype named on the
+   * card, so the image is never read as a confirmed instance of it.
+   * `photoCaption` sits under the thumbnail; `photoNote` explains it in full
+   * once the card is open.
+   */
+  photoCaption?: string;
+  photoNote?: string;
+  /** What it may look like. */
+  appearance: string;
+  /** Where it commonly appears, only when the reference states it. */
+  location?: string;
+  /** Two or three concise points. */
+  points: string[];
 };
 
 export type Step = { title: string; detail: string };
@@ -244,6 +272,56 @@ export const LEARN_TOPICS: Topic[] = [
             ],
           },
           {
+            kind: 'subtypes',
+            heading: 'Types of basal cell carcinoma',
+            intro: 'More than twenty variants are described. These are the ones seen most often.',
+            items: [
+              {
+                id: 'nodular',
+                name: 'Nodular',
+                summary: 'The most common form, and the classic pearly bump.',
+                photo: 'bcc-nodular',
+                appearance:
+                  'A raised, round growth with a translucent or pearly surface, often with fine visible vessels across it.',
+                location: 'Most often the head and neck, particularly the nose and forehead.',
+                points: ['The most common variant.', 'Considered lower risk than the infiltrative forms.'],
+              },
+              {
+                id: 'superficial',
+                name: 'Superficial',
+                summary: 'A flat, scaly patch rather than a bump, usually on the trunk.',
+                photo: 'bcc-superficial',
+                appearance:
+                  'A reddened, well defined flat patch with a light scale, which can be mistaken for eczema or psoriasis.',
+                location: 'Usually the trunk.',
+                points: ['Often appears in more than one place.', 'Grows outward rather than downward.'],
+              },
+              {
+                id: 'morpheaform',
+                name: 'Morpheaform or sclerosing',
+                summary: 'Looks like a scar, and its edges are hard to see.',
+                photo: 'bcc-morpheaform',
+                appearance: 'A pale, waxy, slightly firm patch with poorly defined edges, easily mistaken for a scar.',
+                location: 'Mainly the nose, inner eye corners, forehead, and cheeks.',
+                points: [
+                  'Its true extent is hard to judge by eye.',
+                  'Returns after treatment more often than the nodular form.',
+                ],
+              },
+              {
+                id: 'pigmented',
+                name: 'Pigmented',
+                summary: 'A nodular growth carrying brown or black colour.',
+                photo: 'bcc-pigmented',
+                appearance: 'A pearly bump with brown, black, or blue-grey pigment, so it can be mistaken for a mole.',
+                points: [
+                  'More often seen in people with darker skin tones.',
+                  'Behaves like the nodular form despite the different colour.',
+                ],
+              },
+            ],
+          },
+          {
             kind: 'list',
             variant: 'grouped',
             heading: 'Common signs',
@@ -287,7 +365,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Worth remembering',
             text: 'A sore on sun-exposed skin that keeps reopening over several weeks is worth showing a dermatologist, even when it does not hurt.',
           },
-          { kind: 'sources', sources: ['aadBcc', 'nciSkin'] },
+          { kind: 'sources', sources: ['aadBcc', 'statPearlsBcc', 'nciSkin'] },
         ],
       },
       {
@@ -310,6 +388,49 @@ export const LEARN_TOPICS: Topic[] = [
               { title: 'Rough, scaly surface', detail: 'The patch feels crusted or sandpapery rather than smooth.' },
               { title: 'Firm red base', detail: 'The skin underneath often looks inflamed or reddened.' },
               { title: 'Crusting that returns', detail: 'Flakes lift off and rebuild in the same spot.' },
+            ],
+          },
+          {
+            kind: 'subtypes',
+            heading: 'Types of squamous cell carcinoma',
+            intro: 'Three forms account for most cases seen on the skin.',
+            items: [
+              {
+                id: 'bowens',
+                name: 'Bowen disease, or in situ',
+                summary: 'The earliest form, still confined to the surface layer of the skin.',
+                photo: 'scc-bowens',
+                appearance: 'A well defined red, scaly patch that can look like eczema or psoriasis but does not clear.',
+                points: [
+                  'Has not grown past the top layer of skin.',
+                  'Highly treatable at this stage.',
+                ],
+              },
+              {
+                id: 'keratoacanthoma',
+                name: 'Keratoacanthoma',
+                summary: 'Grows quickly, and can shrink on its own.',
+                photo: 'scc-keratoacanthoma',
+                appearance: 'A dome-shaped lump with a central plug of keratin, giving it a crater-like middle.',
+                points: [
+                  'Appears and grows over weeks rather than months.',
+                  'Still assessed and treated as a squamous cell carcinoma even though it may regress.',
+                ],
+              },
+              {
+                id: 'invasive',
+                name: 'Invasive',
+                summary: 'Has grown past the surface layer into deeper skin.',
+                photo: 'scc-invasive',
+                photoCaption: 'General SCC example',
+                photoNote:
+                  'Clinical example of squamous cell carcinoma. The image source does not specify whether this lesion is invasive, and invasion is confirmed under a microscope rather than by eye.',
+                appearance: 'A firm, often tender lump, or a scaly sore that bleeds, crusts, and does not heal.',
+                points: [
+                  'The form most likely to spread if it is left untreated.',
+                  'Still very treatable when found early.',
+                ],
+              },
             ],
           },
           {
@@ -357,7 +478,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Worth remembering',
             text: 'A rough patch that keeps coming back after it seems to heal is a common early sign, and it is much simpler to treat at that stage.',
           },
-          { kind: 'sources', sources: ['aadScc', 'nciSkin'] },
+          { kind: 'sources', sources: ['aadScc', 'statPearlsScc', 'nciSkin'] },
         ],
       },
       {
@@ -380,6 +501,68 @@ export const LEARN_TOPICS: Topic[] = [
               { title: 'Asymmetric shape', detail: 'One half does not mirror the other half.' },
               { title: 'Irregular, notched border', detail: 'The edge wanders instead of forming a clean circle.' },
               { title: 'Uneven color', detail: 'Several shades of brown or black appear within one spot.' },
+            ],
+          },
+          {
+            kind: 'subtypes',
+            heading: 'Types of melanoma',
+            intro:
+              'Four main types are recognised, by how they grow and where they appear. Tap one to see what it may look like.',
+            items: [
+              {
+                id: 'superficial-spreading',
+                name: 'Superficial spreading melanoma',
+                // Kept to two lines in the narrow card column. This is the only
+                // subtype whose name wraps, so a third line of summary made its
+                // card taller than every sibling in the set.
+                summary: 'The most common type. Spreads outward before it grows deeper.',
+                photo: 'melanoma-superficial-spreading',
+                appearance:
+                  'A flat or slightly raised patch with an uneven edge and more than one shade of brown, black, or pink.',
+                location: 'Often the trunk in men and the legs in women, though it can appear anywhere.',
+                points: [
+                  'Usually grows sideways for a period before it grows deeper.',
+                  'The ABCDE signs describe this type well.',
+                ],
+              },
+              {
+                id: 'nodular',
+                name: 'Nodular melanoma',
+                summary: 'Grows downward early, so it can become serious faster than the others.',
+                photo: 'melanoma-nodular',
+                appearance:
+                  'A firm, raised lump, often evenly coloured. It can be black, brown, red, pink, or carry no extra colour at all.',
+                points: [
+                  'Grows deeper from the start rather than spreading sideways first.',
+                  'May not show the usual ABCDE signs, so a new firm lump that keeps growing is worth checking even when it looks even.',
+                ],
+              },
+              {
+                id: 'lentigo-maligna',
+                name: 'Lentigo maligna melanoma',
+                summary: 'Develops slowly on skin with many years of sun exposure.',
+                photo: 'melanoma-lentigo-maligna',
+                appearance:
+                  'A large, flat, freckle-like patch of uneven tan and brown that widens slowly over years.',
+                location: 'Usually the face, head, and neck.',
+                points: [
+                  'More common in older adults.',
+                  'Slow growth makes it easy to mistake for an age spot.',
+                ],
+              },
+              {
+                id: 'acral-lentiginous',
+                name: 'Acral lentiginous melanoma',
+                summary: 'Appears on palms, soles, and under the nails, on skin that rarely sees sun.',
+                photo: 'melanoma-acral',
+                appearance:
+                  'A dark patch on a palm or sole, or a dark band running the length of a nail.',
+                location: 'Palms, soles, and nail beds.',
+                points: [
+                  'Not linked to sun exposure.',
+                  'Worth knowing about because these areas are easy to skip during a self-check.',
+                ],
+              },
             ],
           },
           {
@@ -429,7 +612,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Do not wait this one out',
             text: 'If a mole matches an ABCDE sign or has clearly changed, book a dermatologist rather than watching it for another few months. Early melanoma is usually treated with a simple removal.',
           },
-          { kind: 'sources', sources: ['aadMelanoma', 'aadAbcde', 'nciSkin'] },
+          { kind: 'sources', sources: ['aadMelanoma', 'nciMelanomaSubtypes', 'aadAbcde', 'nciSkin'] },
         ],
       },
     ],
@@ -893,6 +1076,15 @@ function blockWords(block: ArticleBlock): number {
       );
     case 'notice':
       return countWords(block.title, block.text);
+    case 'subtypes':
+      return (
+        countWords(block.heading, block.intro) +
+        block.items.reduce(
+          (total, item) =>
+            total + countWords(item.name, item.summary, item.appearance, item.location, ...item.points),
+          0
+        )
+      );
     case 'sources':
       // A reference list is scanned, not read. Counting it would inflate every
       // article's estimate by a minute for text nobody reads start to finish.
