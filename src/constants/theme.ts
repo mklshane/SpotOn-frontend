@@ -107,14 +107,10 @@ export const Motion = {
   press: { damping: 18, stiffness: 320 },
   pressScale: 0.97,
   entrance: {
-    /** How far an entering element travels upward. Deliberately small. */
-    distance: 10,
     /** Gap between staggered siblings. */
     stagger: 45,
     /** Ceiling on the stagger, so a long list never withholds its tail. */
     maxDelay: 300,
-    /** How far an illustration scales up from, as a fraction. 0.04 = from 96%. */
-    settleScale: 0.04,
   },
 } as const;
 

@@ -93,7 +93,6 @@ export function LearnArticleHero({ articleId, icon, eyebrow, title, meta }: Lear
             // expo-image, so both hero kinds resolve the same way instead of
             // one easing in and the other snapping.
             <Entrance
-              variant="settle"
               style={[
                 styles.artworkMedallion,
                 { backgroundColor: theme.surface },
