@@ -487,19 +487,30 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
       <ThemedText type="caption" themeColor="muted" style={styles.creditsHeading}>
         IMAGE CREDITS
       </ThemedText>
-      {credits.map((credit) => (
-        <PressableScale
-          key={credit.url}
-          onPress={() => Linking.openURL(credit.url)}
-          accessibilityRole="link"
-          accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
-          style={styles.creditRow}>
-          <ThemedText type="caption" themeColor="textSecondary">
-            Image source: {credit.org} ({credit.licence})
-          </ThemedText>
-          <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
-        </PressableScale>
-      ))}
+      {credits.map((credit) =>
+        // A credit covering more than one source has no single page to open, so
+        // it renders as plain text rather than a link that would point at only
+        // one of them.
+        credit.url ? (
+          <PressableScale
+            key={credit.org}
+            onPress={() => Linking.openURL(credit.url as string)}
+            accessibilityRole="link"
+            accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
+            style={styles.creditRow}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Image source: {credit.org} ({credit.licence})
+            </ThemedText>
+            <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
+          </PressableScale>
+        ) : (
+          <View key={credit.org} style={styles.creditRow}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              Image source: {credit.org} ({credit.licence})
+            </ThemedText>
+          </View>
+        ),
+      )}
     </View>
   );
 }

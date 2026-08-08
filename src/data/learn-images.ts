@@ -3,26 +3,56 @@ import type { ImageSourcePropType } from 'react-native';
 /**
  * Slots for real clinical photography in the Education module.
  *
- * All thirteen slots hold real photographs, added 2026-08-08 and licensed CC0 or
- * CC BY. Both permit this use, including commercially, so the project is not
- * locked into staying non-commercial. Every image carries its attribution in
- * `credit`, which each article's Image Credits section renders automatically.
+ * Every slot holds a real photograph. Two provenance groups:
  *
- * Eleven come from the ISIC Archive. The two `abcde-evolving-*` slots come from
- * a CC BY case report instead, because a genuine before-and-after needs the same
- * lesion on the same person at two dated points, and ISIC is built around single
- * images per lesion. That pair is dermoscopic rather than clinical, which the UI
- * labels outright rather than glossing over.
+ * Externally sourced, all CC0 or CC BY. Both permit this use, including
+ * commercially, so the project is not locked into staying non-commercial. Each
+ * carries its attribution in `credit`, which the article's Image Credits section
+ * renders automatically. Most come from the ISIC Archive; the two
+ * `abcde-evolving-*` slots come from a CC BY case report instead, because a
+ * genuine before-and-after needs the same lesion on the same person at two dated
+ * points and ISIC is built around single images per lesion. That pair is
+ * dermoscopic rather than clinical, which the UI labels outright.
+ *
+ * Project-supplied, added 2026-08-08: the four melanoma subtypes, the three BCC
+ * subtypes other than superficial, `scc-keratoacanthoma`, and `melanoma-example`.
+ * These are clinical naked-eye views, which is why the melanoma subtypes no
+ * longer carry `modality: 'dermoscopic'`. They come from the DDI and SCIN
+ * datasets and share `DATASET_CREDIT` below, whose comment records a licensing
+ * question that has to be settled before release.
  *
  * See docs/education-image-shortlist.md for the full audit trail.
  */
 
 export type ImageCredit = {
   org: string;
-  /** Page the image came from, shown as "View original". */
-  url: string;
+  /**
+   * Page the image came from, shown as "View original". Omitted where a credit
+   * covers more than one dataset and no single page would be honest to link to;
+   * the row then renders as plain text.
+   */
+  url?: string;
   /** e.g. "CC BY-NC-ND 4.0". Recorded so the licence travels with the asset. */
   licence: string;
+};
+
+/**
+ * Shared credit for the project-supplied photographs. They come from the DDI and
+ * SCIN dermatology datasets, and which image came from which was not recorded, so
+ * both are named on every one rather than either being guessed at.
+ *
+ * Read the licences before release. SCIN's Data Use License permits redistribution
+ * with attribution and forbids re-identifying contributors. DDI's Stanford Research
+ * Use Agreement is far narrower: personal, non-commercial research only, and it
+ * states outright that you may not distribute, publish, or reproduce any portion of
+ * the dataset without prior written permission. Shipping these inside an installable
+ * app is distribution. Since the two datasets are not separated here, that
+ * restriction has to be assumed to cover all nine until each image is traced back to
+ * its dataset or Stanford grants permission.
+ */
+const DATASET_CREDIT: ImageCredit = {
+  org: 'DDI (Stanford Medicine) and SCIN (Google Health & Stanford Medicine) dermatology datasets',
+  licence: 'DDI Research Use Agreement; SCIN Data Use License',
 };
 
 export type ClinicalImageSpec = {
@@ -135,55 +165,48 @@ const IMAGES = {
     credit: { org: 'Memorial Sloan Kettering Cancer Center, via ISIC Archive',
       url: 'https://api.isic-archive.com/api/v2/images/ISIC_2222766/', licence: 'CC BY 4.0' },
   },
-  // Melanoma subtypes. ISIC labels these in diagnosis_4, but every labelled
-  // image in the archive is dermoscopic: a query for clinical melanoma with a
-  // subtype returns zero. They are shown as dermoscopic rather than passed off
-  // as naked-eye views.
+  // Melanoma subtypes. All four are clinical, naked-eye photographs supplied by
+  // the project on 2026-08-08, replacing the dermoscopic ISIC images that stood
+  // here before. ISIC only labels subtypes on dermoscopic images, so those four
+  // showed a magnified instrument view of a lesion nobody would recognise in a
+  // mirror. These show what the reader would actually see on their own skin,
+  // which is the whole job of a "what it may look like" slot.
   'melanoma-superficial-spreading': {
     needs: 'Documented superficial spreading melanoma.',
-    alt: 'Dermoscopic view of a superficial spreading melanoma',
+    alt: 'A flat, irregularly shaped patch mixing brown, black, and pink shades',
     photoRequired: true,
-    modality: 'dermoscopic',
-    asset: require('@/assets/images/learn/clinical/ISIC_0009992.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0009992/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/melanoma-superficial-spreading.jpg'),
+    credit: DATASET_CREDIT,
   },
   'melanoma-nodular': {
     needs: 'Documented nodular melanoma.',
-    alt: 'Dermoscopic view of a nodular melanoma',
+    alt: 'A raised, dome-shaped dark nodule on an arm',
     photoRequired: true,
-    modality: 'dermoscopic',
-    asset: require('@/assets/images/learn/clinical/ISIC_0000076.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0000076/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/melanoma-nodular.jpg'),
+    credit: DATASET_CREDIT,
   },
   'melanoma-lentigo-maligna': {
     needs: 'Documented lentigo maligna melanoma.',
-    alt: 'Dermoscopic view of a lentigo maligna melanoma',
+    alt: 'A large, flat, freckle-like patch of uneven tan and brown on sun-damaged skin',
     photoRequired: true,
-    modality: 'dermoscopic',
-    asset: require('@/assets/images/learn/clinical/ISIC_0009924.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0009924/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/melanoma-lentigo-maligna.jpg'),
+    credit: DATASET_CREDIT,
   },
   'melanoma-acral': {
     needs: 'Documented acral or acral-lentiginous melanoma.',
-    alt: 'Dermoscopic view of an acral lentiginous melanoma',
+    alt: 'A wide dark band running the length of a thumbnail',
     photoRequired: true,
-    modality: 'dermoscopic',
-    asset: require('@/assets/images/learn/clinical/ISIC_0000290.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0000290/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/melanoma-acral.jpg'),
+    credit: DATASET_CREDIT,
   },
-  // BCC subtypes. Only the nodular variant carries a subtype label on a
-  // clinical image anywhere in ISIC; the rest wait on a source.
+  // BCC subtypes. Nodular, pigmented, and morpheaform are project-supplied
+  // clinical photographs; superficial still comes from NCI Visuals Online.
   'bcc-nodular': {
     needs: 'Documented nodular basal cell carcinoma.',
-    alt: 'A pearly nodular basal cell carcinoma',
+    alt: 'A pearly, translucent pink nodule typical of nodular basal cell carcinoma',
     photoRequired: true,
-    asset: require('@/assets/images/learn/clinical/ISIC_0024262.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0024262/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/bcc-nodular.jpg'),
+    credit: DATASET_CREDIT,
   },
   'bcc-superficial': {
     needs: 'Sourced. National Cancer Institute Visuals Online, photographed by Kelly Nelson MD.',
@@ -198,28 +221,18 @@ const IMAGES = {
     },
   },
   'bcc-morpheaform': {
-    needs: 'Sourced. Nakayama et al., Journal of Skin Cancer 2011, via Wikimedia Commons.',
-    alt: 'A pale, scar-like morpheaform basal cell carcinoma with poorly defined edges',
+    needs: 'Documented morpheaform basal cell carcinoma.',
+    alt: 'A pale, scar-like patch with poorly defined edges, typical of morpheaform basal cell carcinoma',
     photoRequired: true,
-    fit: 'contain',
-    asset: require('@/assets/images/learn/clinical/jsc-2011-morpheaform-bcc.jpg'),
-    credit: {
-      org: 'Nakayama M, et al. J Skin Cancer. 2011;2011:496910',
-      url: 'https://commons.wikimedia.org/wiki/File:Morpheaform_basal-cell_carcinoma.jpg',
-      licence: 'CC BY 4.0',
-    },
+    asset: require('@/assets/images/learn/clinical/bcc-morpheaform.jpg'),
+    credit: DATASET_CREDIT,
   },
   'bcc-pigmented': {
-    needs: 'Sourced. Figure 1 of Ruml et al. 2024.',
-    alt: 'A hyperpigmented plaque on the scalp of an African American patient, a pigmented basal cell carcinoma',
+    needs: 'Documented pigmented basal cell carcinoma.',
+    alt: 'A dark, glossy pigmented basal cell carcinoma at the hairline on brown skin',
     photoRequired: true,
-    fit: 'contain',
-    asset: require('@/assets/images/learn/clinical/cureus-2024-pigmented-bcc-fig1.jpg'),
-    credit: {
-      org: 'Ruml A, et al. Cureus. 2024;16(6):e62862 (Fig 1)',
-      url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC11260829/',
-      licence: 'CC BY 4.0',
-    },
+    asset: require('@/assets/images/learn/clinical/bcc-pigmented.jpg'),
+    credit: DATASET_CREDIT,
   },
   // SCC subtypes. ISIC records no diagnosis_4 subtype for invasive squamous
   // cell carcinoma at all, and its Bowen disease images are CC BY-NC.
@@ -236,16 +249,11 @@ const IMAGES = {
     },
   },
   'scc-keratoacanthoma': {
-    needs: 'Sourced. Figure 1 of Stansbury et al. 2025, a patient with skin of color.',
-    alt: 'A keratoacanthoma on the anterior leg of a patient with skin of color',
+    needs: 'Documented keratoacanthoma.',
+    alt: 'A dome-shaped red nodule with a crusted central plug, typical of a keratoacanthoma',
     photoRequired: true,
-    fit: 'contain',
-    asset: require('@/assets/images/learn/clinical/cureus-2025-keratoacanthoma-fig1.jpg'),
-    credit: {
-      org: 'Stansbury W, et al. Cureus. 2025;17(4):e82695 (Fig 1)',
-      url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12094132/',
-      licence: 'CC BY 4.0',
-    },
+    asset: require('@/assets/images/learn/clinical/scc-keratoacanthoma.jpg'),
+    credit: DATASET_CREDIT,
   },
   // Deliberately a general squamous cell carcinoma, not an invasive one. The
   // NCI records this only as "squamous cell carcinoma", and invasion is a
@@ -317,9 +325,8 @@ const IMAGES = {
     needs:
       'Melanoma showing several ABCDE features at once. Needs a second example on darker skin, where melanoma more often appears on palms, soles, or under nails.',
     alt: 'An asymmetric, unevenly coloured lesion typical of melanoma',
-    asset: require('@/assets/images/learn/clinical/ISIC_0024292.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0024292/',
-      licence: 'CC0 1.0 (public domain)' },
+    asset: require('@/assets/images/learn/clinical/melanoma-example.jpg'),
+    credit: DATASET_CREDIT,
     photoRequired: true,
   },
 } satisfies Record<string, ClinicalImageSpec>;
@@ -343,10 +350,12 @@ export function pendingClinicalImages(): { id: ClinicalImageId; needs: string }[
 export function activeImageCredits(ids: readonly ClinicalImageId[]): ImageCredit[] {
   const seen = new Set<string>();
 
+  // Keyed on org, not url: a credit covering several datasets carries no url,
+  // and keying on an absent one would collapse every such credit into one row.
   return ids.reduce<ImageCredit[]>((credits, id) => {
     const { asset, credit } = CLINICAL_IMAGES[id];
-    if (!asset || !credit || seen.has(credit.url)) return credits;
-    seen.add(credit.url);
+    if (!asset || !credit || seen.has(credit.org)) return credits;
+    seen.add(credit.org);
     return [...credits, credit];
   }, []);
 }

@@ -213,3 +213,80 @@ shows the feature its slot teaches, particularly:
 
 Swapping any of them is a one-line change in `learn-images.ts`; alternates are
 listed above.
+
+## 2026-08-08: nine slots replaced with project-supplied clinical photographs
+
+Nine slots no longer use the sources listed above. They were replaced with
+clinical, naked-eye photographs supplied directly by the project:
+
+| Slot | Was | Now |
+| --- | --- | --- |
+| `melanoma-example` | ISIC_0024292 | `melanoma-example.jpg` |
+| `melanoma-superficial-spreading` | ISIC_0009992 (dermoscopic) | `melanoma-superficial-spreading.jpg` |
+| `melanoma-nodular` | ISIC_0000076 (dermoscopic) | `melanoma-nodular.jpg` |
+| `melanoma-lentigo-maligna` | ISIC_0009924 (dermoscopic) | `melanoma-lentigo-maligna.jpg` |
+| `melanoma-acral` | ISIC_0000290 (dermoscopic) | `melanoma-acral.jpg` |
+| `scc-keratoacanthoma` | Stansbury et al. 2025, Fig 1 | `scc-keratoacanthoma.jpg` |
+| `bcc-pigmented` | Ruml et al. 2024, Fig 1 | `bcc-pigmented.jpg` |
+| `bcc-nodular` | ISIC_0024262 | `bcc-nodular.jpg` |
+| `bcc-morpheaform` | Nakayama et al. 2011 | `bcc-morpheaform.jpg` |
+
+Two consequences worth recording:
+
+**The four melanoma subtypes are no longer dermoscopic.** ISIC only labels
+melanoma subtype on dermoscopic images, so those four slots previously showed a
+magnified instrument view — accurate, but not what a reader sees in a mirror.
+The replacements are clinical, so `modality: 'dermoscopic'` was dropped from all
+four and the frame no longer carries the dermoscopy caveat. Alt text was
+rewritten to describe the lesion rather than the instrument.
+
+**`fit: 'contain'` was dropped** from `bcc-pigmented`, `bcc-morpheaform`, and
+`scc-keratoacanthoma`. Letterboxing existed to protect the edges of published
+journal figures; these are square close-ups already centred on the lesion, so
+they take the default `cover` like the ISIC photographs do.
+
+The nine superseded files are still in `assets/images/learn/clinical/` but are no
+longer referenced by any slot, so Metro does not bundle them. Delete them once
+the replacements have been reviewed on device.
+
+### Provenance: DDI and SCIN
+
+The nine come from two datasets — [DDI](https://ddi-dataset.github.io/) (Stanford
+Medicine) and [SCIN](https://github.com/google-research-datasets/scin) (Google
+Health with Stanford Medicine) — and which image came from which was not recorded.
+All nine therefore share one `DATASET_CREDIT` naming both, rather than either being
+guessed at per image. That credit carries no `url`, since no single page would be
+honest to link to; `ImageCredit.url` was made optional and such rows render as plain
+text instead of a link.
+
+### Blocking before release: the DDI licence
+
+This is the one thing on this page that is not just bookkeeping.
+
+- **SCIN** is released under the SCIN Data Use License, which permits reproducing
+  and sharing the material with attribution, and forbids any attempt to re-identify
+  contributors. Fine for this use.
+- **DDI** is released under a Stanford University School of Medicine Research Use
+  Agreement, which grants use "for personal, non-commercial research purposes only"
+  and states: "YOU MAY NOT DISTRIBUTE, PUBLISH, OR REPRODUCE A COPY of any portion
+  or all of the Diverse Dermatology Images Dataset to others without specific prior
+  written permission." It also prohibits commercial use outright.
+
+Bundling an image into a shipped app is distribution. Because the nine are not
+separated by dataset, the DDI restriction has to be assumed to cover all of them.
+This is a reversal of the sourcing rule the rest of this document was written
+under, which deliberately took only CC0 and CC BY images so the project would not
+be locked out of going commercial.
+
+Three ways out, in order of effort:
+
+1. Trace each of the nine back to its dataset. Any that turn out to be SCIN are
+   clear immediately, and only the DDI ones need handling.
+2. Request written permission from Stanford (roxanad@stanford.edu is the contact on
+   the DDI page) for the DDI images used.
+3. Replace the DDI ones. SCIN alone, or ISIC, can cover most of these slots — the
+   melanoma subtypes are the hard case, which is what pushed them to dermoscopic
+   ISIC images in the first place.
+
+Until one of those happens, this is fine for a thesis demo and not fine for a
+public release or anything commercial.
