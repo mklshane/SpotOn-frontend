@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
-  cancelAnimation,
   Easing,
   ReduceMotion,
   useAnimatedStyle,
@@ -33,7 +32,7 @@ export type EntranceProviderProps = {
 /**
  * Drives the entrance of everything beneath it, in three phases:
  *
- *  - first arrival: elements fade up in sequence
+ *  - first arrival: elements fade in sequence
  *  - after that sequence settles: anything that mounts later (filter results,
  *    a section reappearing) fades in on its own, quickly and without stagger,
  *    so acting on the screen never feels like waiting on it
@@ -73,18 +72,16 @@ export type EntranceProps = {
   index?: number;
   /** Explicit delay in ms, for sub-sequences with their own rhythm (chips). */
   delay?: number;
-  /**
-   * `rise` (default) fades up, for content arriving in a sequence.
-   * `settle` fades and scales in place, for a single illustration resolving.
-   * Sliding artwork looks like a card; scaling it looks like it developing.
-   */
-  variant?: 'rise' | 'settle';
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 };
 
-/** Fades its child in, with a small upward drift or a soft scale. */
-export function Entrance({ index = 0, delay, variant = 'rise', style, children }: EntranceProps) {
+/**
+ * Fades its child in. Opacity only, on purpose: nothing moves, scales, or
+ * travels, so content arrives exactly where it will sit rather than sliding
+ * into place under the reader.
+ */
+export function Entrance({ index = 0, delay, style, children }: EntranceProps) {
   const { stagger, duration } = useContext(EntranceContext);
   const progress = useSharedValue(0);
 
@@ -106,20 +103,14 @@ export function Entrance({ index = 0, delay, variant = 'rise', style, children }
       )
     );
 
-    return () => cancelAnimation(progress);
+    // Deliberately no cancelAnimation cleanup. This effect re-runs whenever the
+    // provider settles, and cancelling there froze the fade at whatever opacity
+    // it had reached, which on a fast device is near zero: the element stayed
+    // invisible for good. A fade with nothing but opacity behind it has no
+    // recovery from that, so it must never be interrupted part way.
   }, [delay, duration, index, progress, stagger]);
 
-  const rise = variant === 'rise';
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const remaining = 1 - progress.value;
-    return {
-      opacity: progress.value,
-      transform: rise
-        ? [{ translateY: remaining * Motion.entrance.distance }]
-        : [{ scale: 1 - remaining * Motion.entrance.settleScale }],
-    };
-  });
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
   return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
 }
