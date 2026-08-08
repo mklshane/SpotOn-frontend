@@ -94,6 +94,30 @@ export const Elevation = {
   lg: { shadowColor: '#7A4A2B', shadowOpacity: 0.12, shadowRadius: 28, shadowOffset: { width: 0, height: 12 }, elevation: 10 },
 } as const;
 
+/**
+ * Motion. Durations in milliseconds, kept short and even because this is a
+ * medical app: animation here is feedback and orientation, never decoration.
+ * `press` is the app's press signature, matching the one Button already uses.
+ */
+export const Motion = {
+  /** Anything the user is waiting on: filter switches, re-entry, color changes. */
+  fast: 150,
+  /** First-paint entrances. */
+  base: 260,
+  press: { damping: 18, stiffness: 320 },
+  pressScale: 0.97,
+  entrance: {
+    /** How far an entering element travels upward. Deliberately small. */
+    distance: 10,
+    /** Gap between staggered siblings. */
+    stagger: 45,
+    /** Ceiling on the stagger, so a long list never withholds its tail. */
+    maxDelay: 300,
+    /** How far an illustration scales up from, as a fraction. 0.04 = from 96%. */
+    settleScale: 0.04,
+  },
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
