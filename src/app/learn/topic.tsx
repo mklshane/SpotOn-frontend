@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native'
 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import { EducationCard } from '@/components/learn/EducationCard';
-import { LearnDetailHeader } from '@/components/learn/LearnDetailHeader';
+import { LearnDetailHeader, learnDetailContent } from '@/components/learn/LearnDetailHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
@@ -90,7 +90,7 @@ export default function LearnTopicScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
+  scrollContent: learnDetailContent,
   body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.base },
   introCard: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
   artworkRow: {

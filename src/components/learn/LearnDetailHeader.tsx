@@ -38,6 +38,18 @@ export function LearnDetailHeader({ title }: LearnDetailHeaderProps) {
   );
 }
 
+/**
+ * Scroll padding shared by every Education detail screen, so the gap under the
+ * back bar is defined once instead of being redeclared per screen. `paddingTop`
+ * is what actually pushes the first card down: the header's own margin alone
+ * left it sitting almost flush.
+ */
+export const learnDetailContent = {
+  paddingHorizontal: Space.xl,
+  paddingTop: Space.base,
+  paddingBottom: Space.xxxl,
+} as const;
+
 const styles = StyleSheet.create({
   header: {
     height: 48,
@@ -45,6 +57,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
+    // Small gap so the first card does not sit flush against the back bar.
+    // Lives here rather than in each screen's scroll padding, so every
+    // Education detail page picks it up from the one shared header.
+    marginBottom: Space.sm,
   },
   title: { flex: 1, textAlign: 'center' },
   // Balances the back chevron so the title stays optically centered.
