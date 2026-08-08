@@ -13,6 +13,7 @@ export { ImageViewer } from './image-viewer';
 export { Logo } from './logo';
 export { OnboardingHero } from './onboarding-hero';
 export { Screen } from './screen';
+export { SearchBar } from './search-bar';
 export { SectionHeader } from './section-header';
 export { Segmented } from './segmented';
 export { SettingsRow } from './settings-row';
