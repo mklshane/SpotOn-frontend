@@ -16,8 +16,11 @@ type PhotoVisual = {
 export type LearnArticleHeroProps = {
   articleId: string;
   icon: IconName;
+  /** Category label above the title, e.g. "Skin cancer type". */
+  eyebrow: string;
   title: string;
-  sectionCount: number;
+  /** Quiet supporting line under the title, e.g. "2 min read". */
+  meta: string;
 };
 
 const SELF_CHECK_IMAGE = require('@/assets/images/learn/article-self-check.jpg');
@@ -45,6 +48,10 @@ const ARTICLE_PHOTOS: Record<string, PhotoVisual> = {
     source: CONSULTATION_IMAGE,
     accessibilityLabel: 'A dermatologist examining a patient\'s forearm',
   },
+  'self-check': {
+    source: SELF_CHECK_IMAGE,
+    accessibilityLabel: 'A woman checking the skin on her forearm',
+  },
 };
 
 const CANCER_TYPE_VISUALS: Partial<Record<string, CancerTypeKind>> = {
@@ -54,7 +61,7 @@ const CANCER_TYPE_VISUALS: Partial<Record<string, CancerTypeKind>> = {
 };
 
 /** Topic-specific visual header shared by all Learn article detail pages. */
-export function LearnArticleHero({ articleId, icon, title, sectionCount }: LearnArticleHeroProps) {
+export function LearnArticleHero({ articleId, icon, eyebrow, title, meta }: LearnArticleHeroProps) {
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < 360;
@@ -99,12 +106,12 @@ export function LearnArticleHero({ articleId, icon, title, sectionCount }: Learn
         <View style={styles.eyebrowRow}>
           <Icon name="book.fill" size={13} tintColor={theme.brandPressed} />
           <ThemedText type="caption" style={[styles.eyebrow, { color: theme.brandPressed }]}>
-            EDUCATION GUIDE
+            {eyebrow.toUpperCase()}
           </ThemedText>
         </View>
         <ThemedText type={compact ? 'title2' : 'title1'}>{title}</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
+          {meta}
         </ThemedText>
       </View>
     </Card>
