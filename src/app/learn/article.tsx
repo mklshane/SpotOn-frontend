@@ -5,9 +5,11 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import {
   BodyAreasBlock,
   CompareBlock,
+  ImageCreditsBlock,
   ListBlock,
   NoticeBlock,
   ProseGroup,
+  SourcesBlock,
   StepsBlock,
   VisualBlock,
 } from '@/components/learn/article-blocks';
@@ -25,6 +27,7 @@ import {
   getTopic,
   type ArticleBlock,
 } from '@/data/learn-content';
+import type { ClinicalImageId } from '@/data/learn-images';
 import { useTheme } from '@/hooks/use-theme';
 
 type ProseBlock = Extract<ArticleBlock, { kind: 'prose' }>;
@@ -69,6 +72,8 @@ function renderBlock(block: ArticleBlock, key: number) {
       return <BodyAreasBlock key={key} block={block} />;
     case 'notice':
       return <NoticeBlock key={key} block={block} />;
+    case 'sources':
+      return <SourcesBlock key={key} block={block} />;
     case 'prose':
       // Prose is grouped into shared cards before it reaches here.
       return null;
@@ -97,6 +102,21 @@ export default function LearnArticleScreen() {
   // standing disclaimer would only repeat the beat.
   const hasNotice = article?.blocks.some((block) => block.kind === 'notice') ?? false;
 
+  // Every clinical image slot this article renders. Only the slots holding a
+  // real, licensed photograph produce a credit; while they are all diagrams the
+  // credits section renders nothing at all.
+  const imageIds = useMemo<ClinicalImageId[]>(() => {
+    if (!article) return [];
+
+    return article.blocks.flatMap<ClinicalImageId>((block) => {
+      if (block.kind === 'compare') {
+        return block.items.flatMap((item) => [item.photos.typical, item.photos.concern]);
+      }
+      if (block.kind === 'visual' && block.photo) return [block.photo];
+      return [];
+    });
+  }, [article]);
+
   return (
     <Screen padded={false}>
       <LearnDetailHeader title="Education" />
@@ -124,6 +144,8 @@ export default function LearnArticleScreen() {
                 renderBlock(group.block, index)
               )
             )}
+
+            <ImageCreditsBlock imageIds={imageIds} />
 
             {!hasNotice ? (
               <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>

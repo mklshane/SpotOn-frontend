@@ -1,8 +1,9 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Pressable, View, type ImageSourcePropType } from 'react-native';
+import { StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon, type IconName } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -38,16 +39,11 @@ export function EducationCard({
   const theme = useTheme();
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={tag ? `${tag}. ${title}` : title}
-      style={({ pressed }) => [
-        styles.card,
-        { backgroundColor: theme.surface, borderColor: theme.hairline },
-        Elevation.sm,
-        pressed && styles.pressed,
-      ]}>
+      style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.hairline }, Elevation.sm]}>
       {image ? (
         <Image
           source={image}
@@ -78,7 +74,7 @@ export function EducationCard({
           </ThemedText>
         ) : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -93,7 +89,6 @@ const styles = StyleSheet.create({
     // faint to separate a white card from the warm off-white page behind it.
     borderWidth: StyleSheet.hairlineWidth,
   },
-  pressed: { opacity: 0.82 },
   thumb: {
     width: THUMB,
     height: THUMB,

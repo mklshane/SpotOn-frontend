@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -21,9 +22,14 @@ export function LearnDetailHeader({ title }: LearnDetailHeaderProps) {
 
   return (
     <View style={styles.header}>
-      <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+      <PressableScale
+        hitSlop={12}
+        scaleTo={0.88}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Back">
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
-      </Pressable>
+      </PressableScale>
       <ThemedText type="headline" themeColor="textSecondary" numberOfLines={1} style={styles.title}>
         {title}
       </ThemedText>

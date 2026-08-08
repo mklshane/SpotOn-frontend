@@ -1,14 +1,17 @@
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import * as Linking from 'expo-linking';
+import { StyleSheet, View } from 'react-native';
 
-import { MoleSwatch, SIGN_CAPTIONS } from '@/components/learn/AbcdeArtwork';
-import { CancerTypeArtwork } from '@/components/learn/CancerTypeCard';
+import { ClinicalImage } from '@/components/learn/ClinicalImage';
 import { BodyGlyph } from '@/components/scan/body-glyph';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Radius, Space } from '@/constants/theme';
 import type { ArticleBlock } from '@/data/learn-content';
+import { activeImageCredits, type ClinicalImageId } from '@/data/learn-images';
+import { PENDING_SOURCES, SOURCES } from '@/data/learn-sources';
 import { useTheme } from '@/hooks/use-theme';
 
 /**
@@ -78,47 +81,47 @@ export function CompareBlock({ block }: { block: Extract<ArticleBlock, { kind: '
         <BlockHeading title={block.heading} intro={block.intro} />
       </View>
 
-      {block.items.map((item) => {
-        const captions = SIGN_CAPTIONS[item.sign];
-
-        return (
-          <View key={item.sign}>
-            <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
-            <View style={styles.section}>
-              <View style={styles.compareTitleRow}>
-                <View style={[styles.letter, { backgroundColor: theme.brandTint }]}>
-                  <ThemedText type="headline" themeColor="brandPressed">
-                    {item.letter}
-                  </ThemedText>
-                </View>
-                <ThemedText type="headline" style={styles.headingText}>
-                  {item.title}
+      {block.items.map((item) => (
+        <View key={item.sign}>
+          <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
+          <View style={styles.section}>
+            <View style={styles.compareTitleRow}>
+              <View style={[styles.letter, { backgroundColor: theme.brandTint }]}>
+                <ThemedText type="headline" themeColor="brandPressed">
+                  {item.letter}
                 </ThemedText>
               </View>
-
-              <ThemedText type="callout" themeColor="textSecondary">
-                {item.detail}
+              <ThemedText type="headline" style={styles.headingText}>
+                {item.title}
               </ThemedText>
-
-              <View accessible={false} style={[styles.compareRow, { backgroundColor: theme.elementBg }]}>
-                <View style={styles.swatch}>
-                  <MoleSwatch sign={item.sign} state="typical" />
-                  <ThemedText type="caption" themeColor="muted">
-                    {captions.typical}
-                  </ThemedText>
-                </View>
-                <View style={[styles.swatchDivider, { backgroundColor: theme.hairline }]} />
-                <View style={styles.swatch}>
-                  <MoleSwatch sign={item.sign} state="concern" />
-                  <ThemedText type="caption" style={{ color: theme.brandPressed }}>
-                    {captions.concern}
-                  </ThemedText>
-                </View>
-              </View>
             </View>
+
+            <View style={styles.compareRow}>
+              <ClinicalImage
+                id={item.photos.typical}
+                caption={item.captions.typical}
+                measurement={item.measurements?.typical}
+              />
+              <ClinicalImage
+                id={item.photos.concern}
+                caption={item.captions.concern}
+                measurement={item.measurements?.concern}
+                emphasis
+              />
+            </View>
+
+            <ThemedText type="callout" themeColor="textSecondary">
+              {item.detail}
+            </ThemedText>
+
+            {item.footnote ? (
+              <ThemedText type="footnote" themeColor="muted">
+                {item.footnote}
+              </ThemedText>
+            ) : null}
           </View>
-        );
-      })}
+        </View>
+      ))}
     </Card>
   );
 }
@@ -222,19 +225,16 @@ export function ListBlock({ block }: { block: Extract<ArticleBlock, { kind: 'lis
  */
 export function VisualBlock({ block }: { block: Extract<ArticleBlock, { kind: 'visual' }> }) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
-  const compact = width < 375;
 
   return (
     <Card padded={false} style={[styles.card, { borderColor: theme.hairline }]}>
       <View style={styles.section}>
         <BlockHeading title={block.heading} intro={block.intro} />
 
-        <View accessible={false} style={[styles.artStage, { backgroundColor: theme.elementBg }]}>
-          <View style={[styles.artMedallion, { backgroundColor: theme.surface }]}>
-            <CancerTypeArtwork kind={block.art} size={compact ? 116 : 132} />
-          </View>
-        </View>
+        <ClinicalImage
+          id={block.photo}
+          caption="Possible appearance. Appearance alone cannot confirm a diagnosis."
+        />
 
         <View style={styles.traits}>
           {block.traits.map((trait) => (
@@ -312,6 +312,100 @@ export function NoticeBlock({ block }: { block: Extract<ArticleBlock, { kind: 'n
   );
 }
 
+/**
+ * The article's medical references. Anything the module could not verify is
+ * listed here as an explicit gap rather than omitted, so a reader can see the
+ * difference between a claim that is sourced and one that is not yet.
+ */
+export function SourcesBlock({ block }: { block: Extract<ArticleBlock, { kind: 'sources' }> }) {
+  const theme = useTheme();
+  const pending = block.pending ?? [];
+
+  return (
+    <View style={styles.sources}>
+      <BlockHeading title="Sources" />
+
+      {block.sources.map((id) => {
+        const source = SOURCES[id];
+
+        return (
+          <PressableScale
+            key={id}
+            onPress={() => Linking.openURL(source.url)}
+            accessibilityRole="link"
+            accessibilityLabel={`${source.title}, ${source.org}. Opens in your browser.`}
+            style={[styles.sourceRow, { backgroundColor: theme.surface, borderColor: theme.hairline }]}>
+            <View style={styles.sourceText}>
+              <ThemedText type="caption" themeColor="muted">
+                {source.org}
+              </ThemedText>
+              <ThemedText type="subhead" style={styles.sourceTitle}>
+                {source.title}
+              </ThemedText>
+              <ThemedText type="caption" style={{ color: theme.brandPressed }}>
+                View source
+              </ThemedText>
+            </View>
+            <Icon name="arrow.up.right" size={15} tintColor={theme.brandPressed} />
+          </PressableScale>
+        );
+      })}
+
+      {pending.map((id) => {
+        const gap = PENDING_SOURCES[id];
+
+        return (
+          <View key={id} style={[styles.sourceRow, styles.sourcePending, { borderColor: theme.hairline }]}>
+            <View style={styles.sourceText}>
+              <ThemedText type="caption" themeColor="muted">
+                {gap.org}
+              </ThemedText>
+              <ThemedText type="subhead" style={styles.sourceTitle}>
+                Needs a verified source
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {gap.claim}
+              </ThemedText>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * Credit for any real photograph on the page. Separate from Sources on purpose:
+ * where a picture came from is a different question from where the medical
+ * information came from. Renders nothing while every slot is still a diagram.
+ */
+export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalImageId[] }) {
+  const theme = useTheme();
+  const credits = activeImageCredits(imageIds);
+  if (credits.length === 0) return null;
+
+  return (
+    <View style={styles.credits}>
+      <ThemedText type="caption" themeColor="muted" style={styles.creditsHeading}>
+        IMAGE CREDITS
+      </ThemedText>
+      {credits.map((credit) => (
+        <PressableScale
+          key={credit.url}
+          onPress={() => Linking.openURL(credit.url)}
+          accessibilityRole="link"
+          accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
+          style={styles.creditRow}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Image source: {credit.org} ({credit.licence})
+          </ThemedText>
+          <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
+        </PressableScale>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   // No `overflow: 'hidden'` here on purpose. Nothing in these blocks reaches a
   // rounded corner (dividers are inset by Space.lg, artwork sits inside the
@@ -335,14 +429,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compareRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: Radius.md,
-    paddingVertical: Space.base,
-  },
-  swatch: { flex: 1, alignItems: 'center', gap: Space.sm },
-  swatchDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: Space.sm },
+  // alignItems flex-start so a one-line caption beside a two-line one does not
+  // stretch its sibling's frame, which is what made the halves unequal.
+  compareRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md },
 
   stepRow: { flexDirection: 'row', gap: Space.md },
   stepGutter: { width: 28, alignItems: 'center' },
@@ -412,4 +501,23 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, minWidth: 0, gap: 2 },
   noticeTitle: { fontWeight: '700' },
+
+  sources: { gap: Space.sm },
+  sourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    padding: Space.base,
+    borderRadius: Radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  // An unverified entry is deliberately flat and unlinked, so it cannot be
+  // mistaken for a citation at a glance.
+  sourcePending: { backgroundColor: 'transparent', borderStyle: 'dashed' },
+  sourceText: { flex: 1, minWidth: 0, gap: 2 },
+  sourceTitle: { fontWeight: '600' },
+
+  credits: { gap: Space.xs, paddingHorizontal: Space.xs },
+  creditsHeading: { fontWeight: '700', letterSpacing: 0.5 },
+  creditRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
 });
