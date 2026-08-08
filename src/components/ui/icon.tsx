@@ -86,6 +86,8 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'cross.case.fill': { set: 'ionicons', name: 'medkit' },
   'square.grid.2x2.fill': { set: 'ionicons', name: 'grid' },
   'sun.max.fill': { set: 'ionicons', name: 'sunny' },
+  'person.2.fill': { set: 'ionicons', name: 'people' },
+  'umbrella.fill': { set: 'mci', name: 'umbrella' },
   // screening questionnaire + results
   'arrow.triangle.2.circlepath': { set: 'ionicons', name: 'sync' },
   'bandage.fill': { set: 'mci', name: 'bandage' },

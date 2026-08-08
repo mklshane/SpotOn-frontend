@@ -1,32 +1,105 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
+import {
+  BodyAreasBlock,
+  CompareBlock,
+  ListBlock,
+  NoticeBlock,
+  ProseGroup,
+  StepsBlock,
+  VisualBlock,
+} from '@/components/learn/article-blocks';
 import { LearnArticleHero } from '@/components/learn/LearnArticleHero';
+import { LearnDetailHeader } from '@/components/learn/LearnDetailHeader';
 import { ThemedText } from '@/components/themed-text';
-import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
-import { getArticle } from '@/data/learn-content';
+import {
+  getArticle,
+  getArticleReadMinutes,
+  getCategoryLabel,
+  getTopic,
+  type ArticleBlock,
+} from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
+
+type ProseBlock = Extract<ArticleBlock, { kind: 'prose' }>;
+
+/** A run of consecutive prose blocks, or a single richer block. */
+type RenderGroup = { kind: 'prose'; blocks: ProseBlock[] } | { kind: 'block'; block: ArticleBlock };
+
+/**
+ * Consecutive prose sections share one divided card, the way a normal article
+ * body reads. Anything with its own layout (diagrams, steps, icon rows, body
+ * artwork) stands on its own so the shape of the content is visible before it
+ * is read.
+ */
+function groupBlocks(blocks: ArticleBlock[]): RenderGroup[] {
+  const groups: RenderGroup[] = [];
+
+  for (const block of blocks) {
+    if (block.kind !== 'prose') {
+      groups.push({ kind: 'block', block });
+      continue;
+    }
+
+    const last = groups[groups.length - 1];
+    if (last?.kind === 'prose') last.blocks.push(block);
+    else groups.push({ kind: 'prose', blocks: [block] });
+  }
+
+  return groups;
+}
+
+function renderBlock(block: ArticleBlock, key: number) {
+  switch (block.kind) {
+    case 'compare':
+      return <CompareBlock key={key} block={block} />;
+    case 'steps':
+      return <StepsBlock key={key} block={block} />;
+    case 'list':
+      return <ListBlock key={key} block={block} />;
+    case 'visual':
+      return <VisualBlock key={key} block={block} />;
+    case 'bodyAreas':
+      return <BodyAreasBlock key={key} block={block} />;
+    case 'notice':
+      return <NoticeBlock key={key} block={block} />;
+    case 'prose':
+      // Prose is grouped into shared cards before it reaches here.
+      return null;
+    default:
+      return block satisfies never;
+  }
+}
 
 export default function LearnArticleScreen() {
   const theme = useTheme();
   const { topicId, articleId } = useLocalSearchParams<{ topicId: string; articleId?: string }>();
   const article = topicId ? getArticle(topicId, articleId) : undefined;
+  const topic = topicId ? getTopic(topicId) : undefined;
+
+  const groups = useMemo(() => (article ? groupBlocks(article.blocks) : []), [article]);
+
+  // A nested article belongs to its parent topic (a skin cancer type); a
+  // top-level one is labelled by the category its browse chip uses.
+  const eyebrow = !topic
+    ? 'Education guide'
+    : topic.kind === 'subtopics'
+      ? 'Skin cancer type'
+      : getCategoryLabel(topic.category);
+
+  // Articles that end on their own notice already close with a takeaway, so the
+  // standing disclaimer would only repeat the beat.
+  const hasNotice = article?.blocks.some((block) => block.kind === 'notice') ?? false;
 
   return (
     <Screen padded={false}>
-      <View style={styles.header}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon name="chevron.left" tintColor={theme.brand} size={20} />
-        </Pressable>
-        <ThemedText type="headline" themeColor="textSecondary">
-          Education
-        </ThemedText>
-        <View style={styles.headerSpacer} />
-      </View>
+      <LearnDetailHeader title="Education" />
 
       {!article ? (
         <ListState kind="error" title="Article not found" />
@@ -39,41 +112,27 @@ export default function LearnArticleScreen() {
             <LearnArticleHero
               articleId={article.id}
               icon={article.icon}
+              eyebrow={eyebrow}
               title={article.title}
-              sectionCount={article.sections.length}
+              meta={`${getArticleReadMinutes(article)} min read`}
             />
 
-            <Card padded={false} style={[styles.article, { borderColor: theme.hairline }]}>
-              {article.sections.map((section, i) => (
-                <View key={i}>
-                  {i > 0 ? <View style={[styles.divider, { backgroundColor: theme.hairline }]} /> : null}
-                  <View style={styles.section}>
-                    {section.heading ? (
-                      <View style={styles.sectionHeading}>
-                        <View style={[styles.headingAccent, { backgroundColor: theme.brand }]} />
-                        <ThemedText type="headline" style={styles.headingText}>
-                          {section.heading}
-                        </ThemedText>
-                      </View>
-                    ) : null}
-                    <View style={styles.paragraphs}>
-                      {section.paragraphs.map((paragraph, j) => (
-                        <ThemedText key={j} type="body" themeColor="textSecondary">
-                          {paragraph}
-                        </ThemedText>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </Card>
+            {groups.map((group, index) =>
+              group.kind === 'prose' ? (
+                <ProseGroup key={index} blocks={group.blocks} />
+              ) : (
+                renderBlock(group.block, index)
+              )
+            )}
 
-            <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
-              <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
-              <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
-                This guide supports skin-health awareness and does not replace advice from a dermatologist.
-              </ThemedText>
-            </View>
+            {!hasNotice ? (
+              <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
+                <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
+                <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
+                  This guide supports skin-health awareness and does not replace advice from a dermatologist.
+                </ThemedText>
+              </View>
+            ) : null}
           </View>
         </ScrollView>
       )}
@@ -82,29 +141,15 @@ export default function LearnArticleScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    height: 48,
-    paddingHorizontal: Space.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: { width: 20 },
   scrollContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
-  body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.lg },
-  article: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: Space.lg },
-  section: { padding: Space.lg, gap: Space.md },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  headingAccent: { width: 4, height: 20, borderRadius: 2 },
-  headingText: { flex: 1 },
-  paragraphs: { gap: Space.sm },
+  body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.base },
   educationNote: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Space.sm,
     borderRadius: Radius.md,
     padding: Space.base,
+    marginTop: Space.xs,
   },
   educationNoteText: { flex: 1 },
 });

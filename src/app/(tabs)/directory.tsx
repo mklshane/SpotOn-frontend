@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { DirectorySegments, type DirectorySegment } from '@/components/directory/DirectorySegments';
-import { SearchBar } from '@/components/directory/SearchBar';
+import { SearchBar } from '@/components/ui/search-bar';
 import { ClinicsView } from '@/components/directory/ClinicsView';
 import { DoctorsView } from '@/components/directory/DoctorsView';
 import { Icon } from '@/components/ui/icon';
@@ -69,7 +69,7 @@ export default function DirectoryScreen() {
           value={query}
           onChangeText={setQuery}
           placeholder={segment === 'clinics' ? 'Search clinics or area…' : 'Search doctors…'}
-          floating
+          elevation="md"
         />
         {!isOnline ? (
           <View style={[styles.offlineChip, { backgroundColor: theme.brandTint }]}>
