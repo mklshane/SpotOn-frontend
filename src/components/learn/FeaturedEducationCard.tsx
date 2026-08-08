@@ -1,15 +1,10 @@
 import { Image } from 'expo-image';
-import {
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type ImageSourcePropType,
-} from 'react-native';
+import { StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -46,12 +41,12 @@ export function FeaturedEducationCard({
   const compact = width < 375;
 
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${category}: ${title}`}
       accessibilityHint="Opens the guide"
-      style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}>
+      style={styles.pressable}>
       <Card padded={false} style={[styles.card, { borderColor: theme.hairline }]}>
         <View>
           <Image
@@ -92,13 +87,12 @@ export function FeaturedEducationCard({
           </View>
         </View>
       </Card>
-    </Pressable>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   pressable: { borderRadius: Radius.xl },
-  pressed: { opacity: 0.85 },
   card: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
   image: { width: '100%', height: 172, backgroundColor: '#EEDCCF' },
   imageCompact: { height: 148 },

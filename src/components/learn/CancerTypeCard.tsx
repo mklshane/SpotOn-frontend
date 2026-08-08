@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, {
   Circle,
   ClipPath,
@@ -11,6 +11,7 @@ import Svg, {
 
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Radius, Space, Type } from '@/constants/theme';
 
 export type CancerTypeKind = 'melanoma' | 'scc' | 'bcc';
@@ -141,7 +142,7 @@ export function CancerTypeArtwork({ kind, size = ART_SIZE }: { kind: CancerTypeK
  * the three cards read as a severity scale. */
 export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerTypeCardProps) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={styles.wrap}>
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={styles.wrap}>
       <View style={[styles.card, { backgroundColor: tint }]}>
         <View style={styles.medallion}>
           <CancerTypeArtwork kind={kind} />
@@ -154,7 +155,7 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
           <Icon name="chevron.right" size={11} tintColor={color} />
         </View>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
