@@ -86,7 +86,8 @@
     "postinstall": "patch-package",
     "test:multiview": "node scripts/test-multiview.mjs",
     "test:flow": "node scripts/test-scan-flow.mjs",
-    "test:capture": "node scripts/test-capture.mjs"
+    "test:capture": "node scripts/test-capture.mjs",
+    "test:scratch": "node scripts/test-scratch-files.mjs"
   },
   "private": true
 }

@@ -13,6 +13,7 @@ import { Icon } from '@/components/ui/icon';
 import { Colors, Space } from '@/constants/theme';
 import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 import { locateLesionInImage } from '@/lib/classifier/preprocess';
+import { discardScratch } from '@/lib/scratch-files';
 
 const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
@@ -180,6 +181,11 @@ export default function CropScreen() {
         // exactly the fine texture the model reads, and at 1024² the file-size saving is trivial.
         { compress: 1, format: SaveFormat.JPEG },
       );
+      // The source is dead once the crop exists: every route in here arrives by push/replace and
+      // leaves by the replace below, so this screen is off the stack and no back-nav can want it
+      // again. Camera sources are the upright temp from capture; gallery sources are ImagePicker's
+      // own cache copy, not the library original. discardScratch ignores anything that is neither.
+      await discardScratch(uri);
       // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
       router.replace({ pathname: '/scan/quality', params: { uri: result.uri, detected } });
     } finally {

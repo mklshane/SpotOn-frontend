@@ -49,6 +49,7 @@ import {
 } from '@/lib/capture-core';
 import { BRIGHT, DARK } from '@/lib/image-quality-core';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
+import { discardScratch } from '@/lib/scratch-files';
 import { useScreeningSession } from '@/lib/screening-session';
 import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -686,6 +687,9 @@ export default function CaptureScreen() {
         actions.push({ resize: { height: PHOTO_LONG_EDGE } });
       }
       const upright = await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
+      // The sensor still is the single biggest scratch file we produce (2-8 MB, full resolution)
+      // and `upright` has now superseded it — nothing downstream ever reads photo.path again.
+      await discardScratch(raw);
       // Carry the live detector's verdict + box forward. We can't re-run the model on the still
       // here — its interpreter is busy on the camera thread, and hitting it from JS crashes — so
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.

@@ -16,6 +16,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DevTools } from '@/components/ui/dev-tools';
 import { AuthProvider } from '@/lib/auth';
 import { ScanHistoryProvider } from '@/lib/scan-history';
+import { sweepScratchFiles } from '@/lib/scratch-files';
 import { ScreeningSessionProvider } from '@/lib/screening-session';
 
 // The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
@@ -53,6 +54,20 @@ export default function RootLayout() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [ready, fontError]);
+
+  // Reclaim scratch photos left behind by scans that never reached a hand-off — backed out of the
+  // crop screen, killed mid-flow, crashed. capture/crop unlink eagerly on the happy path, so this
+  // is the backstop, not the main mechanism. Fire-and-forget: it touches only the cache and tmp
+  // roots, so nothing the app needs can be waiting on it.
+  useEffect(() => {
+    sweepScratchFiles()
+      .then((freed) => {
+        if (__DEV__ && freed > 0) {
+          console.log(`[scratch] swept ${(freed / 1e6).toFixed(1)} MB of stale capture files`);
+        }
+      })
+      .catch((e) => console.warn('[scratch] sweep failed', e));
+  }, []);
 
   if (!ready) {
     return null; // keep the native splash visible until the display font is ready (or we give up)
