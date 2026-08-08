@@ -1,21 +1,86 @@
+import type { CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import type { IconName } from '@/components/ui/icon';
 
-export type ArticleSection = {
-  heading?: string;
-  paragraphs: string[];
+/** Which of the five ABCDE signs a comparison diagram illustrates. */
+export type AbcdeSign = 'asymmetry' | 'border' | 'color' | 'diameter' | 'evolving';
+
+/**
+ * Article bodies are a list of blocks rather than a single prose shape, so each
+ * topic can be presented the way its information actually reads: a visual
+ * checklist as side-by-side diagrams, a clinic visit as numbered steps, risk
+ * factors and sun-safety advice as scannable icon rows, and everything else as
+ * plain headed prose. Every block still renders from the same type ramp,
+ * spacing scale and card treatment, so the articles stay recognisably one set.
+ */
+export type ArticleBlock =
+  | { kind: 'prose'; heading?: string; paragraphs: string[] }
+  | { kind: 'compare'; heading?: string; intro?: string; items: CompareItem[] }
+  | { kind: 'steps'; heading?: string; intro?: string; steps: Step[] }
+  | { kind: 'list'; heading?: string; intro?: string; variant: 'grouped' | 'tips'; items: ListItem[] }
+  | { kind: 'visual'; heading?: string; intro?: string; art: CancerTypeKind; traits: Trait[] }
+  | { kind: 'bodyAreas'; heading?: string; intro?: string; areas: BodyArea[] }
+  | { kind: 'notice'; tone: 'info' | 'caution'; title?: string; text: string };
+
+/** One sign of the ABCDE rule, shown as a typical-versus-concerning pair. */
+export type CompareItem = {
+  /** The letter this sign stands for, e.g. "A". */
+  letter: string;
+  sign: AbcdeSign;
+  title: string;
+  detail: string;
 };
+
+export type Step = { title: string; detail: string };
+
+export type ListItem = { icon: IconName; title: string; detail: string };
+
+/** One labelled feature of the illustration in a `visual` block. */
+export type Trait = { title: string; detail: string };
+
+/**
+ * A place on the body a lesion commonly appears. `region` is a body-mark region
+ * name from the scan flow, reused here so the Education illustrations come from
+ * the same drawing set as the rest of the app.
+ */
+export type BodyArea = { region: string; label: string };
 
 export type Article = {
   id: string;
   title: string;
   icon: IconName;
-  sections: ArticleSection[];
+  /** One line used by list cards and search results. */
+  summary: string;
+  blocks: ArticleBlock[];
+};
+
+/**
+ * Broad buckets the Learn hub's filter chips are built from. Deliberately
+ * coarser than the topic list: a chip per topic would just duplicate the list
+ * below it instead of narrowing it.
+ */
+export const LEARN_CATEGORIES = [
+  { id: 'basics', label: 'Basics' },
+  { id: 'warning-signs', label: 'Warning Signs' },
+  { id: 'self-check', label: 'Self-Check' },
+  { id: 'risk', label: 'Risk Factors' },
+  { id: 'sun-safety', label: 'Sun Safety' },
+  { id: 'care', label: 'Getting Care' },
+] as const;
+
+export type LearnCategoryId = (typeof LEARN_CATEGORIES)[number]['id'];
+
+type TopicBase = {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: IconName;
+  category: LearnCategoryId;
 };
 
 export type Topic =
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'article'; article: Article }
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'subtopics'; subtopics: Article[] }
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'comingSoon' };
+  | (TopicBase & { kind: 'article'; article: Article })
+  | (TopicBase & { kind: 'subtopics'; subtopics: Article[] })
+  | (TopicBase & { kind: 'comingSoon' });
 
 export type LearnRecommendation = {
   title: string;
@@ -81,27 +146,33 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'What is Skin Cancer',
     subtitle: 'A quick introduction to what skin cancer is and why early detection matters.',
     icon: 'cross.case.fill',
+    category: 'basics',
     kind: 'article',
     article: {
       id: 'what-is-skin-cancer',
       title: 'What is Skin Cancer',
       icon: 'cross.case.fill',
-      sections: [
+      summary: 'What skin cancer is, and why finding it early makes such a difference.',
+      // Straightforward background reading, so it stays plain headed prose.
+      blocks: [
         {
+          kind: 'prose',
           paragraphs: [
-            'Skin cancer happens when skin cells grow abnormally, usually because of damage from ultraviolet (UV) light — most often from the sun, but tanning beds too. It is the most common type of cancer worldwide, and also one of the most treatable when caught early.',
+            'Skin cancer happens when skin cells grow abnormally, usually because of damage from ultraviolet (UV) light. Most of that damage comes from the sun, though tanning beds cause it too. It is the most common type of cancer worldwide, and also one of the most treatable when caught early.',
           ],
         },
         {
+          kind: 'prose',
           heading: 'Why early detection matters',
           paragraphs: [
-            'Most skin cancers develop slowly and visibly, on skin you can see and check yourself. Spotting a change early — before it grows or spreads — usually means simpler treatment and better outcomes.',
+            'Most skin cancers develop slowly and visibly, on skin you can see and check yourself. Spotting a change early, before it grows or spreads, usually means simpler treatment and better outcomes.',
           ],
         },
         {
+          kind: 'prose',
           heading: "SpotOn's role",
           paragraphs: [
-            'SpotOn helps you track spots on your skin over time and get an early, informal read on whether a spot looks worth showing a doctor. It is a screening aid, not a diagnosis — always follow up with a dermatologist for anything that concerns you.',
+            'SpotOn helps you track spots on your skin over time and get an early, informal read on whether a spot looks worth showing a doctor. It is a screening aid, not a diagnosis. Always follow up with a dermatologist for anything that concerns you.',
           ],
         },
       ],
@@ -112,28 +183,74 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'Types of Skin Cancer',
     subtitle: 'The three most common types, and how they differ.',
     icon: 'square.grid.2x2.fill',
+    category: 'basics',
     kind: 'subtopics',
     subtopics: [
       {
         id: 'bcc',
         title: 'Basal Cell Carcinoma',
         icon: 'cross.case.fill',
-        sections: [
+        summary: 'The most common and least dangerous type, usually a slow-growing pearly bump.',
+        blocks: [
           {
-            heading: 'What it looks like',
+            kind: 'prose',
             paragraphs: [
-              'Often a pearly or waxy bump, or a flat, flesh-colored/brown scar-like lesion. It may bleed or scab and not fully heal.',
+              'Basal cell carcinoma is the most common skin cancer and the least dangerous. It grows slowly on skin that has had years of sun, and it is highly curable when treated early.',
             ],
           },
           {
-            heading: 'Risk level',
-            paragraphs: [
-              'The most common and least dangerous type — it grows slowly and rarely spreads beyond the skin, but can damage surrounding tissue if left untreated.',
+            kind: 'visual',
+            heading: 'What it may look like',
+            art: 'bcc',
+            traits: [
+              { title: 'Pearly, waxy surface', detail: 'The bump can look slightly translucent, as if lit from within.' },
+              { title: 'Raised, rolled border', detail: 'The edge is smooth and defined rather than ragged.' },
+              { title: 'Fine surface vessels', detail: 'Thread-like blood vessels are often visible across the bump.' },
             ],
           },
           {
+            kind: 'list',
+            variant: 'grouped',
+            heading: 'Common signs',
+            items: [
+              {
+                icon: 'drop.fill',
+                title: 'Bleeds, then scabs over',
+                detail: 'It may bleed after a light knock, crust over, and reopen in the same place instead of healing.',
+              },
+              {
+                icon: 'clock.fill',
+                title: 'Slow to change',
+                detail: 'It develops over months or years rather than weeks, so it is easy to dismiss as a stubborn pimple.',
+              },
+              {
+                icon: 'checkmark.seal.fill',
+                title: 'Rarely spreads',
+                detail: 'It almost always stays local, though it can damage nearby tissue if it is left alone for a long time.',
+              },
+            ],
+          },
+          {
+            kind: 'bodyAreas',
+            heading: 'Where it usually appears',
+            intro: 'Almost always on skin that gets regular sun.',
+            areas: [
+              { region: 'head / face', label: 'Face and nose' },
+              { region: 'neck', label: 'Neck' },
+              { region: 'shoulder', label: 'Shoulders' },
+              { region: 'forearm', label: 'Forearms' },
+            ],
+          },
+          {
+            kind: 'prose',
             heading: 'Typical treatment',
             paragraphs: ['Usually removed with a minor outpatient procedure. Highly curable when caught early.'],
+          },
+          {
+            kind: 'notice',
+            tone: 'info',
+            title: 'Worth remembering',
+            text: 'A sore on sun-exposed skin that keeps reopening over several weeks is worth showing a dermatologist, even when it does not hurt.',
           },
         ],
       },
@@ -141,22 +258,68 @@ export const LEARN_TOPICS: Topic[] = [
         id: 'scc',
         title: 'Squamous Cell Carcinoma',
         icon: 'cross.case.fill',
-        sections: [
+        summary: 'A scaly patch or sore that keeps reopening, most often on sun-exposed skin.',
+        blocks: [
           {
-            heading: 'What it looks like',
+            kind: 'prose',
             paragraphs: [
-              'A firm, red bump, a scaly patch, or a sore that heals and reopens, often on sun-exposed skin like the face, ears, or hands.',
+              'Squamous cell carcinoma is the second most common skin cancer. It is still highly treatable when found early, but it is more likely than basal cell carcinoma to grow deeper if it is ignored.',
             ],
           },
           {
-            heading: 'Risk level',
-            paragraphs: [
-              'More likely than BCC to grow deeper or spread if untreated, though still highly treatable when found early.',
+            kind: 'visual',
+            heading: 'What it may look like',
+            art: 'scc',
+            traits: [
+              { title: 'Rough, scaly surface', detail: 'The patch feels crusted or sandpapery rather than smooth.' },
+              { title: 'Firm red base', detail: 'The skin underneath often looks inflamed or reddened.' },
+              { title: 'Crusting that returns', detail: 'Flakes lift off and rebuild in the same spot.' },
             ],
           },
           {
+            kind: 'list',
+            variant: 'grouped',
+            heading: 'Common signs',
+            items: [
+              {
+                icon: 'bandage.fill',
+                title: 'A sore that will not close',
+                detail: 'It heals partway, then reopens in the same place over weeks or months.',
+              },
+              {
+                icon: 'allergens',
+                title: 'Rough to the touch',
+                detail: 'The patch can feel scaly or tender, and it may catch on clothing.',
+              },
+              {
+                icon: 'exclamationmark.triangle.fill',
+                title: 'Can grow deeper',
+                detail: 'Left untreated it is more likely than basal cell carcinoma to spread beyond the skin.',
+              },
+            ],
+          },
+          {
+            kind: 'bodyAreas',
+            heading: 'Where it usually appears',
+            intro: 'On the areas that take the most daily sun.',
+            areas: [
+              { region: 'head / face', label: 'Face and ears' },
+              { region: 'neck', label: 'Neck' },
+              { region: 'hand', label: 'Backs of hands' },
+              { region: 'forearm', label: 'Forearms' },
+              { region: 'lower leg', label: 'Lower legs' },
+            ],
+          },
+          {
+            kind: 'prose',
             heading: 'Typical treatment',
-            paragraphs: ['Usually surgical removal; larger or higher-risk cases may need additional treatment.'],
+            paragraphs: ['Usually surgical removal. Larger or higher-risk cases may need additional treatment.'],
+          },
+          {
+            kind: 'notice',
+            tone: 'info',
+            title: 'Worth remembering',
+            text: 'A rough patch that keeps coming back after it seems to heal is a common early sign, and it is much simpler to treat at that stage.',
           },
         ],
       },
@@ -164,24 +327,70 @@ export const LEARN_TOPICS: Topic[] = [
         id: 'melanoma',
         title: 'Melanoma',
         icon: 'cross.case.fill',
-        sections: [
+        summary: 'The least common but most serious type, usually a new or changing mole.',
+        blocks: [
           {
-            heading: 'What it looks like',
+            kind: 'prose',
             paragraphs: [
-              'A new or changing mole — often asymmetric, with an irregular border, uneven color, and larger than a pencil eraser. See the ABCDE rule for the full checklist.',
+              'Melanoma is the least common of the three types but the most serious, because it can spread to other parts of the body. Found early it is very treatable, which is why a changing mole is worth acting on rather than watching.',
             ],
           },
           {
-            heading: 'Risk level',
-            paragraphs: [
-              'The least common but most serious type — it can spread to other parts of the body if not caught early, so prompt evaluation matters most here.',
+            kind: 'visual',
+            heading: 'What it may look like',
+            art: 'melanoma',
+            traits: [
+              { title: 'Asymmetric shape', detail: 'One half does not mirror the other half.' },
+              { title: 'Irregular, notched border', detail: 'The edge wanders instead of forming a clean circle.' },
+              { title: 'Uneven color', detail: 'Several shades of brown or black appear within one spot.' },
             ],
           },
           {
+            kind: 'list',
+            variant: 'grouped',
+            heading: 'Common signs',
+            items: [
+              {
+                icon: 'arrow.triangle.2.circlepath',
+                title: 'It changes over time',
+                detail: 'It grows, darkens, or shifts shape over weeks to months. Change matters more than any single feature.',
+              },
+              {
+                icon: 'square.grid.2x2.fill',
+                title: 'It stands out from your other moles',
+                detail: 'Often called the ugly duckling sign, because it simply does not match the rest of your skin.',
+              },
+              {
+                icon: 'exclamationmark.triangle.fill',
+                title: 'It can appear on new skin',
+                detail: 'Most melanomas are new spots rather than changes to a mole you have had for years.',
+              },
+            ],
+          },
+          {
+            kind: 'bodyAreas',
+            heading: 'Where it usually appears',
+            intro: 'Melanoma can appear anywhere, including skin that rarely sees sun.',
+            areas: [
+              { region: 'upper back', label: 'Back' },
+              { region: 'lower leg', label: 'Legs' },
+              { region: 'forearm', label: 'Arms' },
+              { region: 'foot', label: 'Soles of feet' },
+              { region: 'head / face', label: 'Face and scalp' },
+            ],
+          },
+          {
+            kind: 'prose',
             heading: 'Typical treatment',
             paragraphs: [
-              'Surgical removal is standard; more advanced cases may need additional treatment from an oncology team.',
+              'Surgical removal is standard. More advanced cases may need additional treatment from an oncology team.',
             ],
+          },
+          {
+            kind: 'notice',
+            tone: 'caution',
+            title: 'Do not wait this one out',
+            text: 'If a mole matches an ABCDE sign or has clearly changed, book a dermatologist rather than watching it for another few months. Early melanoma is usually treated with a simple removal.',
           },
         ],
       },
@@ -192,25 +401,146 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'Warning Signs (ABCDE Rule)',
     subtitle: 'A simple checklist for spotting a mole that needs attention.',
     icon: 'exclamationmark.triangle.fill',
+    category: 'warning-signs',
     kind: 'article',
     article: {
       id: 'warning-signs',
       title: 'Warning Signs (ABCDE Rule)',
       icon: 'exclamationmark.triangle.fill',
-      sections: [
-        { heading: 'Asymmetry', paragraphs: ['One half of the mole does not match the other half.'] },
-        { heading: 'Border', paragraphs: ['Edges are irregular, ragged, or blurred, instead of smooth.'] },
+      summary: 'Five things to look for in a mole, shown side by side.',
+      // The five signs are visual by nature, so each one is drawn as a
+      // typical-versus-concerning pair rather than described in prose.
+      blocks: [
         {
-          heading: 'Color',
-          paragraphs: ['Uneven color, or shades of brown, black, red, white, or blue within the same spot.'],
+          kind: 'prose',
+          paragraphs: [
+            'Melanoma is often noticed first by the person who has it, not by a doctor. The ABCDE rule is the same checklist dermatologists use, and it works just as well at home in front of a mirror.',
+          ],
         },
         {
-          heading: 'Diameter',
-          paragraphs: ['Larger than about 6mm (roughly the size of a pencil eraser), though melanomas can be smaller.'],
+          kind: 'compare',
+          heading: 'The ABCDE rule',
+          intro:
+            'Compare a spot against each sign below. One sign on its own is not a diagnosis, but it is a good reason to have the spot looked at.',
+          items: [
+            {
+              letter: 'A',
+              sign: 'asymmetry',
+              title: 'Asymmetry',
+              detail: 'One half of the mole does not match the other half.',
+            },
+            {
+              letter: 'B',
+              sign: 'border',
+              title: 'Border',
+              detail: 'Edges are irregular, ragged, or blurred, instead of smooth.',
+            },
+            {
+              letter: 'C',
+              sign: 'color',
+              title: 'Color',
+              detail: 'Uneven color, or shades of brown, black, red, white, or blue within the same spot.',
+            },
+            {
+              letter: 'D',
+              sign: 'diameter',
+              title: 'Diameter',
+              detail:
+                'Larger than about 6mm, roughly the size of a pencil eraser, though melanomas can be smaller.',
+            },
+            {
+              letter: 'E',
+              sign: 'evolving',
+              title: 'Evolving',
+              detail: 'Any change in size, shape, color, or symptoms such as itching or bleeding over time.',
+            },
+          ],
         },
         {
-          heading: 'Evolving',
-          paragraphs: ['Any change in size, shape, color, or symptoms (itching, bleeding) over time.'],
+          kind: 'prose',
+          heading: 'If a spot matches a sign',
+          paragraphs: [
+            'Have it checked rather than waiting to see what happens. Scanning it with SpotOn also keeps a dated photo, which makes any later change much easier to see.',
+          ],
+        },
+        {
+          kind: 'notice',
+          tone: 'info',
+          title: 'One sign is not a diagnosis',
+          text: 'Plenty of harmless moles fail one of these tests. The rule is a prompt to get a spot looked at, not a verdict on what it is.',
+        },
+      ],
+    },
+  },
+  {
+    id: 'self-check',
+    title: 'How to Check Your Skin',
+    subtitle: 'A five-step routine you can do at home in about ten minutes.',
+    icon: 'magnifyingglass',
+    category: 'self-check',
+    kind: 'article',
+    article: {
+      id: 'self-check',
+      title: 'How to Check Your Skin',
+      icon: 'magnifyingglass',
+      summary: 'A five-step routine for checking your own skin, and the spots people miss.',
+      // A procedure, so it is numbered, and the easily missed areas are drawn
+      // rather than listed as text.
+      blocks: [
+        {
+          kind: 'prose',
+          paragraphs: [
+            'A skin self-check takes about ten minutes and needs nothing more than good light and a mirror. Doing it in the same order every time is what makes a change easy to notice.',
+          ],
+        },
+        {
+          kind: 'steps',
+          heading: 'The five-step routine',
+          intro: 'Once a month is enough for most people.',
+          steps: [
+            {
+              title: 'Find good light and a mirror',
+              detail:
+                'Stand in bright, even light in front of a full-length mirror. A handheld mirror helps for the areas you cannot see directly.',
+            },
+            {
+              title: 'Work from the top down',
+              detail:
+                'Start at your scalp and face, then your neck, shoulders, chest, and arms, and finish at your legs and feet. A fixed order means you are far less likely to skip a patch.',
+            },
+            {
+              title: 'Check the areas that are easy to miss',
+              detail:
+                'Between your fingers and toes, the soles of your feet, behind your ears, your nape, and your back. Skin cancer can appear where the sun rarely reaches.',
+            },
+            {
+              title: 'Compare each spot against the rest',
+              detail:
+                'You are looking for the one that stands out from your other moles. If something catches your eye, check it against the ABCDE rule.',
+            },
+            {
+              title: 'Photograph anything you want to watch',
+              detail:
+                'Scan the spot with SpotOn so you have a dated photo. Comparing two pictures months apart is far more reliable than trying to remember.',
+            },
+          ],
+        },
+        {
+          kind: 'bodyAreas',
+          heading: 'The spots people skip',
+          intro: 'Give these a deliberate look, since they are hard to see without help.',
+          areas: [
+            { region: 'back of head', label: 'Scalp and nape' },
+            { region: 'upper back', label: 'Back' },
+            { region: 'hand', label: 'Between fingers' },
+            { region: 'foot', label: 'Soles and toes' },
+          ],
+        },
+        {
+          kind: 'notice',
+          tone: 'info',
+          title: 'Ask for a second pair of eyes',
+          text: 'Your back and scalp are the hardest areas to check alone. Asking someone you trust to look, or using a phone camera, covers the blind spots a mirror cannot.',
         },
       ],
     },
@@ -220,34 +550,62 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'Risk Factors',
     subtitle: 'What raises your chances of developing skin cancer.',
     icon: 'figure.stand',
+    category: 'risk',
     kind: 'article',
     article: {
       id: 'risk-factors',
       title: 'Risk Factors',
       icon: 'figure.stand',
-      sections: [
+      summary: 'The four things that most affect your chances, grouped at a glance.',
+      // Four parallel factors, so they read better as a compact grouped list
+      // than as four headed paragraphs.
+      blocks: [
         {
+          kind: 'prose',
           paragraphs: [
-            'Anyone can develop skin cancer, but some factors make it more likely. Knowing yours can help you decide how often to self-check and when to see a dermatologist.',
+            'Anyone can develop skin cancer, but some factors make it more likely. Knowing yours can help you decide how often to check your skin and when to see a dermatologist.',
           ],
         },
         {
-          heading: 'Sun exposure',
-          paragraphs: ['Frequent sunburns or long-term unprotected sun exposure, especially earlier in life.'],
-        },
-        {
-          heading: 'Skin type',
-          paragraphs: [
-            'Fair skin, light hair, and eyes that burn easily are at higher risk, though anyone can develop skin cancer.',
+          kind: 'list',
+          variant: 'grouped',
+          heading: 'What raises your risk',
+          items: [
+            {
+              icon: 'sun.max.fill',
+              title: 'Sun exposure',
+              detail: 'Frequent sunburns or long-term unprotected sun exposure, especially earlier in life.',
+            },
+            {
+              icon: 'figure.stand',
+              title: 'Skin type',
+              detail:
+                'Fair skin, light hair, and eyes that burn easily carry a higher risk, though anyone can develop skin cancer.',
+            },
+            {
+              icon: 'person.2.fill',
+              title: 'Family history',
+              detail: 'A close relative with skin cancer, especially melanoma, raises your own risk.',
+            },
+            {
+              icon: 'circle.grid.2x2.fill',
+              title: 'Age and moles',
+              detail: 'Risk increases with age, and having many moles or atypical-looking moles is also a factor.',
+            },
           ],
         },
         {
-          heading: 'Family history',
-          paragraphs: ['A close relative with skin cancer, especially melanoma, raises your own risk.'],
+          kind: 'prose',
+          heading: 'What to do with this',
+          paragraphs: [
+            'Having a risk factor does not mean you will develop skin cancer. It is a reason to check your skin a little more regularly, and to protect it from the sun.',
+          ],
         },
         {
-          heading: 'Age and moles',
-          paragraphs: ['Risk increases with age, and having many moles or atypical-looking moles is also a factor.'],
+          kind: 'notice',
+          tone: 'info',
+          title: 'Darker skin is not exempt',
+          text: 'Skin cancer is less common in darker skin tones, but it is often found later, when it is harder to treat. Everyone benefits from checking their own skin.',
         },
       ],
     },
@@ -257,45 +615,58 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'UV Protection in the Philippines',
     subtitle: 'Sun safety tips for our year-round tropical climate.',
     icon: 'sun.max.fill',
+    category: 'sun-safety',
     kind: 'article',
     article: {
       id: 'prevention',
       title: 'UV Protection in the Philippines',
       icon: 'sun.max.fill',
-      sections: [
+      summary: 'Practical sun-safety habits for a country with high UV all year.',
+      // Advice you act on, so it is presented as scannable recommendation
+      // cards instead of a wall of paragraphs.
+      blocks: [
         {
+          kind: 'prose',
           paragraphs: [
-            "The Philippines sits close to the equator, so UV levels stay high year-round — not just during summer (March to May, when PAGASA regularly reports \"Extreme\" UV Index readings). Sun protection is a daily habit here, not a seasonal one.",
+            'The Philippines sits close to the equator, so UV levels stay high all year, not only during summer (March to May, when PAGASA regularly reports "Extreme" UV Index readings). Sun protection is a daily habit here, not a seasonal one.',
           ],
         },
         {
-          heading: 'Check the UV Index',
-          paragraphs: [
-            'PAGASA publishes a daily UV Index forecast. From "Very High" to "Extreme" (8 and above, common on clear days), unprotected skin can burn in under 15 minutes — plan outdoor errands, commutes, or exercise around it when you can.',
-          ],
-        },
-        {
-          heading: 'Sunscreen that survives the humidity',
-          paragraphs: [
-            'Use broad-spectrum SPF 30+ daily, reapplied every two hours outdoors — more often if you are sweating or swimming, both common here. A water-resistant, lightweight formula sits better under our humidity than heavy creams.',
-          ],
-        },
-        {
-          heading: 'Everyday exposure adds up',
-          paragraphs: [
-            'Jeepney and tricycle rides, market trips, waiting for a ride, walking to school or work — a lot of daily sun exposure here happens outside of "beach days." Long sleeves, a wide-brimmed hat or cap, and sunglasses help on ordinary errands, not just vacations.',
-          ],
-        },
-        {
-          heading: 'Peak hours and cloudy days',
-          paragraphs: [
-            'UV rays are strongest between 10am and 4pm — seek shade when possible during this window. Overcast or rainy-season skies block heat but not most UV, so cloudy days still call for protection.',
-          ],
-        },
-        {
-          heading: 'Regular self-checks',
-          paragraphs: [
-            'Check your skin monthly for new or changing spots, using the ABCDE rule as a guide, and use SpotOn to track anything you want to keep an eye on.',
+          kind: 'list',
+          variant: 'tips',
+          heading: 'Everyday sun protection',
+          intro: 'Five habits that fit around an ordinary week here.',
+          items: [
+            {
+              icon: 'chart.bar.fill',
+              title: 'Check the UV Index',
+              detail:
+                'PAGASA publishes a daily UV Index forecast. At "Very High" to "Extreme" levels (8 and above, common on clear days), unprotected skin can burn in under 15 minutes, so plan errands, commutes, or exercise around it when you can.',
+            },
+            {
+              icon: 'drop.fill',
+              title: 'Use sunscreen that survives the humidity',
+              detail:
+                'Broad-spectrum SPF 30+ daily, reapplied every two hours outdoors, and sooner if you are sweating or swimming. A water-resistant, lightweight formula sits better here than a heavy cream.',
+            },
+            {
+              icon: 'umbrella.fill',
+              title: 'Cover up on ordinary errands',
+              detail:
+                'Jeepney and tricycle rides, market trips, waiting for a ride, and walks to school or work all add up. Long sleeves, a wide-brimmed hat or cap, and sunglasses help outside of beach days.',
+            },
+            {
+              icon: 'clock.fill',
+              title: 'Plan around peak hours',
+              detail:
+                'UV rays are strongest between 10am and 4pm, so seek shade during that window when possible. Overcast or rainy-season skies block heat but not most UV.',
+            },
+            {
+              icon: 'magnifyingglass',
+              title: 'Check your skin monthly',
+              detail:
+                'Look for new or changing spots using the ABCDE rule as a guide, and use SpotOn to track anything you want to keep an eye on.',
+            },
           ],
         },
       ],
@@ -306,25 +677,69 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'When to See a Doctor',
     subtitle: 'Signs that mean it is time for a professional opinion.',
     icon: 'stethoscope',
+    category: 'care',
     kind: 'article',
     article: {
       id: 'when-to-see-a-doctor',
       title: 'When to See a Doctor',
       icon: 'stethoscope',
-      sections: [
+      summary: 'What is worth booking for, and what actually happens at the visit.',
+      // Two different shapes in one article: a checklist of reasons to book,
+      // then the visit itself as an ordered walkthrough.
+      blocks: [
         {
-          heading: 'Red-flag symptoms',
-          paragraphs: [
-            'See a dermatologist if a spot matches any of the ABCDE warning signs, changes noticeably, bleeds, itches persistently, or simply looks different from your other moles.',
+          kind: 'list',
+          variant: 'grouped',
+          heading: 'Signs worth booking for',
+          intro: 'See a dermatologist if a spot does any of the following.',
+          items: [
+            {
+              icon: 'exclamationmark.triangle.fill',
+              title: 'It matches an ABCDE sign',
+              detail:
+                'Asymmetry, an irregular border, uneven color, a diameter over about 6mm, or any change over time.',
+            },
+            {
+              icon: 'drop.fill',
+              title: 'It bleeds or will not heal',
+              detail: 'A sore that scabs over, heals, and then reopens in the same place is worth showing someone.',
+            },
+            {
+              icon: 'scribble',
+              title: 'It itches persistently',
+              detail: 'Ongoing itching or tenderness in one spot, rather than an occasional passing itch.',
+            },
+            {
+              icon: 'square.grid.2x2.fill',
+              title: 'It looks unlike your other moles',
+              detail: 'A spot that simply stands out from the rest of your skin is reason enough to have it checked.',
+            },
           ],
         },
         {
+          kind: 'steps',
           heading: 'What to expect at a visit',
-          paragraphs: [
-            'A dermatologist will visually examine the spot, possibly with a dermatoscope, and may recommend a biopsy if anything looks concerning. Most visits are quick and non-invasive.',
+          intro: 'Most visits are quick and non-invasive.',
+          steps: [
+            {
+              title: 'Visual examination',
+              detail:
+                'The dermatologist looks closely at the spot, and often at the rest of your skin, which usually takes only a few minutes.',
+            },
+            {
+              title: 'A closer look with a dermatoscope',
+              detail:
+                'A handheld magnifying lens may be rested against the skin to see detail that is invisible to the naked eye. It does not hurt.',
+            },
+            {
+              title: 'A biopsy, only if needed',
+              detail:
+                'If anything looks concerning, a small sample is taken under local anesthetic and sent to a lab for a definite answer.',
+            },
           ],
         },
         {
+          kind: 'prose',
           heading: 'Finding a clinic',
           paragraphs: [
             'The Directory tab lists nearby dermatology clinics and doctors offering online booking, so you can find and reach a professional directly from SpotOn.',
@@ -338,6 +753,7 @@ export const LEARN_TOPICS: Topic[] = [
     title: 'SpotOn Questionnaire',
     subtitle: 'A guided self-check to help assess your risk.',
     icon: 'doc.text.fill',
+    category: 'self-check',
     kind: 'comingSoon',
   },
 ];
@@ -351,5 +767,77 @@ export function getArticle(topicId: string, articleId?: string): Article | undef
   if (!topic) return undefined;
   if (topic.kind === 'article') return topic.article;
   if (topic.kind === 'subtopics') return topic.subtopics.find((a) => a.id === articleId);
+  return undefined;
+}
+
+export function getCategoryLabel(id: LearnCategoryId): string {
+  return LEARN_CATEGORIES.find((c) => c.id === id)?.label ?? '';
+}
+
+// Average adult reading speed for non-technical prose. Read times are derived
+// from the article text itself rather than hand-authored, so they can never
+// drift out of sync with the content.
+const WORDS_PER_MINUTE = 200;
+
+function countWords(...parts: (string | undefined)[]): number {
+  return parts.reduce(
+    (total, part) => total + (part ? part.trim().split(/\s+/).filter(Boolean).length : 0),
+    0
+  );
+}
+
+function blockWords(block: ArticleBlock): number {
+  switch (block.kind) {
+    case 'prose':
+      return countWords(block.heading, ...block.paragraphs);
+    case 'compare':
+      return (
+        countWords(block.heading, block.intro) +
+        block.items.reduce((total, item) => total + countWords(item.title, item.detail), 0)
+      );
+    case 'steps':
+      return (
+        countWords(block.heading, block.intro) +
+        block.steps.reduce((total, step) => total + countWords(step.title, step.detail), 0)
+      );
+    case 'list':
+      return (
+        countWords(block.heading, block.intro) +
+        block.items.reduce((total, item) => total + countWords(item.title, item.detail), 0)
+      );
+    case 'visual':
+      return (
+        countWords(block.heading, block.intro) +
+        block.traits.reduce((total, trait) => total + countWords(trait.title, trait.detail), 0)
+      );
+    case 'bodyAreas':
+      return (
+        countWords(block.heading, block.intro) +
+        block.areas.reduce((total, area) => total + countWords(area.label), 0)
+      );
+    case 'notice':
+      return countWords(block.title, block.text);
+    default:
+      // Exhaustiveness check: a compile error here means a new block kind was
+      // added without teaching the read-time estimate how to measure it.
+      return block satisfies never;
+  }
+}
+
+/**
+ * Estimated reading time in whole minutes. Rounds up rather than to nearest, so
+ * the figure never promises a shorter read than the article actually is.
+ */
+export function getArticleReadMinutes(article: Article): number {
+  const words = article.blocks.reduce((total, block) => total + blockWords(block), 0);
+  return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
+}
+
+/** Combined reading time for a topic, or `undefined` when it has no article yet. */
+export function getTopicReadMinutes(topic: Topic): number | undefined {
+  if (topic.kind === 'article') return getArticleReadMinutes(topic.article);
+  if (topic.kind === 'subtopics') {
+    return topic.subtopics.reduce((total, article) => total + getArticleReadMinutes(article), 0);
+  }
   return undefined;
 }
