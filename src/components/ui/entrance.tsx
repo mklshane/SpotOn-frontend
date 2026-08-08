@@ -26,6 +26,12 @@ const EntranceContext = createContext<EntranceValue>({ stagger: 0, duration: Mot
 export type EntranceProviderProps = {
   /** Stable key identifying the screen, e.g. "learn". */
   screen: string;
+  /**
+   * Play the sequence on every mount instead of once per session. Right for a
+   * pushed detail screen, which the user experiences as arriving fresh each
+   * time; wrong for a tab, which stays mounted and should not re-animate.
+   */
+  replay?: boolean;
   children: ReactNode;
 };
 
@@ -38,9 +44,9 @@ export type EntranceProviderProps = {
  *    so acting on the screen never feels like waiting on it
  *  - reduced motion, or a return visit: no stagger at all
  */
-export function EntranceProvider({ screen, children }: EntranceProviderProps) {
+export function EntranceProvider({ screen, replay = false, children }: EntranceProviderProps) {
   const reduced = useReducedMotion();
-  const [firstVisit] = useState(() => !played.has(screen));
+  const [firstVisit] = useState(() => replay || !played.has(screen));
   const [settled, setSettled] = useState(() => !firstVisit || reduced);
 
   useEffect(() => {
