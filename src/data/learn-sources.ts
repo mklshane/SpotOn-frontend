@@ -72,6 +72,21 @@ export const SOURCES = {
       'A case of a superficial spreading melanoma in situ diagnosed via digital dermoscopic monitoring with high dynamic range conversion (2014)',
     url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC4230260/',
   },
+  nciMelanomaSubtypes: {
+    org: 'National Cancer Institute',
+    title: 'Melanoma Treatment (PDQ), Health Professional Version',
+    url: 'https://www.cancer.gov/types/skin/hp/melanoma-treatment-pdq',
+  },
+  statPearlsBcc: {
+    org: 'StatPearls, National Library of Medicine',
+    title: 'Basal Cell Carcinoma',
+    url: 'https://www.ncbi.nlm.nih.gov/books/NBK482439/',
+  },
+  statPearlsScc: {
+    org: 'StatPearls, National Library of Medicine',
+    title: 'Cutaneous Squamous Cell Carcinoma',
+    url: 'https://www.ncbi.nlm.nih.gov/books/NBK441939/',
+  },
   whoUvIndex: {
     org: 'World Health Organization',
     title: 'Radiation: The ultraviolet (UV) index',

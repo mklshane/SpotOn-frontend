@@ -5,12 +5,13 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { lesionTitle } from '@/components/scan/lesion-row';
-import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
+import { ScanTimeline } from '@/components/scan/scan-timeline';
 import { tierColor } from '@/components/scan/screening-row';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Screen, SectionHeader, TextField } from '@/components/ui';
+import { Entrance, EntranceProvider } from '@/components/ui/entrance';
 import { Icon } from '@/components/ui/icon';
-import { Elevation, Radius, Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -116,8 +117,10 @@ export default function LesionDetailScreen() {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Space.huge }]}
         showsVerticalScrollIndicator={false}>
-        {/* Title + tier */}
-        <View style={styles.titleBlock}>
+        {/* Fade only, matching the Education module: nothing moves, so a spot
+            being monitored does not slide around while it is being read. */}
+        <EntranceProvider screen={`lesion-${lesion.id}`} replay>
+        <Entrance index={0} style={styles.titleBlock}>
           {editing ? (
             <TextField
               value={draft}
@@ -147,74 +150,46 @@ export default function LesionDetailScreen() {
               </View>
             </Pressable>
           )}
+          {/* Pill beside a stacked pair rather than one long run-on line: the
+              status, the place, and the record are three different facts, and
+              on a narrow screen the single line wrapped mid-sentence. */}
           <View style={styles.metaRow}>
             <View style={[styles.tierPill, { backgroundColor: bg }]}>
               <ThemedText type="caption" style={{ color: fg }}>
                 {TIER_LABEL[tier]}
               </ThemedText>
             </View>
-            <ThemedText type="footnote" themeColor="textSecondary">
-              {lesion.mark?.region ?? 'Location not marked'}
-              {trend.count ? ` · ${trend.count} ${trend.count === 1 ? 'scan' : 'scans'}` : ''}
-              {lesion.archived ? ' · not tracked' : ''}
-            </ThemedText>
+            <View style={styles.metaText}>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {lesion.mark?.region ?? 'Location not marked'}
+                {lesion.archived ? ' · not tracked' : ''}
+              </ThemedText>
+              {trend.count ? (
+                <ThemedText type="caption" themeColor="muted">
+                  {trend.count} {trend.count === 1 ? 'scan' : 'scans'}
+                  {trend.firstAt
+                    ? ` · ${trend.count === 1 ? 'Started' : 'Tracking since'} ${fmtDate(trend.firstAt)}`
+                    : ''}
+                </ThemedText>
+              ) : null}
+            </View>
           </View>
-        </View>
+        </Entrance>
 
         {/* Photo timeline — the highest-value element on this screen */}
         {screenings.length > 0 ? (
-          <View style={styles.section}>
+          <Entrance index={1} style={styles.section}>
             <SectionHeader title="Over time" variant="label" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
-              {screenings.map((s, i) => {
-                const c = tierColor(theme, s.triage.tier);
-                const isLatest = i === screenings.length - 1;
-                return (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => router.push({ pathname: '/scan/result', params: { id: s.id } })}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Scan ${i + 1} of ${screenings.length}, ${fmtDate(s.createdAt)}, ${TIER_LABEL[s.triage.tier]}`}
-                    style={({ pressed }) => [styles.stripItem, pressed && styles.pressed]}>
-                    {/* backgroundColor is load-bearing, not decoration: iOS derives the shadow
-                        path from the layer's backing, so a transparent wrapper casts nothing. */}
-                    <View style={[styles.stripPhotoWrap, { backgroundColor: theme.surface }]}>
-                      <ScreeningThumbnail uri={s.imageUri} style={styles.stripPhoto} iconSize={24} />
-                      {/* Tier as a solid pill rather than a naked dot: a 10px dot floating on a
-                          photo disappears against a light lesion and reads as an artifact. */}
-                      <View style={[styles.stripTier, { backgroundColor: theme.surface }]}>
-                        <View style={[styles.stripTierDot, { backgroundColor: c.fg }]} />
-                        <ThemedText type="caption" style={{ color: c.fg }}>
-                          {TIER_LABEL[s.triage.tier]}
-                        </ThemedText>
-                      </View>
-                    </View>
-                    <View style={styles.stripMeta}>
-                      <ThemedText type="caption" themeColor={isLatest ? 'text' : 'textSecondary'}>
-                        {fmtDate(s.createdAt)}
-                      </ThemedText>
-                      {/* Only the ends are labelled — every scan tagged would be noise, but with no
-                          anchor at all a strip of near-identical photos has no reading direction. */}
-                      {isLatest ? (
-                        <ThemedText type="caption" style={{ color: theme.brand }}>
-                          Latest
-                        </ThemedText>
-                      ) : i === 0 ? (
-                        <ThemedText type="caption" themeColor="muted">
-                          First
-                        </ThemedText>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
+            <ScanTimeline
+              screenings={screenings}
+              onOpen={(s) => router.push({ pathname: '/scan/result', params: { id: s.id } })}
+            />
+          </Entrance>
         ) : null}
 
         {/* Trend sparkline — hidden below 3 points, where a line chart is just noise */}
         {trend.tpsSeries.length >= 3 ? (
-          <View style={styles.section}>
+          <Entrance index={2} style={styles.section}>
             <SectionHeader title="Priority score" variant="label" />
             <Card style={styles.sparkCard}>
               <TpsSparkline series={trend.tpsSeries} />
@@ -222,12 +197,12 @@ export default function LesionDetailScreen() {
                 Triage Priority Score, 0–8. Higher means seek care sooner.
               </ThemedText>
             </Card>
-          </View>
+          </Entrance>
         ) : null}
 
         {/* Since-first summary */}
         {trend.count > 1 && trend.tierFrom && trend.tierTo ? (
-          <View style={styles.section}>
+          <Entrance index={3} style={styles.section}>
             <SectionHeader title="What changed" variant="label" />
             <Card style={styles.changeCard}>
               {/* The verdict leads, at headline weight, in the tier's own colour. The old paragraph
@@ -297,19 +272,24 @@ export default function LesionDetailScreen() {
                 </ThemedText>
               )}
             </Card>
-          </View>
+          </Entrance>
         ) : null}
 
-        <View style={styles.actions}>
+        {/* One filled pill, one quiet link. Two outlined buttons of equal
+            width read as an either/or choice; re-scanning is the action this
+            screen exists to prompt, and the result is already one tap away
+            from the timeline above. */}
+        <Entrance index={4} style={styles.actions}>
           <Button label="Re-scan this spot" variant="brand" onPress={startFollowUp} disabled={!latest} />
           {latest ? (
             <Button
               label="View latest result"
-              variant="outline"
+              variant="ghost"
               onPress={() => router.push({ pathname: '/scan/result', params: { id: latest.id } })}
             />
           ) : null}
-        </View>
+        </Entrance>
+        </EntranceProvider>
       </ScrollView>
     </Screen>
   );
@@ -367,30 +347,10 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   titleText: { flexShrink: 1 },
   editChip: { width: 32, height: 32, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  metaRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md },
+  metaText: { flex: 1, minWidth: 0, gap: 2 },
   tierPill: { paddingHorizontal: Space.md, paddingVertical: 3, borderRadius: Radius.pill },
   section: { gap: Space.md },
-
-  // Photo timeline. The strip is the point of the screen — a clinician reads change, and these
-  // photos side by side are the change — so it carries the elevation the flat squares lacked.
-  strip: { gap: Space.base, paddingVertical: Space.xs, paddingRight: Space.xl },
-  stripItem: { width: 132, gap: Space.sm, alignItems: 'flex-start' },
-  stripPhotoWrap: { ...Elevation.sm, borderRadius: Radius.lg },
-  stripPhoto: { width: 132, height: 132, borderRadius: Radius.lg },
-  stripTier: {
-    position: 'absolute',
-    left: Space.sm,
-    bottom: Space.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    ...Elevation.sm,
-  },
-  stripTierDot: { width: 6, height: 6, borderRadius: 3 },
-  stripMeta: { gap: 2 },
 
   pressed: { opacity: 0.85 },
   sparkCard: { gap: Space.md },

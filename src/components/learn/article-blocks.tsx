@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { ClinicalImage } from '@/components/learn/ClinicalImage';
@@ -313,6 +314,103 @@ export function NoticeBlock({ block }: { block: Extract<ArticleBlock, { kind: 'n
 }
 
 /**
+ * Recognised variants of a skin cancer type, each with its own documented
+ * photograph. Cards expand in place rather than pushing a new screen: a reader
+ * comparing four variants wants them side by side in one scroll, not four
+ * round trips through the navigator.
+ */
+export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 'subtypes' }> }) {
+  const theme = useTheme();
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <View style={styles.subtypes}>
+      <BlockHeading title={block.heading} intro={block.intro} />
+
+      {block.items.map((item) => {
+        const open = openId === item.id;
+
+        return (
+          <Card key={item.id} padded={false} style={[styles.card, { borderColor: theme.hairline }]}>
+            <PressableScale
+              onPress={() => setOpenId(open ? null : item.id)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: open }}
+              accessibilityLabel={`${item.name}. ${open ? 'Collapse' : 'Expand'} details.`}
+              style={styles.subtypeHead}>
+              <View style={styles.subtypePhoto}>
+                <ClinicalImage id={item.photo} caption={item.photoCaption} />
+              </View>
+              <View style={styles.subtypeText}>
+                <ThemedText type="headline" numberOfLines={2}>
+                  {item.name}
+                </ThemedText>
+                <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={3}>
+                  {item.summary}
+                </ThemedText>
+                <View style={styles.subtypeMore}>
+                  <ThemedText type="caption" style={{ color: theme.brandPressed }}>
+                    {open ? 'Show less' : 'View details'}
+                  </ThemedText>
+                  <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} tintColor={theme.brandPressed} />
+                </View>
+              </View>
+            </PressableScale>
+
+            {open ? (
+              <View style={styles.subtypeBody}>
+                <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
+                <View style={styles.subtypeDetail}>
+                  <ThemedText type="subhead" style={styles.subtypeLabel}>
+                    What it may look like
+                  </ThemedText>
+                  <ThemedText type="callout" themeColor="textSecondary">
+                    {item.appearance}
+                  </ThemedText>
+
+                  {item.photoNote ? (
+                    <View style={[styles.photoNote, { backgroundColor: theme.elementBg }]}>
+                      <Icon name="info.circle.fill" size={14} tintColor={theme.textSecondary} />
+                      <ThemedText type="caption" themeColor="textSecondary" style={styles.photoNoteText}>
+                        {item.photoNote}
+                      </ThemedText>
+                    </View>
+                  ) : null}
+
+                  {item.location ? (
+                    <>
+                      <ThemedText type="subhead" style={styles.subtypeLabel}>
+                        Common location
+                      </ThemedText>
+                      <ThemedText type="callout" themeColor="textSecondary">
+                        {item.location}
+                      </ThemedText>
+                    </>
+                  ) : null}
+
+                  {item.points.length ? (
+                    <View style={styles.traits}>
+                      {item.points.map((point) => (
+                        <View key={point} style={styles.traitRow}>
+                          <View style={[styles.traitDot, { backgroundColor: theme.brand }]} />
+                          <ThemedText type="footnote" themeColor="textSecondary" style={styles.traitText}>
+                            {point}
+                          </ThemedText>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+          </Card>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
  * The article's medical references. Anything the module could not verify is
  * listed here as an explicit gap rather than omitted, so a reader can see the
  * difference between a claim that is sourced and one that is not yet.
@@ -501,6 +599,28 @@ const styles = StyleSheet.create({
   },
   noticeText: { flex: 1, minWidth: 0, gap: 2 },
   noticeTitle: { fontWeight: '700' },
+
+  subtypes: { gap: Space.md },
+  // Centre, not flex-start: a two-line name like "Superficial spreading
+  // melanoma" makes the text column taller than the photo, and pinning the
+  // photo to the top left it floating above its own card.
+  subtypeHead: { flexDirection: 'row', gap: Space.base, padding: Space.base, alignItems: 'center' },
+  // Fixed width so the photo never collapses: ClinicalImage's wrap is flex: 1,
+  // which in a row beside text would otherwise fight the text for space.
+  subtypePhoto: { width: 104 },
+  subtypeText: { flex: 1, minWidth: 0, gap: 2 },
+  subtypeMore: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: Space.xs },
+  subtypeBody: { paddingBottom: Space.base },
+  subtypeDetail: { paddingHorizontal: Space.base, paddingTop: Space.base, gap: Space.sm },
+  subtypeLabel: { fontWeight: '700' },
+  photoNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.md,
+  },
+  photoNoteText: { flex: 1 },
 
   sources: { gap: Space.sm },
   sourceRow: {

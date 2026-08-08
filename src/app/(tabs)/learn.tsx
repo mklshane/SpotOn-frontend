@@ -6,35 +6,29 @@ import { CancerTypeCard } from '@/components/learn/CancerTypeCard';
 import { EducationCard } from '@/components/learn/EducationCard';
 import { FeaturedEducationCard } from '@/components/learn/FeaturedEducationCard';
 import { ThemedText } from '@/components/themed-text';
-import { Chip } from '@/components/ui/chip';
 import { Entrance, EntranceProvider } from '@/components/ui/entrance';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { SearchBar } from '@/components/ui/search-bar';
 import { SectionHeader } from '@/components/ui/section-header';
-import { Motion, Space } from '@/constants/theme';
+import { Space } from '@/constants/theme';
 import {
   getCategoryLabel,
   getDailyLearnRecommendation,
   getArticleReadMinutes,
   getTopicReadMinutes,
-  LEARN_CATEGORIES,
   LEARN_TOPICS,
+  type Article,
   type LearnCategoryId,
   type Topic,
 } from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
 
-// Two topics are promoted into their own blocks above the list — the featured
-// card and the horizontal types rail — so the browse list below skips them
-// rather than repeating them. Filtering or searching still reaches both.
+// Two topics are promoted into their own blocks above the list: the featured
+// card and the horizontal types rail. The browse list skips them rather than
+// repeating them, and search still reaches both.
 const FEATURED_TOPIC_ID = 'warning-signs';
 const TYPES_TOPIC_ID = 'types-of-skin-cancer';
-
-// The chip rail lands just after the search field and runs tighter than the
-// page's own stagger, so the row reads as one sweep instead of seven arrivals.
-const CHIP_ENTRANCE_DELAY = 2 * Motion.entrance.stagger;
-const CHIP_ENTRANCE_STAGGER = 18;
 
 const FEATURED_IMAGE = require('@/assets/images/learn/article-self-check.jpg');
 const TIP_IMAGE = require('@/assets/images/learn/recommended-sun-protection.jpg');
@@ -67,13 +61,6 @@ const CANCER_TYPES = [
   },
 ] as const;
 
-type FilterId = LearnCategoryId | 'all';
-
-const FILTERS: readonly { id: FilterId; label: string }[] = [
-  { id: 'all', label: 'All' },
-  ...LEARN_CATEGORIES,
-];
-
 /** A single browsable row — either a topic, or an article nested inside one. */
 type Entry = {
   key: string;
@@ -83,6 +70,8 @@ type Entry = {
   tag: string;
   icon: Topic['icon'];
   category: LearnCategoryId;
+  /** Lower-cased searchable text, including any subtype names the article lists. */
+  haystack: string;
   onPress: () => void;
 };
 
@@ -111,13 +100,20 @@ function lengthLabel(topic: Topic): string {
 }
 
 function topicEntry(topic: Topic): Entry {
+  const tag = `${getCategoryLabel(topic.category)} · ${lengthLabel(topic)}`;
+  // A subtopics parent carries its children's subtype names too, so searching
+  // "acral" surfaces Types of Skin Cancer as well as the melanoma article.
+  const nestedTerms =
+    topic.kind === 'subtopics' ? topic.subtopics.map(subtypeTerms).join(' ') : '';
+
   return {
     key: topic.id,
     title: topic.title,
     description: topic.subtitle,
-    tag: `${getCategoryLabel(topic.category)} · ${lengthLabel(topic)}`,
+    tag,
     icon: topic.icon,
     category: topic.category,
+    haystack: `${topic.title} ${topic.subtitle} ${tag} ${nestedTerms}`.toLowerCase(),
     onPress: () => openTopic(topic),
   };
 }
@@ -140,6 +136,8 @@ function buildEntries(): { topics: Entry[]; nested: Entry[] } {
           tag: `${topic.title} · ${getArticleReadMinutes(article)} min read`,
           icon: article.icon,
           category: topic.category,
+          haystack:
+            `${article.title} ${article.summary} ${subtypeTerms(article)}`.toLowerCase(),
           onPress: () =>
             router.push({
               pathname: '/learn/article',
@@ -153,14 +151,21 @@ function buildEntries(): { topics: Entry[]; nested: Entry[] } {
 }
 
 function matches(entry: Entry, query: string): boolean {
-  const haystack = `${entry.title} ${entry.description} ${entry.tag}`.toLowerCase();
-  return haystack.includes(query);
+  return entry.haystack.includes(query);
+}
+
+/** Every subtype name and summary an article names, for the search index. */
+function subtypeTerms(article: Article): string {
+  return article.blocks
+    .flatMap((block) =>
+      block.kind === 'subtypes' ? block.items.map((item) => `${item.name} ${item.summary}`) : []
+    )
+    .join(' ');
 }
 
 export default function LearnScreen() {
   const theme = useTheme();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<FilterId>('all');
 
   const { topics, nested } = useMemo(() => buildEntries(), []);
   const featured = LEARN_TOPICS.find((t) => t.id === FEATURED_TOPIC_ID);
@@ -168,33 +173,25 @@ export default function LearnScreen() {
 
   const trimmedQuery = query.trim().toLowerCase();
   const searching = trimmedQuery.length > 0;
-  const filtering = filter !== 'all';
   // The curated blocks (featured, tip, types rail) only make sense when nothing
   // is narrowing the catalog; otherwise the screen is a single result list.
-  const browsing = !searching && !filtering;
+  const browsing = !searching;
 
   const results = useMemo(() => {
     if (browsing) {
       return topics.filter((entry) => entry.key !== FEATURED_TOPIC_ID && entry.key !== TYPES_TOPIC_ID);
     }
 
-    // Search widens the pool to nested articles; the chip, when set, still
-    // narrows it — the two compose rather than one overriding the other.
-    let pool = searching ? [...topics, ...nested] : topics;
-    if (filtering) pool = pool.filter((entry) => entry.category === filter);
-    if (searching) pool = pool.filter((entry) => matches(entry, trimmedQuery));
-
-    return pool;
-  }, [browsing, filter, filtering, nested, searching, topics, trimmedQuery]);
+    // Search reaches past the topic list into nested articles and their named
+    // subtypes, so "nodular" finds the melanoma variant rather than nothing.
+    return [...topics, ...nested].filter((entry) => matches(entry, trimmedQuery));
+  }, [browsing, nested, topics, trimmedQuery]);
 
   let listTitle = 'More topics';
   let listSubtitle: string | undefined = 'Short guides you can read anytime, even offline.';
   if (searching) {
     listTitle = 'Results';
     listSubtitle = `${results.length} ${results.length === 1 ? 'guide' : 'guides'} for “${query.trim()}”`;
-  } else if (filtering) {
-    listTitle = getCategoryLabel(filter);
-    listSubtitle = `${results.length} ${results.length === 1 ? 'guide' : 'guides'}`;
   }
 
   return (
@@ -215,7 +212,7 @@ export default function LearnScreen() {
             </ThemedText>
           </Entrance>
 
-          <Entrance index={1}>
+          <Entrance index={1} style={styles.search}>
             <SearchBar
               value={query}
               onChangeText={setQuery}
@@ -224,26 +221,6 @@ export default function LearnScreen() {
               elevation="sm"
             />
           </Entrance>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            style={styles.rail}
-            contentContainerStyle={styles.chipRailContent}>
-            {FILTERS.map((option, i) => (
-              // The rail runs on its own faster rhythm than the page sequence,
-              // so seven chips read as one gesture rather than seven arrivals.
-              <Entrance key={option.id} delay={CHIP_ENTRANCE_DELAY + i * CHIP_ENTRANCE_STAGGER}>
-                <Chip
-                  label={option.label}
-                  variant="solid"
-                  active={filter === option.id}
-                  onPress={() => setFilter(option.id)}
-                />
-              </Entrance>
-            ))}
-          </ScrollView>
 
           {browsing && featured ? (
             <Entrance index={3}>
@@ -350,23 +327,14 @@ const styles = StyleSheet.create({
     gap: Space.base,
   },
   header: { gap: Space.xs, marginBottom: Space.xs },
+  // The chip rail used to sit here. Without it the search field would butt
+  // straight into the featured card, so the gap it occupied is kept.
+  search: { marginBottom: Space.sm },
   // Section headers add to the container's 16 gap for a 28pt section break.
   sectionHeader: { marginTop: Space.md },
   // Bleed the horizontal rails to the screen edges so their contents scroll
   // under the body padding instead of clipping at it.
   rail: { marginHorizontal: -Space.xl },
-  // A horizontal ScrollView clips to its bounds, and those bounds are exactly
-  // the content's height. Without vertical padding the filter chips' shadow
-  // (Elevation.sm reaches 6pt above and 10pt below a chip) is drawn outside the
-  // scroll view and cut off, flattening the pills' bottom edge. This padding is
-  // the shadow's room, not decoration: it lands the surrounding gaps on 24 and
-  // 28, both section-gap values on the scale.
-  chipRailContent: {
-    gap: Space.sm,
-    paddingHorizontal: Space.xl,
-    paddingTop: Space.sm,
-    paddingBottom: Space.md,
-  },
   typeRow: { gap: Space.md, paddingHorizontal: Space.xl },
   list: { gap: Space.md },
 });

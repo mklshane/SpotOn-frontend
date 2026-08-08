@@ -135,6 +135,134 @@ const IMAGES = {
     credit: { org: 'Memorial Sloan Kettering Cancer Center, via ISIC Archive',
       url: 'https://api.isic-archive.com/api/v2/images/ISIC_2222766/', licence: 'CC BY 4.0' },
   },
+  // Melanoma subtypes. ISIC labels these in diagnosis_4, but every labelled
+  // image in the archive is dermoscopic: a query for clinical melanoma with a
+  // subtype returns zero. They are shown as dermoscopic rather than passed off
+  // as naked-eye views.
+  'melanoma-superficial-spreading': {
+    needs: 'Documented superficial spreading melanoma.',
+    alt: 'Dermoscopic view of a superficial spreading melanoma',
+    photoRequired: true,
+    modality: 'dermoscopic',
+    asset: require('@/assets/images/learn/clinical/ISIC_0009992.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0009992/',
+      licence: 'CC0 1.0 (public domain)' },
+  },
+  'melanoma-nodular': {
+    needs: 'Documented nodular melanoma.',
+    alt: 'Dermoscopic view of a nodular melanoma',
+    photoRequired: true,
+    modality: 'dermoscopic',
+    asset: require('@/assets/images/learn/clinical/ISIC_0000076.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0000076/',
+      licence: 'CC0 1.0 (public domain)' },
+  },
+  'melanoma-lentigo-maligna': {
+    needs: 'Documented lentigo maligna melanoma.',
+    alt: 'Dermoscopic view of a lentigo maligna melanoma',
+    photoRequired: true,
+    modality: 'dermoscopic',
+    asset: require('@/assets/images/learn/clinical/ISIC_0009924.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0009924/',
+      licence: 'CC0 1.0 (public domain)' },
+  },
+  'melanoma-acral': {
+    needs: 'Documented acral or acral-lentiginous melanoma.',
+    alt: 'Dermoscopic view of an acral lentiginous melanoma',
+    photoRequired: true,
+    modality: 'dermoscopic',
+    asset: require('@/assets/images/learn/clinical/ISIC_0000290.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0000290/',
+      licence: 'CC0 1.0 (public domain)' },
+  },
+  // BCC subtypes. Only the nodular variant carries a subtype label on a
+  // clinical image anywhere in ISIC; the rest wait on a source.
+  'bcc-nodular': {
+    needs: 'Documented nodular basal cell carcinoma.',
+    alt: 'A pearly nodular basal cell carcinoma',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_0024262.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0024262/',
+      licence: 'CC0 1.0 (public domain)' },
+  },
+  'bcc-superficial': {
+    needs: 'Sourced. National Cancer Institute Visuals Online, photographed by Kelly Nelson MD.',
+    alt: 'A reddish-brown, slightly raised patch of superficial basal cell carcinoma',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/nci-superficial-bcc.jpg'),
+    credit: {
+      org: 'Kelly Nelson MD, National Cancer Institute Visuals Online',
+      url: 'https://commons.wikimedia.org/wiki/File:Superficial_basal_cell_carcinoma.jpg',
+      licence: 'CC0 1.0 (public domain)',
+    },
+  },
+  'bcc-morpheaform': {
+    needs: 'Sourced. Nakayama et al., Journal of Skin Cancer 2011, via Wikimedia Commons.',
+    alt: 'A pale, scar-like morpheaform basal cell carcinoma with poorly defined edges',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/jsc-2011-morpheaform-bcc.jpg'),
+    credit: {
+      org: 'Nakayama M, et al. J Skin Cancer. 2011;2011:496910',
+      url: 'https://commons.wikimedia.org/wiki/File:Morpheaform_basal-cell_carcinoma.jpg',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'bcc-pigmented': {
+    needs: 'Sourced. Figure 1 of Ruml et al. 2024.',
+    alt: 'A hyperpigmented plaque on the scalp of an African American patient, a pigmented basal cell carcinoma',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/cureus-2024-pigmented-bcc-fig1.jpg'),
+    credit: {
+      org: 'Ruml A, et al. Cureus. 2024;16(6):e62862 (Fig 1)',
+      url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC11260829/',
+      licence: 'CC BY 4.0',
+    },
+  },
+  // SCC subtypes. ISIC records no diagnosis_4 subtype for invasive squamous
+  // cell carcinoma at all, and its Bowen disease images are CC BY-NC.
+  'scc-bowens': {
+    needs: 'Sourced. Figure 1 of Scurtu et al. 2024, a composite of clinical and dermoscopic panels.',
+    alt: 'Clinical and dermoscopic views of two Bowen disease plaques',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/diagnostics-2024-bowen-fig1.jpg'),
+    credit: {
+      org: 'Scurtu LG, et al. Diagnostics. 2024;14(16):1799 (Fig 1)',
+      url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC11353497/',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'scc-keratoacanthoma': {
+    needs: 'Sourced. Figure 1 of Stansbury et al. 2025, a patient with skin of color.',
+    alt: 'A keratoacanthoma on the anterior leg of a patient with skin of color',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/cureus-2025-keratoacanthoma-fig1.jpg'),
+    credit: {
+      org: 'Stansbury W, et al. Cureus. 2025;17(4):e82695 (Fig 1)',
+      url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12094132/',
+      licence: 'CC BY 4.0',
+    },
+  },
+  // Deliberately a general squamous cell carcinoma, not an invasive one. The
+  // NCI records this only as "squamous cell carcinoma", and invasion is a
+  // histological finding no caption here confirms. The card says so rather than
+  // letting the photo's placement imply a diagnosis the source does not make.
+  'scc-invasive': {
+    needs: 'Sourced. A general clinical example of squamous cell carcinoma from NCI Visuals Online.',
+    alt: 'A scaly, ulcerated squamous cell carcinoma on the nose',
+    photoRequired: true,
+    fit: 'contain',
+    asset: require('@/assets/images/learn/clinical/nci-scc-example.jpg'),
+    credit: {
+      org: 'National Cancer Institute Visuals Online',
+      url: 'https://commons.wikimedia.org/wiki/File:Squamous_cell_carcinoma_crop.jpg',
+      licence: 'CC0 1.0 (public domain)',
+    },
+  },
   // The one longitudinal pair that could be licensed: same lesion, same
   // patient, seven months apart, published under CC BY. They are dermoscopic
   // rather than clinical, which the UI states plainly rather than papering over.
@@ -171,8 +299,8 @@ const IMAGES = {
     needs:
       'Basal cell carcinoma on sun-exposed skin: a pearly or translucent raised bump. Needs a second example on darker skin, where it more often looks brown, black, or grey.',
     alt: 'A raised, pearly bump typical of basal cell carcinoma',
-    asset: require('@/assets/images/learn/clinical/ISIC_0024262.jpg'),
-    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0024262/',
+    asset: require('@/assets/images/learn/clinical/ISIC_0024221.jpg'),
+    credit: { org: 'ISIC Archive', url: 'https://api.isic-archive.com/api/v2/images/ISIC_0024221/',
       licence: 'CC0 1.0 (public domain)' },
     photoRequired: true,
   },
