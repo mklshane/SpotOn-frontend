@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import {
   BodyAreasBlock,
@@ -14,11 +15,12 @@ import {
   VisualBlock,
 } from '@/components/learn/article-blocks';
 import { LearnArticleHero } from '@/components/learn/LearnArticleHero';
-import { LearnDetailHeader } from '@/components/learn/LearnDetailHeader';
+import { LearnDetailHeader, learnDetailContent } from '@/components/learn/LearnDetailHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
+import { Reveal, ScrollRevealProvider, useScrollReveal } from '@/components/ui/scroll-reveal';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
 import {
   getArticle,
@@ -89,6 +91,7 @@ export default function LearnArticleScreen() {
   const topic = topicId ? getTopic(topicId) : undefined;
 
   const groups = useMemo(() => (article ? groupBlocks(article.blocks) : []), [article]);
+  const { value: reveal, onScroll } = useScrollReveal();
 
   // A nested article belongs to its parent topic (a skin cancer type); a
   // top-level one is labelled by the category its browse chip uses.
@@ -124,46 +127,52 @@ export default function LearnArticleScreen() {
       {!article ? (
         <ListState kind="error" title="Article not found" />
       ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentInsetAdjustmentBehavior="automatic"
-          contentContainerStyle={styles.scrollContent}>
-          <View style={styles.body}>
-            <LearnArticleHero
-              articleId={article.id}
-              icon={article.icon}
-              eyebrow={eyebrow}
-              title={article.title}
-              meta={`${getArticleReadMinutes(article)} min read`}
-            />
+        <ScrollRevealProvider value={reveal}>
+          <Animated.ScrollView
+            showsVerticalScrollIndicator={false}
+            contentInsetAdjustmentBehavior="automatic"
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            contentContainerStyle={styles.scrollContent}>
+            <View style={styles.body}>
+              <LearnArticleHero
+                articleId={article.id}
+                icon={article.icon}
+                eyebrow={eyebrow}
+                title={article.title}
+                meta={`${getArticleReadMinutes(article)} min read`}
+              />
 
-            {groups.map((group, index) =>
-              group.kind === 'prose' ? (
-                <ProseGroup key={index} blocks={group.blocks} />
-              ) : (
-                renderBlock(group.block, index)
-              )
-            )}
+              {groups.map((group, index) => (
+                <Reveal key={index}>
+                  {group.kind === 'prose' ? (
+                    <ProseGroup blocks={group.blocks} />
+                  ) : (
+                    renderBlock(group.block, index)
+                  )}
+                </Reveal>
+              ))}
 
-            <ImageCreditsBlock imageIds={imageIds} />
+              <ImageCreditsBlock imageIds={imageIds} />
 
-            {!hasNotice ? (
-              <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
-                <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
-                <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
-                  This guide supports skin-health awareness and does not replace advice from a dermatologist.
-                </ThemedText>
-              </View>
-            ) : null}
-          </View>
-        </ScrollView>
+              {!hasNotice ? (
+                <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
+                  <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
+                  <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
+                    This guide supports skin-health awareness and does not replace advice from a dermatologist.
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
+          </Animated.ScrollView>
+        </ScrollRevealProvider>
       )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
+  scrollContent: learnDetailContent,
   body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.base },
   educationNote: {
     flexDirection: 'row',
