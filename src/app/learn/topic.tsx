@@ -1,35 +1,32 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
-import { TopicRow } from '@/components/learn/TopicRow';
+import { EducationCard } from '@/components/learn/EducationCard';
+import { LearnDetailHeader } from '@/components/learn/LearnDetailHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
-import { getTopic } from '@/data/learn-content';
+import { getArticleReadMinutes, getTopic } from '@/data/learn-content';
 import { useTheme } from '@/hooks/use-theme';
+
+// The three artworks, ordered least to most serious, so the intro reads as a
+// scale left to right and matches the order of the cards beneath it.
+const INTRO_ARTWORK: CancerTypeKind[] = ['bcc', 'scc', 'melanoma'];
 
 export default function LearnTopicScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const compact = width < 360;
+  const compact = width < 375;
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
   const topic = topicId ? getTopic(topicId) : undefined;
 
   return (
     <Screen padded={false}>
-      <View style={styles.header}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
-          <Icon name="chevron.left" tintColor={theme.brand} size={20} />
-        </Pressable>
-        <ThemedText type="headline" themeColor="textSecondary">
-          {topic?.title ?? 'Topic'}
-        </ThemedText>
-        <View style={styles.headerSpacer} />
-      </View>
+      <LearnDetailHeader title={topic?.title ?? 'Topic'} />
 
       {!topic || topic.kind !== 'subtopics' ? (
         <ListState kind="error" title="Topic not found" />
@@ -43,7 +40,7 @@ export default function LearnTopicScreen() {
               <View
                 style={[styles.artworkRow, { backgroundColor: theme.brandTint }, compact && styles.artworkRowCompact]}
                 accessible={false}>
-                {(['bcc', 'scc', 'melanoma'] as CancerTypeKind[]).map((kind) => (
+                {INTRO_ARTWORK.map((kind) => (
                   <View
                     key={kind}
                     style={[styles.medallion, { backgroundColor: theme.surface }, compact && styles.medallionCompact]}>
@@ -52,25 +49,38 @@ export default function LearnTopicScreen() {
                 ))}
               </View>
               <View style={styles.introText}>
+                <ThemedText type="caption" style={[styles.eyebrow, { color: theme.brandPressed }]}>
+                  BASICS
+                </ThemedText>
                 <ThemedText type="title2">Know the common types</ThemedText>
                 <ThemedText type="callout" themeColor="textSecondary">
-                  Compare their common signs, risk levels, and typical treatment options.
+                  Three types account for almost every skin cancer. Compare what each one looks like, how serious it
+                  is, and where it tends to appear.
                 </ThemedText>
               </View>
             </Card>
 
-            <View>
-              {topic.subtopics.map((sub) => (
-                <TopicRow
-                  key={sub.id}
-                  icon={sub.icon}
-                  title={sub.title}
-                  subtitle={sub.sections[0]?.paragraphs[0] ?? ''}
+            <View style={styles.list}>
+              {topic.subtopics.map((article) => (
+                <EducationCard
+                  key={article.id}
+                  icon={article.icon}
+                  tag={`${getArticleReadMinutes(article)} min read`}
+                  title={article.title}
+                  description={article.summary}
                   onPress={() =>
-                    router.push({ pathname: '/learn/article', params: { topicId: topic.id, articleId: sub.id } })
+                    router.push({ pathname: '/learn/article', params: { topicId: topic.id, articleId: article.id } })
                   }
                 />
               ))}
+            </View>
+
+            <View style={[styles.note, { backgroundColor: theme.elementBg }]}>
+              <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
+              <ThemedText type="footnote" themeColor="textSecondary" style={styles.noteText}>
+                Ordered from least to most serious. All three are treatable, and all three are far simpler to treat
+                when they are found early.
+              </ThemedText>
             </View>
           </View>
         </ScrollView>
@@ -80,16 +90,8 @@ export default function LearnTopicScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    height: 48,
-    paddingHorizontal: Space.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerSpacer: { width: 20 },
   scrollContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
-  body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.lg },
+  body: { width: '100%', maxWidth: MaxContentWidth, alignSelf: 'center', gap: Space.base },
   introCard: { overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth },
   artworkRow: {
     minHeight: 132,
@@ -109,4 +111,15 @@ const styles = StyleSheet.create({
   },
   medallionCompact: { width: 66, height: 66 },
   introText: { padding: Space.lg, gap: Space.xs },
+  eyebrow: { fontWeight: '700', letterSpacing: 0.55 },
+  list: { gap: Space.md, marginTop: Space.xs },
+  note: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    padding: Space.base,
+    marginTop: Space.xs,
+  },
+  noteText: { flex: 1 },
 });
