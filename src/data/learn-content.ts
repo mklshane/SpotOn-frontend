@@ -1,5 +1,6 @@
-import type { CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import type { IconName } from '@/components/ui/icon';
+import type { ClinicalImageId } from '@/data/learn-images';
+import type { PendingSourceId, SourceId } from '@/data/learn-sources';
 
 /** Which of the five ABCDE signs a comparison diagram illustrates. */
 export type AbcdeSign = 'asymmetry' | 'border' | 'color' | 'diameter' | 'evolving';
@@ -17,17 +18,50 @@ export type ArticleBlock =
   | { kind: 'compare'; heading?: string; intro?: string; items: CompareItem[] }
   | { kind: 'steps'; heading?: string; intro?: string; steps: Step[] }
   | { kind: 'list'; heading?: string; intro?: string; variant: 'grouped' | 'tips'; items: ListItem[] }
-  | { kind: 'visual'; heading?: string; intro?: string; art: CancerTypeKind; traits: Trait[] }
+  | {
+      kind: 'visual';
+      heading?: string;
+      intro?: string;
+      /**
+       * Required, and `photoRequired` in the image registry. This block exists
+       * to show what a lesion actually looks like, so it takes a photograph or
+       * a labelled gap. There is deliberately no illustration path.
+       */
+      photo: ClinicalImageId;
+      traits: Trait[];
+    }
   | { kind: 'bodyAreas'; heading?: string; intro?: string; areas: BodyArea[] }
-  | { kind: 'notice'; tone: 'info' | 'caution'; title?: string; text: string };
+  | { kind: 'notice'; tone: 'info' | 'caution'; title?: string; text: string }
+  | { kind: 'sources'; sources: SourceId[]; pending?: PendingSourceId[] };
 
-/** One sign of the ABCDE rule, shown as a typical-versus-concerning pair. */
+/**
+ * One sign of the ABCDE rule. Most are a typical-versus-concerning pair;
+ * diameter is a question of scale rather than contrast, so it stands alone with
+ * a measured drawing.
+ */
 export type CompareItem = {
   /** The letter this sign stands for, e.g. "A". */
   letter: string;
   sign: AbcdeSign;
   title: string;
   detail: string;
+  /** Labels under each frame. Non-clinical wording on purpose. */
+  captions: { typical: string; concern: string };
+  /**
+   * Documented sizes under each frame, quoted from the source archive's own
+   * measurement. Never derived from the rendered image: a photograph carries no
+   * reliable millimetres per pixel, so anything measured off it would be a
+   * guess wearing a number's clothes.
+   */
+  measurements?: { typical: string; concern: string };
+  /**
+   * Photo slots. These are `photoRequired`, so an empty slot renders a labelled
+   * gap rather than a drawing: recognising a lesion is the whole point of these
+   * frames and an illustration cannot carry it.
+   */
+  photos: { typical: ClinicalImageId; concern: ClinicalImageId };
+  /** Quiet line under the pair, e.g. where the measurements came from. */
+  footnote?: string;
 };
 
 export type Step = { title: string; detail: string };
@@ -175,6 +209,7 @@ export const LEARN_TOPICS: Topic[] = [
             'SpotOn helps you track spots on your skin over time and get an early, informal read on whether a spot looks worth showing a doctor. It is a screening aid, not a diagnosis. Always follow up with a dermatologist for anything that concerns you.',
           ],
         },
+        { kind: 'sources', sources: ['nciSkin', 'aadOverview'] },
       ],
     },
   },
@@ -201,7 +236,7 @@ export const LEARN_TOPICS: Topic[] = [
           {
             kind: 'visual',
             heading: 'What it may look like',
-            art: 'bcc',
+            photo: 'bcc-example',
             traits: [
               { title: 'Pearly, waxy surface', detail: 'The bump can look slightly translucent, as if lit from within.' },
               { title: 'Raised, rolled border', detail: 'The edge is smooth and defined rather than ragged.' },
@@ -252,6 +287,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Worth remembering',
             text: 'A sore on sun-exposed skin that keeps reopening over several weeks is worth showing a dermatologist, even when it does not hurt.',
           },
+          { kind: 'sources', sources: ['aadBcc', 'nciSkin'] },
         ],
       },
       {
@@ -269,7 +305,7 @@ export const LEARN_TOPICS: Topic[] = [
           {
             kind: 'visual',
             heading: 'What it may look like',
-            art: 'scc',
+            photo: 'scc-example',
             traits: [
               { title: 'Rough, scaly surface', detail: 'The patch feels crusted or sandpapery rather than smooth.' },
               { title: 'Firm red base', detail: 'The skin underneath often looks inflamed or reddened.' },
@@ -321,6 +357,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Worth remembering',
             text: 'A rough patch that keeps coming back after it seems to heal is a common early sign, and it is much simpler to treat at that stage.',
           },
+          { kind: 'sources', sources: ['aadScc', 'nciSkin'] },
         ],
       },
       {
@@ -338,7 +375,7 @@ export const LEARN_TOPICS: Topic[] = [
           {
             kind: 'visual',
             heading: 'What it may look like',
-            art: 'melanoma',
+            photo: 'melanoma-example',
             traits: [
               { title: 'Asymmetric shape', detail: 'One half does not mirror the other half.' },
               { title: 'Irregular, notched border', detail: 'The edge wanders instead of forming a clean circle.' },
@@ -392,6 +429,7 @@ export const LEARN_TOPICS: Topic[] = [
             title: 'Do not wait this one out',
             text: 'If a mole matches an ABCDE sign or has clearly changed, book a dermatologist rather than watching it for another few months. Early melanoma is usually treated with a simple removal.',
           },
+          { kind: 'sources', sources: ['aadMelanoma', 'aadAbcde', 'nciSkin'] },
         ],
       },
     ],
@@ -428,31 +466,54 @@ export const LEARN_TOPICS: Topic[] = [
               sign: 'asymmetry',
               title: 'Asymmetry',
               detail: 'One half of the mole does not match the other half.',
+              captions: { typical: 'More regular', concern: 'Asymmetrical' },
+              photos: { typical: 'abcde-asymmetry-regular', concern: 'abcde-asymmetry-irregular' },
             },
             {
               letter: 'B',
               sign: 'border',
               title: 'Border',
-              detail: 'Edges are irregular, ragged, or blurred, instead of smooth.',
+              detail: 'Look for edges that are irregular, ragged, blurred, or uneven.',
+              captions: { typical: 'More even border', concern: 'Irregular border' },
+              photos: { typical: 'abcde-border-even', concern: 'abcde-border-irregular' },
             },
             {
               letter: 'C',
               sign: 'color',
               title: 'Color',
-              detail: 'Uneven color, or shades of brown, black, red, white, or blue within the same spot.',
+              detail:
+                'Look for uneven color, or several shades within the same spot, such as tan, brown, black, red, white, or blue.',
+              captions: { typical: 'More uniform', concern: 'Multiple colors' },
+              photos: { typical: 'abcde-color-uniform', concern: 'abcde-color-varied' },
             },
             {
               letter: 'D',
               sign: 'diameter',
               title: 'Diameter',
               detail:
-                'Larger than about 6mm, roughly the size of a pencil eraser, though melanomas can be smaller.',
+                'Diameter is one feature to consider. Melanomas are often wider than about 6 mm when found, but they can also be smaller.',
+              captions: { typical: 'Smaller example', concern: 'Larger example' },
+              measurements: { typical: '5.3 mm', concern: '10.4 mm' },
+              photos: { typical: 'abcde-diameter-small', concern: 'abcde-diameter-large' },
+              footnote:
+                'Both measurements are recorded by the source archive, not read off these photographs. You cannot judge a real diameter from a picture.',
             },
             {
+              // The same lesion on the same patient, seven months apart, from a
+              // CC BY case report. These are dermoscopic rather than clinical,
+              // which the captions and note below state outright: a magnified
+              // instrument view is not what anyone sees in a mirror, and
+              // implying otherwise would teach the wrong expectation.
               letter: 'E',
               sign: 'evolving',
               title: 'Evolving',
-              detail: 'Any change in size, shape, color, or symptoms such as itching or bleeding over time.',
+              detail:
+                'Watch for changes in a spot over time, including its size, shape, color, or new symptoms such as itching or bleeding.',
+              captions: { typical: 'Initial image', concern: '7 months later' },
+              measurements: { typical: '3 mm', concern: '5 mm' },
+              photos: { typical: 'abcde-evolving-earlier', concern: 'abcde-evolving-later' },
+              footnote:
+                'Dermoscopic view. Dermoscopy is a magnified examination of the skin used by healthcare professionals, so this is not how the spot looks to the naked eye. The same lesion is shown here growing from 3 mm to 5 mm over seven months, with both measurements taken from the published case report.',
             },
           ],
         },
@@ -466,9 +527,10 @@ export const LEARN_TOPICS: Topic[] = [
         {
           kind: 'notice',
           tone: 'info',
-          title: 'One sign is not a diagnosis',
-          text: 'Plenty of harmless moles fail one of these tests. The rule is a prompt to get a spot looked at, not a verdict on what it is.',
+          title: 'Important to know',
+          text: 'The ABCDE rule can help you notice changes in your skin. It cannot confirm whether a spot is cancerous, and plenty of harmless moles fail one of these tests. Use it to decide what to show a dermatologist, not to rule anything in or out yourself.',
         },
+        { kind: 'sources', sources: ['aadAbcde', 'aadMelanoma', 'nciSkin', 'satoTanakaEvolving'] },
       ],
     },
   },
@@ -542,6 +604,7 @@ export const LEARN_TOPICS: Topic[] = [
           title: 'Ask for a second pair of eyes',
           text: 'Your back and scalp are the hardest areas to check alone. Asking someone you trust to look, or using a phone camera, covers the blind spots a mirror cannot.',
         },
+        { kind: 'sources', sources: ['aadSelfExam', 'aadAbcde'], pending: ['selfCheckFrequency'] },
       ],
     },
   },
@@ -607,6 +670,7 @@ export const LEARN_TOPICS: Topic[] = [
           title: 'Darker skin is not exempt',
           text: 'Skin cancer is less common in darker skin tones, but it is often found later, when it is harder to treat. Everyone benefits from checking their own skin.',
         },
+        { kind: 'sources', sources: ['nciPrevention', 'aadOverview'] },
       ],
     },
   },
@@ -628,7 +692,11 @@ export const LEARN_TOPICS: Topic[] = [
         {
           kind: 'prose',
           paragraphs: [
-            'The Philippines sits close to the equator, so UV levels stay high all year, not only during summer (March to May, when PAGASA regularly reports "Extreme" UV Index readings). Sun protection is a daily habit here, not a seasonal one.',
+            // The previous wording asserted that PAGASA publishes a daily UV
+            // Index forecast. Its public site was checked on 2026-08-08 and no
+            // such product was found, so the claim was replaced with WHO's
+            // published thresholds, which are verifiable. See PENDING_SOURCES.
+            'The Philippines sits close to the equator, so UV levels stay high all year rather than only in summer. Sun protection is a daily habit here, not a seasonal one.',
           ],
         },
         {
@@ -641,7 +709,7 @@ export const LEARN_TOPICS: Topic[] = [
               icon: 'chart.bar.fill',
               title: 'Check the UV Index',
               detail:
-                'PAGASA publishes a daily UV Index forecast. At "Very High" to "Extreme" levels (8 and above, common on clear days), unprotected skin can burn in under 15 minutes, so plan errands, commutes, or exercise around it when you can.',
+                'The World Health Organization advises sun protection once the UV Index reaches 3, and at 8 and above it advises staying out of the sun around midday and seeking shade. Most weather apps and forecasts publish the current figure, so you can plan errands and exercise around it.',
             },
             {
               icon: 'drop.fill',
@@ -669,6 +737,7 @@ export const LEARN_TOPICS: Topic[] = [
             },
           ],
         },
+        { kind: 'sources', sources: ['whoUvIndex', 'nciPrevention', 'aadOverview'] },
       ],
     },
   },
@@ -745,6 +814,13 @@ export const LEARN_TOPICS: Topic[] = [
             'The Directory tab lists nearby dermatology clinics and doctors offering online booking, so you can find and reach a professional directly from SpotOn.',
           ],
         },
+        {
+          kind: 'notice',
+          tone: 'info',
+          title: 'Important to know',
+          text: 'A dermatologist can tell you what a spot is. Nothing you read here, and no photo comparison, can do that on its own.',
+        },
+        { kind: 'sources', sources: ['aadOverview', 'aadAbcde', 'nciSkin'] },
       ],
     },
   },
@@ -817,6 +893,10 @@ function blockWords(block: ArticleBlock): number {
       );
     case 'notice':
       return countWords(block.title, block.text);
+    case 'sources':
+      // A reference list is scanned, not read. Counting it would inflate every
+      // article's estimate by a minute for text nobody reads start to finish.
+      return 0;
     default:
       // Exhaustiveness check: a compile error here means a new block kind was
       // added without teaching the read-time estimate how to measure it.

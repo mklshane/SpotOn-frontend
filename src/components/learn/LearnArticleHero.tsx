@@ -4,6 +4,7 @@ import { StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import { ThemedText } from '@/components/themed-text';
 import { Card } from '@/components/ui/card';
+import { Entrance } from '@/components/ui/entrance';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -88,14 +89,18 @@ export function LearnArticleHero({ articleId, icon, eyebrow, title, meta }: Lear
             compact && styles.artworkCompact,
           ]}>
           {cancerType ? (
-            <View
+            // Matches the soft fade its photo sibling already gets from
+            // expo-image, so both hero kinds resolve the same way instead of
+            // one easing in and the other snapping.
+            <Entrance
+              variant="settle"
               style={[
                 styles.artworkMedallion,
                 { backgroundColor: theme.surface },
                 compact && styles.artworkMedallionCompact,
               ]}>
               <CancerTypeArtwork kind={cancerType} size={compact ? 116 : 136} />
-            </View>
+            </Entrance>
           ) : (
             <Icon name={icon} size={56} tintColor={theme.brand} />
           )}
