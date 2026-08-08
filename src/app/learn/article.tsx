@@ -11,6 +11,7 @@ import {
   NoticeBlock,
   ProseGroup,
   SourcesBlock,
+  SubtypesBlock,
   StepsBlock,
   VisualBlock,
 } from '@/components/learn/article-blocks';
@@ -72,6 +73,8 @@ function renderBlock(block: ArticleBlock, key: number) {
       return <VisualBlock key={key} block={block} />;
     case 'bodyAreas':
       return <BodyAreasBlock key={key} block={block} />;
+    case 'subtypes':
+      return <SubtypesBlock key={key} block={block} />;
     case 'notice':
       return <NoticeBlock key={key} block={block} />;
     case 'sources':
