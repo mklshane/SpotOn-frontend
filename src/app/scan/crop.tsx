@@ -18,9 +18,10 @@ import { discardScratch } from '@/lib/scratch-files';
 const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
 const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the image's short side
-// The guide circle's diameter as a fraction of the crop frame == the lesion-fill the classifier is
-// most reliable on. Fill this ring with the spot and the resulting crop lands in the model's stable
-// band. Single source of truth in model-config so the guide and the auto-refinement never drift.
+// The guide circle's diameter as a fraction of the crop frame, and the fill the upload auto-frame
+// zooms to — one constant so the ring and the auto-frame can never disagree. Sits inside (not at
+// the middle of) the classifier's stable band: this is a viewfinder a person reads, so it is
+// framed wider than the inference-only REFINE_TARGET_FILL. See model-config for why they differ.
 const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {

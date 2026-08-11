@@ -86,6 +86,32 @@ export const SHADOW_GRAD = 0.25; // one side this much darker than the other (0.
 export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
 
 /**
+ * Skin-pixel rule thresholds, widened 2026-08-11 for pale, cool-toned, brightly-lit skin.
+ *
+ * Both classic rules (YCbCr box + Kovac RGB) assume WARM skin, and a very pale forearm under bright
+ * light is neither warm nor saturated. Measured on the reported false rejection: mean cr 131.6
+ * against a 133 floor and mean |r-g| 4.9 against a >15 requirement — it missed on both, scoring
+ * 0.149 coverage against SKIN_MIN 0.30 and reporting "This doesn't look like a photo of skin" for a
+ * clean, well-lit photo of skin. This is a Fitzpatrick I–II failure, the opposite end from the tone
+ * bias this project usually has to watch.
+ *
+ * Not a one-photo fix: across 1320 real lesion photos the old thresholds falsely reject 5.0%
+ * (66 photos). At 131/10 that drops to 3.1%, and the reported photo scores 0.666.
+ *
+ * WHY NOT LOOSER. CR_MIN cannot approach 128, because a neutral grey has cr == 128 exactly — the
+ * floor is the only thing separating skin from any grey surface. Measured on synthetic negatives at
+ * SKIN_MIN 0.30: at 129 a grey wall scores 0.298 and at 128 it scores 0.324, i.e. a wall starts
+ * passing as skin. 131 keeps grey at 0.239 and white at 0.231, a comfortable margin below the gate,
+ * while still recovering most pale skin. Blue and green scenes score ~0.000 at every setting.
+ *
+ * KNOWN AND UNCHANGED: warm-toned non-skin still passes this rule — bare wood scores ~0.998 and a
+ * cream UI ~0.73 at the OLD thresholds too. This gate rejects blue/green/dark scenes, not
+ * everything that isn't skin; widening it does not make that weakness worse.
+ */
+export const SKIN_CR_MIN = 131; // was 133 — the pale-skin floor; 128 is neutral grey, never go there
+export const SKIN_RG_DIFF = 10; // was 15 — desaturated skin has a small red-green gap
+
+/**
  * Compute the four quality checks over a decoded RGBA image (Uint8-like, length W*H*4).
  * Assessed on a centered ROI ≈ the lesion (our crop step centers it), per Stanford TrueImage.
  */
@@ -118,8 +144,9 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
 
       const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
       const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-      const ycc = cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
-      const rgbRule = r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > 15;
+      const ycc = cb >= 77 && cb <= 127 && cr >= SKIN_CR_MIN && cr <= 173;
+      const rgbRule =
+        r > 95 && g > 40 && b > 20 && r > g && r > b && Math.abs(r - g) > SKIN_RG_DIFF;
       if (luma > 40 && (ycc || rgbRule)) skinCount++;
     }
   }

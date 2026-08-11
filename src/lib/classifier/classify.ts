@@ -4,6 +4,7 @@ import {
   looksLikeProbabilities,
   meanLogits as meanLogitsCore,
   softmaxT,
+  toLogitSpace,
 } from './aggregate-core';
 import type { ClassificationOutput, LesionClass, PerImageResult } from '../triage/types';
 import {
@@ -19,6 +20,7 @@ import {
   INFERENCE_TIMEOUT_MS,
   DETECTOR_CROP_ENABLED,
   MULTI_IMAGE_AGGREGATION_ENABLED,
+  MODEL_OUTPUTS_PROBABILITIES,
   MODEL_VERSION,
   NORMALIZATION,
   REFINE_CONFIDENCE,
@@ -45,10 +47,15 @@ const softmax = softmaxT;
 /**
  * One prediction at one crop: the TTA-averaged model output plus everything derived from it.
  *
- * `logits` is the mean of the per-view RAW logits — the space MALIGNANT_THRESHOLD and
+ * `logits` is the mean of the per-view logits — the space MALIGNANT_THRESHOLD and
  * CONFIDENCE_TEMPERATURE were calibrated in (see model-config.ts). It is carried here so that
  * pooling *across images* can happen in that same space; averaging softmaxes instead would
  * silently invalidate the calibrated operating point. Nothing on the single-image path reads it.
+ *
+ * For a softmax-baked export (MODEL_OUTPUTS_PROBABILITIES, i.e. D8) these are log-probabilities,
+ * which are the true logits up to a per-view additive constant. Softmax, temperature and pooling
+ * are all invariant to a class-independent shift, so every consumer behaves identically — but the
+ * absolute values are not comparable against records written by a raw-logit export like D7.
  */
 export type Prediction = {
   logits: number[];
@@ -124,8 +131,23 @@ export async function classifyOne(
         if (out.length !== CLASS_ORDER.length) {
           throw new ClassifierError('invalid-output', `bad output tensor (${out.length} values)`);
         }
-        logitSum ??= new Float64Array(out.length);
-        for (let i = 0; i < out.length; i++) logitSum[i] += out[i];
+        // Fail loudly when the bundled graph disagrees with MODEL_OUTPUTS_PROBABILITIES. Getting
+        // this wrong is silent — top-1 survives either way — so it has to be checked, not assumed.
+        const raw = Array.from(out);
+        if (looksLikeProbabilities(raw) !== MODEL_OUTPUTS_PROBABILITIES) {
+          throw new ClassifierError(
+            'invalid-output',
+            `model output is ${MODEL_OUTPUTS_PROBABILITIES ? 'not ' : ''}a probability vector, ` +
+              `but MODEL_OUTPUTS_PROBABILITIES is ${MODEL_OUTPUTS_PROBABILITIES}`,
+          );
+        }
+        // Convert BEFORE accumulating. A softmax-baked export (D8) must be pulled back into log
+        // space here, or this loop would average probabilities — a different estimator that
+        // compresses confidence and rescales the malignant score against a threshold fitted on
+        // logit-mean output. See aggregate-core `toLogitSpace` for why the log makes it exact.
+        const viewLogits = MODEL_OUTPUTS_PROBABILITIES ? toLogitSpace(raw) : raw;
+        logitSum ??= new Float64Array(viewLogits.length);
+        for (let i = 0; i < viewLogits.length; i++) logitSum[i] += viewLogits[i];
       }
     } catch (e) {
       throw asClassifierError(e, 'inference');
@@ -136,9 +158,9 @@ export async function classifyOne(
     if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
       throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
     }
-    // Tolerate a future export that bakes softmax in; otherwise apply calibrated softmax here.
-    const probsFromModel = looksLikeProbabilities(values);
-    const p = probsFromModel ? values : softmax(values, CONFIDENCE_TEMPERATURE);
+    // `values` is logit space for every export, so the calibrated softmax always applies — which is
+    // what keeps CONFIDENCE_TEMPERATURE live on a probability-emitting graph.
+    const p = softmax(values, CONFIDENCE_TEMPERATURE);
     const byClass = {} as Record<LesionClass, number>;
     CLASS_ORDER.forEach((cls, i) => {
       byClass[cls] = p[i];
@@ -148,7 +170,7 @@ export async function classifyOne(
       probs: byClass,
       ...pickTopClass(byClass),
       views: views.length,
-      probsFromModel,
+      probsFromModel: MODEL_OUTPUTS_PROBABILITIES,
     };
   };
 
@@ -396,8 +418,9 @@ export function composeSetResult(
   let topConfidence: number;
   if (shouldPool) {
     const values = meanLogitsCore(usable.map((r) => r.prediction.logits));
-    // A future softmax-baked export is already in probability space; don't re-softmax it.
-    const p = usable[0].prediction.probsFromModel ? values : softmax(values, CONFIDENCE_TEMPERATURE);
+    // Per-image `logits` are always logit space (a softmax-baked export was converted per view in
+    // predictAt), so the calibrated softmax applies uniformly here too.
+    const p = softmax(values, CONFIDENCE_TEMPERATURE);
     probs = {} as Record<LesionClass, number>;
     CLASS_ORDER.forEach((cls, i) => {
       probs[cls] = p[i];

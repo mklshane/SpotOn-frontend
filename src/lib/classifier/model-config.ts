@@ -5,16 +5,44 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_classifier_D7_float32.tflite (flatbuffer inspection,
- * 2026-07-30) — byte-for-byte the same graph shape as the D3/D4 exports (686 tensors,
- * 397 operators, `onnx2tf flatbuffer_direct`), so the swap is drop-in:
- *   input  "input"  [1, 260, 260, 3] float32 NHWC  (EfficientNet-B2)
- *   output "logits" [1, 5]           float32       (Gemm head — NO softmax in the graph;
- *                                                   classify.ts applies softmax on-device)
+ * Verified against the bundled spoton_d7_s3_mm_fp32.tflite (interpreter inspection, 2026-08-11),
+ * and matching the contract its own `deploy_config.txt` states:
+ *   input  "serving_default_args_0"       [1, 260, 260, 3] float32 NHWC  (EfficientNet-B2)
+ *   output "serving_default_output_0_..." [1, 5]           float32       (raw LOGITS — no softmax
+ *                                                   in the graph; classify.ts applies it on-device)
+ * Confirmed empirically over 3 random inputs: outputs carry negatives and do not sum to 1.
+ *
+ * NOT EVERY EXPORT SHARES THAT I/O CONTRACT. The D8 export bakes a softmax into the graph
+ * (`SOFTMAX = True` in its `ExportWrap`), so it emits probabilities, not logits. Bundling such a
+ * file without setting MODEL_OUTPUTS_PROBABILITIES below double-softmaxes the result — see that
+ * constant for the measured damage. Check a new export's output before assuming it is drop-in.
  */
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
-// D7 (2026-07-30, `D7_zoomout_mm.pt` → SpotOn_D7_export_threshold_temperature.ipynb): the
+//
+// D7_s3_mm (2026-08-10, `D7_s3_mm.pt` → SpotOn_D7_s3_molemapper.ipynb, exported by
+// SpotOn_D7_s3_mm_export.ipynb). The D7 recipe with the training SOURCES narrowed: Drive `stage3`
+// real images plus OHSU MoleMapper benign nevi (Synapse syn51602723, train-only, capped at 3000,
+// deduped) — and nothing else. No synthetic, no Roboflow hard-negative pull. Mechanics are
+// unchanged from D7: RandomZoomOut(edge) before RandomResizedCrop, loose ~0.36-fill base crops for
+// train, eval on deployment geometry (crop_pad 0.45, ~0.69 fill), anchor stage1, label smoothing
+// 0.1, lesion-level split seed 42, balanced sampler, cosine 5e-5, 25 epochs.
+//
+// UNLIKE D7 AND D8, THIS EXPORT SHIPS ITS OWN CALIBRATION. `exports/D7_s3_mm/deploy_config.txt`
+// (fetched from Drive 2026-08-11) carries the constants below, both derived on deploy-geometry
+// VAL crops — genuinely held out, unlike anything measurable offline here:
+//     MALIGNANT_THRESHOLD    0.4069   (90%-sensitivity point; F1 point 0.5729 for reference)
+//     CONFIDENCE_TEMPERATURE 0.9594
+// They are adopted verbatim rather than re-derived. Note they are a PAIR from one fit: T rescales
+// the malignant score, so neither may be changed without the other.
+//
+// OFFLINE SANITY CHECK ONLY (1320 Roboflow `spoton-dataset` images, 2026-08-11). These are ~70%
+// training data for this lineage — stage3 now contains the imported hard set — so this is fit, not
+// generalization, and the numbers are quoted only to show nothing is grossly wrong: top-1 0.882,
+// malignant AUROC 0.972, ECE 0.057, Safety Floor fires on 1.4%.
+//
+// --- D7 (2026-07-30, `D7_zoomout_mm.pt` → SpotOn_D7_export_threshold_temperature.ipynb) ---
+// The predecessor, kept because its reasoning still explains the geometry constants below: the
 // scale-INVARIANT retrain. D4's core defect is that its augmentation (`RandomResizedCrop`) can only
 // crop *in*, so a lesion that fills a small part of the frame is out of distribution and the class
 // flips with framing (~57% flip-rate across zoom levels). D7 adds
@@ -25,10 +53,50 @@ import type { LesionClass } from '../triage/types';
 // Crucially D7 was validated on *deployment geometry* (detector crop_pad 0.45, ~0.69 fill — the
 // exact crop lesion-detector.ts produces), so DETECTOR_CROP_ENABLED below must stay on for its
 // numbers to hold. Use float32 — the float16 export can't run (TFLite CONV_2D rejects float16 input).
-export const MODEL_ASSET = require('../../../assets/models/spoton_classifier_D7_float32.tflite');
+//
+// D8 WAS TRIALLED AND REVERTED (2026-08-11). `spoton_d8_fp32.tflite` is still in assets/models but
+// is not bundled. It measured better on the Roboflow `spoton-dataset` images (top-1 0.773 → 0.851,
+// malignant AUROC 0.915 → 0.959, McNemar p = 1.1e-10) — but all 1320 of those images are
+// `split:train` for both models, so that is fit on hard examples, not generalization. Against it:
+// D8's own held-out seed-42 split gives AUROC 0.958 while `D8_export_tflite.ipynb` records the
+// predecessor at 0.979 and says the export "exists to trial the trade-off, not as the new
+// default"; and D8's run reports a Fitzpatrick sIII-VI sensitivity gap of +0.129 against D4's
+// -0.022, which for a Fitz III-V-focused product outweighs a top-1 gain.
+// To trial it again: point MODEL_ASSET/MODEL_VERSION at it, set MODEL_OUTPUTS_PROBABILITIES true
+// (its graph emits probabilities — see that constant), and refit MALIGNANT_THRESHOLD; D8's own
+// thr90 is 0.4057 and its thrF1 is 0.6188, and those do NOT converge, so the value is a policy
+// choice rather than a measured optimum. Settle it with `~/Downloads/D7_vs_D8_heldout.ipynb`,
+// which scores both models on the identical held-out split.
+export const MODEL_ASSET = require('../../../assets/models/spoton_d7_s3_mm_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_classifier_D7_float32';
+export const MODEL_VERSION = 'spoton_d7_s3_mm_fp32';
+
+/**
+ * Whether the bundled graph already ends in a softmax, i.e. emits probabilities rather than logits.
+ *
+ * FALSE for the bundled D7, and for every export up to it — they emit raw logits and classify.ts
+ * applies the softmax. It is TRUE only for a softmax-baked export such as D8. Declared rather than
+ * sniffed because the consequence of getting it wrong is silent and severe, and a heuristic can
+ * only see it after the fact — by which point the TTA views have already been averaged in the
+ * wrong space.
+ *
+ * classify.ts uses this to convert each view back to log space (aggregate-core `toLogitSpace`)
+ * BEFORE averaging, so the 4-view TTA, CONFIDENCE_TEMPERATURE and multi-image pooling all keep
+ * operating in the logit space MALIGNANT_THRESHOLD is calibrated on. It also cross-checks each raw
+ * output against this flag and fails loudly on a mismatch, so a mis-set constant surfaces as a
+ * caught 'invalid-output' rather than as quietly wrong triage.
+ *
+ * WHAT GOES WRONG IF THIS IS LEFT FALSE WITH A SOFTMAX-BAKED MODEL BUNDLED — measured on D8 over
+ * 1320 images, 2026-08-11. classify.ts would softmax an already-softmaxed vector. Top-1 is
+ * untouched (softmax is monotone), so it looks fine, but confidence collapses and everything
+ * downstream that reads confidence breaks: mean top-class confidence 0.784 → 0.343, the malignant
+ * score compresses from [0.002, 0.998] to [0.447, 0.702] (so sens/spec @0.50 becomes 0.984/0.642),
+ * and the <40% Safety Floor fires on 96.1% of images instead of 2.8%. classify.ts guards against
+ * this: it cross-checks every raw output against this flag and throws 'invalid-output' on a
+ * mismatch, so a mis-set constant surfaces as a caught error rather than as quietly wrong triage.
+ */
+export const MODEL_OUTPUTS_PROBABILITIES = false;
 
 /**
  * Index → class mapping of the output logits. The training pipeline used
@@ -46,6 +114,37 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
 /**
  * Decision threshold on the malignant score (BCC+MEL+SCC softmax sum), consumed by the Malignant
  * Gate in tps-core.ts (`evaluateMalignantGate`), which floors the tier at Moderate when it fires.
+ *
+ * === D7_s3_mm, 2026-08-11: 0.4069, TAKEN VERBATIM FROM THE EXPORT'S OWN deploy_config.txt. ===
+ *
+ * This is the first export to arrive with its own calibration, and it is a better-founded number
+ * than anything derived here: the 90%-sensitivity operating point on temperature-scaled
+ * DEPLOY-GEOMETRY VALIDATION crops (crop_pad 0.45, ~0.69 fill — the exact crop lesion-detector.ts
+ * produces), verified on test, from `SpotOn_D7_s3_mm_export.ipynb`. The val split is genuinely held
+ * out; every set available offline here is not. So it is adopted unrounded and unmodified.
+ *
+ * PAIRED WITH CONFIDENCE_TEMPERATURE 0.9594 — same fit, same notebook. T rescales the softmax and
+ * therefore the malignant score, so these two constants are one unit. Never move one alone.
+ *
+ * THE ONE MISMATCH, MEASURED AND ACCEPTED. deploy_config.txt derives both constants from a SINGLE
+ * forward pass, and the notebook asserts that is "same as the phone". It is not — TTA_ENABLED is
+ * true, so the app averages 4 dihedral views. Measured on 1320 images (2026-08-11) the difference
+ * is small and in the safe direction:
+ *   - malignant score shifts by mean +0.0038 / median +0.0009 (p5 -0.098, p95 +0.115)
+ *   - only 40 of 1320 images (3.0%) cross 0.4069 at all when TTA is switched on
+ *   - the empirical 90%-sens point moves +0.0150, an order of magnitude less than the ±0.2-wide
+ *     bootstrap plateau the D7 note below documents for a threshold of this kind
+ *   - TTA is slightly BETTER on every headline metric (top-1 0.882 vs 0.874, AUROC 0.972 vs 0.965)
+ * So TTA stays on and the published threshold stands. If TTA_ENABLED is ever flipped off, this
+ * constant becomes exactly right rather than approximately right — no refit needed in that
+ * direction.
+ *
+ * DO NOT re-tune this on the Roboflow `spoton-dataset` images. They are ~70% training data for this
+ * lineage; the model fits them well enough that 0.4069 measures 96.7% sensitivity there rather than
+ * the intended 90%, and the empirical 90%-sens point on that set is ~0.69. That gap is
+ * memorization, not evidence the threshold is wrong.
+ *
+ * --- superseded D7 value (0.50), kept for the protocol it documents ---
  *
  * REFIT FOR D7, 2026-07-30 (scratchpad `refit_d7_threshold.py`). Derived by the same protocol the
  * D4 value was — converge several independent rules on `dataset_real`, then bootstrap to state how
@@ -123,7 +222,7 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.5;
+export const MALIGNANT_THRESHOLD = 0.4069;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -152,6 +251,30 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  *
  * COUPLED TO THE BUNDLED MODEL FILE — refit whenever the bundled .tflite changes.
  *
+ * === D7_s3_mm, 2026-08-11: 0.9594, FITTED — the first non-1.0 temperature since D3. ===
+ *
+ * From the export's own `deploy_config.txt`: a scalar T fit by NLL (LBFGS) on deploy-geometry
+ * VALIDATION logits, in the same notebook and the same run that produced MALIGNANT_THRESHOLD
+ * 0.4069. Adopted verbatim, for the reason D7 gave for NOT adopting its own fitted T=1.42 — the
+ * objection there was that the fit was circular (fitted and evaluated on the same 94 images) and
+ * that a genuinely held-out notebook value should win. This IS that value.
+ *
+ * T < 1 SHARPENS rather than softens: dividing logits by 0.9594 scales them up ~4%, so confidence
+ * rises slightly. That is the opposite direction from the usual over-confidence correction, and it
+ * says this model was mildly UNDER-confident on val. Measured consequence offline (1320 images,
+ * contaminated so indicative only): mean confidence 0.828, ECE 0.057, and the <40% Safety Floor
+ * fires on 1.4% of images — comfortably inside its design band, and no risk of the floor going
+ * quiet or firing constantly.
+ *
+ * COUPLED TO MALIGNANT_THRESHOLD — the score is a sum of post-temperature softmax values. The two
+ * were fitted together and must be replaced together.
+ *
+ * NOTE ON MECHANISM: with MODEL_OUTPUTS_PROBABILITIES true, T is applied to the log-space vector
+ * recovered by `toLogitSpace`, not to the graph's probabilities. That is exact, not an
+ * approximation — see the proof in aggregate-core.ts. (Simply skipping the softmax for a
+ * probability-emitting graph would make T an unreachable no-op.) Inert for the bundled D7, which
+ * emits logits.
+ *
  * D7 (2026-07-30): MEASURED AND DELIBERATELY LEFT AT 1.0. D7 is already better calibrated than D4
  * at T = 1.0 on `dataset_real` at deployment geometry — ECE 0.275 (D4) → 0.197 (D7), mean confidence
  * 0.757 → 0.675, at identical top-1 (59.6%). Fitting T by NLL on those 94 images gives T = 1.42
@@ -170,13 +293,19 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 1.0;
+export const CONFIDENCE_TEMPERATURE = 0.9594;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average
  * the raw logits before softmax. This is the configuration MALIGNANT_THRESHOLD was selected under,
  * so the two must move together. Costs 4× inference (still well inside INFERENCE_TIMEOUT_MS).
  * Set to false to fall back to a single forward pass.
+ *
+ * D7_s3_mm (2026-08-11): STAYS ON, though its constants were fitted single-pass. See the mismatch
+ * note on MALIGNANT_THRESHOLD — measured at 1320 images, enabling TTA moves the malignant score by
+ * a median +0.0009, flips 3.0% of images across the threshold, and improves top-1 and AUROC. Off is
+ * the strictly-calibrated configuration and on is the slightly more accurate one; on wins because
+ * the calibration error it introduces is far smaller than the threshold's own uncertainty.
  */
 export const TTA_ENABLED = true;
 
@@ -264,12 +393,30 @@ export const REFINE_CONFIDENCE = 0.65;
 export const REFINE_TARGET_FILL = 0.45;
 
 /**
- * Target lesion-fill fraction for the manual crop guide (scan/crop.tsx). Deliberately the same
- * value the auto-refinement zooms to, so the circle a user is asked to fill and the crop the model
- * prefers are one number — telling the user "make the spot fill this circle" produces exactly the
- * framing the classifier is most reliable on (stable band 0.27–0.54, measured 2026-07-24).
+ * Target lesion-fill fraction for the manual crop guide and the upload auto-frame (scan/crop.tsx):
+ * lesion diameter ÷ crop side, so the visible field is 1/LESION_TARGET_FILL lesion diameters.
+ *
+ * DECOUPLED FROM REFINE_TARGET_FILL, 2026-08-11. It was an alias of it (0.45), on the reasoning
+ * that the circle a user is asked to fill and the crop the model prefers should be one number.
+ * That conflates two different jobs, and the shared value was tuned for the model's job:
+ *   - REFINE_TARGET_FILL is an INFERENCE crop, seen only by the classifier, on the fallback path
+ *     when the detector cannot localize. 0.45 is the middle of the measured stable band.
+ *   - This one is a VIEWFINDER, seen by a person. At 0.45 the upload preview opens showing just
+ *     2.2 lesion diameters, which reads as jarringly over-zoomed — the reported symptom.
+ * 0.32 shows ~3.1 diameters instead (a 41% wider field) while staying inside the same 0.27–0.54
+ * stable band, so a photo framed to this guide is still in-distribution if it ever reaches the
+ * classifier uncropped.
+ *
+ * WHY THIS DOES NOT MOVE THE OPERATING POINT. DETECTOR_CROP_ENABLED is on, so the classifier
+ * re-crops with the YOLO detector at crop_pad 0.45 regardless of how the user framed the shot —
+ * the manual crop only has to CONTAIN the lesion with enough margin for the detector to localize
+ * it. Wider is the safer direction there too: the detector discards any box spanning more than
+ * FULL_FRAME (0.95) of the image as "not a localized lesion", which over-zooming walks toward.
+ *
+ * Turn it down further to zoom out more, up to zoom in. Below ~0.27 the classifier's own stability
+ * band gives out, so treat that as the floor rather than going wider still.
  */
-export const LESION_TARGET_FILL = REFINE_TARGET_FILL;
+export const LESION_TARGET_FILL = 0.32;
 
 /**
  * Optional pixel-domain steps applied between JPEG decode and tensor packing

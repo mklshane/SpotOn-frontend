@@ -26,7 +26,7 @@ execFileSync(
   { cwd: ROOT, stdio: 'inherit' },
 );
 const core = await import(pathToFileURL(join(out, 'aggregate-core.js')).href);
-const { softmaxT, looksLikeProbabilities, meanLogits, detectDisagreementAmong } = core;
+const { softmaxT, looksLikeProbabilities, meanLogits, detectDisagreementAmong, toLogitSpace } = core;
 
 let pass = 0;
 const fails = [];
@@ -64,6 +64,56 @@ check('softmax does not mutate its input', vecNear(original, [1, 2, 3, 4, 5]));
 check('detects a probability vector', looksLikeProbabilities([0.1, 0.2, 0.3, 0.15, 0.25]));
 check('rejects raw logits', !looksLikeProbabilities([1, 2, 3, 4, 5]));
 check('rejects negatives that happen to sum to 1', !looksLikeProbabilities([-0.5, 0.5, 0.5, 0.5, 0]));
+
+/* ------------------------------------------------------------------ toLogitSpace
+ * D8 bakes softmax into its graph, so classify.ts converts each view back to log space before
+ * averaging. The property that has to hold is that this is EQUIVALENT to a raw-logit export —
+ * otherwise swapping the model silently moves the operating point MALIGNANT_THRESHOLD sits on. */
+const z1 = [2.0, -1.0, 3.5, 0.25, -0.75];
+const z2 = [-0.5, 1.5, 0.0, 2.25, 1.0];
+
+// softmax(log p) === p — the conversion loses nothing softmax can see.
+check('log space round-trips through softmax', vecNear(softmaxT(toLogitSpace(softmaxT(z1))), softmaxT(z1), 1e-12));
+
+// THE load-bearing one: averaging log-probs === averaging logits, because log softmax(z) differs
+// from z by a class-independent constant that cancels in the final softmax.
+check(
+  'mean of log-probs === mean of logits (D8 path === D7 path)',
+  vecNear(
+    softmaxT(meanLogits([toLogitSpace(softmaxT(z1)), toLogitSpace(softmaxT(z2))])),
+    softmaxT(meanLogits([z1, z2])),
+    1e-12,
+  ),
+);
+
+// The same must survive temperature, or CONFIDENCE_TEMPERATURE would mean something different
+// on a softmax-baked export than on a raw-logit one.
+check(
+  'equivalence holds under temperature',
+  vecNear(
+    softmaxT(meanLogits([toLogitSpace(softmaxT(z1)), toLogitSpace(softmaxT(z2))]), 2.5),
+    softmaxT(meanLogits([z1, z2]), 2.5),
+    1e-12,
+  ),
+);
+
+// And it must NOT equal the wrong estimator — averaging the probabilities directly. If these ever
+// coincide the test above is vacuous.
+const probMeanD8 = [softmaxT(z1), softmaxT(z2)]
+  .reduce((a, v) => a.map((x, i) => x + v[i] / 2), [0, 0, 0, 0, 0]);
+check(
+  'log-space mean differs from probability mean',
+  !vecNear(softmaxT(meanLogits([toLogitSpace(softmaxT(z1)), toLogitSpace(softmaxT(z2))])), probMeanD8, 1e-6),
+);
+
+// A class that underflows to exactly 0 must not poison the mean with -Infinity/NaN.
+const withZero = toLogitSpace([0, 0.5, 0.5, 0, 0]);
+check('zero probability stays finite', withZero.every(Number.isFinite));
+check('zero probability softmaxes to ~0', softmaxT(withZero)[0] < 1e-9);
+check(
+  'a floored class does not NaN the mean',
+  softmaxT(meanLogits([withZero, toLogitSpace(softmaxT(z1))])).every(Number.isFinite),
+);
 
 /* ------------------------------------------------------------------ meanLogits */
 check('mean of one vector is that vector', vecNear(meanLogits([[1, 2, 3, 4, 5]]), [1, 2, 3, 4, 5]));

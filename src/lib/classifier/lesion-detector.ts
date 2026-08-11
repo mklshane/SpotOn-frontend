@@ -30,11 +30,35 @@ const ZOOM_CAP = 4.0;
 export type LesionBox = { cx: number; cy: number; bw: number; bh: number; conf: number };
 
 /**
+ * Serializes calls onto the one cached interpreter (`getLesionModel` returns a single shared
+ * instance). Overlapping `run()` calls on it are not safe — the note above records that reaching
+ * this interpreter while the camera thread holds it CRASHES — and since 2026-08-11 there are two
+ * independent JS callers on the same screen: scan/quality.tsx's lesion gate and, via
+ * classify.ts/DETECTOR_CROP_ENABLED, the classification pass that quality.tsx enqueues on mount.
+ * Both run on the same still at the same moment.
+ *
+ * A promise chain rather than a real lock because every caller is on the JS thread: each waits for
+ * the previous to finish, and a rejection is swallowed for queueing purposes only (the failing
+ * caller still sees its own error) so one failure cannot wedge the queue.
+ */
+let detectorQueue: Promise<unknown> = Promise.resolve();
+
+/**
  * Detect the best central lesion box in a still, in normalized [0,1] coords, or null when nothing
  * lesion-like is found. Assumes a square image (crop.tsx always outputs 1024²), so a plain resize
  * to the detector's input equals ultralytics' letterbox of a square — no padding, no aspect skew.
+ *
+ * Calls queue behind one another; see `detectorQueue`. Deterministic for a given uri, so two
+ * callers racing on the same image agree by construction — the quality gate and the crop the
+ * classifier picks can never disagree about whether this photo has a lesion.
  */
-export async function detectLesionBox(uri: string): Promise<LesionBox | null> {
+export function detectLesionBox(uri: string): Promise<LesionBox | null> {
+  const run = detectorQueue.catch(() => {}).then(() => runDetector(uri));
+  detectorQueue = run.catch(() => {});
+  return run;
+}
+
+async function runDetector(uri: string): Promise<LesionBox | null> {
   const model = await getLesionModel();
   const { inputSize, chMajor, channels, anchors, numClasses } = readLayout(model);
 
