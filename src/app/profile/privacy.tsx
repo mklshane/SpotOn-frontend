@@ -1,12 +1,13 @@
 import { ThemedText } from "@/components/themed-text";
-import { Icon } from "@/components/ui/icon";
+import { DocumentHeader } from "@/components/ui/document-header";
 import { Screen } from "@/components/ui/screen";
 import { ContactLink } from "@/components/ui/settings-row";
-import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 
 import { Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+
+import { StubScreen } from "@/components/ui/stub-screen";
 
 const LAST_UPDATED = "July, 2026";
 const CONTACT_EMAIL = "help.spoton@gmail.com";
@@ -69,27 +70,13 @@ function Bullet({
 }
 
 export default function PrivacyPolicyScreen() {
+  <StubScreen title="Privacy Policy" />;
   const theme = useTheme();
 
   return (
     <Screen padded={false}>
+      <DocumentHeader title="Privacy Policy" />
       <View style={styles.header}>
-        <View
-          style={[styles.headerGlow, { backgroundColor: theme.brandTint }]}
-          pointerEvents="none"
-        />
-        <View style={styles.headerTop}>
-          <Pressable
-            hitSlop={12}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={({ pressed }) => pressed && styles.pressed}
-          >
-            <Icon name="chevron.left" tintColor={theme.brand} size={20} />
-          </Pressable>
-        </View>
-        <ThemedText type="largeTitle">Privacy Policy</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
           Last Updated: {LAST_UPDATED}
         </ThemedText>

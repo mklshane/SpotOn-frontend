@@ -42,7 +42,9 @@ function queryString(params?: QueryParams): string {
   if (!params) return "";
   const parts = Object.entries(params)
     .filter(([, v]) => v !== undefined && v !== null)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+    .map(
+      ([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`,
+    );
   return parts.length ? `?${parts.join("&")}` : "";
 }
 
@@ -51,7 +53,10 @@ function queryString(params?: QueryParams): string {
 // which on cold start blocks the splash screen from ever routing anywhere.
 const REQUEST_TIMEOUT_MS = 15000;
 
-async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+async function fetchWithTimeout(
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -69,20 +74,41 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
 async function request<T>(
   method: string,
   path: string,
-  opts: { params?: QueryParams; body?: unknown; auth?: boolean; _retried?: boolean } = {},
+  opts: {
+    params?: QueryParams;
+    body?: unknown;
+    auth?: boolean;
+    _retried?: boolean;
+  } = {},
 ): Promise<T> {
+  // A FormData body (file uploads) must be left untouched: it can't be
+  // JSON-stringified (that silently drops the file, serializing to "{}"),
+  // and its Content-Type — including the multipart boundary — has to be set
+  // by `fetch` itself, not by us.
+  const isFormData =
+    typeof FormData !== "undefined" && opts.body instanceof FormData;
+
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  if (opts.body !== undefined && !isFormData)
+    headers["Content-Type"] = "application/json";
   if (opts.auth && tokenProvider) {
     const token = await tokenProvider();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetchWithTimeout(`${API_BASE_URL}${path}${queryString(opts.params)}`, {
-    method,
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  const res = await fetchWithTimeout(
+    `${API_BASE_URL}${path}${queryString(opts.params)}`,
+    {
+      method,
+      headers,
+      body:
+        opts.body === undefined
+          ? undefined
+          : isFormData
+            ? (opts.body as FormData)
+            : JSON.stringify(opts.body),
+    },
+  );
 
   // One-shot refresh-and-retry on an expired access token.
   if (res.status === 401 && opts.auth && refreshHandler && !opts._retried) {

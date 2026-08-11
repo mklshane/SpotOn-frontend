@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { useState } from 'react';
+import { router } from "expo-router";
+import { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -8,49 +8,71 @@ import {
   ScrollView,
   StyleSheet,
   View,
-} from 'react-native';
+} from "react-native";
 
-import type { Sex } from '@/api/types';
-import { ThemedText } from '@/components/themed-text';
-import { Accordion } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
-import { DateField } from '@/components/ui/date-field';
-import { Icon } from '@/components/ui/icon';
-import { Screen } from '@/components/ui/screen';
-import { TextField } from '@/components/ui/text-field';
-import { Space } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { useAuth } from '@/lib/auth';
-import { sanitizeName } from '@/lib/form-validation';
-import { saveProfile } from '@/lib/profile';
+import type { Sex } from "@/api/types";
+import { ThemedText } from "@/components/themed-text";
+import { Accordion } from "@/components/ui/accordion";
+import { AvatarPicker } from "@/components/ui/avatar-picker";
+import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
+import { Icon } from "@/components/ui/icon";
+import { Screen } from "@/components/ui/screen";
+import { TextField } from "@/components/ui/text-field";
+import { Space } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
+import { useAuth } from "@/lib/auth";
+import { sanitizeName } from "@/lib/form-validation";
+import { saveProfile } from "@/lib/profile";
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
-  { value: 'female', label: 'Female' },
-  { value: 'male', label: 'Male' },
-  { value: 'intersex', label: 'Intersex' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+  { value: "female", label: "Female" },
+  { value: "male", label: "Male" },
+  { value: "intersex", label: "Intersex" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
-const SKIN_TYPE_OPTIONS: { value: string; label: string; description: string }[] = [
-  { value: '1', label: 'Type I', description: 'Always burns, never tans' },
-  { value: '2', label: 'Type II', description: 'Usually burns, tans minimally' },
-  { value: '3', label: 'Type III', description: 'Sometimes burns, tans uniformly' },
-  { value: '4', label: 'Type IV', description: 'Rarely burns, tans easily' },
-  { value: '5', label: 'Type V', description: 'Very rarely burns, tans easily' },
-  { value: '6', label: 'Type VI', description: 'Never burns' },
+const SKIN_TYPE_OPTIONS: {
+  value: string;
+  label: string;
+  description: string;
+}[] = [
+  { value: "1", label: "Type I", description: "Always burns, never tans" },
+  {
+    value: "2",
+    label: "Type II",
+    description: "Usually burns, tans minimally",
+  },
+  {
+    value: "3",
+    label: "Type III",
+    description: "Sometimes burns, tans uniformly",
+  },
+  { value: "4", label: "Type IV", description: "Rarely burns, tans easily" },
+  {
+    value: "5",
+    label: "Type V",
+    description: "Very rarely burns, tans easily",
+  },
+  { value: "6", label: "Type VI", description: "Never burns" },
 ];
 
 export default function EditProfileScreen() {
   const theme = useTheme();
   const { user, setUser } = useAuth();
 
-  const [fullName, setFullName] = useState(sanitizeName(user?.full_name ?? ''));
+  const [fullName, setFullName] = useState(sanitizeName(user?.full_name ?? ""));
   const [dob, setDob] = useState<string | null>(user?.date_of_birth ?? null);
   const [sex, setSex] = useState<Sex | null>((user?.sex as Sex | null) ?? null);
-  const phone = user?.phone ?? '';
+  const phone = user?.phone ?? "";
   const [skinType, setSkinType] = useState<string | null>(
-    user?.fitzpatrick_skin_type != null ? String(user.fitzpatrick_skin_type) : null,
+    user?.fitzpatrick_skin_type != null
+      ? String(user.fitzpatrick_skin_type)
+      : null,
+  );
+  const [avatarUri, setAvatarUri] = useState<string | null>(
+    user?.avatar_url ?? null,
   );
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
@@ -62,9 +84,9 @@ export default function EditProfileScreen() {
 
   function validate() {
     const next: typeof errors = {};
-    if (!fullName.trim()) next.fullName = 'Please enter your name.';
-    if (!dob) next.dob = 'Enter a valid date of birth.';
-    if (!sex) next.sex = 'Please select one.';
+    if (!fullName.trim()) next.fullName = "Please enter your name.";
+    if (!dob) next.dob = "Enter a valid date of birth.";
+    if (!sex) next.sex = "Please select one.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -79,14 +101,26 @@ export default function EditProfileScreen() {
         dateOfBirth: dob,
         sex,
         fitzpatrickSkinType: skinType ? Number(skinType) : undefined,
+        // NOTE: `saveProfile` needs to accept and persist this field (e.g.
+        // upload the local file URI and store the resulting remote URL).
+        // Keep `null` distinct from `undefined` here: `null` means "the user
+        // removed their photo, clear it," while `undefined` would typically
+        // mean "field not touched" on a partial-update API — collapsing the
+        // two would make photo removal silently fail to persist.
+        avatarUri,
       });
       setUser(saved);
       if (failedFields.length > 0) {
-        Alert.alert('Profile saved', 'Profile saved, but some fields could not be updated.');
+        Alert.alert(
+          "Profile saved",
+          "Profile saved, but some fields could not be updated.",
+        );
       }
       router.back();
     } catch {
-      setFormError("Couldn't save your details. Check your connection and try again.");
+      setFormError(
+        "Couldn't save your details. Check your connection and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -94,21 +128,32 @@ export default function EditProfileScreen() {
 
   return (
     <Screen variant="gradient" gradient="dawnSoft">
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
             <Pressable
               hitSlop={12}
               onPress={() => router.back()}
               accessibilityRole="button"
-              accessibilityLabel="Back">
+              accessibilityLabel="Back"
+            >
               <Icon name="chevron.left" tintColor={theme.brand} size={20} />
             </Pressable>
             <ThemedText type="title1">Edit profile</ThemedText>
           </View>
+
+          <AvatarPicker
+            uri={avatarUri}
+            name={fullName}
+            onChange={setAvatarUri}
+          />
 
           <View style={styles.form}>
             <TextField
@@ -120,7 +165,12 @@ export default function EditProfileScreen() {
               transformInput={sanitizeName}
               error={errors.fullName}
             />
-            <DateField label="Date of birth" value={dob} onChange={setDob} error={errors.dob} />
+            <DateField
+              label="Date of birth"
+              value={dob}
+              onChange={setDob}
+              error={errors.dob}
+            />
             <Accordion
               label="Sex"
               placeholder="Select"
@@ -152,11 +202,20 @@ export default function EditProfileScreen() {
 
           <View style={styles.actions}>
             {formError ? (
-              <ThemedText type="footnote" themeColor="riskCritical" style={styles.center}>
+              <ThemedText
+                type="footnote"
+                themeColor="riskCritical"
+                style={styles.center}
+              >
                 {formError}
               </ThemedText>
             ) : null}
-            <Button label="Save changes" variant="brand" loading={submitting} onPress={handleSubmit} />
+            <Button
+              label="Save changes"
+              variant="brand"
+              loading={submitting}
+              onPress={handleSubmit}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -166,9 +225,14 @@ export default function EditProfileScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { flexGrow: 1, paddingTop: Space.lg, paddingBottom: Space.xl, gap: Space.xxl },
-  header: { flexDirection: 'row', alignItems: 'center', gap: Space.base },
+  content: {
+    flexGrow: 1,
+    paddingTop: Space.lg,
+    paddingBottom: Space.xl,
+    gap: Space.xxl,
+  },
+  header: { flexDirection: "row", alignItems: "center", gap: Space.base },
   form: { gap: Space.xl },
-  actions: { marginTop: 'auto', gap: Space.sm, paddingTop: Space.xl },
-  center: { textAlign: 'center' },
+  actions: { marginTop: "auto", gap: Space.sm, paddingTop: Space.xl },
+  center: { textAlign: "center" },
 });

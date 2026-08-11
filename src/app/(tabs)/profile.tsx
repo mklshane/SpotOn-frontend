@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -30,6 +31,13 @@ export default function ProfileScreen() {
   const age = computeAge(user?.date_of_birth ?? null);
   const sexLabel = user?.sex ? (SEX_LABELS[user.sex] ?? user.sex) : null;
   const skinLabel = skinTypeLabel(user?.fitzpatrick_skin_type ?? null);
+
+  // Cache-bust on `updated_at` — the backend reuses the same avatar_url on
+  // every re-upload, and without this the cached image from before the edit
+  // would keep rendering even though the URL "changed" server-side.
+  const avatarSource = user?.avatar_url
+    ? { uri: `${user.avatar_url}?v=${encodeURIComponent(user.updated_at)}` }
+    : null;
 
   const scanCount = entries.length;
   const lastScan = entries[0]?.createdAt;
@@ -77,7 +85,16 @@ export default function ProfileScreen() {
             style={styles.avatarWrap}
           >
             <View style={styles.avatarFrost}>
-              <Icon name="person.fill" tintColor="#FFFFFF" size={40} />
+              {avatarSource ? (
+                <Image
+                  source={avatarSource}
+                  contentFit="cover"
+                  transition={150}
+                  style={[StyleSheet.absoluteFill]}
+                />
+              ) : (
+                <Icon name="person.fill" tintColor="#FFFFFF" size={40} />
+              )}
             </View>
             <View
               style={[styles.editBadge, { backgroundColor: theme.surface }]}
@@ -213,6 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.16)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.4)",
+    overflow: "hidden",
   },
   editBadge: {
     position: "absolute",
