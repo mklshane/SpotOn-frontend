@@ -125,7 +125,12 @@ export interface MetaResponse {
 }
 
 // Matches backend Literal in api/app/schemas/user.py.
-export type Sex = 'male' | 'female' | 'intersex' | 'other' | 'prefer_not_to_say';
+export type Sex =
+  | "male"
+  | "female"
+  | "intersex"
+  | "other"
+  | "prefer_not_to_say";
 
 // Mirrors backend UserOut (GET /me).
 export interface UserProfile {
@@ -136,6 +141,7 @@ export interface UserProfile {
   date_of_birth: string | null; // ISO date "YYYY-MM-DD"
   sex: string | null;
   fitzpatrick_skin_type: number | null;
+  avatar_url: string | null;
   is_active: boolean;
   is_verified: boolean;
   consent_data_privacy: boolean;
