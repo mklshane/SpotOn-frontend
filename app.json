@@ -136,6 +136,7 @@
       ],
       "react-native-fast-tflite",
       "expo-sharing",
+      "./plugins/withoutPushEntitlement",
       [
         "expo-notifications",
         {
