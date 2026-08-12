@@ -15,6 +15,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DevTools } from '@/components/ui/dev-tools';
 import { AuthProvider } from '@/lib/auth';
+import { initNotifications } from '@/lib/notifications';
 import { ScanHistoryProvider } from '@/lib/scan-history';
 import { sweepScratchFiles } from '@/lib/scratch-files';
 import { ScreeningSessionProvider } from '@/lib/screening-session';
@@ -67,6 +68,14 @@ export default function RootLayout() {
         }
       })
       .catch((e) => console.warn('[scratch] sweep failed', e));
+  }, []);
+
+  // Re-screening reminders live in the OS, not in the app: install the handler/channel and
+  // reconcile the pending alarm against what the OS still holds. Runs on every launch because a
+  // reinstall or a revoked-then-restored permission silently drops a scheduled notification, and
+  // the whole point of the reminder is that it survives the user never reopening the app.
+  useEffect(() => {
+    initNotifications().catch((e) => console.warn('[notifications] init failed', e));
   }, []);
 
   if (!ready) {

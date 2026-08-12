@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { scheduleSelfCheckReminder } from '@/lib/notifications';
 import { resetOnboarding } from '@/lib/onboarding';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -59,7 +60,7 @@ export function DevTools() {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const { addEntry } = useScanHistory();
+  const { addEntry, entries } = useScanHistory();
   const { setImageUri, setSource, startClassification } = useScreeningSession();
 
   // Seed a real photo + kick off classification (as a gallery upload), then jump into the
@@ -117,6 +118,16 @@ export function DevTools() {
     router.replace({ pathname: '/scan/result', params: { id: entry.id } });
   }
 
+  // The re-screening reminder is a real OS notification 30 days out, which is untestable by hand.
+  // Scheduling it with a 0-day interval clamps to a minute from now (see `reminderDate`) and
+  // exercises the whole path — permission, OS delivery while backgrounded, tap, deep link.
+  async function fireTestReminder() {
+    setOpen(false);
+    const lesionId = entries.find((e) => e.lesionId)?.lesionId ?? null;
+    const outcome = await scheduleSelfCheckReminder(0, { lesionId });
+    console.log(`[dev] reminder ${outcome} (lesion ${lesionId ?? 'none'}) — background the app now`);
+  }
+
   if (!__DEV__) return null;
 
   return (
@@ -168,6 +179,13 @@ export function DevTools() {
             }}>
             <ThemedText type="subhead" themeColor="brand">
               Reset onboarding flag
+            </ThemedText>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+            onPress={() => fireTestReminder().catch((e) => console.warn('[dev] reminder failed', e))}>
+            <ThemedText type="subhead" themeColor="brand">
+              Reminder in 1 min
             </ThemedText>
           </Pressable>
         </View>

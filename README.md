@@ -211,7 +211,9 @@ npx expo start --dev-client
 ```
 
 `API_BASE_URL` is configured per environment (`.env` / `app.config.ts`); never commit
-secrets. Camera + (later) notification permissions declared via Expo config plugins.
+secrets. Camera, location and notification permissions are declared via Expo config plugins.
+The 30-day re-screening reminder is a *local* OS notification (`expo-notifications`), scheduled
+on-device when the user opts in on a Low-tier result — no server or push token is involved.
 
 ---
 

@@ -25,7 +25,11 @@ import { Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
 import { clearAllLocalData } from "@/lib/auth-api";
-import { getRemindersEnabled, setRemindersEnabled } from "@/lib/notifications";
+import {
+  getRemindersEnabled,
+  getSelfCheckReminderDueAt,
+  setRemindersEnabled,
+} from "@/lib/notifications";
 import {
   changePassword,
   deleteAccount,
@@ -50,14 +54,37 @@ export default function SettingsScreen() {
 
   // Notifications
   const [remindersEnabled, setRemindersEnabledState] = useState(false);
+  const [reminderDueAt, setReminderDueAt] = useState<string | null>(null);
   useEffect(() => {
     getRemindersEnabled().then(setRemindersEnabledState);
+    getSelfCheckReminderDueAt().then(setReminderDueAt);
   }, []);
 
   async function handleToggleReminders(next: boolean) {
     setRemindersEnabledState(next); // optimistic
-    await setRemindersEnabled(next);
+    // Switching on can fail: it needs OS notification permission, and the user can refuse it (or
+    // have refused it before, in which case the OS won't even prompt).
+    const actual = await setRemindersEnabled(next);
+    setRemindersEnabledState(actual);
+    setReminderDueAt(await getSelfCheckReminderDueAt());
+    if (next && !actual) {
+      Alert.alert(
+        "Notifications are off",
+        "SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings.",
+        [
+          { text: "Not now", style: "cancel" },
+          { text: "Open settings", onPress: () => Linking.openSettings() },
+        ],
+      );
+    }
   }
+
+  const reminderSublabel = (() => {
+    if (!remindersEnabled) return "Reminders to re-check a spot after 30 days";
+    if (!reminderDueAt) return "On — set after your next low-risk result";
+    const due = new Date(reminderDueAt);
+    return `Next reminder on ${due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+  })();
 
   // Change password (inline form)
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -233,7 +260,7 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="bell.fill"
               label="Re-screening reminders"
-              sublabel="Occasional reminders to check your skin"
+              sublabel={reminderSublabel}
               accessory="switch"
               switchValue={remindersEnabled}
               onSwitchChange={handleToggleReminders}

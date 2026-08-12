@@ -4,6 +4,7 @@ import { api, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
 import { setMeta } from '@/data/db';
 
+import { cancelSelfCheckReminder } from './notifications';
 import { STORAGE_KEYS } from './storage-keys';
 
 const ACCESS_KEY = 'spoton.access';
@@ -89,6 +90,9 @@ export async function clearAllLocalData(): Promise<void> {
   await clearCachedProfile();
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
   await setMeta(STORAGE_KEYS.reengagementRemindersEnabled, '');
+  // The re-screening reminder lives in the OS, not in this database — clearing the preference
+  // alone would leave a deleted account's device still being pinged 30 days from now.
+  await cancelSelfCheckReminder();
 }
 
 export async function register(input: RegisterInput): Promise<TokenOut> {

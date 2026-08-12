@@ -1,8 +1,8 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, LayoutAnimationConfig } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
@@ -12,7 +12,12 @@ import { Button, Card, ImageViewer, Screen } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { scheduleSelfCheckReminder } from '@/lib/notifications';
+import {
+  getPendingSelfCheckReminder,
+  getSelfCheckReminderDueAt,
+  REMINDER_DAYS,
+  scheduleSelfCheckReminder,
+} from '@/lib/notifications';
 import { useScanHistory } from '@/lib/scan-history';
 import { QUESTIONS } from '@/lib/triage/questions';
 import {
@@ -295,7 +300,7 @@ export default function ResultScreen() {
             onPress={() => router.push({ pathname: '/scan/lesion', params: { id: record.lesionId! } })}
             disabled={!record.lesionId}
           />
-          {tier.offerReminder ? <ReminderRow /> : null}
+          {tier.offerReminder ? <ReminderRow lesionId={record.lesionId} /> : null}
         </Animated.View>
       </ScrollView>
       <ImageViewer visible={viewerUri != null} uri={viewerUri ?? ''} onClose={() => setViewerUri(null)} />
@@ -450,29 +455,103 @@ function FindingGroup({
   );
 }
 
-/** Low-tier 30-day self-monitoring reminder opt-in. */
-function ReminderRow() {
+/** "October 3" — the reminder date, without a year the user doesn't need for a 30-day horizon. */
+function formatDue(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+}
+
+/**
+ * Low-tier 30-day self-monitoring reminder opt-in. Tapping it asks the OS for notification
+ * permission and hands it a dated alarm, so the reminder arrives even if the app is never
+ * reopened — which is the case this whole row exists for.
+ */
+function ReminderRow({ lesionId }: { lesionId?: string | null }) {
   const theme = useTheme();
-  const [done, setDone] = useState(false);
+  const [state, setState] = useState<'idle' | 'working' | 'done' | 'denied' | 'unsupported'>('idle');
+  const [dueLabel, setDueLabel] = useState<string | null>(null);
+
+  // Coming back to a result you already opted in on should say so, not offer the opt-in again.
+  useEffect(() => {
+    let cancelled = false;
+    getPendingSelfCheckReminder()
+      .then((pending) => {
+        if (cancelled || !pending || pending.lesionId !== (lesionId ?? null)) return;
+        setDueLabel(formatDue(pending.dueAt));
+        setState('done');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [lesionId]);
 
   async function enable() {
+    setState('working');
     try {
-      await scheduleSelfCheckReminder(30);
-      setDone(true);
+      const outcome = await scheduleSelfCheckReminder(REMINDER_DAYS, { lesionId });
+      if (outcome !== 'scheduled') {
+        setState(outcome === 'denied' ? 'denied' : 'unsupported');
+        return;
+      }
+      const due = await getSelfCheckReminderDueAt();
+      setDueLabel(due ? formatDue(due) : null);
+      setState('done');
     } catch (e) {
       console.warn('[result] reminder opt-in failed', e);
+      setState('idle');
     }
   }
 
-  return done ? (
-    <View style={[styles.reminderDone, { backgroundColor: theme.riskLowBg }]}>
-      <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={18} />
-      <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
-        We’ll remind you to re-check this spot in 30 days.
+  if (state === 'done') {
+    return (
+      <View style={[styles.reminderDone, { backgroundColor: theme.riskLowBg }]}>
+        <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={18} />
+        <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
+          {dueLabel
+            ? `We’ll notify you on ${dueLabel} to re-check this spot.`
+            : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`}
+        </ThemedText>
+      </View>
+    );
+  }
+
+  // Permission refused (or previously refused and no longer promptable) — the only way back is the
+  // system settings screen, so say so instead of leaving a button that silently does nothing.
+  if (state === 'denied') {
+    return (
+      <View style={styles.reminderDenied}>
+        <View style={[styles.reminderDone, { backgroundColor: theme.riskModerateBg }]}>
+          <Icon name="bell.fill" tintColor={theme.riskModerate} size={18} />
+          <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
+            Notifications are turned off for SpotOn, so we can’t remind you.
+          </ThemedText>
+        </View>
+        <Button
+          label="Open notification settings"
+          variant="outline"
+          icon="gearshape.fill"
+          onPress={() => Linking.openSettings()}
+        />
+      </View>
+    );
+  }
+
+  if (state === 'unsupported') {
+    return (
+      <ThemedText type="footnote" themeColor="muted">
+        Reminders aren’t available on this device.
       </ThemedText>
-    </View>
-  ) : (
-    <Button label="Remind me in 30 days" variant="outline" icon="bell.fill" onPress={enable} />
+    );
+  }
+
+  return (
+    <Button
+      label={`Remind me in ${REMINDER_DAYS} days`}
+      variant="outline"
+      icon="bell.fill"
+      loading={state === 'working'}
+      onPress={enable}
+    />
   );
 }
 
@@ -610,4 +689,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   reminderText: { flex: 1 },
+  reminderDenied: { gap: Space.sm },
 });

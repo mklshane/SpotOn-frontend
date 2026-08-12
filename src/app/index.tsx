@@ -20,6 +20,7 @@ import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { useDeviceTier } from '@/lib/device-tier';
+import { consumeReminderColdStart } from '@/lib/notifications';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import { isProfileComplete } from '@/lib/profile';
 
@@ -116,8 +117,11 @@ export default function SplashScreenRoute() {
     if (loading) return; // wait for the initial token/session restore
     let cancelled = false;
     (async () => {
-      const [seen] = await Promise.all([
+      const [seen, reminderTap] = await Promise.all([
         hasSeenOnboarding().catch(() => false),
+        // If a re-screening reminder launched the app, it's this route that has to honour it —
+        // a deep link pushed before the redirect below would be replaced right out from under it.
+        consumeReminderColdStart().catch(() => null),
         new Promise((r) => setTimeout(r, MIN_SPLASH_MS)),
       ]);
       if (cancelled) return;
@@ -125,8 +129,14 @@ export default function SplashScreenRoute() {
         router.replace('/(onboarding)');
       } else if (!user) {
         router.replace('/(auth)/login');
+      } else if (!isProfileComplete(user)) {
+        router.replace('/(auth)/complete-profile');
       } else {
-        router.replace(isProfileComplete(user) ? '/home' : '/(auth)/complete-profile');
+        router.replace('/home');
+        // Land on the spot the reminder is about, with home underneath so Back still works.
+        if (reminderTap?.lesionId) {
+          router.push({ pathname: '/scan/lesion', params: { id: reminderTap.lesionId } });
+        }
       }
     })();
     return () => {
