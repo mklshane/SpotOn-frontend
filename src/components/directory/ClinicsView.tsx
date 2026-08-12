@@ -1,9 +1,11 @@
 import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Dimensions, Pressable, StyleSheet, View } from "react-native";
 import { ScrollView } from "react-native-gesture-handler";
+import { useSharedValue } from "react-native-reanimated";
 
 import type { FacilitySync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
@@ -26,17 +28,36 @@ import { downloadAreaPack } from "@/lib/map-offline";
 import { ClinicCard } from "./ClinicCard";
 import { ClinicMap } from "./ClinicMap";
 
-export type ClinicsViewProps = { query: string; topInset: number };
+export type ClinicsViewProps = {
+  query: string;
+  topInset: number;
+  /**
+   * The search bar / segmented-control overlay, rendered by the parent
+   * screen but placed here — between the map and the bottom sheet — so
+   * normal paint order (not zIndex) makes the sheet cover it once it grows
+   * tall enough to reach it, and lets it float above the plain map the rest
+   * of the time. A sibling of `ClinicsView` could never sit "inside" the
+   * sheet's stacking this way — zIndex only reorders siblings under the
+   * same parent, and the sheet lives one level deeper than that.
+   */
+  header?: ReactNode;
+};
 
 type SortMode = "distance" | "rating" | "name";
 type Facility = FacilitySync | FacilityWithDistance;
 
 const SCREEN_H = Dimensions.get("window").height;
-const COLLAPSED_BOTTOM_INSET = SCREEN_H * 0.32 + 12;
 const ALL_CHIP = "All Clinics";
 const OPEN_CHIP = "Open Now";
 
-export function ClinicsView({ query, topInset }: ClinicsViewProps) {
+// `topInset` stays part of the props contract (the parent screen still needs it
+// to size/position the search header itself) but is no longer consumed here —
+// see the snapPoints/topInset comments below for why the sheet stopped using it.
+export function ClinicsView({
+  query,
+  topInset: _topInset,
+  header,
+}: ClinicsViewProps) {
   const theme = useTheme();
   const { coords } = useLocation();
   const { isOnline } = useConnectivity();
@@ -48,6 +69,11 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
+  // Live top-edge Y position of the bottom sheet, in screen space — kept in
+  // sync by BottomSheet itself as it's dragged/snapped. Drives the floating
+  // map controls (zoom buttons, location chip) so they track the sheet's
+  // actual current position instead of a snapshot of its collapsed height.
+  const sheetPosition = useSharedValue(SCREEN_H);
 
   const [hasDefaultedSort, setHasDefaultedSort] = useState(false);
   if (coords && !hasDefaultedSort) {
@@ -125,14 +151,12 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
 
   // OVERHERE FOR SNAP CHANGE: If you want to change the snap points, do it here, top snap is the initial when you open the page
   // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
-  const snapPoints = useMemo(
-    () => [
-      "25%",
-      "64%",
-      Math.max(SCREEN_H * 0.5, SCREEN_H - topInset - Space.md),
-    ],
-    [topInset],
-  );
+  //
+  // The top point is the full screen height (not `SCREEN_H - topInset`) so
+  // dragging all the way up covers the whole screen, Google-Maps-style — the
+  // header stays visible above it purely because it renders with higher
+  // elevation/zIndex as a sibling, not because the sheet stops short of it.
+  const snapPoints = useMemo(() => ["20%", "50%", "96%"], []);
 
   return (
     <View style={styles.fill}>
@@ -141,14 +165,22 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
         coords={coords}
         selectedId={selectedId}
         onSelectFacility={setSelectedId}
-        bottomInset={COLLAPSED_BOTTOM_INSET}
+        sheetPosition={sheetPosition}
         query={query}
       />
+
+      {header}
 
       <BottomSheet
         index={0}
         snapPoints={snapPoints}
-        topInset={topInset}
+        // `topInset` acts as a hard ceiling in this library — the sheet's top
+        // edge can never rise above it, regardless of what any snap point
+        // says. Since the tallest snap point is meant to reach the very top
+        // of the screen, `topInset` has to stay 0 here; it's no longer used
+        // to keep the sheet clear of the header (see the snapPoints comment).
+        topInset={0}
+        animatedPosition={sheetPosition}
         enableDynamicSizing={false}
         backgroundStyle={{ backgroundColor: theme.surface }}
         handleIndicatorStyle={{ backgroundColor: theme.hairline }}
