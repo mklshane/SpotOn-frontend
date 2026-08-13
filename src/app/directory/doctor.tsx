@@ -166,10 +166,11 @@ export default function DoctorDetailScreen() {
             <View style={styles.actions}>
               {doctor.phone ? (
                 <Button
-                  label="Call"
+                  label={doctor.phone}
                   variant="outline"
                   icon="phone.fill"
                   onPress={() => callNumber(doctor.phone as string)}
+                  style={styles.actionButton}
                 />
               ) : null}
               {doctor.website ? (
@@ -178,6 +179,7 @@ export default function DoctorDetailScreen() {
                   variant="outline"
                   icon="globe"
                   onPress={() => openWebsite(doctor.website as string)}
+                  style={styles.actionButton}
                 />
               ) : null}
             </View>
@@ -379,6 +381,7 @@ const styles = StyleSheet.create({
     marginTop: Space.md,
   },
   actions: { flexDirection: "row", gap: Space.sm, marginTop: Space.xs },
+  actionButton: { flex: 1 },
   linkCard: { gap: Space.base },
   linkTop: { flexDirection: "row", alignItems: "center", gap: Space.md },
   linkText: { flex: 1, gap: 2 },

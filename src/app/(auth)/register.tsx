@@ -205,7 +205,11 @@ export default function RegisterScreen() {
                 }}>
                 <ThemedText type="footnote" themeColor="textSecondary">
                   I agree to SpotOn’s{' '}
-                  <ThemedText type="footnote" themeColor="brand" style={styles.inlineLink}>
+                  <ThemedText
+                    type="footnote"
+                    themeColor="brand"
+                    style={styles.inlineLink}
+                    onPress={() => router.push('/profile/privacy')}>
                     Privacy Policy
                   </ThemedText>{' '}
                   and to processing my health data for screening.

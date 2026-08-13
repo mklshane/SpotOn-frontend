@@ -61,6 +61,11 @@ export default function ClinicDetailScreen() {
     facility &&
     (facility.weekday_hours || facility.weekend_hours)
   );
+  const onlyStatus =
+    facility != null &&
+    facility.google_rating == null &&
+    !feeRange &&
+    open != null;
   const dept = facility?.department_info ?? null;
   const hasDeptInfo = !!(
     dept &&
@@ -149,10 +154,36 @@ export default function ClinicDetailScreen() {
               <View style={styles.badges}>
                 <Badge label={humanizeTag(facility.type)} tone="brand" />
                 {facility.has_philhealth ? <Badge label="PhilHealth" /> : null}
+                {onlyStatus ? (
+                  <View
+                    style={[
+                      styles.statusChip,
+                      {
+                        backgroundColor: open
+                          ? theme.riskLowBg
+                          : theme.riskHighBg,
+                      },
+                    ]}
+                  >
+                    <Icon
+                      name={open ? "checkmark.circle.fill" : "clock.fill"}
+                      size={12}
+                      tintColor={open ? theme.riskLow : theme.riskHigh}
+                    />
+                    <ThemedText
+                      type="caption"
+                      themeColor={open ? "riskLow" : "riskHigh"}
+                      style={styles.statusChipLabel}
+                    >
+                      {open ? "Open Now" : "Closed"}
+                    </ThemedText>
+                  </View>
+                ) : null}
               </View>
             </View>
 
-            {facility.google_rating != null || feeRange || open != null ? (
+            {!onlyStatus &&
+            (facility.google_rating != null || feeRange || open != null) ? (
               <View style={styles.statsRow}>
                 {facility.google_rating != null ? (
                   <Card padded={false} style={styles.statTile} elevation="sm">
@@ -356,10 +387,11 @@ export default function ClinicDetailScreen() {
             >
               {facility.phone ? (
                 <Button
-                  label="Call"
+                  label={facility.phone}
                   variant="outline"
                   icon="phone.fill"
                   onPress={() => callNumber(facility.phone as string)}
+                  style={styles.actionButton}
                 />
               ) : null}
               {facility.website ? (
@@ -368,6 +400,7 @@ export default function ClinicDetailScreen() {
                   variant="outline"
                   icon="globe"
                   onPress={() => openWebsite(facility.website as string)}
+                  style={styles.actionButton}
                 />
               ) : null}
             </View>
@@ -435,6 +468,15 @@ const styles = StyleSheet.create({
   identity: { gap: Space.xs },
   badges: { flexDirection: "row", flexWrap: "wrap", gap: Space.xs },
   statsRow: { flexDirection: "row", gap: Space.sm },
+  statusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.xs,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.pill,
+  },
+  statusChipLabel: { fontWeight: "600" },
   statTile: {
     flex: 1,
     alignItems: "center",
@@ -455,4 +497,5 @@ const styles = StyleSheet.create({
   bookButton: { marginTop: Space.md },
   actions: { flexDirection: "row", gap: Space.md, marginTop: Space.md },
   actionsTight: { marginTop: 0 },
+  actionButton: { flex: 1 },
 });
