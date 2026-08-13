@@ -179,6 +179,11 @@ type DayGridProps = {
 function DayGrid({ cursor, value, minDate, maxDate, today, onSelect }: DayGridProps) {
   const theme = useTheme();
   const cells = useMemo(() => buildDayGrid(cursor), [cursor]);
+  const rows = useMemo(() => {
+    const chunks: DayCell[][] = [];
+    for (let i = 0; i < cells.length; i += 7) chunks.push(cells.slice(i, i + 7));
+    return chunks;
+  }, [cells]);
 
   return (
     <View>
@@ -189,47 +194,49 @@ function DayGrid({ cursor, value, minDate, maxDate, today, onSelect }: DayGridPr
           </ThemedText>
         ))}
       </View>
-      <View style={styles.dayGrid}>
-        {cells.map(({ date, inCurrentMonth }) => {
-          const disabled = dateKey(date) < dateKey(minDate) || dateKey(date) > dateKey(maxDate);
-          const selected = isSameDay(date, value);
-          const isToday = isSameDay(date, today);
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.dayRow}>
+          {row.map(({ date, inCurrentMonth }) => {
+            const disabled = dateKey(date) < dateKey(minDate) || dateKey(date) > dateKey(maxDate);
+            const selected = isSameDay(date, value);
+            const isToday = isSameDay(date, today);
 
-          return (
-            <Pressable
-              key={date.toISOString()}
-              disabled={disabled}
-              accessibilityRole="button"
-              accessibilityState={{ selected, disabled }}
-              onPress={() => onSelect(date)}
-              style={styles.dayCellWrap}>
-              <View
-                style={[
-                  styles.dayCell,
-                  selected && { backgroundColor: theme.brand },
-                  !selected && isToday && { borderWidth: 1.5, borderColor: theme.brand },
-                ]}>
-                <ThemedText
-                  type="callout"
-                  style={selected && styles.cellTextSelected}
-                  themeColor={
-                    selected
-                      ? 'onBrand'
-                      : disabled
-                        ? 'muted'
-                        : isToday
-                          ? 'brand'
-                          : !inCurrentMonth
-                            ? 'muted'
-                            : 'text'
-                  }>
-                  {date.getDate()}
-                </ThemedText>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+            return (
+              <Pressable
+                key={date.toISOString()}
+                disabled={disabled}
+                accessibilityRole="button"
+                accessibilityState={{ selected, disabled }}
+                onPress={() => onSelect(date)}
+                style={styles.dayCellWrap}>
+                <View
+                  style={[
+                    styles.dayCell,
+                    selected && { backgroundColor: theme.brand },
+                    !selected && isToday && { borderWidth: 1.5, borderColor: theme.brand },
+                  ]}>
+                  <ThemedText
+                    type="callout"
+                    style={selected && styles.cellTextSelected}
+                    themeColor={
+                      selected
+                        ? 'onBrand'
+                        : disabled
+                          ? 'muted'
+                          : isToday
+                            ? 'brand'
+                            : !inCurrentMonth
+                              ? 'muted'
+                              : 'text'
+                    }>
+                    {date.getDate()}
+                  </ThemedText>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      ))}
     </View>
   );
 }
@@ -326,10 +333,10 @@ const styles = StyleSheet.create({
   hidden: { opacity: 0 },
   pressed: { opacity: 0.6 },
   weekdayRow: { flexDirection: 'row', marginBottom: Space.sm },
-  weekdayCell: { width: `${100 / 7}%`, textAlign: 'center' },
-  dayGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  weekdayCell: { flex: 1, textAlign: 'center' },
+  dayRow: { flexDirection: 'row' },
   dayCellWrap: {
-    width: `${100 / 7}%`,
+    flex: 1,
     height: DAY_CELL,
     alignItems: 'center',
     justifyContent: 'center',

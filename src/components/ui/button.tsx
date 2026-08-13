@@ -79,7 +79,12 @@ export function Button({
             {icon ? (
               <Icon name={icon} tintColor={textColor} size={18} style={styles.icon} />
             ) : null}
-            <ThemedText style={[styles.label, { color: textColor }]}>{label}</ThemedText>
+            <ThemedText
+              style={[styles.label, { color: textColor }]}
+              numberOfLines={1}
+              ellipsizeMode="tail">
+              {label}
+            </ThemedText>
           </>
         )}
       </View>
@@ -103,8 +108,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: Radius.pill,
   },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Space.sm,
+    flexShrink: 1,
+    minWidth: 0,
+  },
   icon: { marginRight: 2 },
-  label: { ...Type.headline },
+  label: { ...Type.headline, flexShrink: 1 },
   disabled: { opacity: 0.5 },
 });
