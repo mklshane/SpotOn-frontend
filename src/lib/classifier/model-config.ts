@@ -5,8 +5,9 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_d7_s3_mm_fp32.tflite (interpreter inspection, 2026-08-11),
- * and matching the contract its own `deploy_config.txt` states:
+ * Verified against the bundled spoton_d9_fp32.tflite (interpreter inspection, 2026-08-12), and
+ * matching the contract its own `deploy_config (1).txt` states — identical to the D7_s3_mm
+ * contract it replaced:
  *   input  "serving_default_args_0"       [1, 260, 260, 3] float32 NHWC  (EfficientNet-B2)
  *   output "serving_default_output_0_..." [1, 5]           float32       (raw LOGITS — no softmax
  *                                                   in the graph; classify.ts applies it on-device)
@@ -20,7 +21,42 @@ import type { LesionClass } from '../triage/types';
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
 //
-// D7_s3_mm (2026-08-10, `D7_s3_mm.pt` → SpotOn_D7_s3_molemapper.ipynb, exported by
+// === D9 / D6_multiscale, bundled 2026-08-12 at Shane's explicit instruction. ===
+//
+// READ THE FILENAME WITH CARE: `spoton_d9_fp32.tflite` is NOT a training run newer than D8. It is
+// the **D6_multiscale** export from `~/Downloads/SpotOn_D6_multiscale_export.ipynb`, which writes
+// `spoton_d6_multiscale_fp32.tflite`; the file was renamed on download. Never infer lineage order
+// from a `d<N>` filename in assets/models — check the matching `deploy_config*.txt`.
+//
+// Calibration is taken verbatim from `~/Downloads/deploy_config (1).txt` (D6_multiscale, exported
+// 2026-08-12), both constants below fitted together on deploy-geometry val:
+//     MALIGNANT_THRESHOLD    0.7519   (90%-sens, no TTA; F1 point 0.7332 for reference)
+//     CONFIDENCE_TEMPERATURE 0.7828
+//
+// I/O contract verified by interpreter inspection 2026-08-12 — input "serving_default_args_0"
+// [1, 260, 260, 3] float32 NHWC, output "serving_default_output_0_output" [1, 5] float32 raw
+// LOGITS (signed: min -22.0 across 12 ImageNet-normalized random inputs). So this is a drop-in on
+// geometry and MODEL_OUTPUTS_PROBABILITIES stays false. Note a single N(0,1) probe returns all
+// -positive values and looks deceptively like a non-logit graph; use normalized inputs to check.
+//
+// EVIDENCE AGAINST THIS MODEL, recorded so the choice is not re-made blind. The export notebook's
+// own header says D6 "has the documented zoom-in regression and the widest fairness gap of the
+// D-runs (-0.064 at deploy geometry) … shipping it is not the plan". On the de-duplicated 107-image
+// ISIC holdout it is the weakest of the four candidates on both discrimination and sensitivity at
+// its own shipped threshold:
+//     model        top1   AUROC   sens@own thr   spec    thr for 90% sens
+//     D7          0.598   0.837       0.725      0.815        0.1965
+//     D7_s3_mm    0.636   0.858       0.750      0.852        0.1448
+//     D8          0.579   0.832       0.762      0.741        0.2192
+//     D9          0.617   0.826       0.613      0.852        0.2336
+// Two caveats on that table, both stated by Shane 2026-08-12: the 107 images are what survives
+// dropping 93 exact duplicates, which wrecks the 40/class balance (BCC 40->14, OTHER 40->11); and
+// the earlier 200-image figures for the same comparison are contaminated and must not be quoted.
+// Either way the direction holds — every model needs ~0.14-0.23 to reach 90% sensitivity, against
+// shipped values of 0.41-0.75, and 0.7519 is the furthest of any candidate from its own 90% point.
+//
+// --- previously bundled: D7_s3_mm ---
+// (2026-08-10, `D7_s3_mm.pt` → SpotOn_D7_s3_molemapper.ipynb, exported by
 // SpotOn_D7_s3_mm_export.ipynb). The D7 recipe with the training SOURCES narrowed: Drive `stage3`
 // real images plus OHSU MoleMapper benign nevi (Synapse syn51602723, train-only, capped at 3000,
 // deduped) — and nothing else. No synthetic, no Roboflow hard-negative pull. Mechanics are
@@ -28,9 +64,10 @@ import type { LesionClass } from '../triage/types';
 // train, eval on deployment geometry (crop_pad 0.45, ~0.69 fill), anchor stage1, label smoothing
 // 0.1, lesion-level split seed 42, balanced sampler, cosine 5e-5, 25 epochs.
 //
-// UNLIKE D7 AND D8, THIS EXPORT SHIPS ITS OWN CALIBRATION. `exports/D7_s3_mm/deploy_config.txt`
-// (fetched from Drive 2026-08-11) carries the constants below, both derived on deploy-geometry
-// VAL crops — genuinely held out, unlike anything measurable offline here:
+// UNLIKE D7 AND D8, THE D7_s3_mm EXPORT SHIPS ITS OWN CALIBRATION. `exports/D7_s3_mm/
+// deploy_config.txt` (fetched from Drive 2026-08-11) carries the constants it was bundled with,
+// both derived on deploy-geometry VAL crops — genuinely held out, unlike anything measurable
+// offline here:
 //     MALIGNANT_THRESHOLD    0.4069   (90%-sensitivity point; F1 point 0.5729 for reference)
 //     CONFIDENCE_TEMPERATURE 0.9594
 // They are adopted verbatim rather than re-derived. Note they are a PAIR from one fit: T rescales
@@ -67,10 +104,10 @@ import type { LesionClass } from '../triage/types';
 // thr90 is 0.4057 and its thrF1 is 0.6188, and those do NOT converge, so the value is a policy
 // choice rather than a measured optimum. Settle it with `~/Downloads/D7_vs_D8_heldout.ipynb`,
 // which scores both models on the identical held-out split.
-export const MODEL_ASSET = require('../../../assets/models/spoton_d7_s3_mm_fp32.tflite');
+export const MODEL_ASSET = require('../../../assets/models/spoton_d9_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_d7_s3_mm_fp32';
+export const MODEL_VERSION = 'spoton_d9_fp32';
 
 /**
  * Whether the bundled graph already ends in a softmax, i.e. emits probabilities rather than logits.
@@ -115,9 +152,25 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * Decision threshold on the malignant score (BCC+MEL+SCC softmax sum), consumed by the Malignant
  * Gate in tps-core.ts (`evaluateMalignantGate`), which floors the tier at Moderate when it fires.
  *
- * === D7_s3_mm, 2026-08-11: 0.4069, TAKEN VERBATIM FROM THE EXPORT'S OWN deploy_config.txt. ===
+ * === D9 / D6_multiscale, 2026-08-12: 0.7519, TAKEN VERBATIM FROM `deploy_config (1).txt`. ===
  *
- * This is the first export to arrive with its own calibration, and it is a better-founded number
+ * The 90%-sensitivity point on deploy-geometry VAL crops for the D6_multiscale export, fitted in
+ * the same run as CONFIDENCE_TEMPERATURE 0.7828. Adopted unrounded, by the same rule D7_s3_mm's
+ * value was: a held-out val fit beats anything derivable from the sets on this disk.
+ *
+ * IT IS ALSO THE HIGHEST THRESHOLD THIS PROJECT HAS SHIPPED, AND THE HOLDOUT DISAGREES WITH IT.
+ * On the de-duplicated 107-image ISIC holdout, 0.7519 measures 61.3% sensitivity — the lowest of
+ * the four candidates — and reaching 90% there would need ~0.2336. That gap is not unique to this
+ * model (every candidate's shipped threshold is 2-4x its own holdout 90%-sens point, which is the
+ * finding, not an argument for this export in particular), but D9 has the widest gap of the four
+ * and the lowest sensitivity at its own value. See the MODEL_ASSET note above for the full table
+ * and for why the older 200-image version of it cannot be quoted.
+ *
+ * PAIRED WITH CONFIDENCE_TEMPERATURE 0.7828 — same fit, same export. Never move one alone.
+ *
+ * --- superseded D7_s3_mm value (0.4069), kept for the protocol it documents ---
+ *
+ * That was the first export to arrive with its own calibration, and it is a better-founded number
  * than anything derived here: the 90%-sensitivity operating point on temperature-scaled
  * DEPLOY-GEOMETRY VALIDATION crops (crop_pad 0.45, ~0.69 fill — the exact crop lesion-detector.ts
  * produces), verified on test, from `SpotOn_D7_s3_mm_export.ipynb`. The val split is genuinely held
@@ -222,7 +275,7 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.4069;
+export const MALIGNANT_THRESHOLD = 0.7519;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -251,9 +304,24 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  *
  * COUPLED TO THE BUNDLED MODEL FILE — refit whenever the bundled .tflite changes.
  *
- * === D7_s3_mm, 2026-08-11: 0.9594, FITTED — the first non-1.0 temperature since D3. ===
+ * === D9 / D6_multiscale, 2026-08-12: 0.7828, from `deploy_config (1).txt`. ===
  *
- * From the export's own `deploy_config.txt`: a scalar T fit by NLL (LBFGS) on deploy-geometry
+ * Same rule as D7_s3_mm below — a scalar T fitted on deploy-geometry VAL logits, in the same run
+ * that produced MALIGNANT_THRESHOLD 0.7519, adopted verbatim. Also T < 1, i.e. SHARPENING, but
+ * much harder than D7_s3_mm's 0.9594: dividing logits by 0.7828 scales them up ~28% rather than
+ * ~4%, so this export was substantially more under-confident on val than its predecessor.
+ *
+ * WATCH THE SAFETY FLOOR. Confidence rising ~28% pushes the whole distribution away from the <40%
+ * floor, so the floor should fire LESS often than the 1.4% measured under D7_s3_mm. It has not
+ * been re-measured for this export — there is no uncontaminated local set to measure it on — so
+ * treat a floor that has gone silent in the field as expected under this model rather than as a
+ * bug, and re-derive the rate from field data once it accumulates.
+ *
+ * COUPLED TO MALIGNANT_THRESHOLD 0.7519 — one fit, one unit, replaced together.
+ *
+ * --- superseded D7_s3_mm value (0.9594), the first non-1.0 temperature since D3 ---
+ *
+ * From that export's own `deploy_config.txt`: a scalar T fit by NLL (LBFGS) on deploy-geometry
  * VALIDATION logits, in the same notebook and the same run that produced MALIGNANT_THRESHOLD
  * 0.4069. Adopted verbatim, for the reason D7 gave for NOT adopting its own fitted T=1.42 — the
  * objection there was that the fit was circular (fitted and evaluated on the same 94 images) and
@@ -293,7 +361,7 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 0.9594;
+export const CONFIDENCE_TEMPERATURE = 0.7828;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average
