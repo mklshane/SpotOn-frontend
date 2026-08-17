@@ -101,6 +101,16 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'list.bullet.clipboard.fill': { set: 'ionicons', name: 'clipboard' },
   'square.and.arrow.up': { set: 'ionicons', name: 'share-outline' },
   'arrow.up.left.and.arrow.down.right': { set: 'ionicons', name: 'expand' },
+  ellipsis: { set: 'ionicons', name: 'ellipsis-horizontal' },
+  archivebox: { set: 'ionicons', name: 'archive-outline' },
+  // found missing while auditing icons used near photo containers (result/report screens)
+  photo: { set: 'ionicons', name: 'image-outline' },
+  'info.circle': { set: 'ionicons', name: 'information-circle-outline' },
+  'exclamationmark.circle.fill': { set: 'ionicons', name: 'alert-circle' },
+  'person.crop.circle.badge.exclamationmark': { set: 'mci', name: 'account-alert-outline' },
+  'square.stack.3d.up.fill': { set: 'ionicons', name: 'layers' },
+  'list.bullet': { set: 'ionicons', name: 'list' },
+  'arrow.clockwise': { set: 'ionicons', name: 'refresh' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };
