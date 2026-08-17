@@ -22,6 +22,11 @@ export type TextFieldProps = TextInputProps & {
   /** Filters disallowed characters before forwarding the value to the form state. */
   transformInput?: (value: string) => string;
   containerStyle?: ViewStyle | ViewStyle[];
+  /** Overrides the field's fill color. Defaults to `theme.elementBg`. */
+  fieldBackgroundColor?: string;
+  /** Pins the border to a fixed color regardless of focus/error state — for callers that need
+   *  the field to carry its own status color (e.g. a tier-colored rename field). */
+  fieldBorderColor?: string;
 };
 
 export function TextField({
@@ -30,6 +35,8 @@ export function TextField({
   secure = false,
   transformInput,
   containerStyle,
+  fieldBackgroundColor,
+  fieldBorderColor,
   style,
   onFocus,
   onBlur,
@@ -42,7 +49,8 @@ export function TextField({
   const [focused, setFocused] = useState(false);
   const [hidden, setHidden] = useState(secure);
 
-  const borderColor = error ? theme.riskCritical : focused ? theme.brand : theme.hairline;
+  const borderColor =
+    fieldBorderColor ?? (error ? theme.riskCritical : focused ? theme.brand : theme.hairline);
 
   return (
     <View style={containerStyle}>
@@ -54,7 +62,7 @@ export function TextField({
       <View
         style={[
           styles.field,
-          { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 },
+          { backgroundColor: fieldBackgroundColor ?? theme.elementBg, borderColor, borderWidth: 1.5 },
         ]}>
         <TextInput
           ref={inputRef}
