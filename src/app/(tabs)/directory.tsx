@@ -58,10 +58,13 @@ export default function DirectoryScreen() {
   const onOverlayLayout = (e: LayoutChangeEvent) =>
     setOverlayH(e.nativeEvent.layout.height);
 
-  // Rendered as a prop rather than a sibling: it needs to sit INSIDE each
-  // view's own stacking order (between its map and its bottom sheet), not
+  // Rendered as a prop rather than a sibling: for ClinicsView it needs to sit
+  // INSIDE its own stacking order (between its map and its bottom sheet), not
   // beside it — see the comment on `ClinicsViewProps.header` for why zIndex
-  // alone can't make a sheet cover a sibling of its parent.
+  // alone can't make a sheet cover a sibling of its parent. DoctorsView has
+  // no map/sheet to stack against, but it still takes the same prop so the
+  // header (and its onLayout, which drives `overlayH`) stays mounted and
+  // measured on both segments instead of vanishing when segment !== 'clinics'.
   const header = (
     <View
       pointerEvents="box-none"
@@ -102,21 +105,38 @@ export default function DirectoryScreen() {
 
   return (
     <View style={[styles.fill, { backgroundColor: theme.background }]}>
-      {segment === "clinics" ? (
+      {/* Switching back to Clinics doesn't refetch GPS from scratch and visibly pan from a default location.*/}
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          segment !== "clinics" && styles.hidden,
+        ]}
+      >
         <ClinicsView
           query={debouncedQuery}
           topInset={overlayH}
           header={header}
         />
-      ) : (
-        <DoctorsView query={debouncedQuery} topInset={overlayH} />
-      )}
+      </View>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          segment !== "doctors" && styles.hidden,
+        ]}
+      >
+        <DoctorsView
+          query={debouncedQuery}
+          topInset={overlayH}
+          header={header}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  hidden: { display: "none" },
   overlay: {
     position: "absolute",
     top: 0,
