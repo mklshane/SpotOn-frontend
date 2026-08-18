@@ -19,6 +19,7 @@ import {
   IMAGE_AGREEMENT_MIN_CONFIDENCE,
   INFERENCE_TIMEOUT_MS,
   DETECTOR_CROP_ENABLED,
+  MODEL_INPUT_LAYOUT,
   MULTI_IMAGE_AGGREGATION_ENABLED,
   MODEL_OUTPUTS_PROBABILITIES,
   MODEL_VERSION,
@@ -34,6 +35,7 @@ import { detectLesionBox, lesionBoxToCrop } from './lesion-detector';
 import {
   type CropBox,
   locateLesionInImage,
+  nhwcToNchw,
   preprocessForClassifier,
   ttaViews,
 } from './preprocess';
@@ -80,14 +82,22 @@ export type SingleImageResult = {
 
 export type LoadedModel = { model: ClassifierModel; inputSize: number };
 
-/** Load the interpreter and verify the graph matches the class contract. */
+/** Load the interpreter and verify the graph matches the class and input contract. */
 export async function prepareModel(): Promise<LoadedModel> {
   const model = await getClassifierModel();
-  const { inputSize, numClasses } = readClassifierLayout(model);
+  const { inputSize, layout, numClasses } = readClassifierLayout(model);
   if (numClasses !== CLASS_ORDER.length) {
     throw new ClassifierError(
       'invalid-output',
       `model reports ${numClasses} classes, expected ${CLASS_ORDER.length}`,
+    );
+  }
+  // A layout mismatch cannot fail at the interpreter — both layouts are the same byte count — so
+  // it is checked here, at load, rather than surfacing as quietly scrambled input at inference.
+  if (layout !== MODEL_INPUT_LAYOUT) {
+    throw new ClassifierError(
+      'invalid-output',
+      `model input is ${layout.toUpperCase()}, but MODEL_INPUT_LAYOUT is ${MODEL_INPUT_LAYOUT}`,
     );
   }
   return { model, inputSize };
@@ -120,11 +130,15 @@ export async function classifyOne(
     let logitSum: Float64Array | null = null;
     try {
       for (const view of views) {
+        // Repack to the layout the graph declares, AFTER the flips (which are written against
+        // interleaved RGB). prepareModel has already checked MODEL_INPUT_LAYOUT against the loaded
+        // graph, so this is the model's real layout, not an assumption.
+        const packed = MODEL_INPUT_LAYOUT === 'nchw' ? nhwcToNchw(view, inputSize) : view;
         // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
         // proven detector path uses (capture.tsx runSync).
-        const buffer = view.buffer.slice(
-          view.byteOffset,
-          view.byteOffset + view.byteLength,
+        const buffer = packed.buffer.slice(
+          packed.byteOffset,
+          packed.byteOffset + packed.byteLength,
         ) as ArrayBuffer;
         const outputs = await model.run([buffer]);
         const out = new Float32Array(outputs?.[0] ?? new ArrayBuffer(0));

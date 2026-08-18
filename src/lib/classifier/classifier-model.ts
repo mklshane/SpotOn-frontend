@@ -37,19 +37,34 @@ export function getClassifierModel(): Promise<ClassifierModel> {
   return modelPromise;
 }
 
-/** Input size + class count introspected from the loaded model (NHWC [1,H,W,3] → [1,N]). */
+/** How the graph wants its pixels: interleaved [1,H,W,3] or channel-planar [1,3,H,W]. */
+export type InputLayout = 'nhwc' | 'nchw';
+
+/**
+ * Input size, input layout and class count introspected from the loaded model
+ * ([1,H,W,3] or [1,3,H,W] → [1,N]).
+ *
+ * The layout is READ, not assumed: exports up to D9 are NHWC, the litert-torch D10 export is NCHW,
+ * and the two are indistinguishable by byte count — feeding the wrong one is silently wrong rather
+ * than an error. model-config's MODEL_INPUT_LAYOUT records what the bundled file is expected to be
+ * and prepareModel cross-checks it against this.
+ */
 export function readClassifierLayout(model: ClassifierModel): {
   inputSize: number;
+  layout: InputLayout;
   numClasses: number;
 } {
   const inShape = model.inputs[0]?.shape ?? [];
   let inputSize = FALLBACK_INPUT_SIZE;
+  let layout: InputLayout = 'nhwc';
   if (inShape.length === 4) {
-    // NHWC [1,H,W,3] is what our export uses; tolerate NCHW [1,3,H,W] just in case.
-    const size = inShape[3] === 3 ? inShape[1] : inShape[2];
+    // Channels-first is the only reading when dim 1 is 3 and dim 3 is not (a 3×3 input is not a
+    // case this model family has, so the ambiguity is theoretical).
+    layout = inShape[1] === 3 && inShape[3] !== 3 ? 'nchw' : 'nhwc';
+    const size = layout === 'nchw' ? inShape[2] : inShape[1];
     if (Number.isFinite(size) && size > 0) inputSize = size;
   }
   const outShape = model.outputs[0]?.shape ?? [];
   const numClasses = outShape.reduce((a, b) => a * (b > 0 ? b : 1), 1);
-  return { inputSize, numClasses };
+  return { inputSize, layout, numClasses };
 }

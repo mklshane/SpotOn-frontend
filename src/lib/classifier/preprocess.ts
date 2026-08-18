@@ -74,6 +74,27 @@ export function ttaViews(t: Float32Array, size: number): Float32Array[] {
   ];
 }
 
+/**
+ * NHWC → NCHW (channel-planar) repack, applied last — after the flips above — because everything
+ * else in this file, and the resize/crop it inherits, is interleaved RGB.
+ *
+ * Needed because the D10 export is NCHW [1,3,H,W] while every export before it was NHWC [1,H,W,3]
+ * (litert-torch traces the PyTorch graph as-is; the earlier exporters inserted a transpose). Both
+ * layouts are the same byte count, so a mismatch does NOT fail at the interpreter — it silently
+ * feeds the model a scrambled image. classify.ts picks the layout from the model's own input shape
+ * rather than assuming either one.
+ */
+export function nhwcToNchw(t: Float32Array, size: number): Float32Array {
+  const plane = size * size;
+  const out = new Float32Array(plane * 3);
+  for (let i = 0, o = 0; i < plane; i++, o += 3) {
+    out[i] = t[o];
+    out[plane + i] = t[o + 1];
+    out[2 * plane + i] = t[o + 2];
+  }
+  return out;
+}
+
 /** Pixel dimensions of an image, read from its header (no decode). */
 function imageSize(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) =>
