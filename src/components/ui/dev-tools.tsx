@@ -115,7 +115,7 @@ export function DevTools() {
         malignantThreshold: MALIGNANT_THRESHOLD,
       }),
     });
-    router.replace({ pathname: '/scan/result', params: { id: entry.id } });
+    router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
   }
 
   // The re-screening reminder is a real OS notification 30 days out, which is untestable by hand.

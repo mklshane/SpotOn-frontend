@@ -11,6 +11,7 @@ import { Screen } from '@/components/ui/screen';
 import { BodyViewer } from '@/components/scan/body-viewer';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { prewarmLesionModel } from '@/lib/lesion-model';
 import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
@@ -22,6 +23,11 @@ export default function BodyAreaScreen() {
   // This screen is the flow entry: clear any stale session from an abandoned run.
   useEffect(() => {
     reset();
+    // Start loading the detector now. Choosing a body part takes the user seconds; building the
+    // interpreter and paying TFLite's first-invoke cost takes a fraction of one — but done in
+    // capture.tsx's mount effect, as it was, that fraction lands while they are already pointing
+    // the camera at a lesion waiting for a box. Fire-and-forget; capture.tsx still owns the load.
+    prewarmLesionModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

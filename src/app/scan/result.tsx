@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, LayoutAnimationConfig } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, ImageViewer, Screen } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
+import { useAndroidBack } from '@/hooks/use-android-back';
 import { useTheme } from '@/hooks/use-theme';
 import {
   getPendingSelfCheckReminder,
@@ -47,9 +48,25 @@ const PATTERN_WORD: Record<LesionClass, string> = {
 export default function ResultScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const { getById, loading } = useScanHistory();
   const record = id ? getById(id) : undefined;
+  // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
+  // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
+  const flowTerminal = from === 'scan';
+  const goBack = useCallback(() => {
+    if (!flowTerminal) {
+      // Pushed from home / a lesion timeline / a list — popping is exactly right.
+      if (router.canGoBack()) router.back();
+      else router.replace('/(tabs)/home');
+      return;
+    }
+    exitFlow(record?.lesionId, record?.followUpOf != null);
+  }, [flowTerminal, record?.lesionId, record?.followUpOf]);
+  // Android's back button is a separate mechanism from the iOS swipe that `gestureEnabled: false`
+  // disables below, and would otherwise pop into the finished flow. Only claimed when this result
+  // ends a scan; reached from a list, the default pop is what should happen.
+  useAndroidBack(flowTerminal ? goBack : null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const tierColor = (tier: TriageTier) =>
@@ -64,7 +81,7 @@ export default function ResultScreen() {
   if (!record) {
     return (
       <Screen>
-        <Header />
+        <Header onBack={goBack} />
         <View style={styles.emptyBody}>
           <ThemedText type="body" themeColor="muted" style={styles.center}>
             {loading ? 'Loading result…' : 'This result could not be found.'}
@@ -96,7 +113,9 @@ export default function ResultScreen() {
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>
-      <Header />
+      {/* A back-swipe would bypass the header and slide straight into the reset flow underneath. */}
+      {flowTerminal ? <Stack.Screen options={{ gestureEnabled: false }} /> : null}
+      <Header onBack={goBack} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
@@ -308,13 +327,46 @@ export default function ResultScreen() {
   );
 }
 
-function Header() {
+/**
+ * Leave the capture flow from its final screen.
+ *
+ * Everything under a just-finished result belongs to a session that has already been reset —
+ * followup-confirm, capture, crop, quality, questionnaire — so `router.back()` walks the user
+ * through a stack of empty states. (The reported symptom: back from a re-scan result landed on the
+ * camera, then on "Nothing to re-check".) The flow needs an exit, not a pop.
+ *
+ * A FOLLOW-UP returns to the tracked spot it started from. `dismissTo` pops the flow off in one go
+ * and lands on the lesion screen that is still in the stack; scan history is a context the whole
+ * app shares, and `addEntry` has already updated it, so that screen renders with the new scan in
+ * its timeline without reloading anything. A FIRST scan has no lesion screen underneath — it began
+ * at the body picker from home — so home is where it goes, matching where the user started.
+ */
+function exitFlow(lesionId: string | null | undefined, isFollowUp: boolean): void {
+  const lesionHref = lesionId ? ({ pathname: '/scan/lesion', params: { id: lesionId } } as const) : null;
+  if (isFollowUp && lesionHref) {
+    try {
+      // Guarded rather than assumed: dismissTo needs that route to still be in the stack, and a
+      // deep link or a restored navigation state could mean it is not.
+      if (router.canDismiss()) {
+        router.dismissTo(lesionHref);
+        return;
+      }
+    } catch {
+      // fall through to the replace below
+    }
+    router.replace(lesionHref);
+    return;
+  }
+  router.replace('/(tabs)/home');
+}
+
+function Header({ onBack }: { onBack?: () => void }) {
   const theme = useTheme();
   return (
     <View style={styles.header}>
       <Pressable
         hitSlop={12}
-        onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
+        onPress={() => (onBack ? onBack() : router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
         accessibilityRole="button"
         accessibilityLabel="Back">
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />

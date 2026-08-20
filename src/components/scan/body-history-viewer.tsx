@@ -9,12 +9,26 @@ import { Raycaster, Vector2, type Camera, type Group } from 'three';
 import { ThemedText } from '@/components/themed-text';
 
 import { BodyModel, type BodyModelStatus } from './body-model';
-import { BodyLights } from './mannequin';
+import { BodyLights, MARKER_HIT_RADIUS, MARKER_RADIUS } from './mannequin';
 
 const TARGET_Y = -0.05;
 const POLAR_MIN = 0.3;
 const POLAR_MAX = Math.PI - 0.3;
-const RADIUS_MIN = 3.6;
+/**
+ * Orbit radius limits.
+ *
+ * RADIUS_MIN lowered 3.6 -> 1.0 (2026-08-20): 3.6 was not close enough to place a mark precisely.
+ * The visible world height at radius r is 2*r*tan(fov/2) = 0.768*r, against a body normalised to
+ * 3.7 units tall (body-model.tsx TARGET_HEIGHT), so:
+ *     r 9.5  -> 7.3 units visible : the whole body with margin
+ *     r 3.6  -> 2.8 units visible : about three quarters of the body — the old floor
+ *     r 1.0  -> 0.8 units visible : roughly a forearm, enough to put a dot on one spot
+ * The zoom range goes from 2.6x to 9.5x. 1.0 rather than lower because the orbit target can sit
+ * inside the mesh when someone zooms at the body's centre line, and the camera has to stay outside
+ * it — a torso is roughly 0.25 units in half-depth at this scale, so 1.0 keeps clear with room to
+ * spare. Off-centre zoom moves the target toward the surface, which only adds margin.
+ */
+const RADIUS_MIN = 1.0;
 const RADIUS_MAX = 9.5;
 const MARKER = '#FF7A3C';
 
@@ -122,15 +136,28 @@ export function BodyHistoryViewer({
         <BodyModel onStatus={handleStatus} />
         <group ref={markersRef}>
           {markers.map((m) => (
-            <mesh key={m.id} position={m.point} userData={{ id: m.id }}>
-              <sphereGeometry args={[0.13, 20, 20]} />
-              <meshStandardMaterial
-                color={m.color ?? MARKER}
-                emissive={m.color ?? MARKER}
-                emissiveIntensity={0.6}
-                roughness={0.35}
-              />
-            </mesh>
+            <group key={m.id} position={m.point}>
+              <mesh userData={{ id: m.id }}>
+                <sphereGeometry args={[MARKER_RADIUS, 20, 20]} />
+                <meshStandardMaterial
+                  color={m.color ?? MARKER}
+                  emissive={m.color ?? MARKER}
+                  emissiveIntensity={0.6}
+                  roughness={0.35}
+                />
+              </mesh>
+              {/*
+                Invisible tap target. The dot is small enough now that raycasting it directly would
+                make markers fiddly to hit, so the thing the user aims at and the thing they see are
+                separate spheres — this one is even a shade larger than the old dot, so tapping got
+                easier rather than harder. Fully transparent rather than `visible={false}` so it is
+                unambiguously still raycastable, and low-poly because nothing ever shades it.
+              */}
+              <mesh userData={{ id: m.id }}>
+                <sphereGeometry args={[MARKER_HIT_RADIUS, 8, 8]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              </mesh>
+            </group>
           ))}
         </group>
         <Rig azimuth={azimuth} polar={polar} radius={radius} sceneRef={sceneRef} />

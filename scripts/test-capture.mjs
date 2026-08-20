@@ -47,8 +47,8 @@ for (const [gate, expected] of [[GATE_DARK, 'dark'], [GATE_BRIGHT, 'bright'], [G
   check(`gate ${expected} outranks framing`, computeCoach(true, gate, M({ cx: 0.9, w: 0.01 })) === expected);
   check(`gate ${expected} shows even with no box`, computeCoach(true, gate, null) === expected);
 }
-check('no AI camera → no coach', computeCoach(false, GATE_OK, null) === null);
-check('gates still fire without the AI camera', computeCoach(false, GATE_DARK, null) === 'dark');
+check('guide off → no coach', computeCoach(false, GATE_OK, null) === null);
+check('gates still fire with the guide off', computeCoach(false, GATE_DARK, null) === 'dark');
 check('no box → search', computeCoach(true, GATE_OK, null) === 'search');
 
 // The positional ladder, in order.
@@ -93,6 +93,25 @@ const run = (inputs) => {
   const { seen } = run(Array.from({ length: 4 }, () => ({ score: 0.9 })));
   check('strong box hidden before DETECT_SHOW', !seen[DETECT_SHOW - 2].visible);
   check('strong box appears at DETECT_SHOW', seen[DETECT_SHOW - 1].visible);
+}
+
+// Acquisition: one strong frame banks evidence, and the CONFIRMING frame only has to clear KEEP.
+// Before 2026-08-20 this needed two frames at CREATE, which under the current detector meant
+// waiting for two lucky frames (~7 detector frames on average) before the box appeared.
+{
+  const { seen } = run([{ score: CREATE_SCORE }, { score: KEEP_SCORE }]);
+  check('strong frame + keep-bar confirmation shows the box', seen[1].visible);
+  check('the confirming frame alone is not enough', !seen[0].visible);
+
+  // The evidence bar for STARTING a track is unchanged: without a frame at CREATE, nothing builds.
+  const weak = run(Array.from({ length: 20 }, () => ({ score: KEEP_SCORE })));
+  check('keep-bar frames alone never create a track', !weak.state.active);
+  check('keep-bar frames alone never draw a box', weak.seen.every((r) => !r.visible));
+  check('a sub-CREATE frame with nothing banked decays to zero', weak.state.detectStreak === 0);
+
+  // A single strong frame that is never confirmed must not leave the box on screen.
+  const oneStrong = run([{ score: 0.9 }]);
+  check('one strong frame is not yet a track', !oneStrong.seen[0].visible);
 }
 
 // Once active, the LOWER bar sustains it. This is the anti-flicker property: a score hovering

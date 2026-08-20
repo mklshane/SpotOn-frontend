@@ -20,6 +20,7 @@ import { Button, Card, Screen } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Radius, Space } from '@/constants/theme';
+import { useBlockAndroidBack } from '@/hooks/use-android-back';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -124,7 +125,11 @@ export default function AnalysisScreen() {
         answersSourceId: s.followUp?.priorScreening.id,
       });
       s.reset();
-      router.replace({ pathname: '/scan/result', params: { id: entry.id } });
+      // `from: 'scan'` tells the result screen it is the END of a capture run rather than a row
+      // someone tapped in a list. Back from here must LEAVE the flow — every screen underneath
+      // (followup-confirm, capture, crop, quality, questionnaire) belongs to a session that has
+      // just been reset, so popping into them shows empty states. See result.tsx `exitFlow`.
+      router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
     } catch (e) {
       console.warn('[analysis] persist failed', e);
       finalized.current = false;
@@ -216,6 +221,13 @@ export default function AnalysisScreen() {
     session.reset();
     router.replace('/(tabs)/home');
   }
+
+  // Android back is swallowed here, the same way `gestureEnabled: false` swallows the iOS swipe.
+  // While analysing there is nothing valid to go back TO — the screens underneath belong to a run
+  // that is mid-flight — and in the retake/error states the way out is one of this screen's own
+  // buttons, each of which says what it discards. A silent pop would throw the photo and answers
+  // away without asking.
+  useBlockAndroidBack();
 
   const sweep = useSharedValue(0);
   useEffect(() => {

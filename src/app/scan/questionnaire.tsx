@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, ConfirmDialog, Screen, SelectCard } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
+import { useAndroidBack } from '@/hooks/use-android-back';
 import { useTheme } from '@/hooks/use-theme';
 import { useScreeningSession } from '@/lib/screening-session';
 import { ANSWER_OPTIONS, QUESTIONS, type QuestionDef } from '@/lib/triage/questions';
@@ -108,6 +109,11 @@ export default function QuestionnaireScreen() {
       },
     ]);
   }
+
+  // Android's back button mirrors the header: step back through the questions, and on the first one
+  // ask before discarding the run. Without this it would pop to the capture screen mid-questionnaire
+  // — which is exactly what `gestureEnabled: false` already forbids on iOS.
+  useAndroidBack(() => (index > 0 ? goTo(index - 1) : confirmExit()));
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>

@@ -34,10 +34,23 @@ export const Mannequin = forwardRef<Group>(function Mannequin(_props, ref) {
 });
 
 /** The lesion-location marker: a small glowing sunset sphere placed at a model-local point. */
+/**
+ * Marker sizes, in the model's own units (the body is normalised to 3.7 units tall — see
+ * body-model.tsx TARGET_HEIGHT), shared by every viewer so a mark is the same size everywhere.
+ *
+ * MARKER_RADIUS was 0.1, i.e. a 0.2-wide dot against a 3.7 body — over 5% of its height, which
+ * reads as a blob rather than a spot once the viewer can zoom in close. MARKER_HIT_RADIUS is the
+ * separate, larger sphere that tappable viewers raycast against: shrinking the dot must not shrink
+ * the target, so the two are decoupled and the hit sphere is actually a little LARGER than the old
+ * dot was.
+ */
+export const MARKER_RADIUS = 0.055;
+export const MARKER_HIT_RADIUS = 0.14;
+
 export function Marker({ point }: { point: [number, number, number] }) {
   return (
     <mesh position={point}>
-      <sphereGeometry args={[0.1, 24, 24]} />
+      <sphereGeometry args={[MARKER_RADIUS, 24, 24]} />
       <meshStandardMaterial color={MARKER} emissive={MARKER} emissiveIntensity={0.55} roughness={0.35} />
     </mesh>
   );

@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import Animated, {
   useAnimatedStyle,
+  useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -53,7 +54,14 @@ const MIN_ZOOM = 3;
 const MAX_ZOOM = 18;
 const DEVICE_LOCATION_ZOOM = 13;
 // Breathing room kept between the floating controls and the sheet's top edge.
-const FLOATING_CONTROLS_GAP = -30;
+/**
+ * Clearance between the sheet's top edge and the floating controls above it.
+ *
+ * Was -30, i.e. the controls were pushed 30pt DOWN into the sheet. That was compensating for a
+ * coordinate-space bug rather than expressing a design intent — see `floatingControlsStyle`. With
+ * the measurement fixed the gap is a real gap again, and positive.
+ */
+const FLOATING_CONTROLS_GAP = Space.base;
 
 export function ClinicMap({
   facilities,
@@ -170,12 +178,28 @@ export function ClinicMap({
     [facilities, selectedId],
   );
 
-  // Distance from the screen bottom up to the sheet's current top edge, plus
-  // a fixed gap — recomputed on the UI thread every time `sheetPosition`
-  // changes, so the controls track the sheet through drags, not just settled
-  // snap points.
+  /**
+   * Height of THIS view, which is the space both the map and the bottom sheet live in.
+   *
+   * Not `Dimensions.get('window').height`. The controls are absolutely positioned inside the map,
+   * so their `bottom` is measured from the map's bottom edge, while `sheetPosition` is the sheet's
+   * top edge in that same container's space — the window is a third, larger space that neither of
+   * them is in. Subtracting a container-relative position from the window height overshoots by
+   * however much chrome sits below this view (tab bar, home indicator, Android navigation bar), and
+   * that amount is different on every platform and device. It was being cancelled out by a -30pt
+   * "gap", which is why the controls sat correctly on Android and overlapped the sheet on iOS.
+   *
+   * Measuring the container instead makes the arithmetic exact everywhere and self-correcting on
+   * rotation. Seeded with the window height so the first frame before layout is close rather than
+   * wildly off.
+   */
+  const containerH = useSharedValue(SCREEN_H);
+
+  // Distance from the container's bottom up to the sheet's current top edge, plus the gap —
+  // recomputed on the UI thread every time `sheetPosition` changes, so the controls track the sheet
+  // through drags, not just settled snap points.
   const floatingControlsStyle = useAnimatedStyle(() => ({
-    bottom: SCREEN_H - sheetPosition.value + FLOATING_CONTROLS_GAP,
+    bottom: containerH.value - sheetPosition.value + FLOATING_CONTROLS_GAP,
   }));
 
   const featureCollection = useMemo(
@@ -224,7 +248,12 @@ export function ClinicMap({
     : [MAP_DEFAULT.longitude, MAP_DEFAULT.latitude];
 
   return (
-    <View style={styles.fill}>
+    <View
+      style={styles.fill}
+      onLayout={(e) => {
+        containerH.value = e.nativeEvent.layout.height;
+      }}
+    >
       <MapLibreMap
         style={styles.fill}
         mapStyle={MAP_STYLE_URL}

@@ -26,7 +26,6 @@ import { useRunOnJS, useSharedValue as useWorkletValue } from 'react-native-work
 
 import { ThemedText } from '@/components/themed-text';
 import {
-  applyDeadband,
   computeCoach,
   fullFrameToPreview,
   initialTrackState,
@@ -38,14 +37,12 @@ import {
   type Coach,
   type CoachKind,
   type TrackState,
-  DEADBAND,
   GATE_BLURRY,
   GATE_BRIGHT,
   GATE_DARK,
   GATE_OK,
   KEEP_SCORE,
   LOCK_SCORE,
-  SIZE_DEADBAND_SCALE,
 } from '@/lib/capture-core';
 import { BRIGHT, DARK } from '@/lib/image-quality-core';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
@@ -64,6 +61,12 @@ import {
 import { PerfHud, PERF_ENABLED, usePerfCounters } from '@/components/scan/perf-hud';
 import { useDeviceTier } from '@/lib/device-tier';
 import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
+import {
+  DETECTION_SMOOTHING_CONFIG as SMOOTH,
+  initialAssociationState,
+  softDeadband,
+  stepAssociation,
+} from '@/lib/detection-smoothing';
 import { makeOneEuro } from '@/lib/one-euro';
 import { Radius, Space } from '@/constants/theme';
 
@@ -72,10 +75,9 @@ import { Radius, Space } from '@/constants/theme';
 const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
 Reanimated.addWhitelistedNativeProps({ zoom: true });
 
-// One-Euro filter params for the box (see lib/one-euro.ts). Low minCutoff = steady when still;
-// beta adds responsiveness when the lesion actually moves. Tune on device.
-const EURO_MIN_CUTOFF = 1.5;
-const EURO_BETA = 0.05; // higher = snaps to real motion faster (less follow-lag), still smooth when still
+// One-Euro filter params, the deadbands, the association gate and the box spring all live in
+// lib/detection-smoothing.ts (DETECTION_SMOOTHING_CONFIG) so they can be tuned in one place — and
+// so the CENTRE and the SIZE can be filtered differently, which is what stops the box breathing.
 // Worklet-only: anchors this confident (and near the best) are fused into the box. Stays here
 // because it is consumed inside the frame processor, not by any decision capture-core owns.
 const FUSE_SCORE = 0.25;
@@ -213,7 +215,7 @@ export default function CaptureScreen() {
   }, []);
 
   const [torch, setTorch] = useState(false);
-  const [aiCamera, setAiCamera] = useState(true);
+  const [guide, setGuide] = useState(true);
   const [busy, setBusy] = useState(false);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
@@ -228,14 +230,14 @@ export default function CaptureScreen() {
   const metricsRef = useRef<
     { cx: number; cy: number; w: number; h: number; locked: boolean; stable: boolean } | null
   >(null);
-  const aiCameraRef = useRef(aiCamera);
+  const guideRef = useRef(guide);
 
   const boxValues = useDetectionBoxValues();
   const perf = usePerfCounters();
 
   /** Recompute the single coaching message from the latest gate + framing, and render only on change. */
   const applyCoach = useCallback(() => {
-    const next = computeCoach(aiCameraRef.current, gateRef.current, metricsRef.current);
+    const next = computeCoach(guideRef.current, gateRef.current, metricsRef.current);
     if (next === coachRef.current) return;
     coachRef.current = next;
     setCoach(next);
@@ -260,15 +262,21 @@ export default function CaptureScreen() {
   // One-Euro filters — one per tracked scalar. Preview box (what's drawn) + img box (forwarded
   // to crop). These keep the box steady under small camera shifts but responsive to real motion.
   const euro = useRef({
-    px: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    py: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    pw: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    ph: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    ix: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    iy: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    iw: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
-    ih: makeOneEuro(EURO_MIN_CUTOFF, EURO_BETA),
+    px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+    py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+    pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+    ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+    ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+    iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+    iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+    ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
   }).current;
+  // Which lesion the track is following, so the box can't be stolen by a competing detection —
+  // see stepAssociation. Reset with the filters.
+  const assocRef = useRef(initialAssociationState);
+  // True until the next detection is drawn, so re-acquisition places the box instead of gliding to
+  // it. Set whenever the track is cleared or handed to a different lesion.
+  const snapNext = useRef(true);
   const clearTrack = () => {
     trackRef.current = initialTrackState;
     resetDetectionBox(boxValues);
@@ -276,6 +284,8 @@ export default function CaptureScreen() {
     lastCenter.current = null;
     lastSize.current = null;
     lastImgBox.current = null;
+    assocRef.current = initialAssociationState;
+    snapNext.current = true;
     // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
     Object.values(euro).forEach((f) => f.reset());
     applyCoach();
@@ -293,8 +303,10 @@ export default function CaptureScreen() {
         locked: boolean;
       } | null,
     ) => {
-      // Confidence hysteresis, deadband, stability and the coordinate mapping are all capture-core's
-      // (npm run test:capture). This function is now the wiring between the worklet and that logic.
+      // The decision logic lives in two tested pure modules and this function is the wiring between
+      // the worklet and them: capture-core.ts owns the confidence hysteresis, stability and the
+      // coordinate mapping (npm run test:capture), detection-smoothing.ts owns the association gate,
+      // the deadband and every smoothing constant (npm run test:smoothing).
       const step = stepTrack(trackRef.current, d ? d.score : null);
       trackRef.current = step.state;
       if (!d) {
@@ -315,8 +327,32 @@ export default function CaptureScreen() {
         const drawn = padDrawnBox(prevBox, BOX_PAD, BOX_MAX);
         const b = { x: drawn.cx - drawn.w / 2, y: drawn.cy - drawn.h / 2, w: drawn.w, h: drawn.h };
 
-        // Filter the preview box (center + size), then apply a deadband so tiny residual
-        // movement doesn't make the box creep when the user is holding still.
+        // Is this the lesion we are already following? The worklet argmaxes ~12k anchors with no
+        // memory of the previous frame, so with two lesions in view the winner can alternate and
+        // the box teleports between them. Reject a detection that lands implausibly far from the
+        // tracked box — unless it keeps insisting, which means the user really has moved to a
+        // different lesion, and then the track is handed over cleanly rather than gliding across.
+        const assoc = stepAssociation(
+          assocRef.current,
+          lastCenter.current,
+          { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+          SMOOTH,
+        );
+        assocRef.current = assoc.state;
+        if (!assoc.accept) return; // a competing detection; keep drawing the lesion we were on
+        if (assoc.handover) {
+          // New object: drop the filter history so it starts clean at the new position, and place
+          // the box there instead of animating the whole way.
+          Object.values(euro).forEach((f) => f.reset());
+          lastCenter.current = null;
+          lastSize.current = null;
+          snapNext.current = true;
+        }
+
+        // Filter the preview box. Centre and size use different constants (SMOOTH.position vs
+        // SMOOTH.size): the detector's extents are noisier than its centre, so filtering both the
+        // same way is what made the box breathe. Then a SOFT deadband — it damps sub-threshold
+        // movement without freezing the value, so nothing accumulates to be released as a step.
         let fx = euro.px.filter(b.x + b.w / 2, t);
         let fy = euro.py.filter(b.y + b.h / 2, t);
         let fw = euro.pw.filter(b.w, t);
@@ -324,20 +360,27 @@ export default function CaptureScreen() {
         const prev = lastCenter.current;
         // How far the box moved this frame → "stable" once it holds still for a while.
         const moved = prev ? Math.max(Math.abs(fx - prev.x), Math.abs(fy - prev.y)) : 1;
-        fx = applyDeadband(fx, prev ? prev.x : null, DEADBAND);
-        fy = applyDeadband(fy, prev ? prev.y : null, DEADBAND);
+        fx = softDeadband(fx, prev ? prev.x : null, SMOOTH.positionDeadband);
+        fy = softDeadband(fy, prev ? prev.y : null, SMOOTH.positionDeadband);
         const prevS = lastSize.current;
-        fw = applyDeadband(fw, prevS ? prevS.w : null, DEADBAND * SIZE_DEADBAND_SCALE);
-        fh = applyDeadband(fh, prevS ? prevS.h : null, DEADBAND * SIZE_DEADBAND_SCALE);
+        const sizeBand = SMOOTH.positionDeadband * SMOOTH.sizeDeadbandScale;
+        fw = softDeadband(fw, prevS ? prevS.w : null, sizeBand);
+        fh = softDeadband(fh, prevS ? prevS.h : null, sizeBand);
         trackRef.current = {
           ...trackRef.current,
           stableStreak: stepStability(trackRef.current.stableStreak, moved),
         };
         lastCenter.current = { x: fx, y: fy };
         lastSize.current = { w: fw, h: fh };
-        // Straight to the UI thread: the spring still interpolates these 12 Hz updates up to
-        // display rate, but React is not involved.
-        trackDetectionBox(boxValues, { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh });
+        // Straight to the UI thread: the critically-damped spring interpolates these 12 Hz updates
+        // up to display rate, but React is not involved. The first detection of a track is placed
+        // rather than sprung, so re-acquisition appears where the lesion is instead of flying in.
+        trackDetectionBox(
+          boxValues,
+          { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh },
+          { snap: snapNext.current },
+        );
+        snapNext.current = false;
 
         // Filter the forward-to-crop box in full-frame coords (also feeds positional coaching).
         const icx = euro.ix.filter(full.cx, t);
@@ -389,16 +432,20 @@ export default function CaptureScreen() {
      not React state; the compiler flags every write to one (same false positive the Reanimated
      shared-value writes elsewhere in this file trip). */
   useEffect(() => {
-    aiCameraRef.current = aiCamera;
+    guideRef.current = guide;
     lastGateSV.value = -1;
     blurStreakSV.value = 0;
     gateRef.current = GATE_OK;
-    if (!aiCamera || !isFocused) {
+    if (!guide || !isFocused) {
       metricsRef.current = null;
-      resetDetectionBox(boxValues);
+      // Teardown, not detection loss: the guide was switched off or the screen left, so there
+      // is nothing to fade for — reset the pose immediately rather than animating a box the user
+      // is no longer looking at (and which would otherwise fade in again on return).
+      resetDetectionBox(boxValues, { immediate: true });
+      snapNext.current = true;
     }
     applyCoach();
-  }, [aiCamera, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV]);
+  }, [guide, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV]);
   /* eslint-enable react-hooks/immutability */
 
   const frameProcessor = useFrameProcessor(
@@ -743,7 +790,7 @@ export default function CaptureScreen() {
             photo
             animatedProps={animatedProps}
             torch={torch ? 'on' : 'off'}
-            frameProcessor={aiCamera && isFocused ? frameProcessor : undefined}
+            frameProcessor={guide && isFocused ? frameProcessor : undefined}
           />
         </View>
       </GestureDetector>
@@ -758,8 +805,8 @@ export default function CaptureScreen() {
         <View style={[styles.bracket, styles.br]} />
       </View>
 
-      {/* AI camera = live lesion detector; the box tracks the detected lesion. */}
-      {aiCamera ? <DetectionBox values={boxValues} /> : null}
+      {/* Guide = the live lesion detector; the box tracks the detected lesion. */}
+      {guide ? <DetectionBox values={boxValues} /> : null}
 
       {/* Standing framing hint, tied to the bracket frame it refers to.
           The coach pill above is REACTIVE — it only says "Center the spot" once the detector has
@@ -849,15 +896,15 @@ export default function CaptureScreen() {
 
         <Pressable
           hitSlop={12}
-          onPress={() => setAiCamera((v) => !v)}
+          onPress={() => setGuide((v) => !v)}
           style={styles.sideBtn}
           accessibilityRole="button"
-          accessibilityLabel="Toggle AI camera">
-          <View style={[styles.toggle, aiCamera && styles.toggleOn]}>
-            <View style={[styles.knob, aiCamera && styles.knobOn]} />
+          accessibilityLabel="Toggle guide">
+          <View style={[styles.toggle, guide && styles.toggleOn]}>
+            <View style={[styles.knob, guide && styles.knobOn]} />
           </View>
-          <ThemedText type="caption" style={styles.aiLabel}>
-            AI camera
+          <ThemedText type="caption" style={styles.guideLabel}>
+            Guide
           </ThemedText>
         </Pressable>
       </View>
@@ -1092,7 +1139,7 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: '#FF8A4C' },
   knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFFFFF' },
   knobOn: { alignSelf: 'flex-end' },
-  aiLabel: { color: 'rgba(255,255,255,0.9)' },
+  guideLabel: { color: 'rgba(255,255,255,0.9)' },
   permission: { alignItems: 'center', paddingHorizontal: Space.xl, gap: Space.base },
   permTitle: { color: '#FFFFFF', textAlign: 'center' },
   permBody: { color: 'rgba(255,255,255,0.7)', textAlign: 'center' },

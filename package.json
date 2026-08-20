@@ -88,6 +88,8 @@
     "test:multiview": "node scripts/test-multiview.mjs",
     "test:flow": "node scripts/test-scan-flow.mjs",
     "test:capture": "node scripts/test-capture.mjs",
+    "test:smoothing": "node scripts/test-detection-smoothing.mjs",
+    "test:orbit": "node scripts/test-orbit-camera.mjs",
     "test:scratch": "node scripts/test-scratch-files.mjs"
   },
   "private": true
