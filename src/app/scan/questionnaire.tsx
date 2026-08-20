@@ -21,12 +21,16 @@ import { ANSWER_OPTIONS, QUESTIONS, type QuestionDef } from '@/lib/triage/questi
 import { REFERENCE_CAPTIONS, REFERENCE_IMAGES } from '@/lib/triage/reference-images';
 import type { Answer, QuestionId } from '@/lib/triage/types';
 
-const ADVANCE_MS = 260; // beat after a tap before sliding to the next question
-
 /**
  * The 8-item symptom questionnaire. One question per page (progressive disclosure);
  * swiping is disabled so every question gets an explicit answer. Classification runs
  * in the background the whole time — by the last answer the result is usually ready.
+ *
+ * Tapping a choice NEVER advances the page on its own. Only "Next" moves forward. The screen used
+ * to auto-advance ~260ms after a tap, which meant a mistap was already on the next question before
+ * the user could see what they had picked — and on the answers that matter (this feeds the symptom
+ * score) the correction cost is a back-tap plus a re-read. The button is disabled until the current
+ * question is answered, so the explicit step costs nothing on a deliberate pass.
  */
 export default function QuestionnaireScreen() {
   const theme = useTheme();
@@ -54,7 +58,6 @@ export default function QuestionnaireScreen() {
   const listRef = useRef<FlatList<QuestionDef>>(null);
   const [index, setIndex] = useState(0);
   const [skipOpen, setSkipOpen] = useState(false);
-  const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isLast = index === questions.length - 1;
   const current = questions[index];
@@ -72,13 +75,9 @@ export default function QuestionnaireScreen() {
     setIndex(i);
   }, []);
 
+  /** Record the answer and stay put — the user moves on with "Next". */
   function select(q: QuestionDef, value: Answer) {
     setAnswer(q.id, value);
-    if (advanceTimer.current) clearTimeout(advanceTimer.current);
-    const i = questions.indexOf(q);
-    if (i < questions.length - 1) {
-      advanceTimer.current = setTimeout(() => goTo(i + 1), ADVANCE_MS);
-    }
   }
 
   function next() {
@@ -91,7 +90,6 @@ export default function QuestionnaireScreen() {
 
   /** Skip: every blank answer becomes "I’m not sure", then straight on to the result. */
   function confirmSkip() {
-    if (advanceTimer.current) clearTimeout(advanceTimer.current);
     setSkipOpen(false);
     skipRemaining();
     router.replace('/scan/analysis');

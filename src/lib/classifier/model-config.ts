@@ -5,15 +5,15 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_d12_fp32.tflite (interpreter inspection, 2026-08-18), and
- * matching the contract its own `model_meta_d12.json` states:
+ * Verified against the bundled spoton_d13_fp32.tflite (interpreter inspection, 2026-08-20), and
+ * matching the contract its own `model_meta_d13.json` states:
  *   input  "serving_default_args_0"       [1, 3, 260, 260] float32 **NCHW** (EfficientNet-B2)
  *   output "serving_default_output_0_..." [1, 5]           float32        (raw LOGITS — no softmax
  *                                                   in the graph; classify.ts applies it on-device)
  * Confirmed empirically over 8 ImageNet-normalized random inputs: outputs carry negatives and do
- * not sum to 1. The wide-logit behaviour D11 introduced persists — D12 reaches -356 on those probes
- * against D10's -1.78 — and it is now intermittent: 5 of 8 probes return a tame ~7-sum vector and
- * 3 blow out past -100. See CONFIDENCE_TEMPERATURE for what this does to confidence on real images.
+ * not sum to 1. THE WIDE-LOGIT BEHAVIOUR IS GONE — D13 bottoms out at -2.24 on those probes, back in
+ * D10's range (-1.78), against D11's -437 and D12's -356. Whatever made those two exports produce
+ * blow-out logits on noise did not survive the data bump. See CONFIDENCE_TEMPERATURE.
  *
  * THE INPUT LAYOUT CHANGED AT D10 — see MODEL_INPUT_LAYOUT below. Every export up to D9 was NHWC
  * [1, 260, 260, 3]; D10 onward is channel-planar. The byte count is identical either way, so a
@@ -27,7 +27,75 @@ import type { LesionClass } from '../triage/types';
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
 //
-// === D12 / D12_curated_mm, bundled 2026-08-18 at Shane's instruction. ===
+// === D13 / D13_curated_mm, bundled 2026-08-20 at Shane's instruction. ===
+//
+// The fourth swap in four days (D10 -> D11 -> D12 -> D13). From `D13_latest_curated_v2.ipynb`
+// (train; a restart-hardened rewrite of `D13_latest_curated.ipynb` after a Drive-FUSE stall ate a
+// session — rsync with progress, a preflight cell, heartbeat prints) + `D13_export_download.ipynb`
+// (export, same exporter as D11/D12), with the contract and calibration in
+// `~/Downloads/model_meta_d13.json`:
+//     MALIGNANT_THRESHOLD    0.5350   (90%-sens on the D13 valid split @ deploy geometry)
+//     CONFIDENCE_TEMPERATURE 0.6875   (LBFGS/NLL on the same logits, same run)
+//
+// WHAT CHANGED FROM D12 — data only, for the fourth time. Same recipe, same curated
+// `synapse-iiqly` v2 benigns (train-only), latest stage3 plus `spoton-synthetic` **v9** (D12 used
+// v8, D11 v6, D10 v5). All dirs and flags d13-suffixed so nothing older can leak in.
+//
+// THE SPLIT MOVED AGAIN — four exports, four different test sets. Seed-42 lesion-level 70/15/15
+// recomputed over the current stage3. This notebook goes furthest of the four in acknowledging the
+// problem: it re-evaluates D12, D11 AND D8_slice on D13's own split, "one screen, four models, one
+// test set", and its exporter says to wire D13 in only if it won that four-way. That is the right
+// experiment. Its outputs were not saved, so the result of it is not on this disk.
+//
+// I/O contract verified by interpreter inspection 2026-08-20: input "serving_default_args_0"
+// [1, 3, 260, 260] float32 NCHW, output "serving_default_output_0_output" [1, 5] float32 raw LOGITS,
+// so MODEL_INPUT_LAYOUT stays 'nchw' and MODEL_OUTPUTS_PROBABILITIES stays false — a drop-in for
+// D12, and unlike D11/D12 the logit scale is back to normal (see the header note).
+//
+// WHAT IS NOT KNOWN — THE SAME GAP FOR THE FOURTH TIME. All three D13 notebooks were saved without
+// outputs, so the four-way head-to-head its own exporter gates on does not exist here, and neither
+// does its valid AUROC/ECE or its PyTorch-vs-TFLite parity margin. Four consecutive swaps have now
+// been made on "the artifact exists" alone. The measured table below is the only comparison there
+// is, and it is on a set this file already flags as contaminated.
+//
+// WHAT WAS MEASURED HERE, 2026-08-20 (`synth/eval/model_bakeoff.py isic_holdout` — all eight exports
+// through the shipped pipeline: detector crop, 4-view TTA, logit mean, each under its own contract).
+// CAVEAT FIRST: this is the FULL 200-image ISIC holdout, the set the D9 note below calls
+// contaminated. The de-duplicated 107-image version cannot be rebuilt on this disk — that dedup ran
+// against the Roboflow pool and `synth/eval/roboflow_pool` is gone (a fresh perceptual-hash scan
+// against every LOCAL corpus drops exactly 1 of 200 at Hamming <= 8 on both hashes, and finds no
+// duplicates inside the holdout). These rows are comparable to EACH OTHER — same images, same
+// pipeline, same run — and not to the 107-image table further down.
+//     model      top1  macroF1  AUROC  AUPRC  MEL rec  SCC rec  sens@own thr  spec    ECE   thr@90sens
+//     D7        0.680   0.675   0.839  0.847   0.575    0.500      0.792     0.762  0.083    0.2206
+//     D7_s3_mm  0.720   0.711   0.864  0.880   0.650    0.475      0.825     0.775  0.091    0.2551
+//     D8        0.690   0.685   0.863  0.886   0.600    0.525      0.833     0.762  0.085    0.2431
+//     D9        0.705   0.696   0.858  0.878   0.700    0.425      0.708     0.863  0.133    0.2464
+//     D10       0.680   0.670   0.843  0.878   0.525    0.475      0.808     0.750  0.089    0.1020
+//     D11       0.675   0.664   0.857  0.892   0.550    0.425      0.683     0.850  0.143    0.1298
+//     D12       0.710   0.702   0.849  0.888   0.525    0.500      0.725     0.838  0.115    0.0936
+//     D13       0.720   0.715   0.851  0.880   0.575    0.575      0.742     0.800  0.122    0.1115
+//
+// D13 IS THE BEST OF THE FOUR curated_mm RUNS AND THE FIRST TO CATCH THE LONG-STANDING BASELINE.
+// Top-1 0.720 ties D7_s3_mm exactly (144/200 each, McNemar 16 vs 16, p = 1.00 — they are right and
+// wrong on genuinely different images), and macro-F1 0.715 is the HIGHEST of any export ever scored
+// here, i.e. its accuracy is spread more evenly across the five classes than the baseline's. SCC
+// recall 0.575 is also the best of the eight, against 0.425-0.525 for everything else — SCC has been
+// the weakest class in this project since D4, so that is the most interesting single number in the
+// table. It keeps most of D12's BENIGN gain too (0.700 vs 0.725, against 0.600-0.625 pre-D12).
+//
+// THE MEL PROBLEM IS IMPROVED, NOT SOLVED. MEL recall 0.575 recovers from the D10-D12 trough
+// (0.525/0.550/0.525) but is still below D7_s3_mm's 0.650 and well below D9's 0.700. Four data bumps
+// in, melanoma is still the class this lineage reads worst, in a melanoma screening product.
+//
+// THE THRESHOLD GAP NARROWS FOR THE FIRST TIME. 0.5350 measures sensitivity 0.742 (31 of 120
+// malignancies missed) at specificity 0.800, against a 90%-sens point of 0.1115 on this set — a
+// ratio of ~4.8x, down from D12's ~7.0x and D11's ~5.3x, though still above D9's ~3.1x and far above
+// the pre-D10 exports. The same model at 0.30 measures sens 0.825 / spec 0.750, which is D7_s3_mm's
+// sensitivity at better specificity than D7_s3_mm's own operating point gives. If one number in this
+// file is worth revisiting with a proper held-out fit, it is this one.
+//
+// --- previously bundled: D12 / D12_curated_mm (bundled and superseded, 2026-08-18 -> 2026-08-20) ---
 //
 // The third swap in two days (D10 -> D11 -> D12). From `D12_latest_curated.ipynb` (train) +
 // `D12_export_download.ipynb` (export, identical to D11's exporter apart from checkpoint and output
@@ -58,22 +126,8 @@ import type { LesionClass } from '../triage/types';
 // defended (thesis, TestFlight, a clinician asking), re-run the notebook with outputs saved — it is
 // the only source for the numbers that decide between them.
 //
-// WHAT WAS MEASURED HERE, 2026-08-18 (`synth/eval/model_bakeoff.py isic_holdout` — all seven exports
-// through the shipped pipeline: detector crop, 4-view TTA, logit mean, each under its own contract).
-// CAVEAT FIRST: this is the FULL 200-image ISIC holdout, the set the D9 note below calls
-// contaminated. The de-duplicated 107-image version cannot be rebuilt on this disk — that dedup ran
-// against the Roboflow pool and `synth/eval/roboflow_pool` is gone (a fresh perceptual-hash scan
-// against every LOCAL corpus drops exactly 1 of 200 at Hamming <= 8 on both hashes, and finds no
-// duplicates inside the holdout). These rows are comparable to EACH OTHER — same images, same
-// pipeline, same run — and not to the 107-image table further down.
-//     model        top1   AUROC   AUPRC   MEL rec   sens@own thr   spec    ECE   thr for 90% sens
-//     D7          0.680   0.839   0.847    0.575       0.792       0.762   0.083      0.2206
-//     D7_s3_mm    0.720   0.864   0.880    0.650       0.825       0.775   0.091      0.2551
-//     D8          0.690   0.863   0.886    0.600       0.833       0.762   0.085      0.2431
-//     D9          0.705   0.858   0.878    0.700       0.708       0.863   0.133      0.2464
-//     D10         0.680   0.843   0.878    0.525       0.808       0.750   0.089      0.1020
-//     D11         0.675   0.857   0.892    0.550       0.683       0.850   0.143      0.1298
-//     D12         0.710   0.849   0.888    0.525       0.725       0.838   0.115      0.0936
+// MEASURED ON THE ISIC HOLDOUT — see the eight-model table in the D13 block above, which includes
+// this export.
 //
 // D12 IS THE BEST OF THE THREE curated_mm RUNS, AND THE FIRST THAT IS NOT A REGRESSION. Top-1 0.710
 // against D10's 0.680 and D11's 0.675, second only to D7_s3_mm (0.720) — and the gap to that
@@ -82,7 +136,7 @@ import type { LesionClass } from '../triage/types';
 // against 0.600-0.625 for every other export scored, which is what a train-only benign corpus was
 // supposed to buy in the first place.
 //
-// TWO THINGS IT DOES NOT FIX. MEL recall is 0.525, tied with D10 for the worst of the seven — three
+// TWO THINGS IT DID NOT FIX. MEL recall is 0.525, tied with D10 for the worst of the eight — three
 // consecutive exports have now traded melanoma sensitivity for benign specificity, in a product
 // whose whole purpose is catching melanoma. And its shipped threshold is the most conservative yet
 // relative to this set: 0.6541 measures sensitivity 0.725 (33 of 120 malignancies missed) where the
@@ -120,11 +174,11 @@ import type { LesionClass } from '../triage/types';
 // D8_slice."), not the valid AUROC/ECE, not the PyTorch-vs-TFLite parity margin. That the artifact
 // was exported and handed over is the only evidence here that the gate passed.
 //
-// MEASURED ON THE ISIC HOLDOUT — see the seven-model table in the D12 block above, which includes
+// MEASURED ON THE ISIC HOLDOUT — see the eight-model table in the D13 block above, which includes
 // this export. In short: D11's ranking is strong (top AUPRC 0.892, second AUROC 0.857) but 0.6819
-// sits badly on that score — sensitivity 0.683, the lowest of the seven, 38 of 120 malignancies
+// sits badly on that score — sensitivity 0.683, the lowest of the eight, 38 of 120 malignancies
 // missed; the same model at 0.40 gives sens 0.817 / spec 0.762. Top-1 0.675 was the lowest of the
-// seven and MEL recall 0.550 second-lowest.
+// eight and MEL recall 0.550 second-lowest.
 //
 // --- previously bundled: D10 / D10_curated_mm (bundled and superseded 2026-08-17) ---
 //
@@ -161,9 +215,9 @@ import type { LesionClass } from '../triage/types';
 // the artifact was exported and handed over is the only evidence here that it did. Re-run either
 // notebook with outputs saved before quoting a D10 number anywhere, thesis included.
 //
-// MEASURED ON THE ISIC HOLDOUT — see the six-model table in the D11 block above, which includes
+// MEASURED ON THE ISIC HOLDOUT — see the eight-model table in the D13 block above, which includes
 // this export. In short: D10 is the weakest there on MEL recall (0.525), tied-lowest on top-1
-// (0.680), and its threshold buys back most of the sensitivity D9's 0.7519 gave away (0.708 ->
+// (0.680 at the time), and its threshold buys back most of the sensitivity D9's 0.7519 gave away (0.708 ->
 // 0.808) at a cost in specificity (0.863 -> 0.750). McNemar against the D7_s3_mm baseline is not
 // significant (16 vs 8, p = 0.15). The MEL number is the one to weigh: D10's own gate demanded MEL
 // recall >= ~0.938 on its own test slice — different set, but the direction is against the export.
@@ -251,10 +305,10 @@ import type { LesionClass } from '../triage/types';
 // thr90 is 0.4057 and its thrF1 is 0.6188, and those do NOT converge, so the value is a policy
 // choice rather than a measured optimum. Settle it with `~/Downloads/D7_vs_D8_heldout.ipynb`,
 // which scores both models on the identical held-out split.
-export const MODEL_ASSET = require('../../../assets/models/spoton_d12_fp32.tflite');
+export const MODEL_ASSET = require('../../../assets/models/spoton_d13_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_d12_fp32';
+export const MODEL_VERSION = 'spoton_d13_fp32';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -314,7 +368,31 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * Decision threshold on the malignant score (BCC+MEL+SCC softmax sum), consumed by the Malignant
  * Gate in tps-core.ts (`evaluateMalignantGate`), which floors the tier at Moderate when it fires.
  *
- * === D12 / D12_curated_mm, 2026-08-18: 0.6541, TAKEN VERBATIM FROM `model_meta_d12.json`. ===
+ * === D13 / D13_curated_mm, 2026-08-20: 0.5350, TAKEN VERBATIM FROM `model_meta_d13.json`. ===
+ *
+ * The 90%-sensitivity point on T-scaled malignant probabilities over the D13 valid split at deploy
+ * geometry, fitted in the same run as CONFIDENCE_TEMPERATURE 0.6875. Adopted unrounded, by the rule
+ * every export since D7_s3_mm has been adopted under. Its two selection rules sit ~0.16 apart
+ * (thr90 0.5350, thrF1 0.6934) and the sensitivity-favouring end ships, which is the right end for
+ * this product.
+ *
+ * MEASURED, AND IT IS THE FIRST MOVE IN THE RIGHT DIRECTION. On the 200-image ISIC holdout 0.5350
+ * yields sensitivity 0.742 (31 of 120 malignancies missed) at specificity 0.800 — better than D12's
+ * 0.725 and D11's 0.683, still short of D7_s3_mm's 0.825. More importantly the long-running
+ * shipped-vs-needed gap NARROWED for the first time: that set's own 90%-sens point for D13 is
+ * 0.1115, so the shipped value sits ~4.8x above it, against D12's ~7.0x, D11's ~5.3x and D10's
+ * ~3.8x. The trend that had widened at every swap since D9 has reversed.
+ *
+ * IT IS STILL A GAP, AND THIS IS WHERE THE SENSITIVITY IS. The same model at 0.30 measures sens
+ * 0.825 / spec 0.750 — the baseline's sensitivity at better specificity than the baseline's own
+ * operating point. Nothing here justifies hand-picking 0.30 (it would be fitted on the contaminated
+ * set the whole file warns about), but it does say the model can reach the sensitivity this product
+ * needs and that the val-fitted threshold is what stops it. A genuinely held-out refit is the
+ * single highest-value open item on the classifier.
+ *
+ * PAIRED WITH CONFIDENCE_TEMPERATURE 0.6875 — same fit, same export. Never move one alone.
+ *
+ * --- superseded D12 / D12_curated_mm value (0.6541), from `model_meta_d12.json` ---
  *
  * The 90%-sensitivity point on T-scaled malignant probabilities over the D12 valid split at deploy
  * geometry, fitted in the same run as CONFIDENCE_TEMPERATURE 0.7159. Adopted unrounded, by the rule
@@ -326,17 +404,13 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * one weak corroboration D11 had. The shipped value is the 90%-sens point, i.e. the SENSITIVITY-
  * favouring end of that range, which is the right end to pick for this product.
  *
- * MEASURED, AND THIS IS THE COST: on the 200-image ISIC holdout 0.6541 yields sensitivity 0.725 —
- * 33 of 120 malignancies missed — at specificity 0.838. Better than D11's 0.683 at its own value,
- * still well below D7_s3_mm's 0.825. That set's own 90%-sensitivity point for D12 is 0.0936, so the
- * shipped threshold sits ~7.0x above it — the widest shipped-vs-needed ratio of any export scored
- * (D9 ~3.1x, D10 ~3.8x, D11 ~5.3x). The gap between where these exports are calibrated and where
- * this holdout says 90% sensitivity lives has widened at every swap; it is the single most
- * persistent finding in this file and it is still unexplained. Two candidate explanations, neither
- * tested: the val splits these thresholds are fitted on are easier than the holdout (plausible —
- * they are deploy-crops of stage3, which shares sources with training), or the holdout's 40/class
- * balance misrepresents the score distribution. Settling it needs a genuinely held-out set that is
- * not this one.
+ * MEASURED: on the 200-image ISIC holdout 0.6541 yielded sensitivity 0.725 (33 of 120 malignancies
+ * missed) at specificity 0.838, ~7.0x above that set's own 90%-sens point of 0.0936 — the widest
+ * shipped-vs-needed ratio of any export scored, and the peak of the widening trend D13 reversed.
+ * The two candidate explanations for that gap remain untested: the val splits these thresholds are
+ * fitted on may be easier than the holdout (they are deploy-crops of stage3, which shares sources
+ * with training), or the holdout's 40/class balance may misrepresent the score distribution.
+ * Settling it needs a genuinely held-out set that is not this one.
  *
  * PAIRED WITH CONFIDENCE_TEMPERATURE 0.7159 — same fit, same export. Never move one alone.
  *
@@ -510,7 +584,7 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.6541;
+export const MALIGNANT_THRESHOLD = 0.5350;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -539,7 +613,35 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  *
  * COUPLED TO THE BUNDLED MODEL FILE — refit whenever the bundled .tflite changes.
  *
- * === D12 / D12_curated_mm, 2026-08-18: 0.7159, from `model_meta_d12.json`. ===
+ * === D13 / D13_curated_mm, 2026-08-20: 0.6875, from `model_meta_d13.json`. ===
+ *
+ * A scalar T fit by NLL (LBFGS) on the D13 valid logits at deploy geometry, in the same cell that
+ * produced MALIGNANT_THRESHOLD 0.5350. Adopted verbatim. The fifth sharpening temperature in a row
+ * and the hardest yet (0.7828 -> 0.7889 -> 0.7283 -> 0.7159 -> 0.6875, all T < 1): dividing by
+ * 0.6875 scales logits up ~45%.
+ *
+ * THE WIDE-LOGIT ANOMALY IS GONE. D11 and D12 returned blow-out logits on random probes (-437 and
+ * -356 against D10's -1.78); D13 bottoms out at -2.24, back in the normal range. So the harder T is
+ * now doing ordinary sharpening of ordinary logits rather than compounding an already-extreme
+ * scale. Measured on the 200-image ISIC holdout through the shipped pipeline (2026-08-20):
+ *                              D12      D13
+ *     mean top-class conf     0.815    0.819
+ *     ECE                     0.115    0.122
+ *     Safety Floor (<0.40)     1.5%     1.5%   (3 images of 200)
+ *     conf < REFINE_CONFIDENCE 22.0%    20.5%
+ *     malignant score in mid   94/200   90/200 (0.05 .. 0.95)
+ * Effectively unchanged from D12, i.e. the confidence distribution these exports produce is now a
+ * property of the lineage, not of one bad run.
+ *
+ * THE SAFETY FLOOR IS THE OPEN ITEM, UNCHANGED FROM D12. It fires on 3 images in 200 (1.5%) against
+ * 3.0-4.5% for the pre-D10 exports. A floor that rarely fires is close to decorative; if it is meant
+ * to catch unreadable photos under these models, the 0.40 constant needs refitting to this
+ * confidence distribution rather than left at a value chosen when mean confidence was 0.73. Nothing
+ * about D13 makes that more or less urgent than it was two exports ago — it just has not been done.
+ *
+ * COUPLED TO MALIGNANT_THRESHOLD 0.5350 — one fit, one unit, replaced together.
+ *
+ * --- superseded D12 / D12_curated_mm value (0.7159), from `model_meta_d12.json` ---
  *
  * A scalar T fit by NLL (LBFGS) on the D12 valid logits at deploy geometry, in the same cell that
  * produced MALIGNANT_THRESHOLD 0.6541. Adopted verbatim. The fourth sharpening temperature in a row
@@ -666,7 +768,7 @@ export const INFERENCE_TIMEOUT_MS = 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 0.7159;
+export const CONFIDENCE_TEMPERATURE = 0.6875;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average
