@@ -73,7 +73,10 @@ export default function QualityScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { uri, detected } = useLocalSearchParams<{ uri: string; detected?: string }>();
+  // `detected` (the live camera's green-box verdict, forwarded by crop.tsx) is deliberately NOT
+  // read here any more: it answers "did the detector fire on some preview frame", which this
+  // screen now knows is true of bare skin too. The still decides, from checks.lesion below.
+  const { uri } = useLocalSearchParams<{ uri: string; detected?: string }>();
   const session = useScreeningSession();
   const { setImageUri, questionnaireComplete } = session;
 
@@ -86,11 +89,6 @@ export default function QualityScreen() {
   }, []);
 
   const CARD = Math.min(width - Space.xl * 2, 216);
-
-  // Carried verdict from the LIVE camera detector (the green box). Kept only as a fallback now —
-  // `lesionDet` below re-decides this on the captured still. Gallery uploads never had one.
-  const lesionKnown = detected === '0' || detected === '1';
-  const lesionFound = detected === '1';
 
   const [step, setStep] = useState(0);
   const [checks, setChecks] = useState<IqaChecks | null>(null);
@@ -210,37 +208,42 @@ export default function QualityScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // The lesion row must not be judged before its detection lands, or a slow device would show a
-  // "no lesion" verdict that the detector then contradicts. Bounded by LESION_DETECT_TIMEOUT_MS.
+  // Still gated on the detector even though the lesion row no longer is: `skinBlocks` below asks
+  // whether a lesion was LOCATED, and judging before that lands would show a "not skin" verdict the
+  // detection then contradicts. Bounded by LESION_DETECT_TIMEOUT_MS.
   const settled = (checks != null || error) && lesionDet !== 'pending';
 
   const brightnessOk = checks?.brightness.ok ?? false;
   const sharpOk = checks?.sharpness.ok ?? false;
   const skinOk = checks?.skin.ok ?? false;
-  /** The detector actually answered for this still (found or genuinely nothing there). */
-  const lesionDetResolved = lesionDet === 'found' || lesionDet === 'absent';
   /**
-   * THE DETECTOR OWNS THIS ROW. When it has run on the still, its verdict is the answer, full stop
-   * — it is a lesion detector, and it is the same one the classifier uses to pick its crop. The
-   * live-camera verdict and skin coverage are consulted ONLY when it could not run.
+   * THE IMAGE OWNS THIS ROW, NOT THE DETECTOR (changed 2026-08-25).
    *
-   * It used to be ANDed with `skinOk`, which meant a skin-colour miss reported itself as "no
-   * lesion". That is what the reported false rejection was: the detector found the mole (conf 0.35,
-   * box centred) while the pale-skin heuristic scored 0.149 against a 0.30 floor, so the row warned
-   * and the screen said "This doesn't look like a photo of skin" about a clean photo of skin.
+   * The row used to be the detector's verdict, full stop. That is what let a photo of bare skin
+   * with no lesion in it sail through with a green "Lesion in frame" tick: measured on 33
+   * lesion-free skin patches cut from real clinical photos, `detectLesionBox` fires on 88% of
+   * them, because it was trained only on images that contain a lesion and has never been shown a
+   * negative. It answers "where", never "whether" — and no confidence bar separates the two
+   * (bare-skin median 0.278 vs real-lesion median 0.315).
+   *
+   * `checks.lesion` answers "whether": the centre-surround contrast of the strongest blob in the
+   * middle of the frame (image-quality-core.ts). Against the same three sets, it holds 95.6% /
+   * 93.5% recall on app-framed and held-out lesion photos while cutting bare-skin passes from 88%
+   * to 18% — better than the old row in BOTH directions, which is why the detector is not ANDed in
+   * here (doing so would cost ~10 points of recall and remove no false pass at all).
+   *
+   * The detector is untouched and still owns the crop the classifier reads (lesion-detector.ts).
    */
-  const lesionOk = lesionDetResolved
-    ? lesionDet === 'found'
-    : lesionKnown
-      ? lesionFound
-      : skinOk;
+  const presenceOk = checks?.lesion.ok ?? false;
+  const lesionOk = presenceOk;
   /**
-   * Skin coverage is a fallback signal, not a veto. It blocks only when the detector could not
-   * answer; a found lesion is strictly stronger evidence that this is skin than its colour is.
+   * Skin coverage is a fallback signal, not a veto — it must not report "not skin" about a photo
+   * we have positive lesion evidence for (a pale forearm scores 0.149 against a 0.30 floor). But
+   * that escape now needs REAL evidence: the detector firing is not evidence of anything, so it
+   * takes a located lesion AND the presence signal to waive the skin check. Without that, this is
+   * what still turns away a photo of a desk or a wall.
    */
-  const skinBlocks = !lesionDetResolved && !skinOk;
-  /** Whether we have a real lesion verdict to record, from either the still or the live camera. */
-  const lesionVerdictKnown = lesionDetResolved || lesionKnown;
+  const skinBlocks = !skinOk && !(lesionDet === 'found' && presenceOk);
   const iqaPass = !error && brightnessOk && sharpOk && lesionOk && !skinBlocks;
   const readableOk = readability !== 'unreadable';
   // The verdict itself lives in scan-flow.ts so every branch is pinned by npm run test:flow.
@@ -263,14 +266,13 @@ export default function QualityScreen() {
       out.push(
         checks.brightness.issue === 'dark'
           ? 'The photo looks too dark.'
-          : checks.brightness.issue === 'glare'
-            ? 'Glare on the spot — tilt slightly to avoid the reflection.'
-            : 'The photo looks too bright — try softer, even light.',
+          : 'Glare on the spot — tilt slightly to avoid the reflection.',
       );
     }
-    if (!sharpOk) out.push('The photo looks blurry — move closer and tap to focus.');
-    // Only reachable when the detector could not answer — otherwise its verdict speaks for itself,
-    // and claiming "not skin" about a photo the detector found a lesion in is simply wrong.
+    // Covers both ways this fails now: a missed focus lock and a moving hand (see LESION_EDGE_WIDTH).
+    if (!sharpOk) out.push('The photo looks blurry — hold still, and tap the spot to focus.');
+    // "Not skin" is the stronger claim, so it wins when both fail — and it is never said about a
+    // photo we located a lesion in (see skinBlocks).
     if (skinBlocks) out.push('This doesn’t look like a photo of skin.');
     else if (!lesionOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
     // Confidence is a readability signal like blur is — surfaced here rather than after the
@@ -279,6 +281,19 @@ export default function QualityScreen() {
     // Shadow is advisory: it never blocks, but when we're already asking for a retake, surface it.
     if (checks.shadow && !checks.shadow.ok) {
       out.push('Tip: even out the lighting — avoid casting a shadow across the spot.');
+    }
+    // Hair is advisory too, but UNLIKE shadow it is surfaced even on a passing photo (see
+    // showFooter). The failure it addresses is a well-exposed, sharp, correctly framed photo whose
+    // lesion happens to be under hair — retrain/WHY_CONFIDENT_ERRORS.md records one called MEL at
+    // 99.2%. A tip that only appeared alongside other complaints would never have fired on it.
+    //
+    // It is a tip and not a gate because it CANNOT be better justified than that: there are no
+    // hair-mask annotations to fit HAIR_ROI_MAX against, so it is set to a target flag rate (~1
+    // photo in 8). And removing the hair for the user is not on the table — synth/eval/
+    // HAIR_REMOVAL.md measured every variant of that and they all cost accuracy on exactly the
+    // hairy images they were meant to help.
+    if (checks.hair && !checks.hair.ok) {
+      out.push('Tip: hair is covering the spot — move it aside and retake for a clearer read.');
     }
     return out;
   }, [error, checks, brightnessOk, sharpOk, skinBlocks, lesionOk, readableOk]);
@@ -301,7 +316,7 @@ export default function QualityScreen() {
       uri,
       source: session.source,
       qualityPassed: pass,
-      detected: lesionVerdictKnown ? lesionOk : undefined,
+      detected: checks ? lesionOk : undefined,
     });
     if (index === 0) setImageUri(uri);
     // Inference starts HERE, not at the analysis screen: by the time the user has cropped the next
@@ -324,7 +339,7 @@ export default function QualityScreen() {
       uri,
       source: session.source,
       qualityPassed: pass,
-      detected: lesionVerdictKnown ? lesionOk : undefined,
+      detected: checks ? lesionOk : undefined,
     });
     if (index === 0) setImageUri(uri);
     session.enqueueImage(uri, index);
@@ -374,7 +389,9 @@ export default function QualityScreen() {
   );
 
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;
-  const showFooter = !analyzing && !pass;
+  // The advisory hair tip is the one reason worth showing on a PASSING photo: hair over the lesion
+  // does not make a photo dark, blurry or badly framed, so nothing else would surface it.
+  const showFooter = !analyzing && (!pass || (!!checks?.hair && !checks.hair.ok));
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>

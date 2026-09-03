@@ -28,7 +28,7 @@ const {
   modelCropToFullFrame, fullFrameToModelCrop, fullFrameToPreview, previewToFullFrame, padDrawnBox,
   CREATE_SCORE, KEEP_SCORE, DETECT_SHOW, KEEP_GRACE, STABLE_EPS, STABLE_FRAMES, DEADBAND,
   FAR_MAX, CLOSE_MIN, OFFSET_MAX,
-  GATE_OK, GATE_DARK, GATE_BRIGHT, GATE_BLURRY,
+  GATE_OK, GATE_DARK, GATE_BLURRY,
 } = c;
 
 let pass = 0;
@@ -43,7 +43,7 @@ const M = (o = {}) => ({ cx: 0.5, cy: 0.5, w: 0.4, h: 0.4, locked: true, stable:
 
 // Lighting and focus outrank position — there is no point asking someone to centre a spot they
 // cannot see, and stacked messages are worse than one.
-for (const [gate, expected] of [[GATE_DARK, 'dark'], [GATE_BRIGHT, 'bright'], [GATE_BLURRY, 'blurry']]) {
+for (const [gate, expected] of [[GATE_DARK, 'dark'], [GATE_BLURRY, 'blurry']]) {
   check(`gate ${expected} outranks framing`, computeCoach(true, gate, M({ cx: 0.9, w: 0.01 })) === expected);
   check(`gate ${expected} shows even with no box`, computeCoach(true, gate, null) === expected);
 }

@@ -14,6 +14,7 @@ import { Colors, Space } from '@/constants/theme';
 import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 import { locateLesionInImage } from '@/lib/classifier/preprocess';
 import { discardScratch } from '@/lib/scratch-files';
+import { StatusBar } from 'expo-status-bar';
 
 const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
@@ -196,6 +197,8 @@ export default function CropScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
+      {/* Dark glyphs are unreadable over this near-black backdrop — see the note in capture.tsx. */}
+      <StatusBar style="light" />
       <View style={styles.header}>
         <Pressable
           hitSlop={12}

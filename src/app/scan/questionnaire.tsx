@@ -45,7 +45,22 @@ export default function QuestionnaireScreen() {
     reset,
     followUp,
     questionsToReask,
+    images,
+    imageUri,
   } = useScreeningSession();
+
+  /**
+   * A complete questionnaire is not enough to analyse — there has to be a PHOTO.
+   *
+   * The follow-up screen's "Update these answers" enters this screen directly, with no capture
+   * step before it. `carryForwardAnswers` guarantees the carried answers plus the re-asked ones
+   * cover all 8 questions, so `questionnaireComplete` turns true here on a session that has never
+   * held an image. Sending that to /scan/analysis produced an unrecoverable dead end: the
+   * classifier throws 'classification never started', "Try again" is a permanent no-op because
+   * `retryClassification` bails on an empty URI list, and back is blocked on that screen — the only
+   * exit discarded the whole follow-up.
+   */
+  const hasPhoto = images.length > 0 || imageUri != null;
 
   // A follow-up only asks what the carry-forward policy could not safely reuse (tps-core
   // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers — the carried ones
@@ -81,9 +96,24 @@ export default function QuestionnaireScreen() {
     setAnswer(q.id, value);
   }
 
+  /**
+   * Where a finished questionnaire goes. With a photo, on to analysis; without one, back to the
+   * screen that offers the camera — answers intact, so the user resumes rather than restarts.
+   */
+  function finish() {
+    if (hasPhoto) {
+      router.replace('/scan/analysis');
+      return;
+    }
+    // Entered from follow-up confirm via router.push, so back lands there with the updated answers
+    // already shown. The fallback covers a session that reached here some other way.
+    if (router.canGoBack()) router.back();
+    else router.replace('/scan/followup-confirm');
+  }
+
   function next() {
     if (isLast) {
-      if (questionnaireComplete) router.replace('/scan/analysis');
+      if (questionnaireComplete) finish();
     } else if (currentAnswered) {
       goTo(index + 1);
     }
@@ -93,7 +123,7 @@ export default function QuestionnaireScreen() {
   function confirmSkip() {
     setSkipOpen(false);
     skipRemaining();
-    router.replace('/scan/analysis');
+    finish();
   }
 
   function confirmExit() {

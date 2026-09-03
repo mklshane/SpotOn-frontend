@@ -129,8 +129,12 @@ export default function ResultScreen() {
             end={{ x: 1, y: 1 }}
             style={[styles.hero, { shadowColor: colors.fg }]}>
             <View style={styles.heroTop}>
+              {/* `cls.name` ("Melanoma-like"), not `cls.full` ("Melanoma"). CLASS_DISPLAY ships
+                  both for exactly this reason and scan-timeline already uses the hedged one — this
+                  headline sat directly above an "AI confidence" ring, so the unhedged name read as
+                  a diagnosis. */}
               <ThemedText type="title1" style={styles.heroTitle}>
-                {cls.full}
+                {cls.name}
               </ThemedText>
               <View style={[styles.tierBadge, { backgroundColor: colors.fg, shadowColor: colors.fg }]}>
                 <ThemedText type="subhead" style={{ color: theme.onBrand }}>
@@ -142,8 +146,10 @@ export default function ResultScreen() {
               <ConfidenceRing pct={pct} color={colors.fg} />
               <View style={styles.heroConfText}>
                 <ThemedText type="headline">AI confidence</ThemedText>
+                {/* `topClass` is the raw model enum — this printed "78% probability for MEL
+                    pattern" in the most important sentence on the screen. */}
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}% probability for {classification.topClass} pattern.
+                  {pct}% match to {cls.lay}.
                 </ThemedText>
               </View>
             </View>

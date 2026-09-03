@@ -230,8 +230,22 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   const removeImage = useCallback((uri: string) => {
     // Re-index so images[0] is always the primary and indices stay contiguous.
     setImages((prev) => prev.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i })));
-    partsRef.current = { attempt: partsRef.current.attempt, runs: new Map() };
-    setClassificationState('idle');
+    // Drop ONLY this photo's run.
+    //
+    // This used to reset the whole map, which silently destroyed every other photo's completed
+    // inference — and nothing re-enqueues them. Retaking a second angle therefore threw away the
+    // first photo's classification, and the screening was persisted claiming two images while the
+    // result and the per-image audit trail covered one. (Tell-tale: swiping back from the quality
+    // screen did NOT wipe them, so the explicit Retake button was the destructive path.)
+    //
+    // Surviving runs keep their original keys rather than being re-packed. The key is the index the
+    // photo was enqueued under, `composeSetResult` only uses it to order and to label the audit
+    // trail, and a gap orders identically — whereas re-packing would relabel a kept photo with an
+    // index its own recorded PerImageResult does not agree with.
+    const store = partsRef.current;
+    const runs = new Map([...store.runs.entries()].filter(([, r]) => r.uri !== uri));
+    partsRef.current = { attempt: store.attempt, runs };
+    if (runs.size === 0) setClassificationState('idle');
   }, []);
 
   const acceptLowConfidence = useCallback(() => setAcceptedLowConfidence(true), []);

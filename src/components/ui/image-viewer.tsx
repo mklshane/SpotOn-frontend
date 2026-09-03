@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Space } from '@/constants/theme';
 
 import { Icon } from './icon';
+import { StatusBar } from 'expo-status-bar';
 
 export type ImageViewerProps = {
   visible: boolean;
@@ -22,6 +23,8 @@ export function ImageViewer({ visible, uri, onClose }: ImageViewerProps) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      {/* Dark glyphs are unreadable over this near-black backdrop — see the note in capture.tsx. */}
+      <StatusBar style="light" />
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close photo">
         {uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="contain" />

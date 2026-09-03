@@ -89,7 +89,7 @@ export default function FollowUpConfirmScreen() {
   ];
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={['top']}>
       <View style={styles.header}>
         <Button label="Cancel" variant="ghost" onPress={() => router.back()} />
       </View>

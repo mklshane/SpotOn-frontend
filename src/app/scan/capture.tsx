@@ -38,13 +38,12 @@ import {
   type CoachKind,
   type TrackState,
   GATE_BLURRY,
-  GATE_BRIGHT,
   GATE_DARK,
   GATE_OK,
   KEEP_SCORE,
   LOCK_SCORE,
 } from '@/lib/capture-core';
-import { BRIGHT, DARK } from '@/lib/image-quality-core';
+import { DARK } from '@/lib/image-quality-core';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { discardScratch } from '@/lib/scratch-files';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -69,6 +68,7 @@ import {
 } from '@/lib/detection-smoothing';
 import { makeOneEuro } from '@/lib/one-euro';
 import { Radius, Space } from '@/constants/theme';
+import { StatusBar } from 'expo-status-bar';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
 // would recreate the gesture mid-pinch and crash react-native-gesture-handler).
@@ -88,10 +88,10 @@ const FUSE_SCORE = 0.25;
  * frame the coach calls fine must not then be rejected by image-quality-core — that is the worst
  * kind of feedback, because the user has already committed to the shot.
  *
- * The dark side always encoded this (0.16 + 0.04 = the 0.20 that was hard-coded here), but the
- * bright side had the sign inverted: 0.82 vs a still-gate reject at 0.80, so a frame at luma 0.81
- * read "looks good" and was then thrown out. Deriving both from DARK/BRIGHT with one margin makes
- * the relationship structural, so re-tuning the still gate can't silently invert it again.
+ * Only the dark side is coached. The still gate no longer rejects on high mean luminance (see
+ * IqaChecks in image-quality-core.ts), so a "too bright" viewfinder warning would be nagging about
+ * something nothing downstream cares about; glare on the lesion is judged on the still, where the
+ * ROI is actually resolved, rather than guessed at from a strided preview sample.
  *
  * Both metrics are mean luminance in 0..1, so they are directly comparable — the worklet samples a
  * strided subset of the model input and the gate averages the whole resized still, but neither is
@@ -103,7 +103,6 @@ const BOX_MAX = 0.98;
 
 const LIVE_MARGIN = 0.04; // coach this much before the still gate would reject
 const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
-const BRIGHT_THRESHOLD = BRIGHT - LIVE_MARGIN; // 0.76
 /**
  * Live focus coaching: mean horizontal gradient energy (red channel, 8px gap, every 16th pixel).
  *
@@ -169,9 +168,34 @@ const TARGET_FPS_LOW = 6;
  */
 // Zoom-slider geometry. Shared so the knob can be seated on the track by arithmetic instead of a
 // percentage that silently depends on the padding staying put.
+/**
+ * The capture overlay's bottom stack, derived once instead of three times.
+ *
+ * `instructions` sits at 196 and runs to ~230. `zoomWrap` sits above it, and the framing hint
+ * rides just inside the bracket frame above that. Those three used to be independent hand-tuned
+ * numbers, each derived against `instructions` and blind to the others — so on a 667pt screen
+ * (iPhone SE 2/3) the hint's 36% landed at exactly 240, on top of the zoom slider, and the two
+ * comments explaining them disagreed about where the brackets end. Same failure mode as the map
+ * controls: two constants measuring from different origins with nothing forcing them to agree.
+ *
+ * Now the hint's floor is computed FROM the zoom stack, so a change to either one moves the other.
+ */
 const ZOOM_TRACK_H = 4;
 const ZOOM_KNOB = 16;
 const ZOOM_PAD_V = 20;
+/** Bottom edge of the zoom slider, and its total height — the hint must clear their sum. */
+const ZOOM_BOTTOM = 240;
+const ZOOM_HEIGHT = ZOOM_PAD_V * 2 + ZOOM_TRACK_H;
+/** Breathing room between the top of the zoom slider and the framing hint above it. */
+const FRAME_HINT_CLEARANCE = 10;
+/**
+ * The framing hint tracks the bracket frame (a fraction of the screen) but may never sink into the
+ * zoom slider. On a modern iPhone the fraction wins (0.36 x 852 = 307 > 294) and nothing changes;
+ * on an SE the floor wins and the hint sits just above the slider instead of on it.
+ */
+const FRAME_HINT_FRACTION = 0.36;
+const frameHintBottom = (windowH: number) =>
+  Math.max(FRAME_HINT_FRACTION * windowH, ZOOM_BOTTOM + ZOOM_HEIGHT + FRAME_HINT_CLEARANCE);
 
 const PHOTO_LONG_EDGE = 2048; // cap applied when baking in the EXIF orientation
 
@@ -484,11 +508,10 @@ export default function CaptureScreen() {
         const lume = n > 0 ? sum / n : 1;
         const sharp = gc > 0 ? grad / gc : 1;
 
-        // Fold the three gates into one code, in the same priority order the overlays use, and
+        // Fold the gates into one code, in the same priority order the overlays use, and
         // debounce the blur streak here so the JS thread only hears about real changes.
         let gate = GATE_OK;
         if (lume < DARK_THRESHOLD) gate = GATE_DARK;
-        else if (lume > BRIGHT_THRESHOLD) gate = GATE_BRIGHT;
         else if (sharp < BLUR_THRESHOLD) gate = GATE_BLURRY;
         if (gate === GATE_BLURRY) {
           blurStreakSV.value = Math.min(BLUR_SHOW + 2, blurStreakSV.value + 1);
@@ -780,6 +803,10 @@ export default function CaptureScreen() {
 
   return (
     <View style={styles.root}>
+      {/* The root layout pins `style="dark"` app-wide — correct on every light screen, invisible
+          on this one: dark glyphs on a near-black field hide the clock, battery and signal.
+          Screen-local override; expo-status-bar restores the root value on unmount. */}
+      <StatusBar style="light" />
       <GestureDetector gesture={gesture}>
         <View style={StyleSheet.absoluteFill}>
           <ReanimatedCamera
@@ -816,8 +843,8 @@ export default function CaptureScreen() {
           so the two never stack. Framing matters here beyond tidiness: the classifier is
           scale-sensitive, and a lesion parked in the corner is the wide-framing failure mode the
           whole detector-crop path exists to fight. */}
-      {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' && coach !== 'bright' ? (
-        <View style={styles.frameHint} pointerEvents="none">
+      {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' ? (
+        <View style={[styles.frameHint, { bottom: frameHintBottom(SH) }]} pointerEvents="none">
           <ThemedText type="caption" style={styles.frameHintText}>
             Keep the spot centered in the box
           </ThemedText>
@@ -829,8 +856,6 @@ export default function CaptureScreen() {
           preview stays visible and the user can watch it sharpen. */}
       {busy || coach == null ? null : coach === 'dark' ? (
         <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
-      ) : coach === 'bright' ? (
-        <CaptureCoach title="It's too bright" subtitle="Move out of direct light or glare" icon="sun.max" />
       ) : coach === 'blurry' ? (
         <FocusBanner top={insets.top + Space.xxl} steady={tier !== 'low'} />
       ) : (
@@ -1040,13 +1065,11 @@ const styles = StyleSheet.create({
   // Rides just inside the bracket frame's bottom edge (brackets end at bottom: '34%'), so it reads
   // as a label for the box rather than as another floating message.
   //
-  // Do NOT move this lower to sit outside the frame: `instructions` is pinned at bottom 196 and is
-  // ~34pt tall, so on a 667pt screen the bracket bottom (227) is already level with it — there is
-  // no room below the frame on small devices. At 36% the clearance is +10pt on an SE and 60-100pt
-  // on current phones. Re-check this arithmetic before changing either value.
+  // `bottom` is NOT set here — it comes from `frameHintBottom(SH)` at the usage site, which takes
+  // the larger of the frame fraction and a floor derived from the zoom slider. Do not reintroduce a
+  // literal here: a fixed percentage is what put this pill on top of the slider at 667pt.
   frameHint: {
     position: 'absolute',
-    bottom: '36%',
     alignSelf: 'center',
     paddingHorizontal: Space.md,
     paddingVertical: 5,
@@ -1070,10 +1093,11 @@ const styles = StyleSheet.create({
    *
    * The band between the shutter row and that pill is only ~32pt once the multi-photo "N of 3"
    * counter is accounted for, and a slider needs a 44pt touch target — so sharing that strip is
-   * what made the two fight in the first place. Sitting above the pill leaves the frame brackets
-   * (which end ~290pt from the bottom) clear as well.
+   * what made the two fight in the first place. The framing hint above is now derived from
+   * ZOOM_BOTTOM + ZOOM_HEIGHT rather than guessing at where the brackets fall, so moving this
+   * moves the hint with it.
    */
-  zoomWrap: { position: 'absolute', bottom: 240, left: 0, right: 0, alignItems: 'center' },
+  zoomWrap: { position: 'absolute', bottom: ZOOM_BOTTOM, left: 0, right: 0, alignItems: 'center' },
   zoomHit: { width: '62%', paddingVertical: ZOOM_PAD_V, justifyContent: 'center' },
   zoomTrack: {
     width: '100%',

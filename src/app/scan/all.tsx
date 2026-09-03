@@ -21,7 +21,7 @@ type Tab = 'lesions' | 'scans';
  */
 export default function AllScreeningsScreen() {
   const insets = useSafeAreaInsets();
-  const { entries, lesions, loading, screeningsForLesion } = useScanHistory();
+  const { entries, lesions, loading, loadError, screeningsForLesion } = useScanHistory();
   // Seeded from the route once, then left alone: Home's two "See all" links open the tab that
   // matches the section they sit beside. Syncing this in an effect instead would fight the user's
   // own taps on the Segmented (and trip the React Compiler's cascading-render rule).
@@ -32,14 +32,18 @@ export default function AllScreeningsScreen() {
   const visible = useMemo(() => lesions.filter((l) => !l.archived), [lesions]);
 
   const empty = tab === 'lesions' ? visible.length === 0 : entries.length === 0;
+  // Three states, not two. A failed read used to fall through to "you don't have any screenings
+  // yet" — telling a user their history is gone when it is merely unread.
   const emptyCopy = loading
     ? 'Loading your screenings…'
-    : tab === 'lesions'
-      ? 'No tracked spots yet. Every scan you take starts tracking the spot it was taken of.'
-      : 'You don’t have any screenings yet.';
+    : loadError
+      ? 'We couldn’t open your saved screenings. They are still on this device — close the app and open it again.'
+      : tab === 'lesions'
+        ? 'No tracked spots yet. Every scan you take starts tracking the spot it was taken of.'
+        : 'You don’t have any screenings yet.';
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={['top']}>
       <Header />
       <View style={styles.segmentWrap}>
         <Segmented

@@ -88,6 +88,7 @@ ${extraViews(assets.extraPhotos)}
     <div class="urgText">
       <p>${rich(model.urgencyLead)}</p>
       <p>${h(model.recommendation)} The user is strongly advised to <b>${h(lowerFirst(model.priorityAction))}</b>.</p>
+      ${qualifierNote(model)}
     </div>
   </div>
 
@@ -95,6 +96,23 @@ ${extraViews(assets.extraPhotos)}
 </body></html>`;
   assertNoRemoteRefs(html);
   return html;
+}
+
+/**
+ * Why the urgency reads the way it does, when it was not the classifier's own verdict.
+ *
+ * Both flags were computed, persisted and put on the report model, and neither had a single render
+ * site — so a screening whose photo could not be read printed as a clean clinical document
+ * ("MODERATE urgency… the system detected a low-confidence Melanoma classification") with no
+ * statement that the image was unreadable. The in-app result screen has always shown this; the PDF
+ * a clinician actually reads did not. Same wording as the app, so the two surfaces agree.
+ *
+ * The wording itself lives on the model (`summary-report.ts` `assessmentNote`) rather than being
+ * imported here: this template stays free of runtime imports so the node test can render it.
+ */
+function qualifierNote(model: ReportModel): string {
+  if (!model.assessmentNote) return '';
+  return `<p class="caveat"><b>Note on this assessment:</b> ${h(model.assessmentNote)}</p>`;
 }
 
 /**
@@ -261,6 +279,8 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   .urgText p { margin: 0 0 5pt; }
   .urgText p:last-child { margin-bottom: 0; }
   .urgText b { font-weight: 700; }
+
+  .caveat { margin-top: 6pt; padding-left: 8pt; border-left: 2pt solid ${tier.border}; }
 
   /* 6 — disclaimer */
   .alert {

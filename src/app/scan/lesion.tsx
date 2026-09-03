@@ -24,7 +24,7 @@ import { useScanHistory } from "@/lib/scan-history";
 import { useScreeningSession } from "@/lib/screening-session";
 import { summarizeLesionTrend } from "@/lib/triage/lesion-trend";
 import { QUESTIONS } from "@/lib/triage/questions";
-import { CLASS_DISPLAY } from "@/lib/triage/recommendations";
+import { CLASS_DISPLAY, DISCLAIMER } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
 
 const TIER_LABEL: Record<TriageTier, string> = {
@@ -167,7 +167,7 @@ export default function LesionDetailScreen() {
   }
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={['top']}>
       <View style={styles.header}>
         <Pressable
           hitSlop={12}
@@ -381,7 +381,7 @@ export default function LesionDetailScreen() {
                     >
                       The most likely pattern has changed across scans — it now
                       reads as{" "}
-                      {CLASS_DISPLAY[latest.classification.topClass].full}.
+                      {CLASS_DISPLAY[latest.classification.topClass].name}.
                     </ThemedText>
                   </View>
                 ) : null}
@@ -467,6 +467,19 @@ export default function LesionDetailScreen() {
               />
             ) : null}
           </Entrance>
+
+          {/* recommendations.ts calls this "mandatory on every results surface", and until now it
+              rendered on exactly one (the result screen). This screen carries a tier badge, a
+              priority score and a "it now reads as …" verdict — it is a results surface. */}
+          <Entrance index={9}>
+            <ThemedText
+              type="footnote"
+              themeColor="muted"
+              style={styles.disclaimer}
+            >
+              {DISCLAIMER}
+            </ThemedText>
+          </Entrance>
         </EntranceProvider>
       </ScrollView>
     </Screen>
@@ -546,6 +559,7 @@ function mix(a: string, b: string, t: number): string {
 }
 
 const styles = StyleSheet.create({
+  disclaimer: { textAlign: "center", paddingHorizontal: Space.md, paddingTop: Space.base },
   centerFill: {
     flex: 1,
     alignItems: "center",

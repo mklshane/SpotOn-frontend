@@ -138,6 +138,21 @@ export default function AnalysisScreen() {
     }
   }
 
+  /**
+   * Nothing to analyse. The questionnaire now refuses to route here without a photo, so this is a
+   * backstop for any other path that might: `getClassification()` would throw 'classification
+   * never started', and the resulting error state is a trap — its "Try again" calls
+   * `retryClassification`, which returns early on an empty URI list, and back is blocked on this
+   * screen. Leaving instead of failing keeps the session (and the user's answers) alive.
+   */
+  useEffect(() => {
+    if (session.images.length > 0 || session.imageUri) return;
+    console.warn('[analysis] reached with no photo — returning to the capture step');
+    if (router.canGoBack()) router.back();
+    else router.replace(session.followUp ? '/scan/followup-confirm' : '/scan/body');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Join the background classification with the minimum animation beat.
   useEffect(() => {
     if (stage !== 'analyzing') return;

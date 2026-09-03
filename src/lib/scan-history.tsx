@@ -38,6 +38,13 @@ type ScanHistoryContextValue = {
   lesions: Lesion[];
   /** True until the initial SQLite load settles. */
   loading: boolean;
+  /**
+   * The initial read failed. Distinct from `loading: false` with an empty list, which means "you
+   * genuinely have no screenings" — the two used to be indistinguishable, so a failed SQLite read
+   * told a user their entire history was empty. In a longitudinal tracking app that reads as data
+   * loss, which is the one impression this screen must never give by accident.
+   */
+  loadError: boolean;
   getById: (id: string) => ScreeningRecord | undefined;
   getLesionById: (id: string) => Lesion | undefined;
   /** A lesion's screenings, oldest first — the order the timeline reads them in. */
@@ -73,6 +80,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
   const [entries, setEntries] = useState<ScreeningRecord[]>([]);
   const [lesions, setLesions] = useState<Lesion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -82,7 +90,10 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
         setEntries(records);
         setLesions(ls);
       })
-      .catch((e) => console.warn('[history] load failed', e))
+      .catch((e) => {
+        console.warn('[history] load failed', e);
+        if (alive) setLoadError(true);
+      })
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -207,6 +218,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       entries,
       lesions,
       loading,
+      loadError,
       addEntry,
       renameLesion,
       archiveLesion,
@@ -225,6 +237,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       entries,
       lesions,
       loading,
+      loadError,
       addEntry,
       renameLesion,
       archiveLesion,

@@ -136,14 +136,13 @@ export const OFFSET_MAX = 0.25;
 /** Quality-gate verdicts, in the priority order the overlays are shown in. */
 export const GATE_OK = 0;
 export const GATE_DARK = 1;
-export const GATE_BRIGHT = 2;
-export const GATE_BLURRY = 3;
+export const GATE_BLURRY = 2;
 
 /* ------------------------------------------------------------------ coaching */
 
 export type CoachKind = 'search' | 'far' | 'close' | 'offcenter' | 'steady' | 'ready';
 /** Everything the capture screen can be telling the user right now, gates included. */
-export type Coach = CoachKind | 'dark' | 'bright' | 'blurry';
+export type Coach = CoachKind | 'dark' | 'blurry';
 
 /** What the coach knows about the current framing. Null when no lesion is being tracked. */
 export type FrameMetrics = {
@@ -173,7 +172,6 @@ export function computeCoach(
   m: FrameMetrics | null,
 ): Coach | null {
   if (gate === GATE_DARK) return 'dark';
-  if (gate === GATE_BRIGHT) return 'bright';
   if (gate === GATE_BLURRY) return 'blurry';
   if (!guide) return null;
   if (!m) return 'search';

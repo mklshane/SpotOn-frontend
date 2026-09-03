@@ -98,12 +98,30 @@ export function ClinicsView({
       service: service ?? undefined,
       limit: 200,
     };
-    const fetcher =
-      coords && !query.trim()
-        ? nearbyFacilities(coords.latitude, coords.longitude, params)
-        : listFacilities(params);
+    /**
+     * Proximity first, whole directory as the floor.
+     *
+     * `nearbyFacilities` defaults to a 15 km box (`repositories.ts` `radiusM`), and passing no
+     * override meant a user outside a metro area got an empty list and "No clinics found. Try a
+     * different search or filter." — while the local DB held the full national directory. Granting
+     * location made the app strictly worse than denying it. An empty proximity result now falls
+     * back to the unfiltered list rather than being reported as "none exist".
+     */
+    const fetcher = (async () => {
+      if (coords && !query.trim()) {
+        const near = await nearbyFacilities(coords.latitude, coords.longitude, params);
+        if (near.length) return near;
+      }
+      return listFacilities(params);
+    })();
     fetcher
-      .then((rows) => !cancelled && setFacilities(rows))
+      .then((rows) => {
+        if (cancelled) return;
+        // Clear on success: `setError(true)` had no counterpart anywhere, so one failed read
+        // latched the error state for the screen's lifetime — including over this fallback.
+        setError(false);
+        setFacilities(rows);
+      })
       .catch(() => !cancelled && setError(true));
     return () => {
       cancelled = true;

@@ -100,6 +100,8 @@ function record({
   tier = 'critical',
   imageUri = 'file:///tmp/lesion.jpg',
   tps = 7.2,
+  safetyFloorApplied = false,
+  malignantGateApplied = false,
 } = {}) {
   const probs = { BCC: 0.02, BENIGN: 0.03, MEL: confidence, OTHER: 0.02, SCC: 0.03 };
   return {
@@ -131,10 +133,10 @@ function record({
       symptomScore: 2.73,
       tps,
       tier,
-      safetyFloorApplied: false,
-      confidenceQualifier: false,
+      safetyFloorApplied,
+      confidenceQualifier: safetyFloorApplied,
       malignantScore: 0.92,
-      malignantGateApplied: false,
+      malignantGateApplied,
     },
   };
 }
@@ -218,6 +220,47 @@ for (const c of CASES) {
 // Placeholder handling
 {
   const html = buildReportHtml(CASES[4].model, NO_ASSETS);
+  // A screening the model could not read must SAY so on the page a clinician reads. Both flags
+  // were computed, persisted and modelled with no render site anywhere until 2026-08-20.
+  {
+    const floored = buildReportHtml(
+      buildReportModel(record({ tier: 'moderate', safetyFloorApplied: true }), PROFILE),
+      PHOTO,
+    );
+    check('safety-floor report prints the caveat', floored.includes('Note on this assessment:'));
+    check(
+      'safety-floor caveat explains the photo could not be read',
+      floored.includes('could not read your photos clearly enough'),
+    );
+
+    const gatedHtml = buildReportHtml(
+      buildReportModel(record({ tier: 'moderate', malignantGateApplied: true }), PROFILE),
+      PHOTO,
+    );
+    check('gated report prints the caveat', gatedHtml.includes('Note on this assessment:'));
+    check(
+      'gated caveat explains the closest match was not a cancer type',
+      gatedHtml.includes('closest single match'),
+    );
+
+    // The floor is the whole explanation when both fire — the gate's reasoning about spread-out
+    // probabilities is not meaningful on top of "we could not read it".
+    const both = buildReportHtml(
+      buildReportModel(
+        record({ tier: 'moderate', safetyFloorApplied: true, malignantGateApplied: true }),
+        PROFILE,
+      ),
+      PHOTO,
+    );
+    check(
+      'floor wins over gate when both fired',
+      both.includes('could not read your photos') && !both.includes('closest single match'),
+    );
+
+    const plain = buildReportHtml(buildReportModel(record(), PROFILE), PHOTO);
+    check('an ordinary report prints no caveat', !plain.includes('Note on this assessment:'));
+  }
+
   check('missing photo renders a placeholder', html.includes('photoMissing'));
   check('missing photo emits no <img', !html.includes('<img class="photo"'));
   check('missing profile renders em dashes', (html.match(/—/g) ?? []).length >= 4);

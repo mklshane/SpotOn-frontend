@@ -20,7 +20,8 @@ import {
 import { Logo } from '@/components/ui/logo';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
-import { Space } from '@/constants/theme';
+import { Radius, Space } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import {
   getEmailError,
@@ -32,18 +33,21 @@ import {
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
+  const theme = useTheme();
   const [mode, setMode] = useState<IdentifierMode>('phone');
   const [name, setName] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [isAdult, setIsAdult] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [errors, setErrors] = useState<{
     name?: string;
     identifier?: string;
     password?: string;
-    consent?: string;
+    isAdult?: string;
+    acceptedTerms?: string;
   }>({});
 
   function getIdentifierError(value = identifier, identifierMode = mode) {
@@ -75,7 +79,9 @@ export default function RegisterScreen() {
     next.name = getFullNameError(name);
     next.identifier = getIdentifierError();
     next.password = getRegistrationPasswordError(password);
-    if (!consent) next.consent = 'Please agree to continue.';
+    if (!isAdult) next.isAdult = 'Please confirm you are 18 or older.';
+    if (!acceptedTerms)
+      next.acceptedTerms = 'Please accept the Terms and Privacy Policy to continue.';
     if (!next.name) delete next.name;
     if (!next.identifier) delete next.identifier;
     if (!next.password) delete next.password;
@@ -91,7 +97,7 @@ export default function RegisterScreen() {
     const { error } = await signUp({
       password,
       full_name: name.trim(),
-      consent,
+      consent: isAdult && acceptedTerms,
       ...(mode === 'email' ? { email: id } : { phone: id }),
     });
     setSubmitting(false);
@@ -195,16 +201,29 @@ export default function RegisterScreen() {
 
           <View style={styles.actions}>
             <View style={styles.consent}>
-              <Checkbox
-                checked={consent}
-                onChange={(checked) => {
-                  setConsent(checked);
-                  if (checked) {
-                    setErrors((current) => ({ ...current, consent: undefined }));
-                  }
-                }}>
-                <ThemedText type="footnote" themeColor="textSecondary">
-                  I agree to SpotOn’s{' '}
+              <View
+                style={[
+                  styles.notice,
+                  { backgroundColor: theme.backgroundElement, borderColor: theme.hairline },
+                ]}>
+                <ThemedText type="footnote" style={styles.noticeTitle}>
+                  Before you continue
+                </ThemedText>
+                <ThemedText type="footnote" themeColor="textSecondary" style={styles.noticeBody}>
+                  SpotOn is an academic research prototype and is not a medical device or
+                  diagnostic tool. Its results may be inaccurate and should not replace
+                  consultation with a healthcare professional.
+                </ThemedText>
+                <ThemedText type="footnote" themeColor="textSecondary" style={styles.noticeBody}>
+                  By creating an account, you acknowledge the{' '}
+                  <ThemedText
+                    type="footnote"
+                    themeColor="brand"
+                    style={styles.inlineLink}
+                    onPress={() => router.push('/profile/terms')}>
+                    Terms and Conditions
+                  </ThemedText>{' '}
+                  and{' '}
                   <ThemedText
                     type="footnote"
                     themeColor="brand"
@@ -212,12 +231,60 @@ export default function RegisterScreen() {
                     onPress={() => router.push('/profile/privacy')}>
                     Privacy Policy
                   </ThemedText>{' '}
-                  and to processing my health data for screening.
+                  and consent to the collection and processing of your information as described
+                  in the Privacy Policy.
+                </ThemedText>
+              </View>
+
+              <Checkbox
+                checked={isAdult}
+                onChange={(checked) => {
+                  setIsAdult(checked);
+                  if (checked) {
+                    setErrors((current) => ({ ...current, isAdult: undefined }));
+                  }
+                }}>
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  I confirm that I am 18 years old or older.
                 </ThemedText>
               </Checkbox>
-              {errors.consent ? (
+              {errors.isAdult ? (
                 <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
-                  {errors.consent}
+                  {errors.isAdult}
+                </ThemedText>
+              ) : null}
+
+              <Checkbox
+                checked={acceptedTerms}
+                onChange={(checked) => {
+                  setAcceptedTerms(checked);
+                  if (checked) {
+                    setErrors((current) => ({ ...current, acceptedTerms: undefined }));
+                  }
+                }}>
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  I have read and agree to the{' '}
+                  <ThemedText
+                    type="footnote"
+                    themeColor="brand"
+                    style={styles.inlineLink}
+                    onPress={() => router.push('/profile/terms')}>
+                    Terms and Conditions
+                  </ThemedText>{' '}
+                  and{' '}
+                  <ThemedText
+                    type="footnote"
+                    themeColor="brand"
+                    style={styles.inlineLink}
+                    onPress={() => router.push('/profile/privacy')}>
+                    Privacy Policy
+                  </ThemedText>
+                  , and consent to the processing of my health data for screening.
+                </ThemedText>
+              </Checkbox>
+              {errors.acceptedTerms ? (
+                <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
+                  {errors.acceptedTerms}
                 </ThemedText>
               ) : null}
             </View>
@@ -253,7 +320,10 @@ const styles = StyleSheet.create({
   title: { marginTop: Space.sm },
   form: { gap: Space.lg },
   identifier: { marginBottom: -Space.md },
-  consent: { gap: Space.xs, marginBottom: Space.xs },
+  consent: { gap: Space.md, marginBottom: Space.xs },
+  notice: { borderWidth: 1, borderRadius: Radius.md, padding: Space.base, gap: Space.xs },
+  noticeTitle: { fontWeight: '700' },
+  noticeBody: { lineHeight: 18 },
   consentError: { marginLeft: Space.xl + Space.md },
   inlineLink: { fontWeight: '600' },
   center: { textAlign: 'center' },

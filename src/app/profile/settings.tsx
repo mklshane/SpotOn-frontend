@@ -311,7 +311,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label="Terms of Service"
+              label="Terms and Conditions"
               onPress={() => router.push("/profile/terms")}
             />
           </Card>

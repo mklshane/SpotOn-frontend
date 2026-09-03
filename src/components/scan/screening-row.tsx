@@ -43,15 +43,17 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
     <Pressable
       onPress={() => router.push({ pathname: '/scan/result', params: { id: item.id } })}
       accessibilityRole="button"
-      accessibilityLabel={`${cls.full} screening from ${date}`}
+      accessibilityLabel={`${cls.name} screening from ${date}`}
       style={({ pressed }) => pressed && styles.pressed}>
       <Card padded={false} style={styles.row}>
         <ScreeningThumbnail uri={item.imageUri} style={styles.thumb} />
         <View style={styles.rowText}>
           <View style={styles.rowTitle}>
             <View style={[styles.tierDot, { backgroundColor: fg }]} />
+            {/* Hedged label — a scrollable history of "Melanoma" reads as a list of diagnoses.
+                Same choice as the result hero and scan-timeline. */}
             <ThemedText type="headline" numberOfLines={1} style={styles.rowTitleText}>
-              {cls.full}
+              {cls.name}
             </ThemedText>
           </View>
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>

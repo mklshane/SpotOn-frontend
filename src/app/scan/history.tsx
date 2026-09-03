@@ -21,7 +21,7 @@ import { useScanHistory } from '@/lib/scan-history';
  */
 export default function BodyLesionsScreen() {
   const theme = useTheme();
-  const { lesions, entries } = useScanHistory();
+  const { lesions, entries, loading, loadError } = useScanHistory();
 
   const tracked = useMemo(() => lesions.filter((l) => !l.archived), [lesions]);
 
@@ -67,17 +67,28 @@ export default function BodyLesionsScreen() {
       </View>
 
       <View style={styles.copy}>
+        {/* "0 spots tracked" is a claim about the user's data, so it may only be made once the
+            data has actually been read. This screen used to state it during the initial SQLite
+            load, and permanently if that load failed. */}
         <ThemedText type="title2" style={styles.center}>
-          {tracked.length} {tracked.length === 1 ? 'spot' : 'spots'} tracked
+          {loading
+            ? 'Loading your spots…'
+            : loadError
+              ? 'Spots unavailable'
+              : `${tracked.length} ${tracked.length === 1 ? 'spot' : 'spots'} tracked`}
         </ThemedText>
         <ThemedText type="footnote" themeColor="muted" style={styles.center}>
-          {tracked.length === 0
-            ? entries.length > 0
-              ? 'Your screenings aren’t placed on the body yet — mark a location when you scan.'
-              : 'Scan a spot to start tracking it here.'
-            : `Drag to rotate · pinch to zoom · tap a spot to see how it has changed${
-                unplaced > 0 ? ` · ${unplaced} without a marked location` : ''
-              }`}
+          {loading
+            ? ' '
+            : loadError
+              ? 'We couldn’t open your saved spots. They are still on this device — close the app and open it again.'
+              : tracked.length === 0
+                ? entries.length > 0
+                  ? 'Your screenings aren’t placed on the body yet — mark a location when you scan.'
+                  : 'Scan a spot to start tracking it here.'
+                : `Drag to rotate · pinch to zoom · tap a spot to see how it has changed${
+                    unplaced > 0 ? ` · ${unplaced} without a marked location` : ''
+                  }`}
         </ThemedText>
       </View>
     </Screen>

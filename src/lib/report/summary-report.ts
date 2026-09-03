@@ -7,7 +7,9 @@ import { QUESTIONS } from '../triage/questions';
 import {
   CLASS_DISPLAY,
   confidenceBand,
+  CONFIDENCE_QUALIFIER,
   DISCLAIMER,
+  MALIGNANT_GATE,
   REPORT_DISCLAIMER,
   REPORT_LEAD,
   symptomBurden,
@@ -99,6 +101,17 @@ export type ReportModel = {
    */
   imageUris: string[];
   safetyFloorApplied: boolean;
+  /**
+   * Plain-language reason the urgency is not the classifier's own verdict — the Safety Floor's
+   * "we could not read the photo", or the Malignant Gate's "the closest match was not a cancer
+   * type but enough certainty pointed at one". Null when neither fired.
+   *
+   * It exists because both flags above were computed, persisted and modelled with NO render site
+   * anywhere: a screening the model could not read printed as a clean clinical document with no
+   * statement that the image was unreadable. The app has always shown this (result.tsx); the PDF
+   * handed to a clinician did not.
+   */
+  assessmentNote: string | null;
   /** Summed MEL+SCC+BCC probability, as a percentage — the Malignant Gate's input. */
   malignantPct: number;
   malignantGateApplied: boolean;
@@ -203,6 +216,14 @@ export function buildReportModel(
     imageUri: record.imageUri,
     imageUris: record.images?.length ? record.images.map((i) => i.uri) : [record.imageUri],
     safetyFloorApplied: record.triage.safetyFloorApplied,
+    // Safety Floor takes precedence: when the photo could not be read, that is the whole
+    // explanation and the gate's reasoning about spread-out probabilities is not meaningful on top
+    // of it. result.tsx picks `qualifier` over `gated` for the same reason — the two surfaces agree.
+    assessmentNote: record.triage.safetyFloorApplied
+      ? CONFIDENCE_QUALIFIER.body
+      : record.triage.malignantGateApplied
+        ? MALIGNANT_GATE.body
+        : null,
     malignantPct: Math.round(record.triage.malignantScore * 100),
     malignantGateApplied: record.triage.malignantGateApplied,
 
