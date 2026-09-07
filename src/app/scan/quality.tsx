@@ -391,7 +391,8 @@ export default function QualityScreen() {
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;
   // The advisory hair tip is the one reason worth showing on a PASSING photo: hair over the lesion
   // does not make a photo dark, blurry or badly framed, so nothing else would surface it.
-  const showFooter = !analyzing && (!pass || (!!checks?.hair && !checks.hair.ok));
+  const showReasons = !analyzing && (!pass || (!!checks?.hair && !checks.hair.ok));
+  const showRetakeFooter = !analyzing && !pass;
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>
@@ -456,7 +457,7 @@ export default function QualityScreen() {
           ))}
         </Card>
 
-        {showFooter && reasons.length > 0 ? (
+        {showReasons && reasons.length > 0 ? (
           <Animated.View entering={FadeIn} style={styles.reasons}>
             {reasons.map((r) => (
               <ThemedText key={r} type="footnote" themeColor="muted" style={styles.reason}>
@@ -486,7 +487,7 @@ export default function QualityScreen() {
         </Animated.View>
       ) : null}
 
-      {showFooter ? (
+      {showRetakeFooter ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
           <Button label="Retake or choose another" variant="brand" onPress={retake} style={styles.useAnyway} />
           <Pressable hitSlop={10} onPress={proceed} style={styles.retake} accessibilityRole="button">

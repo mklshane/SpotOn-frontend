@@ -67,8 +67,22 @@ export const GLARE_ROI_MAX = 0.2; // fraction of the lesion ROI blown out (>245)
  * tightened the gate and started rejecting good photos. The new value is the one that reproduces
  * the OLD false-reject rate (3.0% of real held-out photos) at the new resolution, so the resolution
  * change banks its sensitivity gain without costing the user anything.
+ *
+ * RELAXED 4.1e-5 -> 2.4e-5 (2026-08-26), on a report that the focus gate was warning about photos
+ * the user considered fine. Measured across 270 app-framed real photos, the gate warned about 8.5%
+ * of them and this term was the largest single contributor at 7.0%. The relaxation is close to free
+ * because of WHAT this term can still catch: it is a per-pixel difference, so on a real (grainy)
+ * capture it is already blind — LESION_EDGE_WIDTH is what catches those, and it is unchanged. All
+ * this bar loses is some of the CLEAN-blur detection it was never needed for:
+ *
+ *   value     app-framed warned     gaussian σ=5, clean     σ=5 + grain
+ *   4.1e-5          8.5%                   100%                38.5%
+ * → 2.4e-5          5.6%                  72.3%                38.5%
+ *
+ * At 2.4e-5 this term accounts for only 0.4% of the remaining warnings — lowering it further buys
+ * almost nothing. Full table: synth/eval/BLUR_GATE.md round 3.
  */
-export const BLUR = 4.1e-5;
+export const BLUR = 2.4e-5;
 /**
  * Weaker-axis gradient energy below this = motion-smeared.
  *
@@ -95,8 +109,13 @@ export const BLUR = 4.1e-5;
  * (this metric measures 0.71x at 1024px). The table above was fitted at 768px and is kept for the
  * shape of the trade-off; the equivalent 1024px points are 1.5e-5 -> 3.5% false / 78% severe-smear
  * caught. Full data: synth/eval/BLUR_GATE.md.
+ *
+ * RELAXED 1.5e-5 -> 0.8e-5 -> 0.6e-5 (2026-08-26, two passes) alongside BLUR, and for the same
+ * reason: it is a per-pixel difference, so it contributes nothing on a grainy capture, and it was
+ * warning about 4.8% of 270 app-framed real photos. What it loses is clean-smear detection (25px
+ * smear: 80.0% -> 30.8%), which is the case grain does not mask and LESION_EDGE_WIDTH still covers.
  */
-export const DIRECTIONAL_BLUR = 1.5e-5;
+export const DIRECTIONAL_BLUR = 0.6e-5;
 
 /**
  * EDGE WIDTH — the focus term that sensor grain cannot fool.
@@ -157,16 +176,21 @@ export const EDGE_GRAD_BINS = 1024;
  *
  *   value   sharp warned   sharp+grain   σ=2+grain   σ=5+grain   25px smear+grain
  *     10        6.2%          3.1%         13.8%       55.4%          23.1%
- *   → 12        1.5%          1.5%          7.7%       40.0%          16.9%
- *     14        1.5%          1.5%          4.6%       21.5%          13.8%
+ *     12        1.5%          1.5%          7.7%       40.0%          16.9%
+ *   → 14        1.5%          1.5%          4.6%       21.5%          13.8%
  *
- * 12 costs 1.5% false warnings — under half what DIRECTIONAL_BLUR was set at — while taking the
- * blurred-and-grainy cases from 0%. **The two real captures that prompted this measure 23.7 and
- * 24.4**, double the bar, so this is not a hair-splitting threshold on the cases it was built for.
- * Lower it to 10 before raising it: the extra catch is real and the extra cost is under 5 points of
- * warnings on a screen that offers "Use anyway".
+ * RAISED 12 -> 14 (2026-08-26) on a second "the gate is too strict" report, after relaxing the two
+ * older terms had taken app-framed warnings only from 8.5% to 5.6% and left them inert. This is the
+ * term that does the work on real captures, so raising it is the one relaxation that genuinely
+ * costs detection — σ=5+grain falls 38.5% -> 21.5% — and it was done knowingly, at the user's
+ * repeated request, to get warnings to 3.0%. It is the FIRST thing to lower again if blurry photos
+ * start getting through.
+ *
+ * **The two real captures that prompted round 2 measure 23.7 and 24.4**, still well clear of 14, so
+ * the reported failures stay caught. 16 would buy only 0.4 more points of warnings for another 5
+ * points of σ=5+grain, which is why the relaxation stops here.
  */
-export const LESION_EDGE_WIDTH = 12;
+export const LESION_EDGE_WIDTH = 14;
 export const SHADOW_GRAD = 0.25; // one side this much darker than the other (0..1) = uneven light (advisory)
 export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
 
