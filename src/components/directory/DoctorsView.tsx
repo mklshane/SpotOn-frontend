@@ -96,8 +96,6 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
 
   return (
     <View style={styles.fill}>
-      {header}
-
       <View style={[styles.list, { paddingTop: topInset }]}>
         {mode === "doctors" ? (
           <FlatList
@@ -139,6 +137,9 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
           />
         )}
       </View>
+
+      {/* Keep the shared segment/search header above the list in web hit-testing order. */}
+      {header}
     </View>
   );
 }

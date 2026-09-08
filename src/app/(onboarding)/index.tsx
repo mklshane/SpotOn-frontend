@@ -67,7 +67,7 @@ const SLIDES: Slide[] = localizedCopy([
 ]);
 
 export default function OnboardingScreen() {
-  useLocale();
+  const locale = useLocale();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const listRef = useRef<FlatList<Slide>>(null);
@@ -116,7 +116,7 @@ export default function OnboardingScreen() {
   );
 
   return (
-    <Screen variant="gradient" padded={false}>
+    <Screen key={locale} variant="gradient" padded={false}>
       <LanguagePicker compact />
       <View style={styles.header}>
         {index > 0 ? (

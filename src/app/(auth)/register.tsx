@@ -33,7 +33,7 @@ import {
 } from '@/lib/form-validation';
 
 export default function RegisterScreen() {
-  useLocale();
+  const locale = useLocale();
   const { signUp } = useAuth();
   const theme = useTheme();
   const [mode, setMode] = useState<IdentifierMode>('phone');
@@ -111,7 +111,7 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen variant="gradient" gradient="dawnSoft">
+    <Screen key={locale} variant="gradient" gradient="dawnSoft">
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}

@@ -24,7 +24,7 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = localizedCopy([
 ]);
 
 export default function CompleteProfileScreen() {
-  useLocale();
+  const locale = useLocale();
   const { user } = useAuth();
   // Already captured at sign-up if they registered by phone — don't ask again.
   const hasPhone = Boolean(user?.phone);
@@ -65,7 +65,7 @@ export default function CompleteProfileScreen() {
   }
 
   return (
-    <Screen variant="gradient" gradient="dawnSoft">
+    <Screen key={locale} variant="gradient" gradient="dawnSoft">
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

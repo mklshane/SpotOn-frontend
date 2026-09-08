@@ -31,7 +31,7 @@ import {
 import { routeAfterAuth } from '@/lib/profile';
 
 export default function LoginScreen() {
-  useLocale();
+  const locale = useLocale();
   const { signIn } = useAuth();
   const [mode, setMode] = useState<IdentifierMode>('phone');
   const [identifier, setIdentifier] = useState('');
@@ -90,7 +90,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen variant="gradient" gradient="dawnSoft">
+    <Screen key={locale} variant="gradient" gradient="dawnSoft">
       <LanguagePicker compact />
       <KeyboardAvoidingView
         style={styles.flex}
