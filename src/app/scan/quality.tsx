@@ -77,7 +77,7 @@ export default function QualityScreen() {
   // `detected` (the live camera's green-box verdict, forwarded by crop.tsx) is deliberately NOT
   // read here any more: it answers "did the detector fire on some preview frame", which this
   // screen now knows is true of bare skin too. The still decides, from checks.lesion below.
-  const { uri } = useLocalSearchParams<{ uri: string; detected?: string }>();
+  const { uri, upscale } = useLocalSearchParams<{ uri: string; detected?: string; upscale?: string }>();
   const session = useScreeningSession();
   const { setImageUri, questionnaireComplete } = session;
 
@@ -114,7 +114,7 @@ export default function QualityScreen() {
     if (!uri) return;
     session.enqueueImage(uri, pendingIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
+  }, [uri, upscale]);
 
   // Join the first pass as soon as it settles and apply the same Safety Floor rule analysis.tsx
   // uses, so the two screens can never disagree about whether a photo is readable.
@@ -187,7 +187,9 @@ export default function QualityScreen() {
       setError(true);
       return;
     }
-    assessImage(uri)
+    // How far crop.tsx had to enlarge the capture. Without it the gate reads a tight auto-zoom
+    // as a blurry photo — the enlargement, not the focus, is what widens the measured edge.
+    assessImage(uri, Number(upscale) || 1)
       .then((c) => alive && setChecks(c))
       .catch((e) => {
         console.warn('[iqa] failed', e);

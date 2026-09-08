@@ -730,7 +730,16 @@ export function hairCoverage(gray: Float32Array, W: number, H: number): number {
  * Compute the six quality checks over a decoded RGBA image (Uint8-like, length W*H*4).
  * Assessed on a centered ROI ≈ the lesion (our crop step centers it), per Stanford TrueImage.
  */
-export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaChecks {
+/**
+ * @param sourceUpscale How much the analysed image was ENLARGED from its true captured pixels
+ *   (output ÷ crop size, 1 when the crop was downscaled or 1:1). See the edgeWidth note below.
+ */
+export function analyzeRgba(
+  data: ArrayLike<number>,
+  W: number,
+  H: number,
+  sourceUpscale = 1,
+): IqaChecks {
   const n = W * H;
   const gray = new Float32Array(n);
   let sumLuma = 0;
@@ -832,8 +841,22 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
     // All three must hold: the Laplacian catches symmetric softness, the directional term catches
     // motion smear, and edgeWidth catches both when grain is masking them. Additive by
     // construction — each can only ever reject MORE than the ones before it.
+    // edgeWidth counts PIXELS, so enlarging the image before measuring inflates it in exact
+    // proportion — a 2.28x upscale turns a true 8.3px edge into 18.9px and fails a limit of 14.
+    // That is what the auto-zoom does whenever the lesion is small in frame: it crops a few
+    // hundred pixels and stretches them to OUTPUT, and the gate then reports manufactured
+    // softness as a blurry photo. Reported 2026-09-09 on a visibly sharp capture, rejected on
+    // BOTH web and device.
+    //
+    // Dividing by the upscale recovers the edge width in real captured pixels. Guarded with
+    // max(1, …) so it can only ever RELAX the artefact case: a crop that was downscaled (which is
+    // what BLUR_GATE.md's 198 calibration photos were, and where the recorded blurry captures
+    // measure 23.7 and 24.4) has an upscale of 1 and is scored exactly as before.
     sharpness: {
-      ok: sharpness >= BLUR && directional >= DIRECTIONAL_BLUR && edgeWidth <= LESION_EDGE_WIDTH,
+      ok:
+        sharpness >= BLUR &&
+        directional >= DIRECTIONAL_BLUR &&
+        edgeWidth / Math.max(1, sourceUpscale) <= LESION_EDGE_WIDTH,
       value: sharpness,
       directional,
       edgeWidth,

@@ -63,9 +63,13 @@ async function loadRgba(uri: string) {
   return transformToRgba(uri, [{ resize: { width: SIZE, height: SIZE } }]);
 }
 
-export async function assessImage(uri: string): Promise<IqaChecks> {
+/**
+ * @param sourceUpscale How much crop.tsx enlarged the capture to reach OUTPUT (1 = never
+ *   enlarged). Only used to undo the pixel inflation in edgeWidth — see image-quality-core.
+ */
+export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaChecks> {
   const raw = await loadRgba(uri);
-  const checks = analyzeRgba(raw.data, raw.width, raw.height);
+  const checks = analyzeRgba(raw.data, raw.width, raw.height, sourceUpscale);
 
   if (DEBUG) {
     console.log(
@@ -76,6 +80,8 @@ export async function assessImage(uri: string): Promise<IqaChecks> {
       'sharpROI=' + checks.sharpness.value.toFixed(6),
       'directional=' + checks.sharpness.directional.toFixed(8),
       'edgeWidth=' + checks.sharpness.edgeWidth.toFixed(2),
+      'upscale=' + sourceUpscale.toFixed(2),
+      'effEdge=' + (checks.sharpness.edgeWidth / Math.max(1, sourceUpscale)).toFixed(2),
       'sharpOk=' + checks.sharpness.ok,
       'shadow=' + checks.shadow.value.toFixed(3),
       'skin=' + checks.skin.coverage.toFixed(2),

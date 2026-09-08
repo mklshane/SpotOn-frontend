@@ -208,7 +208,17 @@ export default function CropScreen() {
       // for the life of the page.
       releaseBlobUri(uri);
       // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
-      router.replace({ pathname: '/scan/quality', params: { uri: result.uri, detected } });
+      router.replace({
+        pathname: '/scan/quality',
+        params: {
+          uri: result.uri,
+          detected,
+          // >1 when the auto-zoom had to enlarge to reach OUTPUT. The blur gate divides the
+          // measured edge width by this, so a tight crop of a small lesion is not mistaken for
+          // a soft photo.
+          upscale: String(Math.max(1, OUTPUT / cropSize)),
+        },
+      });
     } finally {
       setBusy(false);
     }
