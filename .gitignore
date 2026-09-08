@@ -50,3 +50,6 @@ screeningsummary.png
 # Staged by scripts/copy-litert-wasm.mjs (see that file)
 public/litert/
 public/maplibre/
+
+# Vercel project link (contains project/org ids — machine-local)
+.vercel/

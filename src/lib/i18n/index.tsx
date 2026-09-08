@@ -18,8 +18,14 @@ let saving: Promise<void> = Promise.resolve();
 export function setLanguage(next: Locale): Promise<void> {
   const operation = saving.catch(() => {}).then(async () => {
     await loadLanguage();
-    await writeLocale(next);
+    // Update the live UI first. Browser privacy modes can make storage unavailable;
+    // that should never prevent the current page from changing language.
     applyLocale(next);
+    try {
+      await writeLocale(next);
+    } catch {
+      // The choice remains active for this session; the next launch falls back to English.
+    }
     // Keep native notification content in sync without restarting its due date.
     if (Platform.OS !== 'web') {
       const { refreshReminderLanguage } = await import('../notifications');
