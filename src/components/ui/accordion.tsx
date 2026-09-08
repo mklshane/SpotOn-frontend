@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
@@ -36,13 +37,14 @@ const ROW_HEIGHT = 90;
 
 export function Accordion<T extends string>({
   label,
-  placeholder = 'Select',
+  placeholder = t("Select"),
   value,
   options,
   onChange,
   error,
   containerStyle,
 }: AccordionProps<T>) {
+  useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
@@ -128,6 +130,7 @@ type OptionRowProps<T extends string> = {
  *  (Reanimated shared values must come from a hook, so this can't live inline
  *  inside the parent's `.map()`). */
 function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRowProps<T>) {
+  useLocale();
   const theme = useTheme();
   const hovered = useSharedValue(false);
   const highlight = useSharedValue(0);

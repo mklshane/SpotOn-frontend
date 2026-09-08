@@ -1,3 +1,4 @@
+import { localizedCopy, useLocale } from '@/lib/i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -12,13 +13,13 @@ import { ThemedText } from '../themed-text';
 type SF = IconName;
 type TabConfig = { label: string; icon: SF; iconActive?: SF; center?: boolean };
 
-const TABS: Record<string, TabConfig> = {
+const TABS: Record<string, TabConfig> = localizedCopy({
   home: { label: 'Home', icon: 'house', iconActive: 'house.fill' },
   directory: { label: 'Directory', icon: 'building.2', iconActive: 'building.2.fill' },
   scan: { label: 'Scan', icon: 'camera.fill', center: true },
   learn: { label: 'Learn', icon: 'book', iconActive: 'book.fill' },
   profile: { label: 'Profile', icon: 'person', iconActive: 'person.fill' },
-};
+});
 
 type TabBarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
@@ -31,6 +32,7 @@ type TabBarProps = {
 };
 
 export function CustomTabBar({ state, navigation }: TabBarProps) {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 

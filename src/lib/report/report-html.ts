@@ -1,4 +1,5 @@
 import { h } from './escape';
+import { t } from '../i18n/core';
 import { A4, PHOTO_PT, PrintColors as C, PrintTier, EXTRA_PHOTO_PT } from './report-tokens';
 import type { ReportModel, ReportSymptom, RichText } from './summary-report';
 
@@ -36,7 +37,7 @@ export function buildReportHtml(model: ReportModel, assets: ReportAssets): strin
   const tier = PrintTier[model.tier];
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<title>Screening Summary Report</title>
+<title>${t('Screening Summary Report')}</title>
 <!-- No viewport meta: the layout is sized in points against the A4 print box that
      Print.printToFileAsync sets up. A CSS-pixel viewport would rescale it. -->
 <style>${styles(tier)}</style></head>
@@ -44,55 +45,55 @@ export function buildReportHtml(model: ReportModel, assets: ReportAssets): strin
   <div class="hdr">
     <div class="hdrLeft">
       ${assets.wordmark ? `<img class="mark" src="${assets.wordmark}" alt="SpotOn">` : `<div class="markText">SpotOn</div>`}
-      <h1>Screening Summary Report</h1>
+      <h1>${t('Screening Summary Report')}</h1>
     </div>
-    <div class="stamp">Date: ${h(model.dateLabel)}<br>Time: ${h(model.timeLabel)}</div>
+    <div class="stamp">${t('Date')}: ${h(model.dateLabel)}<br>${t('Time')}: ${h(model.timeLabel)}</div>
   </div>
   <div class="rule"></div>
 
-  <div class="sec">Profile</div>
+  <div class="sec">${t('Profile')}</div>
   <table class="profile">
     <tr>
-      <td class="k">Name</td><td class="v">${value(model.patient.name)}</td>
-      <td class="k">Date of Birth</td><td class="v">${value(model.patient.dobLine)}</td>
+      <td class="k">${t('Name')}</td><td class="v">${value(model.patient.name)}</td>
+      <td class="k">${t('Date of Birth')}</td><td class="v">${value(model.patient.dobLine)}</td>
     </tr>
     <tr>
-      <td class="k">Sex</td><td class="v">${value(model.patient.sex)}</td>
-      <td class="k">Contact</td><td class="v">${value(model.patient.contact)}</td>
+      <td class="k">${t('Sex')}</td><td class="v">${value(model.patient.sex)}</td>
+      <td class="k">${t('Contact')}</td><td class="v">${value(model.patient.contact)}</td>
     </tr>
   </table>
 
-  <div class="sec">Lesion Image and Classification Result</div>
+  <div class="sec">${t('Lesion Image and Classification Result')}</div>
   <div class="lesion">
     ${
       assets.photo
         ? `<img class="photo" src="${assets.photo}" alt="Lesion photograph">`
-        : `<div class="photo photoMissing"><span>Lesion photo<br>unavailable</span></div>`
+        : `<div class="photo photoMissing"><span>${t('Lesion photo')}<br>${t('unavailable')}</span></div>`
     }
     <div class="cls">
-      <div class="clsLabel">Classification Result</div>
+      <div class="clsLabel">${t('Classification Result')}</div>
       <div class="clsName">${h(model.classificationFull)} (${h(model.classificationCode)})</div>
-      <div class="clsConf">Model Confidence: <b>${h(model.confidenceLabel)}</b></div>
+      <div class="clsConf">${t('Model Confidence')}: <b>${h(model.confidenceLabel)}</b></div>
     </div>
   </div>
 ${extraViews(assets.extraPhotos)}
-  <div class="sec">Reported Symptoms (Patient Self-Report)</div>
+  <div class="sec">${t('Reported Symptoms (Patient Self-Report)')}</div>
   <table class="sym">
-    <thead><tr><th class="q">Symptom / Sign</th><th class="a">Response</th></tr></thead>
+    <thead><tr><th class="q">${t('Symptom / Sign')}</th><th class="a">${t('Response')}</th></tr></thead>
     <tbody>${model.symptoms.map(symptomRow).join('')}</tbody>
   </table>
 
-  <div class="sec">Urgency Level and Recommendation</div>
+  <div class="sec">${t('Urgency Level and Recommendation')}</div>
   <div class="urg">
     <div class="urgBox"><span class="urgWord">${h(model.urgencyLabel)}</span></div>
     <div class="urgText">
       <p>${rich(model.urgencyLead)}</p>
-      <p>${h(model.recommendation)} The user is strongly advised to <b>${h(lowerFirst(model.priorityAction))}</b>.</p>
+      <p>${h(model.recommendation)} ${t('The user is strongly advised to')} <b>${h(lowerFirst(model.priorityAction))}</b>.</p>
       ${qualifierNote(model)}
     </div>
   </div>
 
-  <div class="alert"><b>IMPORTANT:</b> ${h(model.printDisclaimer)}</div>
+  <div class="alert"><b>${t('IMPORTANT')}:</b> ${h(model.printDisclaimer)}</div>
 </body></html>`;
   assertNoRemoteRefs(html);
   return html;
@@ -112,7 +113,7 @@ ${extraViews(assets.extraPhotos)}
  */
 function qualifierNote(model: ReportModel): string {
   if (!model.assessmentNote) return '';
-  return `<p class="caveat"><b>Note on this assessment:</b> ${h(model.assessmentNote)}</p>`;
+  return `<p class="caveat"><b>${t('Note on this assessment')}:</b> ${h(model.assessmentNote)}</p>`;
 }
 
 /**
@@ -156,10 +157,10 @@ function extraViews(photos: string[] | undefined): string {
   if (!photos?.length) return '';
   return `
   <div class="views">
-    <div class="viewsLabel">Additional views of the same lesion (not used for classification)</div>
+    <div class="viewsLabel">${t('Additional views of the same lesion (not used for classification)')}</div>
     <div class="viewsRow">
       ${photos
-        .map((p, i) => `<img class="viewThumb" src="${p}" alt="Additional lesion view ${i + 2}">`)
+        .map((p, i) => `<img class="viewThumb" src="${p}" alt="${t('Additional lesion view')} ${i + 2}">`)
         .join('')}
     </div>
   </div>`;
@@ -169,7 +170,7 @@ function symptomRow(s: ReportSymptom): string {
   const rowClass = s.answer === 'No' ? ' class="rNo"' : '';
   return (
     `<tr${rowClass}><td class="q">${h(s.question)}</td>` +
-    `<td class="a a${s.answer}">${h(s.answer)}</td></tr>`
+    `<td class="a a${s.answer}">${h(t(s.answer))}</td></tr>`
   );
 }
 

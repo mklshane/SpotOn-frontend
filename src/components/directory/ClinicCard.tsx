@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -19,6 +20,7 @@ export type ClinicCardProps = {
 };
 
 export function ClinicCard({ facility, onPress }: ClinicCardProps) {
+  useLocale();
   const theme = useTheme();
   const distance = 'distance_m' in facility ? facility.distance_m : null;
   const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
@@ -59,7 +61,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
             </View>
 
             <View style={styles.badges}>
-              {facility.has_philhealth ? <Badge label="PhilHealth" /> : null}
+              {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
               {open != null ? <Badge label={open ? 'Open Now' : 'Closed'} tone={open ? 'brand' : 'neutral'} /> : null}
               <Badge label={humanizeTag(facility.type)} />
               {topService ? <Badge label={humanizeTag(topService)} /> : null}
@@ -70,7 +72,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 {facility.address}
               </ThemedText>
               <ThemedText type="footnote" themeColor="muted">
-                Mon–Fri {formatHours(facility.weekday_hours)}
+                {t("Mon–Fri")}{formatHours(facility.weekday_hours)}
               </ThemedText>
               {facility.phone ? (
                 <ThemedText type="footnote" themeColor="muted">
@@ -97,8 +99,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                   themeColor="onBrand"
                   style={styles.actionLabel}
                   numberOfLines={1}>
-                  Directions
-                </ThemedText>
+                  {t("Directions")}</ThemedText>
               </Pressable>
               {facility.phone ? (
                 <Pressable
@@ -106,7 +107,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                   style={[styles.actionIcon, { backgroundColor: theme.elementBg }]}
                   hitSlop={4}
                   accessibilityRole="button"
-                  accessibilityLabel="Call">
+                  accessibilityLabel={t("Call")}>
                   <Icon name="phone.fill" size={16} tintColor={theme.brand} />
                 </Pressable>
               ) : null}
@@ -116,8 +117,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 hitSlop={4}
                 accessibilityRole="button">
                 <ThemedText type="footnote" themeColor="text" style={styles.actionLabel} numberOfLines={1}>
-                  Details
-                </ThemedText>
+                  {t("Details")}</ThemedText>
               </Pressable>
             </View>
           </View>

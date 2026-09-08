@@ -1,6 +1,6 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import { Image } from 'react-native';
-import { loadTensorflowModel } from 'react-native-fast-tflite';
+import * as FileSystem from '@/lib/fs';
+import { assetUri } from '@/lib/asset-uri';
+import { loadTensorflowModel } from '@/lib/tflite';
 
 /** The loaded TFLite model handle (single-class YOLO lesion detector). */
 export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
@@ -68,8 +68,7 @@ let modelPromise: Promise<LesionModel> | null = null;
 export function getLesionModel(): Promise<LesionModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      const src = Image.resolveAssetSource(MODEL_ASSET);
-      let uri = src.uri;
+      let uri = assetUri(MODEL_ASSET);
       if (uri.startsWith('http')) {
         const dest = `${FileSystem.cacheDirectory}lesion_det_y11n_v1_float16.tflite`;
         await FileSystem.downloadAsync(uri, dest);

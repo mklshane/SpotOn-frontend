@@ -1,5 +1,5 @@
 import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from '@/lib/fs';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 import type { ReportAssets } from './report-html';

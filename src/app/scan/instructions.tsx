@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -29,7 +30,7 @@ type Slide = {
 
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
-const SLIDES: Slide[] = [
+const SLIDES: Slide[] = localizedCopy([
   {
     key: 'locate',
     title: 'Locate your lesion',
@@ -62,9 +63,10 @@ const SLIDES: Slide[] = [
     description: 'Check monthly and use SpotOn to track any changes over time.',
     image: require('@/assets/images/instructions/schedule.svg'),
   },
-];
+]);
 
 export default function InstructionsScreen() {
+  useLocale();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const listRef = useRef<FlatList<Slide>>(null);
@@ -105,12 +107,11 @@ export default function InstructionsScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Close instructions">
+          accessibilityLabel={t("Close instructions")}>
           <Icon name="xmark" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Instructions
-        </ThemedText>
+          {t("Instructions")}</ThemedText>
         <View style={styles.headerSpacer} />
       </View>
 

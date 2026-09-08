@@ -1,3 +1,4 @@
+import { localizedCopy } from "./i18n/core";
 /**
  * Display formatting for UserProfile fields.
  *
@@ -6,13 +7,13 @@
  * its dependency graph.
  */
 
-export const SEX_LABELS: Record<string, string> = {
+export const SEX_LABELS: Record<string, string> = localizedCopy({
   male: 'Male',
   female: 'Female',
   intersex: 'Intersex',
   other: 'Other',
   prefer_not_to_say: 'Prefer not to say',
-};
+});
 
 export const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
@@ -68,5 +69,10 @@ export function formatLongDate(isoDate: string | null | undefined): string | nul
   if (!isoDate) return null;
   const [y, m, d] = isoDate.split('-').map(Number);
   if (!y || !m || !d || m < 1 || m > 12) return null;
-  return `${MONTHS[m - 1]} ${d}, ${y}`;
+  return new Intl.DateTimeFormat(getIntlLocale(), {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(y, m - 1, d));
 }
+import { getIntlLocale } from './i18n/core';

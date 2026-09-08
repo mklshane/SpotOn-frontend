@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -25,19 +26,19 @@ import { useAuth } from "@/lib/auth";
 import { sanitizeName } from "@/lib/form-validation";
 import { saveProfile } from "@/lib/profile";
 
-const SEX_OPTIONS: { value: Sex; label: string }[] = [
+const SEX_OPTIONS: { value: Sex; label: string }[] = localizedCopy([
   { value: "female", label: "Female" },
   { value: "male", label: "Male" },
   { value: "intersex", label: "Intersex" },
   { value: "other", label: "Other" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
-];
+]);
 
 const SKIN_TYPE_OPTIONS: {
   value: string;
   label: string;
   description: string;
-}[] = [
+}[] = localizedCopy([
   { value: "1", label: "Type I", description: "Always burns, never tans" },
   {
     value: "2",
@@ -56,9 +57,10 @@ const SKIN_TYPE_OPTIONS: {
     description: "Very rarely burns, tans easily",
   },
   { value: "6", label: "Type VI", description: "Never burns" },
-];
+]);
 
 export default function EditProfileScreen() {
+  useLocale();
   const theme = useTheme();
   const { user, setUser } = useAuth();
 
@@ -142,11 +144,11 @@ export default function EditProfileScreen() {
               hitSlop={12}
               onPress={() => router.back()}
               accessibilityRole="button"
-              accessibilityLabel="Back"
+              accessibilityLabel={t("Back")}
             >
               <Icon name="chevron.left" tintColor={theme.brand} size={20} />
             </Pressable>
-            <ThemedText type="title1">Edit profile</ThemedText>
+            <ThemedText type="title1">{t("Edit profile")}</ThemedText>
           </View>
 
           <AvatarPicker
@@ -157,8 +159,8 @@ export default function EditProfileScreen() {
 
           <View style={styles.form}>
             <TextField
-              label="Full name"
-              placeholder="Your name"
+              label={t("Full name")}
+              placeholder={t("Your name")}
               inputMode="text"
               value={fullName}
               onChangeText={setFullName}
@@ -166,22 +168,22 @@ export default function EditProfileScreen() {
               error={errors.fullName}
             />
             <DateField
-              label="Date of birth"
+              label={t("Date of birth")}
               value={dob}
               onChange={setDob}
               error={errors.dob}
             />
             <Accordion
-              label="Sex"
-              placeholder="Select"
+              label={t("Sex")}
+              placeholder={t("Select")}
               value={sex}
               options={SEX_OPTIONS}
               onChange={setSex}
               error={errors.sex}
             />
             <TextField
-              label="Phone number"
-              placeholder="09xx xxx xxxx"
+              label={t("Phone number")}
+              placeholder={t("09xx xxx xxxx")}
               keyboardType="phone-pad"
               textContentType="telephoneNumber"
               value={phone}
@@ -192,8 +194,8 @@ export default function EditProfileScreen() {
               style={{ color: theme.muted }}
             />
             <Accordion
-              label="Skin type"
-              placeholder="Select"
+              label={t("Skin type")}
+              placeholder={t("Select")}
               value={skinType}
               options={SKIN_TYPE_OPTIONS}
               onChange={setSkinType}
@@ -211,7 +213,7 @@ export default function EditProfileScreen() {
               </ThemedText>
             ) : null}
             <Button
-              label="Save changes"
+              label={t("Save changes")}
               variant="brand"
               loading={submitting}
               onPress={handleSubmit}

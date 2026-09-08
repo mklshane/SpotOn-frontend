@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -26,6 +27,7 @@ const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the imag
 const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {
+  useLocale();
   const { uri, detected, source, lx, ly, lw, lh } = useLocalSearchParams<{
     uri: string;
     detected?: string;
@@ -204,12 +206,11 @@ export default function CropScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel={fromGallery ? 'Choose another photo' : 'Retake'}>
+          accessibilityLabel={fromGallery ? t("Choose another photo") : 'Retake'}>
           <Icon name={fromGallery ? 'photo.on.rectangle' : 'arrow.counterclockwise'} tintColor="#FFFFFF" size={22} />
         </Pressable>
         <ThemedText type="headline" style={styles.title}>
-          Position the spot
-        </ThemedText>
+          {t("Position the spot")}</ThemedText>
         <View style={{ width: 22 }} />
       </View>
 
@@ -236,12 +237,11 @@ export default function CropScreen() {
           </View>
         </View>
         <ThemedText type="footnote" style={styles.hint}>
-          Zoom so the spot fills the circle
-        </ThemedText>
+          {t("Zoom so the spot fills the circle")}</ThemedText>
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Space.lg }]}>
-        <Button label="Use photo" variant="brand" loading={busy} onPress={confirm} />
+        <Button label={t("Use photo")} variant="brand" loading={busy} onPress={confirm} />
         <Pressable hitSlop={10} onPress={() => router.back()} style={styles.retake}>
           <ThemedText type="headline" style={styles.retakeText}>
             {fromGallery ? 'Choose another' : 'Retake'}

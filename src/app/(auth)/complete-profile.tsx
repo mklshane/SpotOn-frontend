@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
@@ -14,15 +15,16 @@ import { useAuth } from '@/lib/auth';
 import { normalizePhilippinePhone, sanitizePhone } from '@/lib/form-validation';
 import { saveProfile } from '@/lib/profile';
 
-const SEX_OPTIONS: { value: Sex; label: string }[] = [
+const SEX_OPTIONS: { value: Sex; label: string }[] = localizedCopy([
   { value: 'female', label: 'Female' },
   { value: 'male', label: 'Male' },
   { value: 'intersex', label: 'Intersex' },
   { value: 'other', label: 'Other' },
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
+]);
 
 export default function CompleteProfileScreen() {
+  useLocale();
   const { user } = useAuth();
   // Already captured at sign-up if they registered by phone — don't ask again.
   const hasPhone = Boolean(user?.phone);
@@ -72,18 +74,17 @@ export default function CompleteProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.header}>
-            <ThemedText type="title1">Tell us about you</ThemedText>
+            <ThemedText type="title1">{t("Tell us about you")}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary">
-              A few details to personalize your screening. This stays private to you.
-            </ThemedText>
+              {t("A few details to personalize your screening. This stays private to you.")}</ThemedText>
           </View>
 
           <View style={styles.form}>
-            <DateField label="Date of birth" onChange={setDob} error={errors.dob} />
+            <DateField label={t("Date of birth")} onChange={setDob} error={errors.dob} />
 
             <Accordion
-              label="Sex"
-              placeholder="Select"
+              label={t("Sex")}
+              placeholder={t("Select")}
               value={sex}
               options={SEX_OPTIONS}
               onChange={setSex}
@@ -92,8 +93,8 @@ export default function CompleteProfileScreen() {
 
             {hasPhone ? null : (
               <TextField
-                label="Phone number (optional)"
-                placeholder="09xx xxx xxxx"
+                label={t("Phone number (optional)")}
+                placeholder={t("09xx xxx xxxx")}
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 value={phone}
@@ -109,9 +110,9 @@ export default function CompleteProfileScreen() {
                 {formError}
               </ThemedText>
             ) : null}
-            <Button label="Continue" variant="brand" loading={submitting} onPress={handleSubmit} />
+            <Button label={t("Continue")} variant="brand" loading={submitting} onPress={handleSubmit} />
             <Button
-              label="Skip for now"
+              label={t("Skip for now")}
               variant="ghost"
               onPress={() => router.replace('/home')}
             />

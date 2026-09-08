@@ -1,3 +1,4 @@
+import { localizedCopy } from "../i18n/core";
 import type { IconName } from '@/components/ui/icon';
 
 import type { Answer, QuestionId } from './types';
@@ -26,7 +27,7 @@ export type QuestionDef = {
   showUglyDucklingExample?: boolean;
 };
 
-export const QUESTIONS: readonly QuestionDef[] = [
+export const QUESTIONS: readonly QuestionDef[] = localizedCopy([
   {
     id: 'evolution',
     kind: 'major',
@@ -103,13 +104,13 @@ export const QUESTIONS: readonly QuestionDef[] = [
     helper: 'Insect bites and minor irritations usually fade within four to eight weeks.',
     icon: 'clock.fill',
   },
-];
+]);
 
-export const ANSWER_OPTIONS: readonly { value: Answer; title: string; subtitle?: string }[] = [
+export const ANSWER_OPTIONS: readonly { value: Answer; title: string; subtitle?: string }[] = localizedCopy([
   { value: 'yes', title: 'Yes' },
   { value: 'no', title: 'No' },
   { value: 'unsure', title: 'I’m not sure', subtitle: 'It’s okay if you can’t tell' },
-];
+]);
 
 export function getQuestion(id: QuestionId): QuestionDef {
   const q = QUESTIONS.find((x) => x.id === id);

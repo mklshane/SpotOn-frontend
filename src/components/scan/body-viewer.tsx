@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 /* eslint-disable react/no-unknown-property -- react-three-fiber three.js props */
 import { Canvas, useFrame, useThree } from '@react-three/fiber/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -94,6 +95,7 @@ function Rig({
 }
 
 export function BodyViewer({ mark, onPick }: BodyViewerProps) {
+  useLocale();
   const azimuth = useSharedValue(0);
   const polar = useSharedValue(Math.PI / 2);
   const radius = useSharedValue(6.4);
@@ -265,7 +267,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       {status !== 'ready' ? (
         <View style={styles.status} pointerEvents="none">
           <ThemedText type="footnote" themeColor={status === 'error' ? 'riskCritical' : 'muted'}>
-            {status === 'error' ? `Model failed — ${errMsg ?? 'unknown'}` : 'Loading 3D model…'}
+            {status === 'error' ? `Model failed — ${errMsg ?? 'unknown'}` : t("Loading 3D model…")}
           </ThemedText>
         </View>
       ) : null}

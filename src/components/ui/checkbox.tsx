@@ -24,7 +24,7 @@ export function Checkbox({ checked, onChange, children }: CheckboxProps) {
           styles.box,
           checked
             ? { backgroundColor: theme.brand, borderColor: theme.brand }
-            : { backgroundColor: 'transparent', borderColor: theme.hairline },
+            : { backgroundColor: 'transparent', borderColor: theme.brand },
         ]}>
         {checked ? <Icon name="checkmark" tintColor={theme.onBrand} size={13} /> : null}
       </View>

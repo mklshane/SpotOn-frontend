@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import type { DoctorSync } from '@/api/types';
@@ -13,6 +14,7 @@ import { humanizeTag } from '@/lib/format';
 export type DoctorCardProps = { doctor: DoctorSync; onPress: () => void };
 
 export function DoctorCard({ doctor, onPress }: DoctorCardProps) {
+  useLocale();
   const theme = useTheme();
   const specialty = doctor.specialties_display || doctor.specialties.map(humanizeTag).join(', ');
   const location = [doctor.city, doctor.region].filter(Boolean).join(' · ');
@@ -46,7 +48,7 @@ export function DoctorCard({ doctor, onPress }: DoctorCardProps) {
           ) : (
             <View style={styles.location} />
           )}
-          {doctor.pds_certified ? <Badge label="PDS Certified" tone="brand" /> : null}
+          {doctor.pds_certified ? <Badge label={t("PDS Certified")} tone="brand" /> : null}
         </View>
       </Card>
     </Pressable>

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type ViewStyle } from 'react-native';
 
@@ -34,6 +35,7 @@ export function IdentifierField({
   error,
   containerStyle,
 }: IdentifierFieldProps) {
+  useLocale();
   const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
@@ -43,7 +45,7 @@ export function IdentifierField({
   return (
     <View style={containerStyle}>
       <ThemedText type="subhead" themeColor="textSecondary" style={styles.label}>
-        {isPhone ? 'Phone number' : 'Email'}
+        {isPhone ? t("Phone number") : 'Email'}
       </ThemedText>
 
       <View style={[styles.field, { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 }]}>

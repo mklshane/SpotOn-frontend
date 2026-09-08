@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Icon } from '@/components/ui/icon';
@@ -23,6 +24,7 @@ export function SearchBar({
   elevation = 'none',
   accessibilityLabel,
 }: SearchBarProps) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -47,7 +49,7 @@ export function SearchBar({
           onPress={() => onChangeText('')}
           hitSlop={13}
           accessibilityRole="button"
-          accessibilityLabel="Clear search">
+          accessibilityLabel={t("Clear search")}>
           <Icon name="xmark.circle.fill" size={18} tintColor={theme.muted} />
         </Pressable>
       ) : null}

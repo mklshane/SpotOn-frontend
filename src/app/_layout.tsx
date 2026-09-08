@@ -1,3 +1,4 @@
+import { LanguageGate, loadLanguage } from '@/lib/i18n';
 import {
   HankenGrotesk_600SemiBold,
   HankenGrotesk_700Bold,
@@ -8,7 +9,7 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { LogBox } from 'react-native';
+import { LogBox, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -75,7 +76,7 @@ export default function RootLayout() {
   // reinstall or a revoked-then-restored permission silently drops a scheduled notification, and
   // the whole point of the reminder is that it survives the user never reopening the app.
   useEffect(() => {
-    initNotifications().catch((e) => console.warn('[notifications] init failed', e));
+    loadLanguage().then(() => initNotifications()).catch((e) => console.warn('[notifications] init failed', e));
   }, []);
 
   if (!ready) {
@@ -83,8 +84,19 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView
+      style={[
+        { flex: 1 },
+        Platform.OS === 'web' && {
+          width: '100%',
+          maxWidth: 430,
+          alignSelf: 'center',
+          overflow: 'hidden',
+        },
+      ]}
+    >
       <SafeAreaProvider>
+        <LanguageGate>
         <AuthProvider>
           <ScanHistoryProvider>
           <ScreeningSessionProvider>
@@ -105,6 +117,7 @@ export default function RootLayout() {
           </ScreeningSessionProvider>
           </ScanHistoryProvider>
         </AuthProvider>
+        </LanguageGate>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

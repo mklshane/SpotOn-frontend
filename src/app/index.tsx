@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -30,6 +31,7 @@ import { isProfileComplete } from '@/lib/profile';
 const MIN_SPLASH_MS = 400;
 
 function LoadingDots() {
+  useLocale();
   const dots = [0, 1, 2];
   return (
     <View style={styles.dotsRow}>
@@ -41,6 +43,7 @@ function LoadingDots() {
 }
 
 function LoadingDot({ delay }: { delay: number }) {
+  useLocale();
   const v = useSharedValue(0.3);
   useEffect(() => {
     v.value = withDelay(
@@ -59,6 +62,7 @@ function LoadingDot({ delay }: { delay: number }) {
 }
 
 export default function SplashScreenRoute() {
+  useLocale();
   const theme = useTheme();
   const { user, loading } = useAuth();
   // The splash runs at the single most contended moment in the process — JS bundle evaluation,
@@ -180,8 +184,7 @@ export default function SplashScreenRoute() {
         <Animated.View style={[styles.lockup, textStyle]}>
           <Logo variant="wordmark" width={232} tint="#FFFFFF" />
           <ThemedText type="callout" themeColor="onBrand" style={styles.tagline}>
-            Spot it early. Stop it early.
-          </ThemedText>
+            {t("Spot it early. Stop it early.")}</ThemedText>
         </Animated.View>
       </View>
 
@@ -189,8 +192,7 @@ export default function SplashScreenRoute() {
       <View style={styles.footer} pointerEvents="none">
         <LoadingDots />
         <ThemedText type="caption" themeColor="onBrand" style={styles.provenance}>
-          Made for the Philippines
-        </ThemedText>
+          {t("Made for the Philippines")}</ThemedText>
       </View>
 
       {/* Edge vignette for focus & depth — a second full-screen gradient pass, so it goes first

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
 
@@ -36,6 +37,7 @@ export function FeaturedEducationCard({
   meta,
   onPress,
 }: FeaturedEducationCardProps) {
+  useLocale();
   const theme = useTheme();
   const { width } = useWindowDimensions();
   const compact = width < 375;
@@ -45,7 +47,7 @@ export function FeaturedEducationCard({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${category}: ${title}`}
-      accessibilityHint="Opens the guide"
+      accessibilityHint={t("Opens the guide")}
       style={styles.pressable}>
       <Card padded={false} style={[styles.card, { borderColor: theme.hairline }]}>
         <View>

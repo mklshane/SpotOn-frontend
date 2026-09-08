@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -34,6 +35,7 @@ import type { Answer, QuestionId } from '@/lib/triage/types';
  * question is answered, so the explicit step costs nothing on a deliberate pass.
  */
 export default function QuestionnaireScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -128,9 +130,9 @@ export default function QuestionnaireScreen() {
 
   function confirmExit() {
     Alert.alert('Leave this check?', 'Your photo and answers will be discarded.', [
-      { text: 'Keep going', style: 'cancel' },
+      { text: t("Keep going"), style: 'cancel' },
       {
-        text: 'Leave',
+        text: t("Leave"),
         style: 'destructive',
         onPress: () => {
           reset();
@@ -150,16 +152,16 @@ export default function QuestionnaireScreen() {
       {/* Header: back through questions · progress · exit */}
       <View style={styles.header}>
         {index > 0 ? (
-          <Pressable hitSlop={12} onPress={() => goTo(index - 1)} accessibilityRole="button" accessibilityLabel="Previous question">
+          <Pressable hitSlop={12} onPress={() => goTo(index - 1)} accessibilityRole="button" accessibilityLabel={t("Previous question")}>
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
         ) : (
           <View style={styles.headerSpacer} />
         )}
         <ThemedText type="headline" themeColor="textSecondary">
-          Question {index + 1} of {questions.length}
+          {t("Question")}{index + 1} {t("of")}{questions.length}
         </ThemedText>
-        <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel="Exit questionnaire">
+        <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel={t("Exit questionnaire")}>
           <Icon name="xmark" tintColor={theme.muted} size={18} />
         </Pressable>
       </View>
@@ -210,8 +212,7 @@ export default function QuestionnaireScreen() {
         {index === 0 ? (
           <Animated.View entering={FadeIn}>
             <ThemedText type="footnote" themeColor="muted" style={styles.reassure}>
-              There are no wrong answers — answer as best you can.
-            </ThemedText>
+              {t("There are no wrong answers — answer as best you can.")}</ThemedText>
           </Animated.View>
         ) : null}
         <Button
@@ -226,14 +227,13 @@ export default function QuestionnaireScreen() {
             hitSlop={10}
             onPress={() => setSkipOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Skip the remaining questions">
+            accessibilityLabel={t("Skip the remaining questions")}>
             {({ pressed }) => (
               <ThemedText
                 type="subhead"
                 themeColor="textSecondary"
                 style={[styles.skip, pressed && styles.skipPressed]}>
-                Skip these questions
-              </ThemedText>
+                {t("Skip these questions")}</ThemedText>
             )}
           </Pressable>
         ) : null}
@@ -242,7 +242,7 @@ export default function QuestionnaireScreen() {
       <ConfirmDialog
         visible={skipOpen}
         icon="questionmark.circle.fill"
-        title="Skip the questions?"
+        title={t("Skip the questions?")}
         message={`We’ll record your ${unanswered} remaining ${
           unanswered === 1 ? 'answer' : 'answers'
         } as “I’m not sure.” That’s okay — but the more you can answer, the more accurate your result.`}
@@ -261,6 +261,7 @@ export default function QuestionnaireScreen() {
  * source images live in assets/reference/ (see reference-images.ts for attribution).
  */
 function ReferenceImage({ id }: { id: QuestionId }) {
+  useLocale();
   const theme = useTheme();
   const source = REFERENCE_IMAGES[id];
   if (!source) return null;
@@ -280,6 +281,7 @@ function ReferenceImage({ id }: { id: QuestionId }) {
 
 /** Thin linear progress bar: brand fill springing over a hairline track. */
 function ProgressBar({ progress }: { progress: number }) {
+  useLocale();
   const theme = useTheme();
   const p = useSharedValue(progress);
   useEffect(() => {

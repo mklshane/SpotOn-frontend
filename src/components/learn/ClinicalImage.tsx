@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -47,6 +48,7 @@ export function ClinicalImage({
   emphasis = false,
   measurement,
 }: ClinicalImageProps) {
+  useLocale();
   const theme = useTheme();
   const spec = getClinicalImage(id);
 
@@ -112,14 +114,14 @@ export function ClinicalImage({
  * the slot needs, so whoever sources the image does not have to go hunting.
  */
 function PhotoNeeded({ needs }: { needs: string }) {
+  useLocale();
   const theme = useTheme();
 
   return (
-    <View style={styles.needed} accessible accessibilityLabel="Clinical photograph not yet available">
+    <View style={styles.needed} accessible accessibilityLabel={t("Clinical photograph not yet available")}>
       <Icon name="photo.on.rectangle" size={22} tintColor={theme.muted} />
       <ThemedText type="caption" themeColor="textSecondary" style={styles.neededLabel}>
-        Clinical photo needed
-      </ThemedText>
+        {t("Clinical photo needed")}</ThemedText>
       {__DEV__ ? (
         <ThemedText type="caption" themeColor="muted" numberOfLines={4} style={styles.neededHint}>
           {needs}

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { ThemedText } from "@/components/themed-text";
 import { DocumentHeader } from "@/components/ui/document-header";
 import { Icon } from "@/components/ui/icon";
@@ -19,6 +20,7 @@ function Section({
   title: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   return (
     <View style={styles.section}>
       <ThemedText type="title2" style={styles.sectionTitle}>
@@ -30,6 +32,7 @@ function Section({
 }
 
 function SubHeading({ children }: { children: React.ReactNode }) {
+  useLocale();
   return (
     <ThemedText type="caption" themeColor="brand" style={styles.subHeading}>
       {children}
@@ -38,6 +41,7 @@ function SubHeading({ children }: { children: React.ReactNode }) {
 }
 
 function Paragraph({ children }: { children: React.ReactNode }) {
+  useLocale();
   return (
     <ThemedText type="subhead" style={styles.paragraph}>
       {children}
@@ -52,6 +56,7 @@ function Bullet({
   label?: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   const theme = useTheme();
   return (
     <View style={styles.bulletRow}>
@@ -70,6 +75,7 @@ function Bullet({
 
 /** Inline tappable link to the Privacy Policy, for use inside body copy. */
 function PolicyLink() {
+  useLocale();
   return (
     <ThemedText
       type="subhead"
@@ -77,12 +83,12 @@ function PolicyLink() {
       style={styles.inlineLink}
       onPress={() => router.push("/profile/privacy")}
     >
-      Privacy Policy
-    </ThemedText>
+      {t("Privacy Policy")}</ThemedText>
   );
 }
 
 function WarningBanner({ children }: { children: React.ReactNode }) {
+  useLocale();
   const theme = useTheme();
   return (
     <View
@@ -111,9 +117,10 @@ function WarningBanner({ children }: { children: React.ReactNode }) {
 }
 
 export default function TermsScreen() {
+  useLocale();
   return (
     <Screen padded={false}>
-      <DocumentHeader title="Terms and Conditions" />
+      <DocumentHeader title={t("Terms and Conditions")} />
 
       <ScrollView
         contentContainerStyle={styles.content}

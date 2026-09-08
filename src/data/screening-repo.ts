@@ -351,7 +351,7 @@ export async function deleteScreening(id: string): Promise<void> {
 
 /** Best-effort unlink of owned photo files. A failure here must never fail the delete. */
 async function deleteImageFiles(uris: readonly string[]): Promise<void> {
-  const FileSystem = await import("expo-file-system/legacy");
+  const FileSystem = await import("@/lib/fs");
   const owned = `${FileSystem.documentDirectory ?? ""}screenings/`;
   for (const uri of uris) {
     if (!uri.startsWith(owned)) continue;

@@ -1,3 +1,5 @@
+import { LanguagePicker } from '@/components/ui/language-picker';
+import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { ApiError } from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
 import { ActionSheet } from "@/components/ui/action-sheet";
@@ -45,10 +47,11 @@ function formatConsentStatus(
   if (!user?.consent_data_privacy) return "Not granted";
   if (!user.consent_at) return "Granted";
   const d = new Date(user.consent_at);
-  return `Granted on ${d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+  return `${t("Granted on")} ${d.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
 }
 
 export default function SettingsScreen() {
+  useLocale();
   const theme = useTheme();
   const { user, signOut } = useAuth();
 
@@ -72,8 +75,8 @@ export default function SettingsScreen() {
         "Notifications are off",
         "SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings.",
         [
-          { text: "Not now", style: "cancel" },
-          { text: "Open settings", onPress: () => Linking.openSettings() },
+          { text: t("Not now"), style: "cancel" },
+          { text: t("Open settings"), onPress: () => Linking.openSettings() },
         ],
       );
     }
@@ -83,7 +86,7 @@ export default function SettingsScreen() {
     if (!remindersEnabled) return "Reminders to re-check a spot after 30 days";
     if (!reminderDueAt) return "On — set after your next low-risk result";
     const due = new Date(reminderDueAt);
-    return `Next reminder on ${due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+    return `${t("Next reminder on")} ${due.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
   })();
 
   // Change password (inline form)
@@ -182,16 +185,15 @@ export default function SettingsScreen() {
             hitSlop={12}
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("Back")}
             style={({ pressed }) => pressed && styles.pressed}
           >
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
         </View>
-        <ThemedText type="largeTitle">Settings</ThemedText>
+        <ThemedText type="largeTitle">{t("Settings")}</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          Manage your account and preferences
-        </ThemedText>
+          {t("Manage your account and preferences")}</ThemedText>
       </View>
 
       <KeyboardAvoidingView
@@ -202,26 +204,28 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.sectionHead}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
+          <Card style={styles.section}><LanguagePicker /></Card>
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Account & Security</ThemedText>
+            <ThemedText type="title2">{t("Account & Security")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="key.fill"
-              label="Change password"
+              label={t("Change password")}
               onPress={() => setShowPasswordForm((s) => !s)}
             />
             {showPasswordForm ? (
               <View style={styles.passwordForm}>
                 <TextField
-                  label="Current password"
+                  label={t("Current password")}
                   secure
                   textContentType="password"
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                 />
                 <TextField
-                  label="New password"
+                  label={t("New password")}
                   secure
                   textContentType="newPassword"
                   value={newPassword}
@@ -233,7 +237,7 @@ export default function SettingsScreen() {
                   </ThemedText>
                 ) : null}
                 <Button
-                  label="Update password"
+                  label={t("Update password")}
                   variant="outline"
                   loading={passwordSubmitting}
                   onPress={handleChangePassword}
@@ -245,7 +249,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="trash.fill"
-              label={deleting ? "Deleting…" : "Delete account"}
+              label={deleting ? "Deleting…" : t("Delete account")}
               destructive
               onPress={
                 deleting ? undefined : () => setConfirmDeleteVisible(true)
@@ -254,12 +258,12 @@ export default function SettingsScreen() {
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Notifications</ThemedText>
+            <ThemedText type="title2">{t("Notifications")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="bell.fill"
-              label="Re-screening reminders"
+              label={t("Re-screening reminders")}
               sublabel={reminderSublabel}
               accessory="switch"
               switchValue={remindersEnabled}
@@ -268,12 +272,12 @@ export default function SettingsScreen() {
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Privacy & Data</ThemedText>
+            <ThemedText type="title2">{t("Privacy & Data")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="shield.fill"
-              label="Data privacy consent"
+              label={t("Data privacy consent")}
               sublabel={formatConsentStatus(user)}
               accessory={null}
             />
@@ -288,12 +292,12 @@ export default function SettingsScreen() {
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">About & Support</ThemedText>
+            <ThemedText type="title2">{t("About & Support")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="info.circle.fill"
-              label="App version"
+              label={t("App version")}
               sublabel={appVersion}
               accessory={null}
             />
@@ -302,7 +306,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="envelope.fill"
-              label="Help & support"
+              label={t("Help & support")}
               sublabel={SUPPORT_EMAIL}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             />
@@ -311,7 +315,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label="Terms and Conditions"
+              label={t("Terms and Conditions")}
               onPress={() => router.push("/profile/terms")}
             />
           </Card>
@@ -319,7 +323,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="lock.fill"
-              label="Privacy Policy"
+              label={t("Privacy Policy")}
               onPress={() => router.push("/profile/privacy")}
             />
           </Card>
@@ -328,12 +332,12 @@ export default function SettingsScreen() {
 
       <ActionSheet
         visible={confirmDeleteVisible}
-        title="Delete your account? This can't be undone."
+        title={t("Delete your account? This can't be undone.")}
         onClose={() => setConfirmDeleteVisible(false)}
         options={[
           {
             key: "delete",
-            label: "Delete account",
+            label: t("Delete account"),
             destructive: true,
             onPress: handleDeleteAccount,
           },

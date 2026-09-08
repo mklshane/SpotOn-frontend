@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
@@ -62,13 +63,14 @@ const READABILITY_GRACE_MS = 2000;
 const LESION_DETECT_TIMEOUT_MS = 4000;
 
 type RowStatus = 'pending' | 'ok' | 'warn';
-const ROW_META: { label: string; icon: IconName }[] = [
+const ROW_META: { label: string; icon: IconName }[] = localizedCopy([
   { label: 'Lighting', icon: 'sun.max' },
   { label: 'Focus', icon: 'camera.viewfinder' },
   { label: 'Lesion in frame', icon: 'sparkles' },
-];
+]);
 
 export default function QualityScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -501,10 +503,10 @@ export default function QualityScreen() {
           no auto-advance — a timer that fires before the offer can be read isn't an offer. */}
       {!analyzing && pass ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Button label="Proceed" variant="brand" onPress={proceed} style={styles.useAnyway} />
+          <Button label={t("Proceed")} variant="brand" onPress={proceed} style={styles.useAnyway} />
           {canAddAngle ? (
             <Button
-              label="Add another photo"
+              label={t("Add another photo")}
               variant="outline"
               icon="plus.viewfinder"
               onPress={addAnotherAngle}
@@ -516,11 +518,10 @@ export default function QualityScreen() {
 
       {showRetakeFooter ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Button label="Retake or choose another" variant="brand" onPress={retake} style={styles.useAnyway} />
+          <Button label={t("Retake or choose another")} variant="brand" onPress={retake} style={styles.useAnyway} />
           <Pressable hitSlop={10} onPress={proceed} style={styles.retake} accessibilityRole="button">
             <ThemedText type="headline" themeColor="textSecondary">
-              Use anyway
-            </ThemedText>
+              {t("Use anyway")}</ThemedText>
           </Pressable>
         </Animated.View>
       ) : null}
@@ -530,6 +531,7 @@ export default function QualityScreen() {
 
 /** Pulsing dot shown while a check is still pending. */
 function PendingDot({ color }: { color: string }) {
+  useLocale();
   const o = useSharedValue(0.4);
   useEffect(() => {
     o.value = withRepeat(withTiming(1, { duration: 650 }), -1, true);

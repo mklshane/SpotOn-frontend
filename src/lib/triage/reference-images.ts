@@ -1,3 +1,4 @@
+import { localizedCopy } from "../i18n/core";
 import type { ImageSourcePropType } from 'react-native';
 
 import type { QuestionId } from './types';
@@ -23,7 +24,7 @@ export const REFERENCE_IMAGES: Partial<Record<QuestionId, ImageSourcePropType>> 
 };
 
 /** Short, plain-language caption for what the reference photo is showing. */
-export const REFERENCE_CAPTIONS: Partial<Record<QuestionId, string>> = {
+export const REFERENCE_CAPTIONS: Partial<Record<QuestionId, string>> = localizedCopy({
   evolution: 'Example: a mole that grew and darkened over time',
   bleeding_nonhealing: 'Example: a spot that crusts and won’t finish healing',
   irregular_border: 'Example: a ragged, uneven edge',
@@ -32,7 +33,7 @@ export const REFERENCE_CAPTIONS: Partial<Record<QuestionId, string>> = {
   larger_7mm: 'Example: a spot wider than a pencil eraser',
   ugly_duckling: 'Example: one spot that stands out from the rest',
   persistent_2mo: 'Example: a spot that persists and doesn’t fade',
-};
+});
 
 export type ReferenceImageCredit = {
   id: QuestionId;
@@ -44,7 +45,7 @@ export type ReferenceImageCredit = {
 };
 
 /** Attribution for the reference photos, for an in-app licenses/credits screen. */
-export const REFERENCE_IMAGE_CREDITS: readonly ReferenceImageCredit[] = [
+export const REFERENCE_IMAGE_CREDITS: readonly ReferenceImageCredit[] = localizedCopy([
   // NOTE: the five entries below were replaced 2026-07-15 with images supplied directly by the
   // product owner. Provenance/licensing is UNVERIFIED — some carry third-party watermarks
   // (e.g. sciencephoto.com, VisualDx). Confirm rights before shipping to production.
@@ -105,4 +106,4 @@ export const REFERENCE_IMAGE_CREDITS: readonly ReferenceImageCredit[] = [
     license: 'Public domain',
     sourceUrl: 'https://commons.wikimedia.org/wiki/File:Squamous_cell_carcinoma_(2).jpg',
   },
-];
+]);

@@ -29,12 +29,13 @@ const out = mkdtempSync(join(tmpdir(), 'scratch-files-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/scratch-files.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019,dom', '--moduleResolution', 'bundler'],
+  ['src/lib/scratch-files.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019,dom', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
-// The one dependency is expo-file-system/legacy, which cannot load outside a native runtime.
-// Point the compiled import at a stub backed by a scriptable directory tree.
+// scratch-files imports ./fs, which re-exports expo-file-system/legacy — unloadable outside a
+// native runtime. fs.ts is compiled alongside (tsc needs it to typecheck) but never loaded:
+// the import is repointed straight at a stub backed by a scriptable directory tree.
 writeFileSync(
   join(out, 'fs-stub.js'),
   `export let documentDirectory = '';
@@ -75,12 +76,13 @@ export async function getInfoAsync(uri) {
 );
 const js = join(out, 'scratch-files.js');
 const compiled = readFileSync(js, 'utf8');
-if (!compiled.includes('expo-file-system/legacy')) {
-  console.error('FATAL: compiled scratch-files.js no longer imports expo-file-system/legacy — the');
-  console.error('stub swap below is stale and the test would silently exercise nothing.');
+if (!compiled.includes('./fs')) {
+  console.error('FATAL: compiled scratch-files.js no longer imports ./fs — the stub swap below is');
+  console.error('stale and the test would silently exercise nothing.');
   process.exit(1);
 }
-writeFileSync(js, compiled.replace(/["']expo-file-system\/legacy["']/, "'./fs-stub.js'"));
+// Node ESM needs the extension on a relative specifier, so name the stub explicitly.
+writeFileSync(js, compiled.replace(/["']\.\/fs["']/, "'./fs-stub.js'"));
 
 const { discardScratch, sweepScratchFiles } = await import(pathToFileURL(js).href);
 const stub = await import(pathToFileURL(join(out, 'fs-stub.js')).href);

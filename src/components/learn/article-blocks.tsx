@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import * as Linking from 'expo-linking';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -21,6 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
  * in how they announce themselves, which is what keeps the set coherent.
  */
 export function BlockHeading({ title, intro }: { title?: string; intro?: string }) {
+  useLocale();
   const theme = useTheme();
   if (!title && !intro) return null;
 
@@ -45,6 +47,7 @@ export function BlockHeading({ title, intro }: { title?: string; intro?: string 
 
 /** Plain headed prose. Consecutive prose blocks are grouped into one card. */
 export function ProseGroup({ blocks }: { blocks: Extract<ArticleBlock, { kind: 'prose' }>[] }) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -74,6 +77,7 @@ export function ProseGroup({ blocks }: { blocks: Extract<ArticleBlock, { kind: '
  * the difference is the only thing that stands out.
  */
 export function CompareBlock({ block }: { block: Extract<ArticleBlock, { kind: 'compare' }> }) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -129,6 +133,7 @@ export function CompareBlock({ block }: { block: Extract<ArticleBlock, { kind: '
 
 /** An ordered walkthrough, connected down the gutter so the sequence is obvious. */
 export function StepsBlock({ block }: { block: Extract<ArticleBlock, { kind: 'steps' }> }) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -170,6 +175,7 @@ export function StepsBlock({ block }: { block: Extract<ArticleBlock, { kind: 'st
  * `tips` breaks advice into separate cards you can scan and act on one by one.
  */
 export function ListBlock({ block }: { block: Extract<ArticleBlock, { kind: 'list' }> }) {
+  useLocale();
   const theme = useTheme();
 
   if (block.variant === 'tips') {
@@ -225,6 +231,7 @@ export function ListBlock({ block }: { block: Extract<ArticleBlock, { kind: 'lis
  * are captions for the artwork, not a second description of the article.
  */
 export function VisualBlock({ block }: { block: Extract<ArticleBlock, { kind: 'visual' }> }) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -263,6 +270,7 @@ export function VisualBlock({ block }: { block: Extract<ArticleBlock, { kind: 'v
  * silhouettes are what make the pattern land.
  */
 export function BodyAreasBlock({ block }: { block: Extract<ArticleBlock, { kind: 'bodyAreas' }> }) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -292,6 +300,7 @@ export function BodyAreasBlock({ block }: { block: Extract<ArticleBlock, { kind:
  * the few places where waiting genuinely costs something, so it keeps its force.
  */
 export function NoticeBlock({ block }: { block: Extract<ArticleBlock, { kind: 'notice' }> }) {
+  useLocale();
   const theme = useTheme();
   const caution = block.tone === 'caution';
   const accent = caution ? theme.riskHigh : theme.brandPressed;
@@ -320,6 +329,7 @@ export function NoticeBlock({ block }: { block: Extract<ArticleBlock, { kind: 'n
  * round trips through the navigator.
  */
 export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 'subtypes' }> }) {
+  useLocale();
   const theme = useTheme();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -362,8 +372,7 @@ export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 
                 <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
                 <View style={styles.subtypeDetail}>
                   <ThemedText type="subhead" style={styles.subtypeLabel}>
-                    What it may look like
-                  </ThemedText>
+                    {t("What it may look like")}</ThemedText>
                   <ThemedText type="callout" themeColor="textSecondary">
                     {item.appearance}
                   </ThemedText>
@@ -380,8 +389,7 @@ export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 
                   {item.location ? (
                     <>
                       <ThemedText type="subhead" style={styles.subtypeLabel}>
-                        Common location
-                      </ThemedText>
+                        {t("Common location")}</ThemedText>
                       <ThemedText type="callout" themeColor="textSecondary">
                         {item.location}
                       </ThemedText>
@@ -416,12 +424,13 @@ export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 
  * difference between a claim that is sourced and one that is not yet.
  */
 export function SourcesBlock({ block }: { block: Extract<ArticleBlock, { kind: 'sources' }> }) {
+  useLocale();
   const theme = useTheme();
   const pending = block.pending ?? [];
 
   return (
     <View style={styles.sources}>
-      <BlockHeading title="Sources" />
+      <BlockHeading title={t("Sources")} />
 
       {block.sources.map((id) => {
         const source = SOURCES[id];
@@ -441,8 +450,7 @@ export function SourcesBlock({ block }: { block: Extract<ArticleBlock, { kind: '
                 {source.title}
               </ThemedText>
               <ThemedText type="caption" style={{ color: theme.brandPressed }}>
-                View source
-              </ThemedText>
+                {t("View source")}</ThemedText>
             </View>
             <Icon name="arrow.up.right" size={15} tintColor={theme.brandPressed} />
           </PressableScale>
@@ -459,8 +467,7 @@ export function SourcesBlock({ block }: { block: Extract<ArticleBlock, { kind: '
                 {gap.org}
               </ThemedText>
               <ThemedText type="subhead" style={styles.sourceTitle}>
-                Needs a verified source
-              </ThemedText>
+                {t("Needs a verified source")}</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 {gap.claim}
               </ThemedText>
@@ -478,6 +485,7 @@ export function SourcesBlock({ block }: { block: Extract<ArticleBlock, { kind: '
  * information came from. Renders nothing while every slot is still a diagram.
  */
 export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalImageId[] }) {
+  useLocale();
   const theme = useTheme();
   const credits = activeImageCredits(imageIds);
   if (credits.length === 0) return null;
@@ -485,8 +493,7 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
   return (
     <View style={styles.credits}>
       <ThemedText type="caption" themeColor="muted" style={styles.creditsHeading}>
-        IMAGE CREDITS
-      </ThemedText>
+        {t("IMAGE CREDITS")}</ThemedText>
       {credits.map((credit) =>
         // A credit covering more than one source has no single page to open, so
         // it renders as plain text rather than a link that would point at only
@@ -499,14 +506,14 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
             accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
             style={styles.creditRow}>
             <ThemedText type="caption" themeColor="textSecondary">
-              Image source: {credit.org} ({credit.licence})
+              {t("Image source:")}{credit.org} ({credit.licence})
             </ThemedText>
             <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
           </PressableScale>
         ) : (
           <View key={credit.org} style={styles.creditRow}>
             <ThemedText type="caption" themeColor="textSecondary">
-              Image source: {credit.org} ({credit.licence})
+              {t("Image source:")}{credit.org} ({credit.licence})
             </ThemedText>
           </View>
         ),

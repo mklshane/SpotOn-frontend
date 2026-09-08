@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -66,6 +67,7 @@ function describeError(step: string, e: unknown): string {
  * persists the record, and hands off to the results screen.
  */
 export default function AnalysisScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -271,14 +273,12 @@ export default function AnalysisScreen() {
               <View style={[styles.countChip, { backgroundColor: theme.elementBg }]}>
                 <Icon name="square.stack.3d.up.fill" tintColor={theme.textSecondary} size={13} />
                 <ThemedText type="caption" themeColor="textSecondary">
-                  {session.images.length} photos
-                </ThemedText>
+                  {session.images.length} {t("photos")}</ThemedText>
               </View>
             ) : null}
             <Animated.View key={statusIdx} entering={FadeIn} style={styles.header}>
               <ThemedText type="title2" style={styles.center}>
-                Analyzing
-              </ThemedText>
+                {t("Analyzing")}</ThemedText>
               <ThemedText type="subhead" themeColor="textSecondary" style={styles.center}>
                 {STATUS_LINES[statusIdx]}
               </ThemedText>
@@ -308,12 +308,9 @@ export default function AnalysisScreen() {
           <Animated.View entering={FadeInDown} style={styles.stateWrap}>
             <IconCircle icon="exclamationmark.triangle.fill" variant="tint" size={72} iconColor={theme.riskModerate} />
             <ThemedText type="title2" style={styles.center}>
-              We couldn’t analyze this photo
-            </ThemedText>
+              {t("We couldn’t analyze this photo")}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
-              Something went wrong while analyzing on your device. Your answers are saved — you can
-              try again, or come back later.
-            </ThemedText>
+              {t("Something went wrong while analyzing on your device. Your answers are saved — you can try again, or come back later.")}</ThemedText>
             {__DEV__ && errorDetail ? (
               <ThemedText type="footnote" themeColor="muted" style={styles.center}>
                 {errorDetail}
@@ -341,11 +338,10 @@ export default function AnalysisScreen() {
             </>
           ) : (
             <>
-              <Button label="Try again" variant="brand" onPress={retryAfterError} style={styles.cta} />
+              <Button label={t("Try again")} variant="brand" onPress={retryAfterError} style={styles.cta} />
               <Pressable hitSlop={10} onPress={exitToHome} style={styles.secondary} accessibilityRole="button">
                 <ThemedText type="headline" themeColor="textSecondary">
-                  Back to home
-                </ThemedText>
+                  {t("Back to home")}</ThemedText>
               </Pressable>
             </>
           )}

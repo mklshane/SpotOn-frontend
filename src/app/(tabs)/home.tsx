@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
@@ -68,6 +69,7 @@ function getTierColors(theme: ReturnType<typeof useTheme>, tier: TriageTier) {
 }
 
 function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
+  useLocale();
   const theme = useTheme();
   const tierColors = getTierColors(theme, item.triage.tier);
   const location = item.mark?.region ?? 'Unmarked location';
@@ -116,6 +118,7 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
 }
 
 export default function HomeScreen() {
+  useLocale();
   const theme = useTheme();
   const { user } = useAuth();
   const { entries, lesions, loading } = useScanHistory();
@@ -189,7 +192,7 @@ export default function HomeScreen() {
         <Pressable
           onPress={() => router.push('/scan/body')}
           accessibilityRole="button"
-          accessibilityLabel="Start a new screening"
+          accessibilityLabel={t("Start a new screening")}
           style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}>
           <Image
             source={require('@/assets/images/home-screening-hero.png')}
@@ -215,22 +218,19 @@ export default function HomeScreen() {
               <Icon name="camera.viewfinder" tintColor={theme.onBrand} size={24} />
             </View>
             <ThemedText type="title2" themeColor="onBrand">
-              New screening
-            </ThemedText>
+              {t("New screening")}</ThemedText>
             <ThemedText type="footnote" themeColor="onBrand" style={styles.heroSubtitle}>
-              Take a clear photo for private, on-device triage.
-            </ThemedText>
+              {t("Take a clear photo for private, on-device triage.")}</ThemedText>
             <View style={[styles.heroButton, { backgroundColor: theme.surface }]}>
               <ThemedText type="subhead" themeColor="brand">
-                Start screening
-              </ThemedText>
+                {t("Start screening")}</ThemedText>
               <Icon name="chevron.right" tintColor={theme.brand} size={15} />
             </View>
           </View>
         </Pressable>
 
         <View style={styles.sectionHead}>
-          <ThemedText type="title2">Your activity</ThemedText>
+          <ThemedText type="title2">{t("Your activity")}</ThemedText>
         </View>
 
         <View
@@ -274,8 +274,7 @@ export default function HomeScreen() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
                 style={styles.activityCaption}>
-                Completed screenings
-              </ThemedText>
+                {t("Completed screenings")}</ThemedText>
             </View>
           </View>
 
@@ -315,7 +314,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.sectionHead}>
-          <ThemedText type="title2">Recent screenings</ThemedText>
+          <ThemedText type="title2">{t("Recent screenings")}</ThemedText>
           {entries.length > recent.length ? (
             <Pressable
               hitSlop={8}
@@ -323,11 +322,10 @@ export default function HomeScreen() {
               // beside a list of screenings should open the list of screenings.
               onPress={() => router.push({ pathname: '/scan/all', params: { tab: 'scans' } })}
               accessibilityRole="button"
-              accessibilityLabel="See all screenings"
+              accessibilityLabel={t("See all screenings")}
               style={({ pressed }) => pressed && styles.pressed}>
               <ThemedText type="subhead" themeColor="brand">
-                See all
-              </ThemedText>
+                {t("See all")}</ThemedText>
             </Pressable>
           ) : null}
         </View>
@@ -369,16 +367,15 @@ export default function HomeScreen() {
         {spots.length > 0 ? (
           <>
             <View style={styles.sectionHead}>
-              <ThemedText type="title2">Tracked spots</ThemedText>
+              <ThemedText type="title2">{t("Tracked spots")}</ThemedText>
               <Pressable
                 hitSlop={8}
                 onPress={() => router.push({ pathname: '/scan/all', params: { tab: 'lesions' } })}
                 accessibilityRole="button"
-                accessibilityLabel="See all tracked spots"
+                accessibilityLabel={t("See all tracked spots")}
                 style={({ pressed }) => pressed && styles.pressed}>
                 <ThemedText type="subhead" themeColor="brand">
-                  See all
-                </ThemedText>
+                  {t("See all")}</ThemedText>
               </Pressable>
             </View>
 
@@ -407,10 +404,9 @@ export default function HomeScreen() {
             <Icon name="lock.shield.fill" tintColor={theme.brand} size={22} />
           </View>
           <View style={styles.privacyText}>
-            <ThemedText type="headline">Private by design</ThemedText>
+            <ThemedText type="headline">{t("Private by design")}</ThemedText>
             <ThemedText type="footnote" themeColor="textSecondary">
-              Analysis runs on your device. Core screening works offline.
-            </ThemedText>
+              {t("Analysis runs on your device. Core screening works offline.")}</ThemedText>
           </View>
         </View>
       </Animated.ScrollView>

@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from '@/lib/fs';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
@@ -7,6 +7,8 @@ import { loadReportAssets } from './report-assets';
 import { phtFileStamp } from './report-datetime';
 import { buildReportHtml } from './report-html';
 import { A4 } from './report-tokens';
+import { ReportError } from './report-error';
+import type { GeneratedReport } from './report-error';
 import type { ReportModel } from './summary-report';
 
 /**
@@ -18,26 +20,10 @@ import type { ReportModel } from './summary-report';
  * into the template.
  */
 
-export type GeneratedReport = {
-  /** file:// path to the PDF in the cache directory. */
-  uri: string;
-  fileName: string;
-  /** The exact HTML the PDF was rendered from, reused by printing on Android. */
-  html: string;
-};
-
-export type ReportErrorCode = 'render-failed' | 'sharing-unavailable' | 'print-failed';
-
-export class ReportError extends Error {
-  constructor(
-    readonly code: ReportErrorCode,
-    message: string,
-    readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = 'ReportError';
-  }
-}
+// Declared in report-error.ts so the web path can share them; re-exported here so every existing
+// import site (scan/report.tsx) keeps working unchanged.
+export { ReportError } from './report-error';
+export type { GeneratedReport, ReportErrorCode } from './report-error';
 
 /**
  * Renders the report to a PDF in the cache directory and returns its location.

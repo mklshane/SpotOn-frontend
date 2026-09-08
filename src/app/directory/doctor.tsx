@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -53,6 +54,7 @@ function availabilityLine(link: BookingLinkWithPlatform): string | null {
 }
 
 export default function DoctorDetailScreen() {
+  useLocale();
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [doctor, setDoctor] = useState<DoctorSync | null>(null);
@@ -93,26 +95,25 @@ export default function DoctorDetailScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t("Back")}
         >
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Doctor
-        </ThemedText>
+          {t("Doctor")}</ThemedText>
         <View style={styles.headerSpacer} />
       </View>
 
       {loading ? (
-        <ListState kind="loading" title="Loading doctor…" />
+        <ListState kind="loading" title={t("Loading doctor…")} />
       ) : error ? (
         <ListState
           kind="error"
-          title="Couldn't load doctor"
-          subtitle="Check your connection and try again."
+          title={t("Couldn't load doctor")}
+          subtitle={t("Check your connection and try again.")}
         />
       ) : !doctor ? (
-        <ListState kind="error" title="Doctor not found" />
+        <ListState kind="error" title={t("Doctor not found")} />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
           <View style={styles.identity}>
@@ -148,7 +149,7 @@ export default function DoctorDetailScreen() {
             ) : null}
             <View style={styles.badges}>
               {doctor.pds_certified ? (
-                <Badge label="PDS Certified" tone="brand" />
+                <Badge label={t("PDS Certified")} tone="brand" />
               ) : null}
               {doctor.specialties.map((s) => (
                 <Badge key={s} label={humanizeTag(s)} />
@@ -175,7 +176,7 @@ export default function DoctorDetailScreen() {
               ) : null}
               {doctor.website ? (
                 <Button
-                  label="Website"
+                  label={t("Website")}
                   variant="outline"
                   icon="globe"
                   onPress={() => openWebsite(doctor.website as string)}
@@ -188,7 +189,7 @@ export default function DoctorDetailScreen() {
           {practices.length > 0 ? (
             <>
               <View style={styles.sectionHeader}>
-                <ThemedText type="title2">Practices at</ThemedText>
+                <ThemedText type="title2">{t("Practices at")}</ThemedText>
                 <ThemedText type="footnote" themeColor="muted">
                   {practices.length === 1 ? "1 clinic" : `${practices.length} clinics`}
                 </ThemedText>
@@ -243,7 +244,7 @@ export default function DoctorDetailScreen() {
           ) : null}
 
           <View style={styles.sectionHeader}>
-            <ThemedText type="title2">Book online</ThemedText>
+            <ThemedText type="title2">{t("Book online")}</ThemedText>
             {links.length > 0 ? (
               <ThemedText type="footnote" themeColor="muted">
                 {links.length === 1
@@ -255,8 +256,8 @@ export default function DoctorDetailScreen() {
           {links.length === 0 ? (
             <ListState
               kind="empty"
-              title="No booking links yet"
-              subtitle="Check back later."
+              title={t("No booking links yet")}
+              subtitle={t("Check back later.")}
             />
           ) : (
             links.map((link) => {
@@ -328,7 +329,7 @@ export default function DoctorDetailScreen() {
                         ) : null}
                         {link.last_verified ? (
                           <ThemedText type="caption" themeColor="muted">
-                            Verified {formatShortDate(link.last_verified)}
+                            {t("Verified")}{formatShortDate(link.last_verified)}
                           </ThemedText>
                         ) : null}
                       </View>

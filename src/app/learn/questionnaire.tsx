@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
@@ -18,7 +19,7 @@ import { useTheme } from '@/hooks/use-theme';
  * same numbered layout the Self-Check guide uses, so the preview reads as a
  * genuine explanation of the feature rather than a placeholder card.
  */
-const PREVIEW: Extract<ArticleBlock, { kind: 'steps' }> = {
+const PREVIEW: Extract<ArticleBlock, { kind: 'steps' }> = localizedCopy({
   kind: 'steps',
   heading: 'What it will ask you',
   intro: 'Short questions, answered in a couple of minutes.',
@@ -40,15 +41,16 @@ const PREVIEW: Extract<ArticleBlock, { kind: 'steps' }> = {
       detail: 'A plain-language read on how often to check your skin, and when it is worth seeing a dermatologist.',
     },
   ],
-};
+});
 
 export default function LearnQuestionnaireScreen() {
+  useLocale();
   const theme = useTheme();
   const selfCheck = getTopic('self-check');
 
   return (
     <Screen padded={false}>
-      <LearnDetailHeader title="Self-Check" />
+      <LearnDetailHeader title={t("Self-Check")} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -62,19 +64,15 @@ export default function LearnQuestionnaireScreen() {
             <View style={styles.heroText}>
               <View style={styles.eyebrowRow}>
                 <ThemedText type="caption" style={[styles.eyebrow, { color: theme.brandPressed }]}>
-                  SELF-CHECK
-                </ThemedText>
+                  {t("SELF-CHECK")}</ThemedText>
                 <View style={[styles.badge, { backgroundColor: theme.elementBg }]}>
                   <ThemedText type="caption" themeColor="textSecondary" style={styles.badgeText}>
-                    COMING SOON
-                  </ThemedText>
+                    {t("COMING SOON")}</ThemedText>
                 </View>
               </View>
-              <ThemedText type="title1">SpotOn Questionnaire</ThemedText>
+              <ThemedText type="title1">{t("SpotOn Questionnaire")}</ThemedText>
               <ThemedText type="callout" themeColor="textSecondary">
-                A guided set of questions that turns what you know about your own skin into a clear sense of how
-                closely to watch it.
-              </ThemedText>
+                {t("A guided set of questions that turns what you know about your own skin into a clear sense of how closely to watch it.")}</ThemedText>
             </View>
           </Card>
 
@@ -83,8 +81,7 @@ export default function LearnQuestionnaireScreen() {
           {selfCheck ? (
             <>
               <ThemedText type="headline" style={styles.meanwhile}>
-                In the meantime
-              </ThemedText>
+                {t("In the meantime")}</ThemedText>
               <EducationCard
                 icon={selfCheck.icon}
                 tag={`Self-Check · ${getTopicReadMinutes(selfCheck)} min read`}
@@ -98,9 +95,7 @@ export default function LearnQuestionnaireScreen() {
           <View style={[styles.note, { backgroundColor: theme.brandTint }]}>
             <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
             <ThemedText type="footnote" themeColor="textSecondary" style={styles.noteText}>
-              The questionnaire will estimate how much attention your skin needs. It will not diagnose anything, and
-              it does not replace advice from a dermatologist.
-            </ThemedText>
+              {t("The questionnaire will estimate how much attention your skin needs. It will not diagnose anything, and it does not replace advice from a dermatologist.")}</ThemedText>
           </View>
         </View>
       </ScrollView>

@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
@@ -21,6 +22,7 @@ import { formatHours, isOpenNow } from "@/lib/hours";
 import { callNumber, openDirections, openWebsite } from "@/lib/links";
 
 export default function ClinicDetailScreen() {
+  useLocale();
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [facility, setFacility] = useState<FacilitySync | null>(null);
@@ -84,27 +86,26 @@ export default function ClinicDetailScreen() {
             hitSlop={12}
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("Back")}
           >
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
           <ThemedText type="headline" themeColor="textSecondary">
-            Clinic
-          </ThemedText>
+            {t("Clinic")}</ThemedText>
           <View style={styles.headerSpacer} />
         </View>
       ) : null}
 
       {loading ? (
-        <ListState kind="loading" title="Loading clinic…" />
+        <ListState kind="loading" title={t("Loading clinic…")} />
       ) : error ? (
         <ListState
           kind="error"
-          title="Couldn't load clinic"
-          subtitle="Check your connection and try again."
+          title={t("Couldn't load clinic")}
+          subtitle={t("Check your connection and try again.")}
         />
       ) : !facility ? (
-        <ListState kind="error" title="Clinic not found" />
+        <ListState kind="error" title={t("Clinic not found")} />
       ) : (
         <ScrollView contentContainerStyle={styles.body}>
           {showHero ? (
@@ -126,7 +127,7 @@ export default function ClinicDetailScreen() {
                 hitSlop={12}
                 onPress={() => router.back()}
                 accessibilityRole="button"
-                accessibilityLabel="Back"
+                accessibilityLabel={t("Back")}
                 style={styles.heroBackBtn}
               >
                 <Icon name="chevron.left" tintColor="#FFFFFF" size={20} />
@@ -134,7 +135,7 @@ export default function ClinicDetailScreen() {
               {facility.photo_attribution ? (
                 <View style={styles.attributionWrap}>
                   <ThemedText type="caption" style={styles.attributionText}>
-                    Photo: {facility.photo_attribution}
+                    {t("Photo:")}{facility.photo_attribution}
                   </ThemedText>
                 </View>
               ) : null}
@@ -148,12 +149,12 @@ export default function ClinicDetailScreen() {
               </ThemedText>
               {nameParts?.affiliation ? (
                 <ThemedText type="callout" themeColor="textSecondary">
-                  at {nameParts.affiliation}
+                  {t("at")}{nameParts.affiliation}
                 </ThemedText>
               ) : null}
               <View style={styles.badges}>
                 <Badge label={humanizeTag(facility.type)} tone="brand" />
-                {facility.has_philhealth ? <Badge label="PhilHealth" /> : null}
+                {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
                 {onlyStatus ? (
                   <View
                     style={[
@@ -192,8 +193,7 @@ export default function ClinicDetailScreen() {
                       {facility.google_rating.toFixed(1)}
                     </ThemedText>
                     <ThemedText type="caption" themeColor="textSecondary">
-                      Rating
-                    </ThemedText>
+                      {t("Rating")}</ThemedText>
                   </Card>
                 ) : null}
                 {feeRange ? (
@@ -203,8 +203,7 @@ export default function ClinicDetailScreen() {
                       {feeRange}
                     </ThemedText>
                     <ThemedText type="caption" themeColor="textSecondary">
-                      Consult fee
-                    </ThemedText>
+                      {t("Consult fee")}</ThemedText>
                   </Card>
                 ) : null}
                 {open != null ? (
@@ -220,8 +219,7 @@ export default function ClinicDetailScreen() {
                       {open ? "Open" : "Closed"}
                     </ThemedText>
                     <ThemedText type="caption" themeColor="textSecondary">
-                      Status
-                    </ThemedText>
+                      {t("Status")}</ThemedText>
                   </Card>
                 ) : null}
               </View>
@@ -245,10 +243,9 @@ export default function ClinicDetailScreen() {
                     size={40}
                   />
                   <ThemedText type="headline" style={styles.deptTitle}>
-                    Dermatology Department
-                  </ThemedText>
+                    {t("Dermatology Department")}</ThemedText>
                   {dept?.has_derm_department ? (
-                    <Badge label="Confirmed" tone="brand" />
+                    <Badge label={t("Confirmed")} tone="brand" />
                   ) : null}
                 </View>
                 {dept?.department_name ? (
@@ -274,7 +271,7 @@ export default function ClinicDetailScreen() {
                   })
                 }
                 accessibilityRole="button"
-                accessibilityLabel="Get directions"
+                accessibilityLabel={t("Get directions")}
               >
                 <View style={styles.infoRow}>
                   <IconCircle
@@ -314,8 +311,7 @@ export default function ClinicDetailScreen() {
                             type="footnote"
                             themeColor="textSecondary"
                           >
-                            Mon–Fri
-                          </ThemedText>
+                            {t("Mon–Fri")}</ThemedText>
                           <ThemedText type="footnote">
                             {formatHours(facility.weekday_hours)}
                           </ThemedText>
@@ -327,8 +323,7 @@ export default function ClinicDetailScreen() {
                             type="footnote"
                             themeColor="textSecondary"
                           >
-                            Sat–Sun
-                          </ThemedText>
+                            {t("Sat–Sun")}</ThemedText>
                           <ThemedText type="footnote">
                             {formatHours(facility.weekend_hours)}
                           </ThemedText>
@@ -350,7 +345,7 @@ export default function ClinicDetailScreen() {
                   <View style={styles.infoRow}>
                     <IconCircle icon="banknote" variant="tint" size={36} />
                     <ThemedText type="footnote" style={styles.infoText}>
-                      Consultation fee {feeRange}
+                      {t("Consultation fee")}{feeRange}
                     </ThemedText>
                   </View>
                 </>
@@ -360,8 +355,7 @@ export default function ClinicDetailScreen() {
             {facility.services.length ? (
               <View>
                 <ThemedText type="headline" style={styles.sectionTitle}>
-                  Services
-                </ThemedText>
+                  {t("Services")}</ThemedText>
                 <View style={styles.badges}>
                   {facility.services.map((s) => (
                     <Badge key={s} label={humanizeTag(s)} />
@@ -372,7 +366,7 @@ export default function ClinicDetailScreen() {
 
             {facility.booking_url ? (
               <Button
-                label="Book online"
+                label={t("Book online")}
                 icon="calendar"
                 onPress={() => openWebsite(facility.booking_url as string)}
                 style={styles.bookButton}
@@ -396,7 +390,7 @@ export default function ClinicDetailScreen() {
               ) : null}
               {facility.website ? (
                 <Button
-                  label="Website"
+                  label={t("Website")}
                   variant="outline"
                   icon="globe"
                   onPress={() => openWebsite(facility.website as string)}

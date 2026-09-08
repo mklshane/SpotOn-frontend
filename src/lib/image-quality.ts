@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from '@/lib/fs';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as jpeg from 'jpeg-js';
 import { Image as RNImage } from 'react-native';

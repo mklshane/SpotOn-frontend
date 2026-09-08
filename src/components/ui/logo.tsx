@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image, type ImageStyle } from 'expo-image';
 
 const WORDMARK = require('@/assets/images/spoton-wordmark.png');
@@ -20,6 +21,7 @@ export type LogoProps = {
 };
 
 export function Logo({ variant = 'wordmark', width = 168, size = 48, tint, style }: LogoProps) {
+  useLocale();
   const dims =
     variant === 'mark'
       ? { width: size, height: size / MARK_AR }
@@ -31,7 +33,7 @@ export function Logo({ variant = 'wordmark', width = 168, size = 48, tint, style
       style={[dims, style]}
       contentFit="contain"
       tintColor={tint}
-      accessibilityLabel="SpotOn"
+      accessibilityLabel={t("SpotOn")}
     />
   );
 }

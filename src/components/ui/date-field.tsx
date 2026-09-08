@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -38,6 +39,7 @@ const format = (d: Date) =>
   d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
 export function DateField({ label, error, value, onChange, containerStyle }: DateFieldProps) {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [date, setDate] = useState<Date | null>(() => fromIso(value));
@@ -97,7 +99,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
             <CalendarPicker key={sheetKey} value={temp} minDate={MIN_DATE} maxDate={TODAY} onChange={setTemp} />
 
             <Button
-              label="Done"
+              label={t("Done")}
               variant="brand"
               onPress={() => {
                 commit(temp);
@@ -110,8 +112,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
               onPress={() => setOpen(false)}
               style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}>
               <ThemedText type="headline" themeColor="textSecondary">
-                Cancel
-              </ThemedText>
+                {t("Cancel")}</ThemedText>
             </Pressable>
           </Pressable>
         </Pressable>

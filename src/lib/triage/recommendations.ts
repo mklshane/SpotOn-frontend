@@ -1,3 +1,4 @@
+import { t, localizedCopy } from "../i18n/core";
 import type { LesionClass, TriageTier } from './types';
 
 /**
@@ -26,7 +27,7 @@ export type TierContent = {
   offerReminder: boolean;
 };
 
-export const TIER_CONTENT: Record<TriageTier, TierContent> = {
+export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
   low: {
     name: 'Low',
     headline: 'No strong signs of concern right now',
@@ -75,14 +76,14 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = {
     showEducation: false,
     offerReminder: false,
   },
-};
+});
 
 /** Shown instead of the standard headline when the Safety Floor Rule was applied. */
-export const CONFIDENCE_QUALIFIER = {
+export const CONFIDENCE_QUALIFIER = localizedCopy({
   title: 'A precautionary result',
   body:
     'We could not read your photos clearly enough for a confident assessment, so we are recommending a check-up as a precaution. This reflects photo uncertainty — not a detected risk.',
-};
+});
 
 /**
  * Shown when the Malignant Gate raised the tier: the single best-matching pattern was not a
@@ -90,33 +91,35 @@ export const CONFIDENCE_QUALIFIER = {
  * warrant a check. Says why the headline pattern and the urgency appear to disagree, without
  * implying a detection.
  */
-export const MALIGNANT_GATE = {
+export const MALIGNANT_GATE = localizedCopy({
   title: 'Worth having checked',
   body:
     'The closest single match for your photo was not a cancer type, but a meaningful share of the assessment still pointed toward one. When that happens we raise the recommendation rather than rely on the closest match alone. This is a precaution, not a detection.',
-};
+});
 
 /** Non-alarming retake prompt for a first low-confidence pass. */
-export const RESCAN_PROMPT = {
+export const RESCAN_PROMPT = localizedCopy({
   title: 'Let’s try a clearer photo',
   body:
     'We could not see the spot clearly enough for a reliable read. A photo in better light, a little closer, and without anything covering the spot usually gives a much better result.',
   retakeCta: 'Retake photo',
   repickCta: 'Choose another photo',
   continueCta: 'Continue with this photo',
-};
+});
 
 /** Mandatory on every results surface. Matches the Learn hub's established tone. */
-export const DISCLAIMER =
-  'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation — always follow up with a dermatologist about anything that concerns you.';
+export const DISCLAIMER = localizedCopy(
+  'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation — always follow up with a dermatologist about anything that concerns you.',
+);
 
 /**
  * The Screening Summary Report's footer. Counterpart to DISCLAIMER: that one addresses the
  * user, this one addresses the clinician who receives the printout, so the register is
  * formal and the boundary (not a referral, not a transfer of care) is explicit.
  */
-export const REPORT_DISCLAIMER =
-  'This Screening Summary Report is a system output and does NOT constitute a clinical diagnosis, medical referral, or transfer of care. Results are based on a CNN classification of a user-submitted image and patient self-reported symptoms. The attending clinician should conduct an independent clinical examination.';
+export const REPORT_DISCLAIMER = localizedCopy(
+  'This Screening Summary Report is a system output and does NOT constitute a clinical diagnosis, medical referral, or transfer of care. Results are based on a CNN classification of a user-submitted image and patient self-reported symptoms. The attending clinician should conduct an independent clinical examination.',
+);
 
 /**
  * Sentence fragments for the report's urgency paragraph, assembled in summary-report.ts.
@@ -124,27 +127,27 @@ export const REPORT_DISCLAIMER =
  * stays a data change. The bold runs in the rendered sentence are structural (tier,
  * confidence band, symptom burden), never a regex over physician-reviewed prose.
  */
-export const REPORT_LEAD = {
+export const REPORT_LEAD = localizedCopy({
   prefix:
     'Based on the classification result and reported symptoms, this assessment has been assigned a ',
   urgencySuffix: ' urgency level. The system detected a ',
   combined: ' classification combined with a ',
   burdenSuffix: ' across ',
   ofEight: ' of the 8 major and minor warning signs.',
-};
+});
 
 /** Plain-language band for a model confidence percentage, used in the report's lead sentence. */
 export function confidenceBand(pct: number): string {
-  if (pct >= 85) return 'high-confidence';
-  if (pct >= 60) return 'moderate-confidence';
-  return 'low-confidence';
+  if (pct >= 85) return t("high-confidence");
+  if (pct >= 60) return t("moderate-confidence");
+  return t("low-confidence");
 }
 
 /** Plain-language band for how many of the 8 questions were answered "yes". */
 export function symptomBurden(yesCount: number): string {
-  if (yesCount >= 5) return 'high symptom burden';
-  if (yesCount >= 2) return 'moderate symptom burden';
-  return 'low symptom burden';
+  if (yesCount >= 5) return t("high symptom burden");
+  if (yesCount >= 2) return t("moderate symptom burden");
+  return t("low symptom burden");
 }
 
 /**
@@ -157,7 +160,7 @@ export function symptomBurden(yesCount: number): string {
 export const CLASS_DISPLAY: Record<
   LesionClass,
   { full: string; name: string; lay: string; about: string }
-> = {
+> = localizedCopy({
   MEL: {
     full: 'Melanoma',
     name: 'Melanoma-like',
@@ -193,4 +196,4 @@ export const CLASS_DISPLAY: Record<
     about:
       'Benign spots are non-cancerous — for example ordinary moles, freckles, or age-related growths such as seborrhoeic keratoses. They are very common and usually harmless, though it is still worth watching any spot that changes in size, shape, or color over time.',
   },
-};
+});

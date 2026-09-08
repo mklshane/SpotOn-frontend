@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { ThemedText } from "@/components/themed-text";
 import { DocumentHeader } from "@/components/ui/document-header";
 import { Screen } from "@/components/ui/screen";
@@ -46,6 +47,7 @@ function Section({
   title: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   return (
     <View style={styles.section}>
       <ThemedText type="title2" style={styles.sectionTitle}>
@@ -57,6 +59,7 @@ function Section({
 }
 
 function SubHeading({ children }: { children: React.ReactNode }) {
+  useLocale();
   return (
     <ThemedText type="caption" themeColor="brand" style={styles.subHeading}>
       {children}
@@ -65,6 +68,7 @@ function SubHeading({ children }: { children: React.ReactNode }) {
 }
 
 function Paragraph({ children }: { children: React.ReactNode }) {
+  useLocale();
   return (
     <ThemedText type="subhead" style={styles.paragraph}>
       {children}
@@ -79,6 +83,7 @@ function Bullet({
   label?: string;
   children: React.ReactNode;
 }) {
+  useLocale();
   const theme = useTheme();
   return (
     <View style={styles.bulletRow}>
@@ -97,6 +102,7 @@ function Bullet({
 
 /** Inline tappable link that opens an external URL in the system browser. */
 function ExternalLink({ url, label }: { url: string; label: string }) {
+  useLocale();
   return (
     <ThemedText
       type="subhead"
@@ -111,6 +117,7 @@ function ExternalLink({ url, label }: { url: string; label: string }) {
 
 /** Inline tappable link to the Terms and Conditions. */
 function TermsLink() {
+  useLocale();
   return (
     <ThemedText
       type="subhead"
@@ -118,15 +125,15 @@ function TermsLink() {
       style={styles.inlineLink}
       onPress={() => router.push("/profile/terms")}
     >
-      Terms and Conditions
-    </ThemedText>
+      {t("Terms and Conditions")}</ThemedText>
   );
 }
 
 export default function PrivacyPolicyScreen() {
+  useLocale();
   return (
     <Screen padded={false}>
-      <DocumentHeader title="Privacy Policy" />
+      <DocumentHeader title={t("Privacy Policy")} />
       <View style={styles.header}>
         <ThemedText type="footnote" themeColor="textSecondary">
           Last Updated: {LAST_UPDATED}

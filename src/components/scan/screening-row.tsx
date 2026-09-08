@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -29,6 +30,7 @@ export function tierColor(theme: ReturnType<typeof useTheme>, tier: TriageTier) 
  * tier dot + pill, chevron. Used on Home (recent) and the full "All screenings" list.
  */
 export function ScreeningRow({ item }: { item: ScreeningRecord }) {
+  useLocale();
   const theme = useTheme();
   const { fg, bg } = tierColor(theme, item.triage.tier);
   const cls = CLASS_DISPLAY[item.classification.topClass];
@@ -57,7 +59,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
             </ThemedText>
           </View>
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-            {pct}% confidence · {date}
+            {pct}{t("% confidence ·")}{date}
           </ThemedText>
         </View>
         <View style={[styles.tierPill, { backgroundColor: bg }]}>

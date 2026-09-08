@@ -1,3 +1,4 @@
+import { localizedCopy, useLocale } from '@/lib/i18n';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -7,10 +8,10 @@ import { useTheme } from '@/hooks/use-theme';
 
 export type DirectorySegment = 'clinics' | 'doctors';
 
-const SEGMENTS: { value: DirectorySegment; label: string; icon: IconName }[] = [
+const SEGMENTS: { value: DirectorySegment; label: string; icon: IconName }[] = localizedCopy([
   { value: 'clinics', label: 'Clinics', icon: 'building.2.fill' },
   { value: 'doctors', label: 'Online Booking', icon: 'stethoscope' },
-];
+]);
 
 export type DirectorySegmentsProps = {
   value: DirectorySegment;
@@ -19,6 +20,7 @@ export type DirectorySegmentsProps = {
 
 /** Two gray tab pills. Active = brand-filled pill with white icon+label; inactive = muted gray. */
 export function DirectorySegments({ value, onChange }: DirectorySegmentsProps) {
+  useLocale();
   const theme = useTheme();
 
   return (

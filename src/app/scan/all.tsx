@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
@@ -20,6 +21,7 @@ type Tab = 'lesions' | 'scans';
  * read as one thing with a history; "All scans" keeps the flat chronological list unchanged.
  */
 export default function AllScreeningsScreen() {
+  useLocale();
   const insets = useSafeAreaInsets();
   const { entries, lesions, loading, loadError, screeningsForLesion } = useScanHistory();
   // Seeded from the route once, then left alone: Home's two "See all" links open the tab that
@@ -50,8 +52,8 @@ export default function AllScreeningsScreen() {
           value={tab}
           onChange={setTab}
           options={[
-            { value: 'lesions', label: 'Spots' },
-            { value: 'scans', label: 'All scans' },
+            { value: 'lesions', label: t("Spots") },
+            { value: 'scans', label: t("All scans") },
           ]}
         />
       </View>
@@ -96,6 +98,7 @@ export default function AllScreeningsScreen() {
 }
 
 function Header() {
+  useLocale();
   const theme = useTheme();
   return (
     <View style={styles.header}>
@@ -103,18 +106,18 @@ function Header() {
         hitSlop={12}
         onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
         accessibilityRole="button"
-        accessibilityLabel="Back">
+        accessibilityLabel={t("Back")}>
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </Pressable>
       <ThemedText type="headline" themeColor="textSecondary">
-        Your screenings
-      </ThemedText>
+        {t("Your screenings")}</ThemedText>
       <View style={styles.headerSpacer} />
     </View>
   );
 }
 
 function Separator() {
+  useLocale();
   return <View style={styles.separator} />;
 }
 

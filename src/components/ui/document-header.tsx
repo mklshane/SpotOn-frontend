@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 
@@ -18,6 +19,7 @@ export type DocumentHeaderProps = {
  * instead of hand-copying it.
  */
 export function DocumentHeader({ title }: DocumentHeaderProps) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -26,7 +28,7 @@ export function DocumentHeader({ title }: DocumentHeaderProps) {
         hitSlop={12}
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Back"
+        accessibilityLabel={t("Back")}
       >
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </Pressable>

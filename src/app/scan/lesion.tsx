@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
@@ -27,12 +28,12 @@ import { QUESTIONS } from "@/lib/triage/questions";
 import { CLASS_DISPLAY, DISCLAIMER } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
 
-const TIER_LABEL: Record<TriageTier, string> = {
+const TIER_LABEL: Record<TriageTier, string> = localizedCopy({
   low: "Low",
   moderate: "Moderate",
   high: "High",
   critical: "Priority",
-};
+});
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -50,6 +51,7 @@ function fmtDate(iso: string) {
  * answer-flip table — is a different projection of the same question, "is this getting worse?".
  */
 export default function LesionDetailScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -96,13 +98,12 @@ export default function LesionDetailScreen() {
             hitSlop={12}
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("Back")}
           >
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
           <ThemedText type="headline" themeColor="textSecondary">
-            Tracked spot
-          </ThemedText>
+            {t("Tracked spot")}</ThemedText>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.centerFill}>
@@ -120,7 +121,7 @@ export default function LesionDetailScreen() {
             />
           </View>
           <ThemedText type="headline" style={styles.center}>
-            {loading ? "Loading…" : "Spot not found"}
+            {loading ? t("Loading…") : "Spot not found"}
           </ThemedText>
           <ThemedText type="footnote" themeColor="muted" style={styles.center}>
             {loading
@@ -156,7 +157,7 @@ export default function LesionDetailScreen() {
         ? "It will be hidden from your lesion list and the body model. Your scans and photos are kept."
         : "It will reappear in your lesion list.",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("Cancel"), style: "cancel" },
         {
           text: archiving ? "Stop tracking" : "Track again",
           style: archiving ? "destructive" : "default",
@@ -173,13 +174,12 @@ export default function LesionDetailScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Back"
+          accessibilityLabel={t("Back")}
         >
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Tracked spot
-        </ThemedText>
+          {t("Tracked spot")}</ThemedText>
         {/* The action itself, not a generic overflow glyph — there's only ever one thing to do
             here, and "ellipsis" has no Android/web mapping so it rendered as a bare outline
             circle. An icon that names the action also means the button doesn't need a menu to
@@ -230,7 +230,7 @@ export default function LesionDetailScreen() {
                     // A fixed placeholder, not `title`: `title` falls back to this lesion's own
                     // *current* name (region-derived or previously set), so backspacing to empty
                     // showed the name you just deleted instead of a generic empty-state hint.
-                    placeholder="Unnamed Spot"
+                    placeholder={t("Unnamed Spot")}
                     autoFocus
                     onBlur={commitRename}
                     onSubmitEditing={commitRename}
@@ -309,7 +309,7 @@ export default function LesionDetailScreen() {
           {/* Photo timeline — the highest-value element on this screen */}
           {screenings.length > 0 ? (
             <Entrance index={1} style={styles.section}>
-              <SectionHeader title="Over time" variant="label" />
+              <SectionHeader title={t("Over time")} variant="label" />
               <ScanTimeline
                 screenings={screenings}
                 onOpen={(s) =>
@@ -325,14 +325,13 @@ export default function LesionDetailScreen() {
           {/* Trend sparkline — hidden below 3 points, where a line chart is just noise */}
           {trend.tpsSeries.length >= 3 ? (
             <Entrance index={2} style={styles.section}>
-              <SectionHeader title="Priority score" variant="label" />
+              <SectionHeader title={t("Priority score")} variant="label" />
               {/* Tinted with the *current* tier rather than left flat white — the card echoes the
                 hero above instead of reading as an unrelated chart bolted onto the screen. */}
               <Card style={[styles.sparkCard, { backgroundColor: bg }]}>
                 <TpsSparkline series={trend.tpsSeries} />
                 <ThemedText type="caption" themeColor="muted">
-                  Triage Priority Score, 0–8. Higher means seek care sooner.
-                </ThemedText>
+                  {t("Triage Priority Score, 0–8. Higher means seek care sooner.")}</ThemedText>
               </Card>
             </Entrance>
           ) : null}
@@ -340,7 +339,7 @@ export default function LesionDetailScreen() {
           {/* Since-first summary */}
           {trend.count > 1 && trend.tierFrom && trend.tierTo ? (
             <Entrance index={3} style={styles.section}>
-              <SectionHeader title="What changed" variant="label" />
+              <SectionHeader title={t("What changed")} variant="label" />
               <Card style={styles.changeCard}>
                 {/* The verdict leads, at headline weight, in the tier's own colour. The old paragraph
                   buried it mid-sentence and — because most spots hold steady — routinely rendered
@@ -379,8 +378,7 @@ export default function LesionDetailScreen() {
                       themeColor="textSecondary"
                       style={styles.noteText}
                     >
-                      The most likely pattern has changed across scans — it now
-                      reads as{" "}
+                      {t("The most likely pattern has changed across scans — it now reads as")}{" "}
                       {CLASS_DISPLAY[latest.classification.topClass].name}.
                     </ThemedText>
                   </View>
@@ -435,9 +433,7 @@ export default function LesionDetailScreen() {
                   </View>
                 ) : (
                   <ThemedText type="footnote" themeColor="muted">
-                    Your answers about this spot are unchanged since the last
-                    check.
-                  </ThemedText>
+                    {t("Your answers about this spot are unchanged since the last check.")}</ThemedText>
                 )}
               </Card>
             </Entrance>
@@ -449,14 +445,14 @@ export default function LesionDetailScreen() {
             from the timeline above. */}
           <Entrance index={4} style={styles.actions}>
             <Button
-              label="Re-scan this spot"
+              label={t("Re-scan this spot")}
               variant="brand"
               onPress={startFollowUp}
               disabled={!latest}
             />
             {latest ? (
               <Button
-                label="View latest result"
+                label={t("View latest result")}
                 variant="ghost"
                 onPress={() =>
                   router.push({
@@ -492,6 +488,7 @@ function TpsSparkline({
 }: {
   series: { at: string; tps: number; tier: TriageTier }[];
 }) {
+  useLocale();
   const theme = useTheme();
   const W = 260;
   const H = 88;
