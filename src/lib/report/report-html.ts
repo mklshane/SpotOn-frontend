@@ -1,5 +1,5 @@
 import { h } from './escape';
-import { t } from '../i18n/core';
+import { translate, type Locale } from '../i18n/core';
 import { A4, PHOTO_PT, PrintColors as C, PrintTier, EXTRA_PHOTO_PT } from './report-tokens';
 import type { ReportModel, ReportSymptom, RichText } from './summary-report';
 
@@ -34,9 +34,10 @@ export type ReportAssets = {
 const EM_DASH = '—';
 
 export function buildReportHtml(model: ReportModel, assets: ReportAssets): string {
+  const t = (source: string) => translate(source, undefined, model.locale);
   const tier = PrintTier[model.tier];
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8">
+<html lang="${model.locale}"><head><meta charset="utf-8">
 <title>${t('Screening Summary Report')}</title>
 <!-- No viewport meta: the layout is sized in points against the A4 print box that
      Print.printToFileAsync sets up. A CSS-pixel viewport would rescale it. -->
@@ -67,7 +68,7 @@ export function buildReportHtml(model: ReportModel, assets: ReportAssets): strin
   <div class="lesion">
     ${
       assets.photo
-        ? `<img class="photo" src="${assets.photo}" alt="Lesion photograph">`
+        ? `<img class="photo" src="${assets.photo}" alt="${t('Lesion photo')}">`
         : `<div class="photo photoMissing"><span>${t('Lesion photo')}<br>${t('unavailable')}</span></div>`
     }
     <div class="cls">
@@ -76,11 +77,11 @@ export function buildReportHtml(model: ReportModel, assets: ReportAssets): strin
       <div class="clsConf">${t('Model Confidence')}: <b>${h(model.confidenceLabel)}</b></div>
     </div>
   </div>
-${extraViews(assets.extraPhotos)}
+${extraViews(assets.extraPhotos, model.locale)}
   <div class="sec">${t('Reported Symptoms (Patient Self-Report)')}</div>
   <table class="sym">
     <thead><tr><th class="q">${t('Symptom / Sign')}</th><th class="a">${t('Response')}</th></tr></thead>
-    <tbody>${model.symptoms.map(symptomRow).join('')}</tbody>
+    <tbody>${model.symptoms.map((s) => symptomRow(s, model.locale)).join('')}</tbody>
   </table>
 
   <div class="sec">${t('Urgency Level and Recommendation')}</div>
@@ -112,6 +113,7 @@ ${extraViews(assets.extraPhotos)}
  * imported here: this template stays free of runtime imports so the node test can render it.
  */
 function qualifierNote(model: ReportModel): string {
+  const t = (source: string) => translate(source, undefined, model.locale);
   if (!model.assessmentNote) return '';
   return `<p class="caveat"><b>${t('Note on this assessment')}:</b> ${h(model.assessmentNote)}</p>`;
 }
@@ -153,7 +155,8 @@ function rich(runs: RichText): string {
  * only (model-config MULTI_IMAGE_AGGREGATION_ENABLED ships false), and the caption says so. A
  * clinician reading this needs to know which pixels produced the number above it.
  */
-function extraViews(photos: string[] | undefined): string {
+function extraViews(photos: string[] | undefined, locale: Locale): string {
+  const t = (source: string) => translate(source, undefined, locale);
   if (!photos?.length) return '';
   return `
   <div class="views">
@@ -166,7 +169,8 @@ function extraViews(photos: string[] | undefined): string {
   </div>`;
 }
 
-function symptomRow(s: ReportSymptom): string {
+function symptomRow(s: ReportSymptom, locale: Locale): string {
+  const t = (source: string) => translate(source, undefined, locale);
   const rowClass = s.answer === 'No' ? ' class="rNo"' : '';
   return (
     `<tr${rowClass}><td class="q">${h(s.question)}</td>` +

@@ -1,4 +1,4 @@
-import { t, useLocale } from '@/lib/i18n';
+import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
@@ -28,12 +28,12 @@ import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
 /** "Good morning" / "Good afternoon" / "Good evening" based on the device clock. */
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return t('Good morning');
+  if (hour < 18) return t('Good afternoon');
+  return t('Good evening');
 }
 
-const TODAY_LABEL = new Date().toLocaleDateString(undefined, {
+const todayLabel = () => new Date().toLocaleDateString(getIntlLocale(), {
   weekday: 'long',
   month: 'long',
   day: 'numeric',
@@ -185,7 +185,7 @@ export default function HomeScreen() {
             {getGreeting()}, {firstName}
           </ThemedText>
           <ThemedText type="footnote" themeColor="textSecondary">
-            {TODAY_LABEL}
+            {todayLabel()}
           </ThemedText>
         </View>
 

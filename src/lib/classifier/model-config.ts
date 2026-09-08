@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import type { LesionClass } from '../triage/types';
 
 /**
@@ -603,8 +605,20 @@ export const IMAGENET_STD = [0.229, 0.224, 0.225] as const;
 /** Used when the model reports a dynamic input shape; the real value is introspected. */
 export const FALLBACK_INPUT_SIZE = 260;
 
-/** Hard ceiling well inside the 30 s NFR; a hung interpreter surfaces as a 'timeout' error. */
-export const INFERENCE_TIMEOUT_MS = 20_000;
+/**
+ * Hard ceiling; a hung interpreter surfaces as a 'timeout' error.
+ *
+ * 20 s is the native budget — comfortably inside the 30 s NFR for TFLite running on a phone's
+ * own runtime. The WEB build is a different machine entirely: single-threaded WASM, a JS Hermite
+ * resampler and a JS JPEG decode, then the 768² detector followed by 4-view TTA at 260². The
+ * comment on TTA below ("still well inside INFERENCE_TIMEOUT_MS") was written against native and
+ * does not hold in a phone browser, where this fired as "We couldn't analyze this photo".
+ *
+ * Raising the web ceiling is the correct lever. Trimming TTA to fit is NOT: MALIGNANT_THRESHOLD
+ * was selected under 4-view TTA and the two must move together, so dropping views to save time
+ * would move the triage decision boundary.
+ */
+export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
 
 /**
  * Post-hoc temperature scaling applied to the logits before softmax (classify.ts).

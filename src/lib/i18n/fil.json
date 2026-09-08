@@ -879,14 +879,8 @@
   "{{count}} days ago": "{{count}} araw na ang nakalipas",
   "{{count}} months ago": "{{count}} buwan na ang nakalipas",
   "{{count}} years ago": "{{count}} taon na ang nakalipas",
-  "Cancel": "Kanselahin",
-  "Re-screening reminders": "Paalala para mag-screening ulit",
-  "Reminders to photograph a spot again after 30 days.": "Paalala para kunan ulit ang spot pagkatapos ng 30 araw.",
-  "Time to re-check your spot": "Oras na para i-check ulit ang spot mo",
-  "Take a new photo so SpotOn can compare it against your last screening.": "Kumuha ng bagong photo para ma-compare ito ng SpotOn sa huli mong screening.",
   "Granted on": "Ibinigay noong",
   "Next reminder on": "Susunod na paalala sa",
-  "Screening Summary Report": "Buod ng screening",
   "Date": "Petsa",
   "Time": "Oras",
   "Date of Birth": "Birthday",
@@ -904,7 +898,10 @@
   "Note on this assessment": "Tandaan tungkol sa resultang ito",
   "Additional views of the same lesion (not used for classification)": "Iba pang photo ng parehong spot (hindi ginamit sa classification)",
   "Additional lesion view": "Iba pang photo ng spot",
-  "Yes": "Oo",
-  "No": "Hindi",
-  "Unsure": "Hindi sigurado"
+  "Question {{n}} of {{total}}": "Tanong {{n}} sa {{total}}",
+  "Next": "Susunod",
+  "See my results": "Tingnan ang resulta ko",
+  "Zoom": "Zoom",
+  "We couldn’t save this screening": "Hindi namin na-save ang screening na ito",
+  "The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.": "Tapos na ang analysis, pero hindi ito na-save. Kung bukas ang SpotOn sa ibang tab, isara mo iyon at subukan ulit."
 }

@@ -36,6 +36,8 @@ import { useScreeningSession } from '@/lib/screening-session';
 const PHOTO_LONG_EDGE = 2048;
 /** JPEG quality, matching the native manipulateAsync compress value. */
 const JPEG_QUALITY = 0.92;
+/** Digital zoom ceiling. Past ~4x a phone sensor is only magnifying noise. */
+const MAX_ZOOM = 4;
 
 type Status = 'starting' | 'live' | 'denied' | 'unavailable';
 
@@ -56,6 +58,23 @@ export default function CaptureWebScreen() {
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [guide, setGuide] = useState(true);
+  /**
+   * Digital zoom, 1–4x. Applied by cropping the source rect at capture time, so the model sees
+   * the zoomed frame rather than just the user seeing a bigger preview — a lesion framed at 3x
+   * really does arrive larger in the pixels the classifier reads.
+   *
+   * Deliberately NOT the MediaStreamTrack `zoom` constraint: WebKit does not expose it, and every
+   * iOS browser is WebKit, so a constraint-only implementation would do nothing on the iPhones
+   * most testers use. Where the constraint IS available (Android Chrome) we drive it too, below,
+   * to get real optical zoom on top.
+   */
+  const [zoom, setZoom] = useState(1);
+  /** Torch is genuinely impossible on iOS (no WebKit API); the control hides rather than lies. */
+  const [caps, setCaps] = useState<{ torch: boolean; zoom: { min: number; max: number } | null }>({
+    torch: false,
+    zoom: null,
+  });
+  const [torchOn, setTorchOn] = useState(false);
 
   // Same trick as the native body screen: get the detector loading before the user needs it.
   useEffect(() => {
@@ -97,7 +116,19 @@ export default function CaptureWebScreen() {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => {});
         }
-        if (!cancelled) setStatus('live');
+        // What this particular camera can actually do. iOS reports neither.
+        const track = stream.getVideoTracks()[0];
+        const c = (track?.getCapabilities?.() ?? {}) as {
+          torch?: boolean;
+          zoom?: { min: number; max: number };
+        };
+        if (!cancelled) {
+          setCaps({
+            torch: c.torch === true,
+            zoom: c.zoom && c.zoom.max > c.zoom.min ? { min: c.zoom.min, max: c.zoom.max } : null,
+          });
+          setStatus('live');
+        }
       } catch (e) {
         if (cancelled) return;
         // NotAllowedError is a refusal; everything else (no device, in use) is unavailability.
@@ -114,6 +145,31 @@ export default function CaptureWebScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt, stop]);
 
+  /**
+   * Drive the hardware where it exists. Digital zoom always applies at capture; this maps the
+   * same slider onto real optical zoom when the track supports it, so Android gets both.
+   */
+  useEffect(() => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !caps.zoom) return;
+    const { min, max } = caps.zoom;
+    // Map 1..MAX_ZOOM onto the device's own range.
+    const target = min + ((Math.min(zoom, MAX_ZOOM) - 1) / (MAX_ZOOM - 1)) * (max - min);
+    track
+      // `zoom` is a non-standard constraint (absent from lib.dom), hence the cast.
+      .applyConstraints({ advanced: [{ zoom: target }] } as unknown as MediaTrackConstraints)
+      .catch(() => { /* the track can refuse mid-stream; digital zoom still applies */ });
+  }, [zoom, caps.zoom]);
+
+  useEffect(() => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !caps.torch) return;
+    track
+      // `torch` is likewise non-standard — Chromium-only in practice.
+      .applyConstraints({ advanced: [{ torch: torchOn }] } as unknown as MediaTrackConstraints)
+      .catch(() => { /* torch can fail while the camera is warming up */ });
+  }, [torchOn, caps.torch]);
+
   /** Draw the current frame, downscaled to the same long-edge cap the native path uses. */
   async function shoot() {
     const video = videoRef.current;
@@ -123,13 +179,22 @@ export default function CaptureWebScreen() {
       const vw = video.videoWidth;
       const vh = video.videoHeight;
       if (!vw || !vh) return;
-      const scale = Math.min(1, PHOTO_LONG_EDGE / Math.max(vw, vh));
+      // Digital zoom = take a centred sub-rect of the frame. The output stays the same size, so
+      // the lesion occupies more pixels — which is the whole point, since the classifier crops
+      // from this image. `native` already applied optical zoom on top where it was supported.
+      const z = Math.max(1, Math.min(zoom, MAX_ZOOM));
+      const sw = vw / z;
+      const sh = vh / z;
+      const sx = (vw - sw) / 2;
+      const sy = (vh - sh) / 2;
+
+      const scale = Math.min(1, PHOTO_LONG_EDGE / Math.max(sw, sh));
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(vw * scale);
-      canvas.height = Math.round(vh * scale);
+      canvas.width = Math.round(sw * scale);
+      canvas.height = Math.round(sh * scale);
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
       const blob = await new Promise<Blob | null>((resolve) =>
         canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY),
@@ -203,7 +268,16 @@ export default function CaptureWebScreen() {
         autoPlay
         playsInline
         muted
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          // Preview mirror of the capture-time crop, so what you frame is what you get.
+          transform: `scale(${zoom})`,
+          transformOrigin: 'center',
+        }}
       />
 
       {guide ? <View pointerEvents="none" style={styles.guideRing} /> : null}
@@ -230,6 +304,37 @@ export default function CaptureWebScreen() {
         <ThemedText type="subhead" style={styles.instructionsLabel}>
           {t("Instructions")}</ThemedText>
       </Pressable>
+
+      {/* Zoom — always available: it is a canvas crop, so it works even on iOS where the
+          MediaStreamTrack zoom constraint does not exist. */}
+      {status === 'live' ? (
+        <View style={[styles.zoomBar, { bottom: insets.bottom + 132 }]}>
+          <ThemedText type="caption" style={styles.zoomLabel}>
+            {zoom.toFixed(1)}×
+          </ThemedText>
+          <input
+            type="range"
+            min={1}
+            max={MAX_ZOOM}
+            step={0.1}
+            value={zoom}
+            onChange={(e) => setZoom(Number((e.target as HTMLInputElement).value))}
+            aria-label={t('Zoom')}
+            style={{ flex: 1, accentColor: '#FF8A4C' }}
+          />
+          {/* Torch only exists on Chromium/Android; on iPhone the button is absent, not dead. */}
+          {caps.torch ? (
+            <Pressable
+              hitSlop={12}
+              onPress={() => setTorchOn((v) => !v)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: torchOn }}
+              accessibilityLabel={t('Toggle flash')}>
+              <Icon name={torchOn ? 'bolt.fill' : 'bolt.slash.fill'} tintColor="#FFFFFF" size={24} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + Space.lg }]}>
         <Pressable
@@ -326,6 +431,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.9)',
   },
   shutterFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  zoomBar: {
+    position: 'absolute',
+    left: Space.xl,
+    right: Space.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  zoomLabel: { color: '#FFFFFF', minWidth: 38 },
   shotCount: { position: 'absolute', top: -Space.xs, alignSelf: 'center' },
   shotCountText: { color: '#FFFFFF' },
   toggle: { width: 34, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.3)', padding: 2 },

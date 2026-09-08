@@ -1,7 +1,7 @@
-import { Buffer } from 'buffer';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import * as jpeg from 'jpeg-js';
+import type { Action } from 'expo-image-manipulator';
 import { Image as RNImage } from 'react-native';
+
+import { transformToRgba } from '@/lib/image-ops';
 
 import { ClassifierError } from './errors';
 import {
@@ -122,16 +122,9 @@ export async function locateLesionInImage(
     // CropBox is normalized to the short edge — which only round-trips if aspect is preserved.
     const { width: srcW, height: srcH } = await imageSize(uri);
     const resize = srcW <= srcH ? { width: size } : { height: size };
-    const manip = await manipulateAsync(uri, [{ resize }], {
-      compress: 1,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
-    const raw = jpeg.decode(Buffer.from(manip.base64 ?? '', 'base64'), {
-      useTArray: true,
-      formatAsRGBA: true,
-    });
-    const { data, width, height } = raw as { data: Uint8Array; width: number; height: number };
+    // image-ops: browser downscaler on web (see that file) — locateLesion reads edges, so the
+    // resampler matters here for the same reason it does in the blur gate.
+    const { data, width, height } = await transformToRgba(uri, [{ resize }]);
     // RGBA straight through — locateLesion needs colour for its skin-surround check, not just luma.
     return locateLesion(data, width, height, blobOpts);
   } catch {
@@ -425,7 +418,7 @@ export async function preprocessForClassifier(
   cropBox?: CropBox,
 ): Promise<Float32Array> {
   try {
-    const actions: Parameters<typeof manipulateAsync>[1] = [];
+    const actions: Action[] = [];
     if (cropBox) {
       const { width, height } = await imageSize(uri);
       const shortEdge = Math.min(width, height);
@@ -456,16 +449,10 @@ export async function preprocessForClassifier(
       });
     }
     actions.push({ resize: { width: inputSize, height: inputSize } });
-    const manip = await manipulateAsync(uri, actions, {
-      compress: 1,
-      format: SaveFormat.JPEG,
-      base64: true,
-    });
-    const raw = jpeg.decode(Buffer.from(manip.base64 ?? '', 'base64'), {
-      useTArray: true,
-      formatAsRGBA: true,
-    });
-    let img = { data: raw.data as Uint8Array, width: raw.width, height: raw.height };
+    // image-ops: browser downscaler on web. This is the classifier's actual input, so a softer
+    // resampler here means the model sees different pixels on web than on a device.
+    const raw = await transformToRgba(uri, actions);
+    let img = { data: raw.data, width: raw.width, height: raw.height };
     for (const step of PREPROCESS_STEPS) img = step(img);
     return packRgbaToTensor(img.data, img.width, img.height, normalization);
   } catch (e) {

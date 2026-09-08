@@ -1,4 +1,5 @@
 import type { UserProfile } from '@/api/types';
+import { t, getLocale, type Locale } from '../i18n/core';
 
 // Relative, not `@/`-aliased: scripts/test-report-html.mjs compiles this module with the
 // project's tsc but without the tsconfig path map, the same way test-tps.mjs does.
@@ -11,7 +12,6 @@ import {
   DISCLAIMER,
   MALIGNANT_GATE,
   REPORT_DISCLAIMER,
-  REPORT_LEAD,
   symptomBurden,
   TIER_CONTENT,
 } from '../triage/recommendations';
@@ -56,6 +56,7 @@ export type ReportSymptom = {
 };
 
 export type ReportModel = {
+  locale: Locale;
   generatedAt: string;
   scanDate: string;
   /** "May 13, 2026" — the scan date in Philippine time. */
@@ -134,7 +135,7 @@ function buildPatient(profile: UserProfile | null | undefined): ReportPatient {
     name,
     dobDisplay,
     age,
-    dobLine: dobDisplay ? (age != null ? `${dobDisplay} (${age} y/o)` : dobDisplay) : null,
+    dobLine: dobDisplay ? (age != null ? `${dobDisplay} (${t('{{age}} y/o', { age })})` : dobDisplay) : null,
     sex,
     contact,
     incomplete: !name || !dobDisplay || !sex || !contact,
@@ -170,19 +171,19 @@ export function buildReportModel(
   const yesCount = symptoms.filter((s) => s.answer === 'Yes').length;
 
   const urgencyLabel = tier.name.toUpperCase();
-  const urgencyLead: RichText = [
-    { text: REPORT_LEAD.prefix },
-    { text: urgencyLabel, bold: true },
-    { text: REPORT_LEAD.urgencySuffix },
-    { text: `${confidenceBand(roundedPct)} ${CLASS_DISPLAY[topClass].full}`, bold: true },
-    { text: REPORT_LEAD.combined },
-    { text: symptomBurden(yesCount), bold: true },
-    { text: REPORT_LEAD.burdenSuffix },
-    { text: String(yesCount) },
-    { text: REPORT_LEAD.ofEight },
-  ];
+  const leadValues: Record<string, RichRun> = {
+    urgency: { text: urgencyLabel, bold: true },
+    confidence: { text: confidenceBand(roundedPct), bold: true },
+    classification: { text: CLASS_DISPLAY[topClass].full, bold: true },
+    burden: { text: symptomBurden(yesCount), bold: true },
+    count: { text: String(yesCount) },
+  };
+  const lead = t('Based on the classification result and reported symptoms, this assessment has been assigned a {{urgency}} urgency level. The system detected a {{confidence}} {{classification}} classification combined with a {{burden}} across {{count}} of the 8 major and minor warning signs.');
+  const urgencyLead: RichText = lead.split(/(\{\{\w+\}\})/g).filter(Boolean).map((part) =>
+    leadValues[part.slice(2, -2)] && part.startsWith('{{') ? leadValues[part.slice(2, -2)] : { text: part });
 
   return {
+    locale: getLocale(),
     generatedAt: new Date().toISOString(),
     scanDate: record.createdAt,
     dateLabel: phtDateLabel(record.createdAt),
@@ -212,7 +213,7 @@ export function buildReportModel(
     priorityAction: tier.priorityAction,
 
     tps: record.triage.tps.toFixed(2),
-    bodyRegion: record.mark?.region ?? null,
+    bodyRegion: record.mark?.region ? t(record.mark.region) : null,
     imageUri: record.imageUri,
     imageUris: record.images?.length ? record.images.map((i) => i.uri) : [record.imageUri],
     safetyFloorApplied: record.triage.safetyFloorApplied,
@@ -227,7 +228,7 @@ export function buildReportModel(
     malignantPct: Math.round(record.triage.malignantScore * 100),
     malignantGateApplied: record.triage.malignantGateApplied,
 
-    disclaimer: DISCLAIMER,
-    printDisclaimer: REPORT_DISCLAIMER,
+    disclaimer: t(DISCLAIMER),
+    printDisclaimer: t(REPORT_DISCLAIMER),
   };
 }

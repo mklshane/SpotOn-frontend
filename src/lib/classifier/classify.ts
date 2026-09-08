@@ -40,7 +40,11 @@ import {
   ttaViews,
 } from './preprocess';
 
-const DEBUG = __DEV__;
+import { isDebug } from '@/lib/debug-flag';
+
+// Was `__DEV__`, which meant every per-image failure was swallowed silently in the deployed
+// web build — classifyImageAt() converts a throw into an excluded result and logs nothing.
+const DEBUG = isDebug();
 
 // The pure arithmetic lives in aggregate-core.ts so scripts/test-multiview.mjs can pin it without
 // a device (this file require()s the bundled .tflite and cannot be compiled standalone).

@@ -227,7 +227,7 @@ export default function ResultScreen() {
           <View style={styles.disclaimerRow}>
             <Icon name="info.circle" tintColor={theme.muted} size={14} />
             <ThemedText type="footnote" themeColor="muted" style={styles.disclaimerText}>
-              {DISCLAIMER}
+              {t(DISCLAIMER)}
             </ThemedText>
           </View>
         </Animated.View>

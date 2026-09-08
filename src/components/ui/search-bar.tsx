@@ -19,7 +19,7 @@ export type SearchBarProps = {
 export function SearchBar({
   value,
   onChangeText,
-  placeholder = 'Search',
+  placeholder = t('Search'),
   shape = 'md',
   elevation = 'none',
   accessibilityLabel,

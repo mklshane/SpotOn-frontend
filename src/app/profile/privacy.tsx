@@ -135,8 +135,7 @@ export default function PrivacyPolicyScreen() {
     <Screen padded={false}>
       <DocumentHeader title={t("Privacy Policy")} />
       <View style={styles.header}>
-        <ThemedText type="footnote" themeColor="textSecondary">
-          Last Updated: {LAST_UPDATED}
+        <ThemedText type="footnote" themeColor="textSecondary">{t("Last Updated: ")}{t(LAST_UPDATED)}
         </ThemedText>
       </View>
 
@@ -144,604 +143,269 @@ export default function PrivacyPolicyScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Section title="1. Introduction">
-          <Paragraph>
-            SpotOn (“SpotOn,” “we,” “our,” or “the application”) is a research
-            prototype developed as part of an academic thesis project at De La
-            Salle Lipa (DLSL).
-          </Paragraph>
-          <Paragraph>
-            This Privacy Policy explains what personal information SpotOn
-            collects, how that information is processed, where it is stored, how
-            it is protected, and what rights you have over your information.
-          </Paragraph>
-          <Paragraph>
-            SpotOn is designed for academic research, demonstration, and
-            evaluation purposes. Because the application processes information
-            that may relate to a person&apos;s health, we take the protection of
-            this information seriously.
-          </Paragraph>
-          <Paragraph>
-            SpotOn processes personal information in accordance with applicable
-            Philippine privacy laws, including Republic Act No. 10173, otherwise
-            known as the Data Privacy Act of 2012 (DPA), and its applicable
-            implementing rules and regulations. The DPA requires processing to
-            observe the principles of transparency, legitimate purpose, and
-            proportionality.
-          </Paragraph>
+        <Section title={t("1. Introduction")}>
+          <Paragraph>{t("SpotOn (“SpotOn,” “we,” “our,” or “the application”) is a research prototype developed as part of an academic thesis project at De La Salle Lipa (DLSL).")}</Paragraph>
+          <Paragraph>{t("This Privacy Policy explains what personal information SpotOn collects, how that information is processed, where it is stored, how it is protected, and what rights you have over your information.")}</Paragraph>
+          <Paragraph>{t("SpotOn is designed for academic research, demonstration, and evaluation purposes. Because the application processes information that may relate to a person's health, we take the protection of this information seriously.")}</Paragraph>
+          <Paragraph>{t("SpotOn processes personal information in accordance with applicable Philippine privacy laws, including Republic Act No. 10173, otherwise known as the Data Privacy Act of 2012 (DPA), and its applicable implementing rules and regulations. The DPA requires processing to observe the principles of transparency, legitimate purpose, and proportionality.")}</Paragraph>
         </Section>
 
-        <Section title="2. Who Is Responsible for Your Personal Information?">
-          <Paragraph>
-            The personal information collected through SpotOn is processed in
-            connection with the academic research project at De La Salle Lipa.
-          </Paragraph>
-          <Bullet label="Project">
-            SpotOn — Smartphone-Based Early Skin Cancer Risk Detection
-          </Bullet>
+        <Section title={t("2. Who Is Responsible for Your Personal Information?")}>
+          <Paragraph>{t("The personal information collected through SpotOn is processed in connection with the academic research project at De La Salle Lipa.")}</Paragraph>
+          <Bullet label={t("Project")}>{t("SpotOn — Smartphone-Based Early Skin Cancer Risk Detection")}</Bullet>
           <View style={styles.contactRow}>
-            <ThemedText type="subhead" style={styles.contactLabel}>
-              Project contact:
-            </ThemedText>
+            <ThemedText type="subhead" style={styles.contactLabel}>{t("Project contact:")}</ThemedText>
             <ContactLink email={CONTACT_EMAIL} subject="SpotOn Privacy Policy" />
           </View>
         </Section>
 
-        <Section title="3. Information We Collect">
-          <Paragraph>
-            We collect only information that is reasonably necessary for the
-            application&apos;s functionality, account management, research
-            evaluation, and security. Depending on the features you use, SpotOn
-            may process the following categories of information.
-          </Paragraph>
+        <Section title={t("3. Information We Collect")}>
+          <Paragraph>{t("We collect only information that is reasonably necessary for the application's functionality, account management, research evaluation, and security. Depending on the features you use, SpotOn may process the following categories of information.")}</Paragraph>
 
-          <SubHeading>A. Account Information</SubHeading>
-          <Paragraph>When you create an account, we may collect:</Paragraph>
-          <Bullet>full name;</Bullet>
-          <Bullet>email address;</Bullet>
-          <Bullet>telephone number;</Bullet>
-          <Bullet>date of birth;</Bullet>
-          <Bullet>sex;</Bullet>
-          <Bullet>account credentials or authentication information; and</Bullet>
-          <Bullet>the date and record of your privacy consent.</Bullet>
+          <SubHeading>{t("A. Account Information")}</SubHeading>
+          <Paragraph>{t("When you create an account, we may collect:")}</Paragraph>
+          <Bullet>{t("full name;")}</Bullet>
+          <Bullet>{t("email address;")}</Bullet>
+          <Bullet>{t("telephone number;")}</Bullet>
+          <Bullet>{t("date of birth;")}</Bullet>
+          <Bullet>{t("sex;")}</Bullet>
+          <Bullet>{t("account credentials or authentication information; and")}</Bullet>
+          <Bullet>{t("the date and record of your privacy consent.")}</Bullet>
 
-          <SubHeading>B. Health-Related and Skin Information</SubHeading>
-          <Paragraph>
-            To support the application&apos;s screening functionality, SpotOn
-            may process information such as:
-          </Paragraph>
-          <Bullet>Fitzpatrick skin type;</Bullet>
-          <Bullet>skin-lesion photographs;</Bullet>
-          <Bullet>photographs of skin areas;</Bullet>
-          <Bullet>responses to skin-related questionnaires;</Bullet>
-          <Bullet>
-            responses concerning symptoms or lesion characteristics;
-          </Bullet>
-          <Bullet>
-            screening results and risk or urgency classifications; and
-          </Bullet>
-          <Bullet>
-            other information voluntarily entered during a screening.
-          </Bullet>
-          <Paragraph>
-            Some of this information may constitute sensitive personal
-            information, particularly information relating to health. Under the
-            Data Privacy Act, information concerning an individual&apos;s health
-            is classified as sensitive personal information.
-          </Paragraph>
+          <SubHeading>{t("B. Health-Related and Skin Information")}</SubHeading>
+          <Paragraph>{t("To support the application's screening functionality, SpotOn may process information such as:")}</Paragraph>
+          <Bullet>{t("Fitzpatrick skin type;")}</Bullet>
+          <Bullet>{t("skin-lesion photographs;")}</Bullet>
+          <Bullet>{t("photographs of skin areas;")}</Bullet>
+          <Bullet>{t("responses to skin-related questionnaires;")}</Bullet>
+          <Bullet>{t("responses concerning symptoms or lesion characteristics;")}</Bullet>
+          <Bullet>{t("screening results and risk or urgency classifications; and")}</Bullet>
+          <Bullet>{t("other information voluntarily entered during a screening.")}</Bullet>
+          <Paragraph>{t("Some of this information may constitute sensitive personal information, particularly information relating to health. Under the Data Privacy Act, information concerning an individual's health is classified as sensitive personal information.")}</Paragraph>
 
-          <SubHeading>C. Profile Photograph</SubHeading>
-          <Paragraph>
-            If you choose to upload a profile or avatar photograph, that
-            photograph will be associated with your account. Uploading a profile
-            photograph is optional unless otherwise indicated by the
-            application.
-          </Paragraph>
+          <SubHeading>{t("C. Profile Photograph")}</SubHeading>
+          <Paragraph>{t("If you choose to upload a profile or avatar photograph, that photograph will be associated with your account. Uploading a profile photograph is optional unless otherwise indicated by the application.")}</Paragraph>
 
-          <SubHeading>D. Location Information</SubHeading>
-          <Paragraph>
-            SpotOn may request access to your device&apos;s location when you
-            use location-dependent functionality, such as finding or displaying
-            nearby dermatological clinics. Location access is not required for
-            the core skin-image classification functionality.
-          </Paragraph>
+          <SubHeading>{t("D. Location Information")}</SubHeading>
+          <Paragraph>{t("SpotOn may request access to your device's location when you use location-dependent functionality, such as finding or displaying nearby dermatological clinics. Location access is not required for the core skin-image classification functionality.")}</Paragraph>
 
-          <SubHeading>E. Technical and Usage Information</SubHeading>
-          <Paragraph>
-            The application and its supporting infrastructure may process
-            information necessary to operate, secure, troubleshoot, and maintain
-            the service, such as:
-          </Paragraph>
-          <Bullet>device or application information;</Bullet>
-          <Bullet>authentication information;</Bullet>
-          <Bullet>network or connection information;</Bullet>
-          <Bullet>timestamps;</Bullet>
-          <Bullet>application errors or diagnostic information; and</Bullet>
-          <Bullet>
-            information necessary to maintain account and security functions.
-          </Bullet>
-          <Paragraph>
-            SpotOn does not intentionally collect unrelated information that is
-            unnecessary for its stated purposes.
-          </Paragraph>
+          <SubHeading>{t("E. Technical and Usage Information")}</SubHeading>
+          <Paragraph>{t("The application and its supporting infrastructure may process information necessary to operate, secure, troubleshoot, and maintain the service, such as:")}</Paragraph>
+          <Bullet>{t("device or application information;")}</Bullet>
+          <Bullet>{t("authentication information;")}</Bullet>
+          <Bullet>{t("network or connection information;")}</Bullet>
+          <Bullet>{t("timestamps;")}</Bullet>
+          <Bullet>{t("application errors or diagnostic information; and")}</Bullet>
+          <Bullet>{t("information necessary to maintain account and security functions.")}</Bullet>
+          <Paragraph>{t("SpotOn does not intentionally collect unrelated information that is unnecessary for its stated purposes.")}</Paragraph>
         </Section>
 
-        <Section title="4. How We Use Your Information">
-          <Paragraph>
-            We process information for the following purposes.
-          </Paragraph>
+        <Section title={t("4. How We Use Your Information")}>
+          <Paragraph>{t("We process information for the following purposes.")}</Paragraph>
 
-          <SubHeading>A. Account Management</SubHeading>
-          <Paragraph>Your account information is used to:</Paragraph>
-          <Bullet>create and maintain your SpotOn account;</Bullet>
-          <Bullet>authenticate your account;</Bullet>
-          <Bullet>maintain your profile;</Bullet>
-          <Bullet>synchronize account-related information; and</Bullet>
-          <Bullet>provide account-related functionality.</Bullet>
+          <SubHeading>{t("A. Account Management")}</SubHeading>
+          <Paragraph>{t("Your account information is used to:")}</Paragraph>
+          <Bullet>{t("create and maintain your SpotOn account;")}</Bullet>
+          <Bullet>{t("authenticate your account;")}</Bullet>
+          <Bullet>{t("maintain your profile;")}</Bullet>
+          <Bullet>{t("synchronize account-related information; and")}</Bullet>
+          <Bullet>{t("provide account-related functionality.")}</Bullet>
 
-          <SubHeading>B. Skin Screening Functionality</SubHeading>
-          <Paragraph>
-            Skin-related photographs and questionnaire responses are used to
-            operate SpotOn&apos;s experimental machine-learning screening
-            functionality. The application may analyze an image and generate an
-            estimated probability, classification, or urgency result. These
-            results are automatically generated and are not medical diagnoses.
-          </Paragraph>
+          <SubHeading>{t("B. Skin Screening Functionality")}</SubHeading>
+          <Paragraph>{t("Skin-related photographs and questionnaire responses are used to operate SpotOn's experimental machine-learning screening functionality. The application may analyze an image and generate an estimated probability, classification, or urgency result. These results are automatically generated and are not medical diagnoses.")}</Paragraph>
 
-          <SubHeading>C. Research and Academic Evaluation</SubHeading>
-          <Paragraph>
-            Information may be processed for academic research and evaluation
-            associated with the SpotOn thesis project. This may include
-            evaluating:
-          </Paragraph>
-          <Bullet>application performance;</Bullet>
-          <Bullet>machine-learning performance;</Bullet>
-          <Bullet>usability;</Bullet>
-          <Bullet>screening workflow;</Bullet>
-          <Bullet>model errors and limitations; and</Bullet>
-          <Bullet>aggregated research findings.</Bullet>
-          <Paragraph>
-            Where possible, research analysis uses de-identified,
-            pseudonymized, or aggregated information rather than directly
-            identifying users. Your personal information will not be sold for
-            commercial purposes.
-          </Paragraph>
+          <SubHeading>{t("C. Research and Academic Evaluation")}</SubHeading>
+          <Paragraph>{t("Information may be processed for academic research and evaluation associated with the SpotOn thesis project. This may include evaluating:")}</Paragraph>
+          <Bullet>{t("application performance;")}</Bullet>
+          <Bullet>{t("machine-learning performance;")}</Bullet>
+          <Bullet>{t("usability;")}</Bullet>
+          <Bullet>{t("screening workflow;")}</Bullet>
+          <Bullet>{t("model errors and limitations; and")}</Bullet>
+          <Bullet>{t("aggregated research findings.")}</Bullet>
+          <Paragraph>{t("Where possible, research analysis uses de-identified, pseudonymized, or aggregated information rather than directly identifying users. Your personal information will not be sold for commercial purposes.")}</Paragraph>
 
-          <SubHeading>D. Location-Based Features</SubHeading>
-          <Paragraph>
-            When you enable a location-related feature, location information may
-            be used to provide map or nearby-clinic functionality.
-          </Paragraph>
+          <SubHeading>{t("D. Location-Based Features")}</SubHeading>
+          <Paragraph>{t("When you enable a location-related feature, location information may be used to provide map or nearby-clinic functionality.")}</Paragraph>
 
-          <SubHeading>E. Security and Maintenance</SubHeading>
-          <Paragraph>
-            Information may be processed when necessary to:
-          </Paragraph>
-          <Bullet>authenticate users;</Bullet>
-          <Bullet>detect unauthorized activity;</Bullet>
-          <Bullet>maintain application security;</Bullet>
-          <Bullet>troubleshoot technical problems; and</Bullet>
-          <Bullet>protect the integrity of the research system.</Bullet>
+          <SubHeading>{t("E. Security and Maintenance")}</SubHeading>
+          <Paragraph>{t("Information may be processed when necessary to:")}</Paragraph>
+          <Bullet>{t("authenticate users;")}</Bullet>
+          <Bullet>{t("detect unauthorized activity;")}</Bullet>
+          <Bullet>{t("maintain application security;")}</Bullet>
+          <Bullet>{t("troubleshoot technical problems; and")}</Bullet>
+          <Bullet>{t("protect the integrity of the research system.")}</Bullet>
         </Section>
 
-        <Section title="5. Legal Basis for Processing">
-          <Paragraph>
-            SpotOn processes personal information based on applicable lawful
-            processing grounds under the Data Privacy Act.
-          </Paragraph>
-          <Paragraph>
-            Where processing involves sensitive personal information, including
-            health-related information, SpotOn relies on an applicable legal
-            basis recognized under the DPA, including specific, informed consent
-            where required. The DPA generally requires consent for processing
-            sensitive personal information unless another statutory exception
-            applies.
-          </Paragraph>
-          <Paragraph>
-            Where consent is the applicable legal basis, we obtain your consent
-            before processing begins. Consent is freely given, specific,
-            informed, and recorded together with the date it was given.
-          </Paragraph>
+        <Section title={t("5. Legal Basis for Processing")}>
+          <Paragraph>{t("SpotOn processes personal information based on applicable lawful processing grounds under the Data Privacy Act.")}</Paragraph>
+          <Paragraph>{t("Where processing involves sensitive personal information, including health-related information, SpotOn relies on an applicable legal basis recognized under the DPA, including specific, informed consent where required. The DPA generally requires consent for processing sensitive personal information unless another statutory exception applies.")}</Paragraph>
+          <Paragraph>{t("Where consent is the applicable legal basis, we obtain your consent before processing begins. Consent is freely given, specific, informed, and recorded together with the date it was given.")}</Paragraph>
         </Section>
 
-        <Section title="6. How Your Skin Images Are Processed">
-          <SubHeading>On-Device Processing</SubHeading>
-          <Paragraph>
-            SpotOn&apos;s machine-learning image classification is designed to
-            run directly on your device. When an image is analyzed:
-          </Paragraph>
-          <Bullet>the image is selected or captured on the device;</Bullet>
-          <Bullet>the machine-learning model processes the image locally;</Bullet>
-          <Bullet>the application generates the screening output; and</Bullet>
-          <Bullet>
-            the image and screening history may remain within SpotOn&apos;s
-            private application storage on the device.
-          </Bullet>
-          <Paragraph>
-            Lesion photographs are not routinely uploaded to SpotOn&apos;s
-            application servers solely to perform machine-learning
-            classification. This means that SpotOn&apos;s server does not need
-            to receive your lesion photograph in order to perform the core
-            classification process.
-          </Paragraph>
+        <Section title={t("6. How Your Skin Images Are Processed")}>
+          <SubHeading>{t("On-Device Processing")}</SubHeading>
+          <Paragraph>{t("SpotOn's machine-learning image classification is designed to run directly on your device. When an image is analyzed:")}</Paragraph>
+          <Bullet>{t("the image is selected or captured on the device;")}</Bullet>
+          <Bullet>{t("the machine-learning model processes the image locally;")}</Bullet>
+          <Bullet>{t("the application generates the screening output; and")}</Bullet>
+          <Bullet>{t("the image and screening history may remain within SpotOn's private application storage on the device.")}</Bullet>
+          <Paragraph>{t("Lesion photographs are not routinely uploaded to SpotOn's application servers solely to perform machine-learning classification. This means that SpotOn's server does not need to receive your lesion photograph in order to perform the core classification process.")}</Paragraph>
 
-          <SubHeading>Important Distinction</SubHeading>
-          <Paragraph>
-            Your lesion images may still exist in the application&apos;s local
-            storage after analysis if the screening history feature saves them.
-            Local storage on your device is separate from the server-side
-            account database.
-          </Paragraph>
+          <SubHeading>{t("Important Distinction")}</SubHeading>
+          <Paragraph>{t("Your lesion images may still exist in the application's local storage after analysis if the screening history feature saves them. Local storage on your device is separate from the server-side account database.")}</Paragraph>
         </Section>
 
-        <Section title="7. Where Your Data Is Stored">
-          <Paragraph>
-            SpotOn uses two general categories of storage.
-          </Paragraph>
+        <Section title={t("7. Where Your Data Is Stored")}>
+          <Paragraph>{t("SpotOn uses two general categories of storage.")}</Paragraph>
 
-          <SubHeading>A. Local Device Storage</SubHeading>
-          <Paragraph>
-            Screening photographs and related screening history may be stored
-            within SpotOn&apos;s private application storage on your device.
-            This information is subject to the security protections provided by
-            the device operating system and application sandbox.
-          </Paragraph>
-          <Paragraph>
-            SpotOn does not apply an additional application-level AES encryption
-            layer to locally stored images, and does not claim such protection
-            unless it is specifically implemented.
-          </Paragraph>
+          <SubHeading>{t("A. Local Device Storage")}</SubHeading>
+          <Paragraph>{t("Screening photographs and related screening history may be stored within SpotOn's private application storage on your device. This information is subject to the security protections provided by the device operating system and application sandbox.")}</Paragraph>
+          <Paragraph>{t("SpotOn does not apply an additional application-level AES encryption layer to locally stored images, and does not claim such protection unless it is specifically implemented.")}</Paragraph>
 
-          <SubHeading>B. Server-Side Storage</SubHeading>
-          <Paragraph>
-            Account-related information may be stored in the application&apos;s
-            backend database or cloud infrastructure, hosted in {DB_REGION}.
-            This may include information such as:
-          </Paragraph>
-          <Bullet>name;</Bullet>
-          <Bullet>email address;</Bullet>
-          <Bullet>telephone number;</Bullet>
-          <Bullet>date of birth;</Bullet>
-          <Bullet>sex;</Bullet>
-          <Bullet>Fitzpatrick skin type;</Bullet>
-          <Bullet>account information;</Bullet>
-          <Bullet>profile photograph; and</Bullet>
-          <Bullet>
-            screening-related metadata or results where applicable.
-          </Bullet>
-          <Paragraph>
-            The exact categories stored server-side may change as the research
-            prototype is updated.
-          </Paragraph>
+          <SubHeading>{t("B. Server-Side Storage")}</SubHeading>
+          <Paragraph>{t("Account-related information may be stored in the application's backend database or cloud infrastructure, hosted in ")}{DB_REGION}{t(". This may include information such as:")}</Paragraph>
+          <Bullet>{t("name;")}</Bullet>
+          <Bullet>{t("email address;")}</Bullet>
+          <Bullet>{t("telephone number;")}</Bullet>
+          <Bullet>{t("date of birth;")}</Bullet>
+          <Bullet>{t("sex;")}</Bullet>
+          <Bullet>{t("Fitzpatrick skin type;")}</Bullet>
+          <Bullet>{t("account information;")}</Bullet>
+          <Bullet>{t("profile photograph; and")}</Bullet>
+          <Bullet>{t("screening-related metadata or results where applicable.")}</Bullet>
+          <Paragraph>{t("The exact categories stored server-side may change as the research prototype is updated.")}</Paragraph>
         </Section>
 
-        <Section title="8. Third-Party Service Providers">
-          <Paragraph>
-            SpotOn uses third-party infrastructure providers to operate portions
-            of the application. These providers include backend and database
-            infrastructure providers, and map or map-tile providers used for
-            location and map functionality.
-          </Paragraph>
-          <Paragraph>
-            Where third-party services process personal information on behalf of
-            SpotOn, they are subject to appropriate contractual,
-            organizational, and technical safeguards consistent with applicable
-            privacy requirements.
-          </Paragraph>
+        <Section title={t("8. Third-Party Service Providers")}>
+          <Paragraph>{t("SpotOn uses third-party infrastructure providers to operate portions of the application. These providers include backend and database infrastructure providers, and map or map-tile providers used for location and map functionality.")}</Paragraph>
+          <Paragraph>{t("Where third-party services process personal information on behalf of SpotOn, they are subject to appropriate contractual, organizational, and technical safeguards consistent with applicable privacy requirements.")}</Paragraph>
 
-          <SubHeading>Cloud and Backend Providers</SubHeading>
-          <Paragraph>
-            SpotOn&apos;s account database is hosted on Supabase (managed
-            PostgreSQL cloud infrastructure) in {DB_REGION}. See{" "}
+          <SubHeading>{t("Cloud and Backend Providers")}</SubHeading>
+          <Paragraph>{t("SpotOn's account database is hosted on Supabase (managed PostgreSQL cloud infrastructure) in ")}{DB_REGION}{t(". See")}{" "}
             <ExternalLink
               url="https://supabase.com/privacy"
               label="supabase.com/privacy"
             />
             .
           </Paragraph>
-          <Paragraph>
-            The application programming interface that connects the app to that
-            database is hosted on Render in {API_REGION}. See{" "}
+          <Paragraph>{t("The application programming interface that connects the app to that database is hosted on Render in ")}{API_REGION}{t(". See")}{" "}
             <ExternalLink
               url="https://render.com/privacy"
               label="render.com/privacy"
             />
             .
           </Paragraph>
-          <Paragraph>
-            Because these providers operate outside the Philippines, account
-            information processed through SpotOn is stored and processed abroad.
-            The research team remains accountable for that information under the
-            Data Privacy Act, and these providers act as processors on
-            SpotOn&apos;s behalf.
-          </Paragraph>
+          <Paragraph>{t("Because these providers operate outside the Philippines, account information processed through SpotOn is stored and processed abroad. The research team remains accountable for that information under the Data Privacy Act, and these providers act as processors on SpotOn's behalf.")}</Paragraph>
 
-          <SubHeading>Map Services</SubHeading>
-          <Paragraph>
-            When map functionality is used, SpotOn requests map tiles and
-            related map resources from MapTiler. Providing a map requires
-            sending the information necessary to identify the requested map
-            area, which is derived from your approximate location, together with
-            your device&apos;s network address. SpotOn does not send your
-            precise coordinates to the map provider, and clinic distances are
-            calculated on your device rather than on a server. See{" "}
+          <SubHeading>{t("Map Services")}</SubHeading>
+          <Paragraph>{t("When map functionality is used, SpotOn requests map tiles and related map resources from MapTiler. Providing a map requires sending the information necessary to identify the requested map area, which is derived from your approximate location, together with your device's network address. SpotOn does not send your precise coordinates to the map provider, and clinic distances are calculated on your device rather than on a server. See")}{" "}
             <ExternalLink
               url="https://www.maptiler.com/privacy-policy/"
               label="maptiler.com/privacy-policy"
             />
             .
           </Paragraph>
-          <Paragraph>
-            SpotOn does not sell your personal information to these providers.
-          </Paragraph>
+          <Paragraph>{t("SpotOn does not sell your personal information to these providers.")}</Paragraph>
         </Section>
 
-        <Section title="9. Data Sharing and Disclosure">
-          <Paragraph>
-            SpotOn does not sell, rent, or trade your personal information or
-            skin photographs for advertising or commercial data brokerage.
-          </Paragraph>
-          <Paragraph>
-            Information may nevertheless be disclosed or made accessible in
-            limited circumstances, including:
-          </Paragraph>
-          <Bullet>
-            to authorized members of the research team who require access for
-            legitimate project purposes;
-          </Bullet>
-          <Bullet>
-            to authorized institutional personnel where necessary for research
-            oversight, ethics, security, or compliance;
-          </Bullet>
-          <Bullet>
-            to contracted service providers that operate infrastructure used by
-            SpotOn;
-          </Bullet>
-          <Bullet>where required or permitted by applicable law; or</Bullet>
-          <Bullet>
-            where necessary to protect the rights, safety, or security of users
-            or the application.
-          </Bullet>
-          <Paragraph>
-            Access to sensitive information is limited to individuals who
-            require it for an authorized purpose.
-          </Paragraph>
+        <Section title={t("9. Data Sharing and Disclosure")}>
+          <Paragraph>{t("SpotOn does not sell, rent, or trade your personal information or skin photographs for advertising or commercial data brokerage.")}</Paragraph>
+          <Paragraph>{t("Information may nevertheless be disclosed or made accessible in limited circumstances, including:")}</Paragraph>
+          <Bullet>{t("to authorized members of the research team who require access for legitimate project purposes;")}</Bullet>
+          <Bullet>{t("to authorized institutional personnel where necessary for research oversight, ethics, security, or compliance;")}</Bullet>
+          <Bullet>{t("to contracted service providers that operate infrastructure used by SpotOn;")}</Bullet>
+          <Bullet>{t("where required or permitted by applicable law; or")}</Bullet>
+          <Bullet>{t("where necessary to protect the rights, safety, or security of users or the application.")}</Bullet>
+          <Paragraph>{t("Access to sensitive information is limited to individuals who require it for an authorized purpose.")}</Paragraph>
         </Section>
 
-        <Section title="10. Research Data and De-Identification">
-          <Paragraph>
-            SpotOn may use pseudonymization or de-identification techniques when
-            analyzing research data. For example, a record may be associated
-            with a randomized identifier rather than displaying a user&apos;s
-            name.
-          </Paragraph>
-          <Paragraph>
-            However, pseudonymization does not necessarily make information
-            anonymous. If information can still reasonably be linked to an
-            identifiable user through additional information, it continues to be
-            treated as personal information and protected accordingly.
-          </Paragraph>
-          <Paragraph>
-            Research results may be reported in aggregate form so that
-            individual participants are not unnecessarily identified.
-          </Paragraph>
+        <Section title={t("10. Research Data and De-Identification")}>
+          <Paragraph>{t("SpotOn may use pseudonymization or de-identification techniques when analyzing research data. For example, a record may be associated with a randomized identifier rather than displaying a user's name.")}</Paragraph>
+          <Paragraph>{t("However, pseudonymization does not necessarily make information anonymous. If information can still reasonably be linked to an identifiable user through additional information, it continues to be treated as personal information and protected accordingly.")}</Paragraph>
+          <Paragraph>{t("Research results may be reported in aggregate form so that individual participants are not unnecessarily identified.")}</Paragraph>
         </Section>
 
-        <Section title="11. Data Retention">
-          <Paragraph>
-            SpotOn retains personal information only for as long as reasonably
-            necessary for the purposes described in this Privacy Policy, subject
-            to applicable legal, institutional, research, and security
-            requirements.
-          </Paragraph>
+        <Section title={t("11. Data Retention")}>
+          <Paragraph>{t("SpotOn retains personal information only for as long as reasonably necessary for the purposes described in this Privacy Policy, subject to applicable legal, institutional, research, and security requirements.")}</Paragraph>
 
-          <SubHeading>Local Screening Data</SubHeading>
-          <Paragraph>
-            Screening images and history stored locally on your device remain
-            there until they are deleted through the application&apos;s
-            available controls, removed as part of application data deletion, or
-            otherwise removed from the device. Uninstalling the application may
-            remove locally stored application data, depending on the operating
-            system and device configuration.
-          </Paragraph>
+          <SubHeading>{t("Local Screening Data")}</SubHeading>
+          <Paragraph>{t("Screening images and history stored locally on your device remain there until they are deleted through the application's available controls, removed as part of application data deletion, or otherwise removed from the device. Uninstalling the application may remove locally stored application data, depending on the operating system and device configuration.")}</Paragraph>
 
-          <SubHeading>Server-Side Account Data</SubHeading>
-          <Paragraph>
-            Account information stored on SpotOn&apos;s backend will be retained
-            for the duration necessary to operate the research prototype and
-            fulfill legitimate academic, security, and legal requirements. The
-            evaluation period is expected to conclude in {PROJECT_END}.
+          <SubHeading>{t("Server-Side Account Data")}</SubHeading>
+          <Paragraph>{t("Account information stored on SpotOn's backend will be retained for the duration necessary to operate the research prototype and fulfill legitimate academic, security, and legal requirements. The evaluation period is expected to conclude in ")}{t(PROJECT_END)}.
           </Paragraph>
-          <Paragraph>
-            Following completion of the research project, the research team
-            intends to securely delete or appropriately de-identify personal
-            information that is no longer required. We do not claim that all
-            information is permanently deleted immediately upon thesis
-            completion, because some information may need to be retained for
-            legal or institutional reasons.
-          </Paragraph>
+          <Paragraph>{t("Following completion of the research project, the research team intends to securely delete or appropriately de-identify personal information that is no longer required. We do not claim that all information is permanently deleted immediately upon thesis completion, because some information may need to be retained for legal or institutional reasons.")}</Paragraph>
         </Section>
 
-        <Section title="12. Data Security">
-          <Paragraph>
-            SpotOn implements reasonable technical and organizational measures
-            appropriate to the nature of the information being processed. These
-            may include:
-          </Paragraph>
-          <Bullet>encrypted communication using HTTPS/TLS;</Bullet>
-          <Bullet>authentication and access controls;</Bullet>
-          <Bullet>restricted access to backend systems;</Bullet>
-          <Bullet>secure cloud infrastructure;</Bullet>
-          <Bullet>application-level access restrictions; and</Bullet>
-          <Bullet>appropriate security practices for research data.</Bullet>
-          <Paragraph>
-            Data stored by third-party infrastructure providers may also be
-            protected using security mechanisms provided by those services.
-          </Paragraph>
-          <Paragraph>
-            No electronic system can guarantee absolute security. Therefore,
-            while reasonable safeguards are implemented, SpotOn cannot guarantee
-            that unauthorized access, disclosure, alteration, or destruction
-            will never occur.
-          </Paragraph>
+        <Section title={t("12. Data Security")}>
+          <Paragraph>{t("SpotOn implements reasonable technical and organizational measures appropriate to the nature of the information being processed. These may include:")}</Paragraph>
+          <Bullet>{t("encrypted communication using HTTPS/TLS;")}</Bullet>
+          <Bullet>{t("authentication and access controls;")}</Bullet>
+          <Bullet>{t("restricted access to backend systems;")}</Bullet>
+          <Bullet>{t("secure cloud infrastructure;")}</Bullet>
+          <Bullet>{t("application-level access restrictions; and")}</Bullet>
+          <Bullet>{t("appropriate security practices for research data.")}</Bullet>
+          <Paragraph>{t("Data stored by third-party infrastructure providers may also be protected using security mechanisms provided by those services.")}</Paragraph>
+          <Paragraph>{t("No electronic system can guarantee absolute security. Therefore, while reasonable safeguards are implemented, SpotOn cannot guarantee that unauthorized access, disclosure, alteration, or destruction will never occur.")}</Paragraph>
         </Section>
 
-        <Section title="13. Data Breaches and Security Incidents">
-          <Paragraph>
-            If a security incident or personal data breach occurs, the research
-            team will assess the incident and take appropriate measures in
-            accordance with applicable law, institutional procedures, and
-            applicable National Privacy Commission requirements.
-          </Paragraph>
-          <Paragraph>
-            Where notification is legally required, affected individuals and the
-            appropriate authorities will be notified in accordance with
-            applicable requirements.
-          </Paragraph>
+        <Section title={t("13. Data Breaches and Security Incidents")}>
+          <Paragraph>{t("If a security incident or personal data breach occurs, the research team will assess the incident and take appropriate measures in accordance with applicable law, institutional procedures, and applicable National Privacy Commission requirements.")}</Paragraph>
+          <Paragraph>{t("Where notification is legally required, affected individuals and the appropriate authorities will be notified in accordance with applicable requirements.")}</Paragraph>
         </Section>
 
-        <Section title="14. Your Rights as a Data Subject">
-          <Paragraph>
-            Under the Data Privacy Act, you may have rights including the
-            following.
-          </Paragraph>
-          <Bullet label="Right to be informed">
-            You have the right to know whether your personal information is
-            being processed and how it is being used.
-          </Bullet>
-          <Bullet label="Right to access">
-            You may request access to personal information held about you,
-            subject to applicable limitations.
-          </Bullet>
-          <Bullet label="Right to correct or rectify">
-            You may request correction of inaccurate, incomplete, or outdated
-            personal information.
-          </Bullet>
-          <Bullet label="Right to object">
-            Where applicable, you may object to certain processing of your
-            personal information.
-          </Bullet>
-          <Bullet label="Right to withdraw consent">
-            Where processing is based on consent, you may withdraw your consent,
-            subject to applicable legal or operational limitations. Withdrawal
-            of consent does not invalidate processing that was lawfully
-            conducted before withdrawal.
-          </Bullet>
-          <Bullet label="Right to erasure or blocking">
-            Where applicable, you may request deletion, blocking, or restriction
-            of processing of your personal information.
-          </Bullet>
-          <Bullet label="Right to data portability">
-            Where applicable, you may request a copy of your personal
-            information in a structured or commonly used format and exercise
-            your right to data portability.
-          </Bullet>
-          <Bullet label="Right to file a complaint">
-            If you believe your privacy rights have been violated, you may file
-            a complaint with the National Privacy Commission (NPC).
-          </Bullet>
-          <Paragraph>
-            These rights are recognized under the Data Privacy Act and related
-            NPC guidance. Some rights may be subject to limitations or
-            exceptions under applicable law.
-          </Paragraph>
+        <Section title={t("14. Your Rights as a Data Subject")}>
+          <Paragraph>{t("Under the Data Privacy Act, you may have rights including the following.")}</Paragraph>
+          <Bullet label={t("Right to be informed")}>{t("You have the right to know whether your personal information is being processed and how it is being used.")}</Bullet>
+          <Bullet label={t("Right to access")}>{t("You may request access to personal information held about you, subject to applicable limitations.")}</Bullet>
+          <Bullet label={t("Right to correct or rectify")}>{t("You may request correction of inaccurate, incomplete, or outdated personal information.")}</Bullet>
+          <Bullet label={t("Right to object")}>{t("Where applicable, you may object to certain processing of your personal information.")}</Bullet>
+          <Bullet label={t("Right to withdraw consent")}>{t("Where processing is based on consent, you may withdraw your consent, subject to applicable legal or operational limitations. Withdrawal of consent does not invalidate processing that was lawfully conducted before withdrawal.")}</Bullet>
+          <Bullet label={t("Right to erasure or blocking")}>{t("Where applicable, you may request deletion, blocking, or restriction of processing of your personal information.")}</Bullet>
+          <Bullet label={t("Right to data portability")}>{t("Where applicable, you may request a copy of your personal information in a structured or commonly used format and exercise your right to data portability.")}</Bullet>
+          <Bullet label={t("Right to file a complaint")}>{t("If you believe your privacy rights have been violated, you may file a complaint with the National Privacy Commission (NPC).")}</Bullet>
+          <Paragraph>{t("These rights are recognized under the Data Privacy Act and related NPC guidance. Some rights may be subject to limitations or exceptions under applicable law.")}</Paragraph>
         </Section>
 
-        <Section title="15. How to Exercise Your Rights">
-          <Paragraph>
-            To request access, correction, deletion, withdrawal of consent, or
-            other privacy-related assistance, contact the SpotOn Project Team:
-          </Paragraph>
+        <Section title={t("15. How to Exercise Your Rights")}>
+          <Paragraph>{t("To request access, correction, deletion, withdrawal of consent, or other privacy-related assistance, contact the SpotOn Project Team:")}</Paragraph>
           <View style={styles.contactRow}>
             <ContactLink email={CONTACT_EMAIL} subject="SpotOn data request" />
           </View>
-          <Paragraph>
-            Please provide enough information for the research team to identify
-            your account and understand your request. For security purposes, we
-            may need to verify your identity before fulfilling certain requests.
-            We aim to respond within {RESPONSE_WINDOW} of receiving a verified
-            request.
-          </Paragraph>
+          <Paragraph>{t("Please provide enough information for the research team to identify your account and understand your request. For security purposes, we may need to verify your identity before fulfilling certain requests. We aim to respond within ")}{t(RESPONSE_WINDOW)}{t(" of receiving a verified request.")}</Paragraph>
         </Section>
 
-        <Section title="16. Withdrawal from Research">
-          <Paragraph>
-            Participation in the SpotOn research evaluation is voluntary. You
-            may stop participating or request withdrawal from the research
-            activity subject to applicable research-ethics procedures and
-            limitations.
-          </Paragraph>
-          <Paragraph>
-            Withdrawal from research does not affect the lawfulness of
-            processing that occurred before your withdrawal.
-          </Paragraph>
-          <Paragraph>
-            If you wish to withdraw your data from the research dataset, contact
-            the project team using the information above. If the data has
-            already been irreversibly aggregated or anonymized so that it can no
-            longer reasonably be associated with you, it may no longer be
-            possible to identify and remove it.
-          </Paragraph>
+        <Section title={t("16. Withdrawal from Research")}>
+          <Paragraph>{t("Participation in the SpotOn research evaluation is voluntary. You may stop participating or request withdrawal from the research activity subject to applicable research-ethics procedures and limitations.")}</Paragraph>
+          <Paragraph>{t("Withdrawal from research does not affect the lawfulness of processing that occurred before your withdrawal.")}</Paragraph>
+          <Paragraph>{t("If you wish to withdraw your data from the research dataset, contact the project team using the information above. If the data has already been irreversibly aggregated or anonymized so that it can no longer reasonably be associated with you, it may no longer be possible to identify and remove it.")}</Paragraph>
         </Section>
 
-        <Section title="17. Children’s Privacy">
-          <Paragraph>
-            SpotOn is intended for individuals 18 years of age or older. We do
-            not intentionally collect personal information from individuals
-            under 18.
-          </Paragraph>
-          <Paragraph>
-            If you believe that an individual under 18 has provided personal
-            information to SpotOn, please contact us so that we can investigate
-            and take appropriate action.
-          </Paragraph>
+        <Section title={t("17. Children’s Privacy")}>
+          <Paragraph>{t("SpotOn is intended for individuals 18 years of age or older. We do not intentionally collect personal information from individuals under 18.")}</Paragraph>
+          <Paragraph>{t("If you believe that an individual under 18 has provided personal information to SpotOn, please contact us so that we can investigate and take appropriate action.")}</Paragraph>
         </Section>
 
-        <Section title="18. Changes to This Privacy Policy">
-          <Paragraph>
-            This Privacy Policy may be updated when SpotOn&apos;s functionality,
-            research procedures, data-processing activities, third-party
-            services, or applicable requirements change.
-          </Paragraph>
-          <Paragraph>
-            When material changes are made, the “Last Updated” date will be
-            revised. Where appropriate, users will be notified through the
-            application or another reasonable communication method. Previous
-            versions may be retained for research, compliance, and documentation
-            purposes.
-          </Paragraph>
+        <Section title={t("18. Changes to This Privacy Policy")}>
+          <Paragraph>{t("This Privacy Policy may be updated when SpotOn's functionality, research procedures, data-processing activities, third-party services, or applicable requirements change.")}</Paragraph>
+          <Paragraph>{t("When material changes are made, the “Last Updated” date will be revised. Where appropriate, users will be notified through the application or another reasonable communication method. Previous versions may be retained for research, compliance, and documentation purposes.")}</Paragraph>
         </Section>
 
-        <Section title="19. Contact Us">
-          <Paragraph>
-            For questions, concerns, data requests, or privacy complaints
-            relating to SpotOn, contact the SpotOn Project Team:
-          </Paragraph>
+        <Section title={t("19. Contact Us")}>
+          <Paragraph>{t("For questions, concerns, data requests, or privacy complaints relating to SpotOn, contact the SpotOn Project Team:")}</Paragraph>
           <View style={styles.contactRow}>
             <ContactLink email={CONTACT_EMAIL} subject="SpotOn Privacy Policy" />
           </View>
           {DPO_CONTACT ? (
-            <Paragraph>
-              For institutional privacy concerns, you may also contact the De La
-              Salle Lipa Data Protection Officer at {DPO_CONTACT}.
+            <Paragraph>{t("For institutional privacy concerns, you may also contact the De La Salle Lipa Data Protection Officer at ")}{DPO_CONTACT}.
             </Paragraph>
           ) : (
-            <Paragraph>
-              For institutional privacy concerns, you may also contact the De La
-              Salle Lipa Data Protection Officer through the University&apos;s
-              official channels.
-            </Paragraph>
+            <Paragraph>{t("For institutional privacy concerns, you may also contact the De La Salle Lipa Data Protection Officer through the University's official channels.")}</Paragraph>
           )}
         </Section>
 
-        <Section title="20. National Privacy Commission">
-          <Paragraph>
-            If you believe that your personal data has been processed unlawfully
-            or that your rights under Philippine data privacy law have been
-            violated, you may seek assistance from or lodge a complaint with the
-            National Privacy Commission of the Philippines. Official NPC
-            information regarding data-subject rights and complaints is
-            available through the Commission&apos;s website at{" "}
+        <Section title={t("20. National Privacy Commission")}>
+          <Paragraph>{t("If you believe that your personal data has been processed unlawfully or that your rights under Philippine data privacy law have been violated, you may seek assistance from or lodge a complaint with the National Privacy Commission of the Philippines. Official NPC information regarding data-subject rights and complaints is available through the Commission's website at")}{" "}
             <ExternalLink
               url="https://www.privacy.gov.ph"
               label="privacy.gov.ph"
@@ -754,13 +418,7 @@ export default function PrivacyPolicyScreen() {
           type="footnote"
           themeColor="textSecondary"
           style={styles.closing}
-        >
-          By creating an account and using SpotOn, you acknowledge that you have
-          read this Privacy Policy and the <TermsLink />, and understand how
-          your personal information may be processed for the purposes described
-          above. Where consent is required, your consent will be obtained
-          separately and appropriately documented.
-        </ThemedText>
+        >{t("By creating an account and using SpotOn, you acknowledge that you have read this Privacy Policy and the ")}<TermsLink />{t(", and understand how your personal information may be processed for the purposes described above. Where consent is required, your consent will be obtained separately and appropriately documented.")}</ThemedText>
       </ScrollView>
     </Screen>
   );

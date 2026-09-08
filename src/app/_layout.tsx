@@ -1,4 +1,5 @@
 import { LanguageGate, loadLanguage } from '@/lib/i18n';
+import { captureDebugFlag } from '@/lib/debug-flag';
 import {
   HankenGrotesk_600SemiBold,
   HankenGrotesk_700Bold,
@@ -20,6 +21,10 @@ import { initNotifications } from '@/lib/notifications';
 import { ScanHistoryProvider } from '@/lib/scan-history';
 import { sweepScratchFiles } from '@/lib/scratch-files';
 import { ScreeningSessionProvider } from '@/lib/screening-session';
+
+// Runs at module evaluation — before the router mounts and rewrites the URL, which is the only
+// moment `?debug=1` is still readable. See lib/debug-flag.ts.
+captureDebugFlag();
 
 // The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
 // intentional, correct pattern that Reanimated v4 strict mode over-flags. Disable strict mode

@@ -27,12 +27,23 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const litertSrc = join(root, 'node_modules', '@litertjs', 'core', 'wasm');
 const litertDest = join(root, 'public', 'litert');
 
-// Only the variants that can actually load here. `threaded` needs SharedArrayBuffer, which needs
-// cross-origin isolation (COOP/COEP) — and we deliberately do NOT set those headers, because
-// COEP blocks the cross-origin Supabase clinic photos. `compat` targets browsers well below our
-// floor. Shipping just jspi + plain drops ~19 MB from the deploy; tflite.web.ts asks for jspi
-// first and falls back to plain.
-const LITERT_VARIANTS = ['litert_wasm_jspi_internal', 'litert_wasm_internal'];
+// LiteRT picks its wasm variant from a RELAXED-SIMD probe, not from the jspi option:
+//   const relaxedSimd = await supportsFeature("relaxedSimd")   (@litertjs/core dist/index.js)
+// and falls back to `litert_wasm_compat_internal.js` when the browser lacks it. Safari only
+// shipped relaxed SIMD in 18.4, so omitting `compat` 404s the runtime on older iOS and surfaces
+// as a bare ClassifierError('model-load') — this was shipped broken on 2026-09-08 and is why
+// `compat` is back.
+//
+// `threaded` stays out: it is only ever selected when `options.threads` is passed, which we never
+// do (it would also need SharedArrayBuffer, hence COOP/COEP, and COEP blocks the cross-origin
+// Supabase clinic photos).
+//
+// Each client downloads exactly ONE of these, so the extra variant costs hosting, not bandwidth.
+const LITERT_VARIANTS = [
+  'litert_wasm_jspi_internal',   // relaxed SIMD + JSPI  (Chrome, Safari 26.6+)
+  'litert_wasm_internal',        // relaxed SIMD, no JSPI (Safari 18.4–26.5)
+  'litert_wasm_compat_internal', // no relaxed SIMD       (Safari < 18.4, older Android)
+];
 
 if (existsSync(litertSrc)) {
   await mkdir(litertDest, { recursive: true });

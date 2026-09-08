@@ -70,21 +70,21 @@ export function ClinicalImage({
             contentFit={spec.fit ?? 'cover'}
             transition={180}
             accessible
-            accessibilityLabel={spec.alt}
+            accessibilityLabel={t(spec.alt)}
             style={styles.photo}
           />
         ) : mayIllustrate ? (
-          <View accessible accessibilityLabel={spec.alt} style={styles.fallback}>
+          <View accessible accessibilityLabel={t(spec.alt)} style={styles.fallback}>
             {illustration}
           </View>
         ) : (
-          <PhotoNeeded needs={spec.needs} />
+          <PhotoNeeded needs={spec.alt} />
         )}
 
         {spec.asset || mayIllustrate ? (
           <View style={[styles.kind, { backgroundColor: theme.surface }]}>
             <ThemedText type="caption" themeColor="muted" style={styles.kindLabel}>
-              {!spec.asset ? 'ILLUSTRATION' : spec.modality === 'dermoscopic' ? 'DERMOSCOPIC' : 'PHOTO'}
+              {!spec.asset ? t('ILLUSTRATION') : spec.modality === 'dermoscopic' ? t('DERMOSCOPIC') : t('PHOTO')}
             </ThemedText>
           </View>
         ) : null}
@@ -124,7 +124,7 @@ function PhotoNeeded({ needs }: { needs: string }) {
         {t("Clinical photo needed")}</ThemedText>
       {__DEV__ ? (
         <ThemedText type="caption" themeColor="muted" numberOfLines={4} style={styles.neededHint}>
-          {needs}
+          {t(needs)}
         </ThemedText>
       ) : null}
     </View>

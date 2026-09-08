@@ -473,7 +473,7 @@ export default function LesionDetailScreen() {
               themeColor="muted"
               style={styles.disclaimer}
             >
-              {DISCLAIMER}
+              {t(DISCLAIMER)}
             </ThemedText>
           </Entrance>
         </EntranceProvider>

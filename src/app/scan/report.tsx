@@ -41,14 +41,19 @@ type PdfState =
   | { status: 'error'; message: string };
 
 export default function ReportScreen() {
-  useLocale();
+  const locale = useLocale();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getById, loading } = useScanHistory();
   const { user } = useAuth();
   const record = id ? getById(id) : undefined;
 
-  const model = useMemo(() => (record ? buildReportModel(record, user) : null), [record, user]);
+  const model = useMemo(() => {
+    if (!record) return null;
+    // The locale is intentionally read here so a language change rebuilds the report model.
+    void locale;
+    return buildReportModel(record, user);
+  }, [record, user, locale]);
   const [pdf, setPdf] = useState<PdfState>({ status: 'idle' });
   const [viewerOpen, setViewerOpen] = useState(false);
 
@@ -68,13 +73,19 @@ export default function ReportScreen() {
     if (!model) return null;
     if (generated.current) return generated.current;
     if (!inFlight.current) inFlight.current = generateReportPdf(model);
+    const pending = inFlight.current;
     setPdf({ status: 'working' });
     try {
-      const report = await inFlight.current;
+      const report = await pending;
+      if (inFlight.current !== pending) {
+        await discardReportPdf(report);
+        return null;
+      }
       generated.current = report;
       setPdf({ status: 'ready', report });
       return report;
     } catch (e) {
+      if (inFlight.current !== pending) return null;
       inFlight.current = null;
       const message =
         e instanceof ReportError ? e.message : 'The summary could not be prepared. Please try again.';
@@ -95,6 +106,7 @@ export default function ReportScreen() {
   // The PDF holds PII and lives in the cache directory — drop it when the screen goes away.
   useEffect(
     () => () => {
+      inFlight.current = null;
       const report = generated.current;
       if (report) void discardReportPdf(report);
     },
@@ -180,7 +192,7 @@ export default function ReportScreen() {
           <DisclaimerCard model={model} />
         </Animated.View>
 
-        {pdf.status === 'error' ? <ErrorCard message={pdf.message} onRetry={() => void ensurePdf()} /> : null}
+        {pdf.status === 'error' ? <ErrorCard message={t(pdf.message)} onRetry={() => void ensurePdf()} /> : null}
       </ScrollView>
 
       <ActionBar busy={pdf.status === 'working'} onShare={onShare} onPrint={onPrint} />

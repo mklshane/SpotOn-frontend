@@ -93,6 +93,27 @@ export default function QuestionnaireScreen() {
     setIndex(i);
   }, []);
 
+  /**
+   * Re-assert the scroll offset whenever `index` or the viewport width changes.
+   *
+   * `index` drives the header, the progress bar and `currentAnswered`, and it updates the instant
+   * Next is pressed — but the list is moved by an *animated* scroll that is never awaited. Anything
+   * that re-lays the list out mid-flight leaves the two disagreeing, and the symptom is nasty: the
+   * user answers the card they can see (so the radio fills in), while `currentAnswered` is still
+   * testing the question `index` points at, so Next stays dead.
+   *
+   * iOS Safari hits this reliably, because collapsing the URL bar resizes the viewport — `width`
+   * comes from useWindowDimensions() and is baked into getItemLayout and the page style, so the
+   * relayout drops the offset while `index` survives in state. Reported 2026-09-08: the header
+   * read "Question 3" while question 2 was on screen.
+   *
+   * Snapping without animation is deliberate: this runs *after* the animated scroll from goTo, so
+   * it is a correction, not the transition.
+   */
+  useEffect(() => {
+    listRef.current?.scrollToOffset({ offset: index * width, animated: false });
+  }, [index, width]);
+
   /** Record the answer and stay put — the user moves on with "Next". */
   function select(q: QuestionDef, value: Answer) {
     setAnswer(q.id, value);
@@ -159,7 +180,7 @@ export default function QuestionnaireScreen() {
           <View style={styles.headerSpacer} />
         )}
         <ThemedText type="headline" themeColor="textSecondary">
-          {t("Question")}{index + 1} {t("of")}{questions.length}
+          {t('Question {{n}} of {{total}}', { n: index + 1, total: questions.length })}
         </ThemedText>
         <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel={t("Exit questionnaire")}>
           <Icon name="xmark" tintColor={theme.muted} size={18} />
@@ -178,6 +199,10 @@ export default function QuestionnaireScreen() {
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+        // Without this a failed scroll is swallowed and the list stays behind `index`.
+        onScrollToIndexFailed={({ index: i }) =>
+          listRef.current?.scrollToOffset({ offset: i * width, animated: false })
+        }
         renderItem={({ item }) => (
           <Animated.View entering={FadeIn} style={[styles.page, { width }]}>
             {/* Header block — natural height */}
@@ -216,7 +241,7 @@ export default function QuestionnaireScreen() {
           </Animated.View>
         ) : null}
         <Button
-          label={isLast ? 'See my results' : 'Next'}
+          label={isLast ? t('See my results') : t('Next')}
           variant="brand"
           disabled={isLast ? !questionnaireComplete : !currentAnswered}
           onPress={next}

@@ -84,7 +84,7 @@ export default function DirectoryScreen() {
         value={query}
         onChangeText={setQuery}
         placeholder={
-          segment === "clinics" ? "Search clinics or area…" : "Search doctors…"
+          segment === "clinics" ? t("Search clinics or area…") : t("Search doctors…")
         }
         elevation="md"
       />

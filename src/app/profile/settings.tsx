@@ -44,8 +44,8 @@ const SUPPORT_EMAIL = "help.spoton@gmail.com";
 function formatConsentStatus(
   user: { consent_data_privacy: boolean; consent_at: string | null } | null,
 ): string {
-  if (!user?.consent_data_privacy) return "Not granted";
-  if (!user.consent_at) return "Granted";
+  if (!user?.consent_data_privacy) return t("Not granted");
+  if (!user.consent_at) return t("Granted");
   const d = new Date(user.consent_at);
   return `${t("Granted on")} ${d.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
 }
@@ -72,8 +72,8 @@ export default function SettingsScreen() {
     setReminderDueAt(await getSelfCheckReminderDueAt());
     if (next && !actual) {
       Alert.alert(
-        "Notifications are off",
-        "SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings.",
+        t("Notifications are off"),
+        t("SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings."),
         [
           { text: t("Not now"), style: "cancel" },
           { text: t("Open settings"), onPress: () => Linking.openSettings() },
@@ -83,8 +83,8 @@ export default function SettingsScreen() {
   }
 
   const reminderSublabel = (() => {
-    if (!remindersEnabled) return "Reminders to re-check a spot after 30 days";
-    if (!reminderDueAt) return "On — set after your next low-risk result";
+    if (!remindersEnabled) return t("Reminders to re-check a spot after 30 days");
+    if (!reminderDueAt) return t("On — set after your next low-risk result");
     const due = new Date(reminderDueAt);
     return `${t("Next reminder on")} ${due.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
   })();
@@ -108,7 +108,7 @@ export default function SettingsScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setShowPasswordForm(false);
-      Alert.alert("Password changed", "Your password has been updated.");
+      Alert.alert(t("Password changed"), t("Your password has been updated."));
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
@@ -135,12 +135,12 @@ export default function SettingsScreen() {
       router.replace("/(auth)/login");
     } catch (e) {
       Alert.alert(
-        "Could not delete account",
+        t("Could not delete account"),
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? t("This isn't available yet — check back soon.")
           : e instanceof ApiError
             ? e.detail
-            : "Something went wrong. Please try again.",
+            : t("Something went wrong. Please try again."),
       );
       setDeleting(false);
     }
@@ -154,24 +154,24 @@ export default function SettingsScreen() {
     try {
       await requestDataExport();
       Alert.alert(
-        "Export requested",
-        "We'll email your data export within a few days.",
+        t("Export requested"),
+        t("We'll email your data export within a few days."),
       );
     } catch (e) {
       Alert.alert(
-        "Could not request export",
+        t("Could not request export"),
         isNotDeployed(e)
-          ? "Data export isn't available yet — check back soon."
+          ? t("Data export isn't available yet — check back soon.")
           : e instanceof ApiError
             ? e.detail
-            : "Something went wrong. Please try again.",
+            : t("Something went wrong. Please try again."),
       );
     } finally {
       setExporting(false);
     }
   }
 
-  const appVersion = Constants.expoConfig?.version ?? "Unknown";
+  const appVersion = Constants.expoConfig?.version ?? t("Unknown");
 
   return (
     <Screen padded={false}>
@@ -233,7 +233,7 @@ export default function SettingsScreen() {
                 />
                 {passwordError ? (
                   <ThemedText type="footnote" themeColor="riskCritical">
-                    {passwordError}
+                    {t(passwordError)}
                   </ThemedText>
                 ) : null}
                 <Button
@@ -249,7 +249,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="trash.fill"
-              label={deleting ? "Deleting…" : t("Delete account")}
+              label={deleting ? t("Deleting…") : t("Delete account")}
               destructive
               onPress={
                 deleting ? undefined : () => setConfirmDeleteVisible(true)
@@ -286,7 +286,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label={exporting ? "Requesting export…" : "Request data export"}
+              label={exporting ? t("Requesting export…") : t("Request data export")}
               onPress={exporting ? undefined : handleDataExport}
             />
           </Card>

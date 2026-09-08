@@ -1,4 +1,6 @@
 import { t, useLocale } from '@/lib/i18n';
+import { isDebug } from '@/lib/debug-flag';
+import { isDatabaseLockedOut } from '@/data/db';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,12 +54,12 @@ const STATUS_LINES = [
 
 type Stage = 'analyzing' | 'retake' | 'error';
 
-/** Dev diagnostic line for the error state: step + ClassifierError kind + message + cause. */
+/** Diagnostic line for the error state: step + ClassifierError kind + message + cause. */
 function describeError(step: string, e: unknown): string {
   const kind = (e as { kind?: string })?.kind;
   const msg = e instanceof Error ? e.message : String(e);
   const cause = e instanceof Error && e.cause ? ` ← ${String((e.cause as Error)?.message ?? e.cause)}` : '';
-  return `[dev] ${step}${kind ? `/${kind}` : ''}: ${msg}${cause}`;
+  return `${step}${kind ? `/${kind}` : ''}: ${msg}${cause}`;
 }
 
 /**
@@ -80,6 +82,8 @@ export default function AnalysisScreen() {
   const [statusIdx, setStatusIdx] = useState(0);
   // Dev-only diagnostic: which step failed (ClassifierError kind + message + cause).
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  /** Distinguishes "the save failed" from "the analysis failed" — very different for the user. */
+  const [saveFailed, setSaveFailed] = useState(false);
   // Snapshot the low-confidence output so "continue anyway" works even after
   // beginRescan clears the session's run state.
   const pendingOutput = useRef<ClassificationOutput | null>(null);
@@ -133,9 +137,17 @@ export default function AnalysisScreen() {
       // just been reset, so popping into them shows empty states. See result.tsx `exitFlow`.
       router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
     } catch (e) {
+      // NOT the same failure as "we couldn't analyze": by this point classification has already
+      // succeeded and only the save threw. Saying "something went wrong while analyzing … your
+      // answers are saved" was doubly wrong — nothing was wrong with the analysis, and the
+      // answers were precisely what did not save. db.ts now degrades to an in-memory database
+      // rather than throwing, so reaching here means something else broke.
       console.warn('[analysis] persist failed', e);
       finalized.current = false;
       setErrorDetail(describeError('persist', e));
+      // A locked database is the common, explainable case and has its own copy.
+      isDatabaseLockedOut(e);
+      setSaveFailed(true);
       setStage('error');
     }
   }
@@ -308,10 +320,12 @@ export default function AnalysisScreen() {
           <Animated.View entering={FadeInDown} style={styles.stateWrap}>
             <IconCircle icon="exclamationmark.triangle.fill" variant="tint" size={72} iconColor={theme.riskModerate} />
             <ThemedText type="title2" style={styles.center}>
-              {t("We couldn’t analyze this photo")}</ThemedText>
+              {saveFailed ? t("We couldn’t save this screening") : t("We couldn’t analyze this photo")}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
-              {t("Something went wrong while analyzing on your device. Your answers are saved — you can try again, or come back later.")}</ThemedText>
-            {__DEV__ && errorDetail ? (
+              {saveFailed
+                ? t("The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.")
+                : t("Something went wrong while analyzing on your device. Your answers are saved — you can try again, or come back later.")}</ThemedText>
+            {isDebug() && errorDetail ? (
               <ThemedText type="footnote" themeColor="muted" style={styles.center}>
                 {errorDetail}
               </ThemedText>

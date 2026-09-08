@@ -1,6 +1,5 @@
-import { Buffer } from 'buffer';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import * as jpeg from 'jpeg-js';
+
+import { transformToRgba } from '@/lib/image-ops';
 
 import { getLesionModel, readLayout } from '../lesion-model';
 import type { CropBox } from './preprocess';
@@ -62,16 +61,11 @@ async function runDetector(uri: string): Promise<LesionBox | null> {
   const model = await getLesionModel();
   const { inputSize, chMajor, channels, anchors, numClasses } = readLayout(model);
 
-  const manip = await manipulateAsync(uri, [{ resize: { width: inputSize, height: inputSize } }], {
-    compress: 1,
-    format: SaveFormat.JPEG,
-    base64: true,
-  });
-  const raw = jpeg.decode(Buffer.from(manip.base64 ?? '', 'base64'), {
-    useTArray: true,
-    formatAsRGBA: true,
-  });
-  const { data } = raw as { data: Uint8Array };
+  // image-ops: the browser's downscaler on web, so the detector sees the same sharpness a phone
+  // would. It also returns pixels straight from the canvas — no JPEG round-trip.
+  const { data } = await transformToRgba(uri, [
+    { resize: { width: inputSize, height: inputSize } },
+  ]);
   // RGB, 0..1 — the scale the detector's quality gates confirm it expects (DARK_THRESHOLD 0.2).
   const tensor = new Float32Array(inputSize * inputSize * 3);
   for (let i = 0, p = 0; i < tensor.length; i += 3, p += 4) {

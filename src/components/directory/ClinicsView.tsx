@@ -236,8 +236,7 @@ export function ClinicsView({
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
               >
-                {filtered.length === 1 ? "clinic" : "clinics"} {t("· sorted by")}{" "}
-                {sortLabel}
+                {t(filtered.length === 1 ? "clinic · sorted by {{sort}}" : "clinics · sorted by {{sort}}", { sort: t(sortLabel) })}
               </ThemedText>
             </View>
 
@@ -270,7 +269,7 @@ export function ClinicsView({
                 return (
                   <Chip
                     key={item}
-                    label={item}
+                    label={t(item)}
                     active={!service && !openOnly}
                     onPress={() => {
                       setService(null);

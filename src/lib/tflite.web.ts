@@ -68,23 +68,52 @@ function describe(d: { name: string; dtype: string; shape: Int32Array }): Tensor
   return { name: d.name, dataType: d.dtype, shape: Array.from(d.shape) };
 }
 
-function wrap(model: CompiledModel): TfliteModel {
-  const inputs = model.getInputDetails().map(describe);
-  const outputs = model.getOutputDetails().map(describe);
+/**
+ * Wrap a compiled model in the fast-tflite-shaped handle the app consumes.
+ *
+ * `reload` lets `run()` recover from a WebGPU failure at INFERENCE time. The compile-time
+ * try/catch below only covers loadAndCompile — but a WebGPU device can be lost later (iOS Safari
+ * drops it under memory pressure), and that surfaced as an unrecoverable
+ * ClassifierError('inference') with no fallback.
+ */
+function wrap(model: CompiledModel, reload?: () => Promise<CompiledModel>): TfliteModel {
+  let active = model;
+  let inputs = active.getInputDetails().map(describe);
+  let outputs = active.getOutputDetails().map(describe);
+  let recovered = false;
+
+  const invoke = async (buffers: ArrayBuffer[]): Promise<Float32Array[]> => {
+    const tensors = buffers.map((buf, i) =>
+      Tensor.fromTypedArray(new Float32Array(buf), inputs[i]?.shape),
+    );
+    try {
+      const out = (await active.run(tensors)) as Tensor[];
+      return await Promise.all(out.map(async (t) => new Float32Array(await t.data())));
+    } finally {
+      // LiteRT tensors hold WASM/GPU memory that GC won't reclaim.
+      for (const t of tensors) t.delete();
+    }
+  };
 
   return {
-    inputs,
-    outputs,
+    get inputs() {
+      return inputs;
+    },
+    get outputs() {
+      return outputs;
+    },
     async run(buffers: ArrayBuffer[]): Promise<Float32Array[]> {
-      const tensors = buffers.map((buf, i) =>
-        Tensor.fromTypedArray(new Float32Array(buf), inputs[i]?.shape),
-      );
       try {
-        const out = (await model.run(tensors)) as Tensor[];
-        return await Promise.all(out.map(async (t) => new Float32Array(await t.data())));
-      } finally {
-        // LiteRT tensors hold WASM/GPU memory that GC won't reclaim.
-        for (const t of tensors) t.delete();
+        return await invoke(buffers);
+      } catch (e) {
+        if (!reload || recovered) throw e;
+        // One shot, then never again: if the CPU backend also fails the error is real.
+        recovered = true;
+        console.warn('[tflite.web] inference failed, recompiling on wasm and retrying once', e);
+        active = await reload();
+        inputs = active.getInputDetails().map(describe);
+        outputs = active.getOutputDetails().map(describe);
+        return await invoke(buffers);
       }
     },
     runSync(): Float32Array[] {
@@ -107,12 +136,14 @@ export async function loadTensorflowModel(
 ): Promise<TfliteModel> {
   await ensureRuntime();
   const accelerator = isWebGPUSupported() ? 'webgpu' : 'wasm';
+  const onCpu = () => loadAndCompile(source.url, { accelerator: 'wasm' });
   try {
-    return wrap(await loadAndCompile(source.url, { accelerator }));
+    // Only a WebGPU model gets a reload hook — a wasm model has nowhere left to fall back to.
+    return wrap(await loadAndCompile(source.url, { accelerator }), accelerator === 'webgpu' ? onCpu : undefined);
   } catch (e) {
     if (accelerator === 'wasm') throw e;
     // A model WebGPU can't compile is still perfectly runnable on the CPU backend.
     console.warn('[tflite.web] WebGPU compile failed, falling back to wasm', e);
-    return wrap(await loadAndCompile(source.url, { accelerator: 'wasm' }));
+    return wrap(await onCpu());
   }
 }

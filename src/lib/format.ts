@@ -1,4 +1,4 @@
-import { getIntlLocale } from './i18n/core';
+import { getIntlLocale, t } from './i18n/core';
 
 export function formatFee(pesos: number): string {
   return `₱${pesos.toLocaleString(getIntlLocale())}`;
@@ -70,8 +70,8 @@ export function facilityDisplayName(f: FacilityNameSource): string {
 /** "dermatology_clinic" -> "Dermatology Clinic". Used everywhere a raw taxonomy tag
  * (facility type or service) would otherwise leak into the UI. */
 export function humanizeTag(tag: string): string {
-  return tag
+  return t(tag
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(' '));
 }

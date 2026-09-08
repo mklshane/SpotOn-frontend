@@ -7,6 +7,7 @@
  * so a fixed +08:00 shift is exact rather than an approximation.
  */
 
+import { t } from '../i18n/core';
 const PHT_OFFSET_MIN = 8 * 60;
 
 const MONTHS_SHORT = [
@@ -35,7 +36,7 @@ function toPht(iso: string): Date | null {
 export function phtDateLabel(iso: string): string {
   const d = toPht(iso);
   if (!d) return '—';
-  return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+  return t('{{month}} {{day}}, {{year}}', { month: t(MONTHS_SHORT[d.getUTCMonth()]), day: d.getUTCDate(), year: d.getUTCFullYear() });
 }
 
 /** ISO instant -> "09:42 AM PHT". */

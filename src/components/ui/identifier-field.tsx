@@ -99,14 +99,14 @@ export function IdentifierField({
       <View style={styles.footerRow}>
         {error ? (
           <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-            {error}
+            {t(error)}
           </ThemedText>
         ) : (
           <View />
         )}
         <Pressable hitSlop={8} onPress={onToggleMode} accessibilityRole="button">
           <ThemedText type="footnote" themeColor="brand" style={styles.toggle}>
-            {isPhone ? 'Use email instead' : 'Use phone instead'}
+            {isPhone ? t('Use email instead') : t('Use phone instead')}
           </ThemedText>
         </Pressable>
       </View>
