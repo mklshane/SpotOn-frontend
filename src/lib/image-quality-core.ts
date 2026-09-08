@@ -35,7 +35,7 @@ export type IqaChecks = {
   // ok = something lesion-like is actually present. `score` is the centre-surround contrast of the
   // strongest blob in the middle of the frame and `sided` is the same contrast against its WEAKEST
   // side; both must clear their bar. See LESION_PRESENCE and LESION_SIDED_MIN.
-  lesion: { ok: boolean; score: number; sided: number };
+  lesion: { ok: boolean; score: number; sided: number; hue: number };
   // ok = the lesion is not buried under hair. ADVISORY, non-blocking — like `shadow`. This is a
   // DETECTION, deliberately not a removal: see synth/eval/HAIR_REMOVAL.md for the measured reason
   // digital hair removal is not in the pipeline.
@@ -381,6 +381,37 @@ export const LESION_PRESENCE = 16;
  * through MORE bare skin (33.3% at 10), so this narrows the ring test rather than replacing it.
  */
 export const LESION_SIDED_MIN = 11;
+/**
+ * HUE — the blob has to be the colour a lesion can be.
+ *
+ * Presence and sidedness are shape tests: they ask whether a compact region is darker or redder
+ * than the skin on every side. **An ordinary photograph answers yes.** A navy t-shirt against a
+ * pale neck scored 63.7 presence and 53.8 sidedness against bars of 16 and 11; a night street
+ * scored 57.4 and 51.7. Both were reported passing the gate, and nothing shape-based can help:
+ *
+ *   - Skin fraction cannot. The t-shirt frame is 0.539 skin, which is *above* the 5th percentile of
+ *     real clinical photos — advanced ulcerated malignancies score 0.43–0.55, because the lesion
+ *     itself stops counting as skin. Any bar that rejects the t-shirt rejects those too, and
+ *     turning away an ulcerated SCC is a far worse error than accepting a t-shirt.
+ *   - The YOLO detector cannot. It fires HARDER on the t-shirt (0.752) and the night street (0.744)
+ *     than on most of those malignancies (0.089–0.845, several under 0.35). It is anti-correlated.
+ *
+ * What does separate them is colour. A lesion is skin tissue — pigment, blood, crust, scale — so it
+ * lives in the warm half of the colour space; r > b holds for brown, black, red and yellow alike.
+ * Cloth, sky, asphalt and shadow do not. Mean r−b inside the winning blob:
+ *
+ *   set                                       min      p1     p2     p5   median
+ *   app-framed lesions (n=270)              -10.3    -6.3    2.5   15.0    64.9
+ *   held-out lesions (n=200)                -48.6    -1.7    2.8   15.4      —
+ *   good anchors (n=28)                     -16.0   -15.0  -14.0  -10.9      —
+ *   **the reported t-shirt / night street**  **-53.0 / -53.7**
+ *
+ * -20 sits in the empty band between them: it keeps 100% / 99.5% / 100% of the three positive sets
+ * and rejects both reported frames by 33 points. It is a sanity check on the colour of the thing
+ * being called a lesion, not a tuned threshold — do not creep it upward to catch warm-coloured
+ * non-skin (wood, a brown sofa). That needs a different signal, not a tighter bar on this one.
+ */
+export const LESION_HUE_MIN = -20;
 
 /**
  * Steepest slope anywhere in the frame, in luma units per pixel, after a 5×5 box smooth.
@@ -464,12 +495,13 @@ function lesionPresence(
   data: ArrayLike<number>,
   W: number,
   H: number,
-): { score: number; sided: number } {
+): { score: number; sided: number; hue: number } {
   const G = Math.min(LESION_GRID, W, H);
-  if (G < 8) return { score: 0, sided: 0 };
+  if (G < 8) return { score: 0, sided: 0, hue: 0 };
   const n = G * G;
   const lumaSum = new Float64Array(n);
   const redSum = new Float64Array(n);
+  const hueSum = new Float64Array(n); // r-b: warm (a lesion) is positive, cloth and sky are not
   const count = new Float64Array(n);
   for (let y = 0; y < H; y++) {
     const gy = Math.min(G - 1, Math.floor((y * G) / H)) * G;
@@ -481,6 +513,7 @@ function lesionPresence(
       const c = gy + Math.min(G - 1, Math.floor((x * G) / W));
       lumaSum[c] += 0.299 * r + 0.587 * g + 0.114 * b;
       redSum[c] += g - r; // redder than its surround = LOWER here, same sign convention as luma
+      hueSum[c] += r - b;
       count[c]++;
     }
   }
@@ -510,6 +543,10 @@ function lesionPresence(
   const hi = G - lo;
   let best = 0;
   let bestSided = 0;
+  // Where the winning sidedness sits, so its colour can be read back afterwards (see LESION_HUE_MIN).
+  let bestY = -1;
+  let bestX = -1;
+  let bestR = 0;
   const channels: [Float64Array, number][] = [
     [ii(lumaSum), 1],
     [ii(redSum), LESION_RED_WEIGHT],
@@ -530,12 +567,21 @@ function lesionPresence(
           const bottom = rectMean(t, y + rIn + 1, y + rOut + 1, x - rIn, x + rIn + 1);
           const weakest = Math.min(Math.min(left, right), Math.min(top, bottom));
           const sided = (weakest - inner) * weight;
-          if (sided > bestSided) bestSided = sided;
+          if (sided > bestSided) {
+            bestSided = sided;
+            bestY = y;
+            bestX = x;
+            bestR = rIn;
+          }
         }
       }
     }
   }
-  return { score: best, sided: bestSided };
+  const hue =
+    bestY < 0
+      ? 0
+      : rectMean(ii(hueSum), bestY - bestR, bestY + bestR + 1, bestX - bestR, bestX + bestR + 1);
+  return { score: best, sided: bestSided, hue };
 }
 
 /**
@@ -770,7 +816,7 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
 
   const brightness = sumLuma / n / 255;
   const skinCov = skinCount / n;
-  const { score: lesionScore, sided: lesionSided } = lesionPresence(data, W, H);
+  const { score: lesionScore, sided: lesionSided, hue: lesionHue } = lesionPresence(data, W, H);
   // How many pixels the lesion's edge takes to complete. A photo with no lesion in it has nothing
   // to measure, so it scores ~0 and this term abstains — that verdict belongs to `lesion`, below.
   const slope = steepestSlope(gray, W, H);
@@ -795,9 +841,13 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
     shadow: { ok: shadow <= SHADOW_GRAD, value: shadow },
     skin: { ok: skinCov >= SKIN_MIN, coverage: skinCov },
     lesion: {
-      ok: lesionScore >= LESION_PRESENCE && lesionSided >= LESION_SIDED_MIN,
+      ok:
+        lesionScore >= LESION_PRESENCE &&
+        lesionSided >= LESION_SIDED_MIN &&
+        lesionHue >= LESION_HUE_MIN,
       score: lesionScore,
       sided: lesionSided,
+      hue: lesionHue,
     },
     hair: { ok: hairCov <= HAIR_ROI_MAX, coverage: hairCov },
   };

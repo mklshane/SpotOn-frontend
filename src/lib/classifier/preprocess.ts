@@ -174,6 +174,7 @@ export function locateLesion(
     maxTries?: number;
     minPeak?: number;
     centralityWeight?: number;
+    minScore?: number;
   } = {},
 ): CropBox | null {
   const {
@@ -191,6 +192,14 @@ export function locateLesion(
     // peak outright located the lesion in only 5 of 7 real uploads — a figure caption and a pair
     // of spectacle frames won on raw contrast; weighting by centrality gets all 7.
     centralityWeight = 3,
+    // Absolute floor on the WINNING candidate's score (not just its rank against other
+    // candidates). Without this, a photo where nothing is really a lesion still returns whatever
+    // incidental dark region scored highest — background clutter, a shadow edge — and the caller
+    // zooms in on it. A centered, well-contrasted real lesion scores comfortably above this; an
+    // off-center or marginal-contrast false positive does not. Tuned against scripts/test-localizer.mjs
+    // plus real up-close and hard-to-detect sample photos, not guessed — see that script for the
+    // cases this must and must not reject.
+    minScore = 3,
   } = opts;
   const n = width * height;
   if (n < 256 || rgba.length < n * 4) return null;
@@ -287,6 +296,27 @@ export function locateLesion(
       continue;
     }
 
+    // Does the blob touch the edge of the search window? A real, well-framed lesion sits with
+    // margin well inside it — even a large one (measured on real close-up photos: 6-15px of
+    // margin at this scale). A component that reaches the boundary is being clipped by something
+    // bigger spilling out of the searchable region (a hair mass reaching off toward the frame
+    // edge, a background object) rather than a self-contained lesion, however dark it reads. This
+    // is what rejected a strong, well-scored false lock onto a hairline on a real upload where the
+    // actual lesion (a faint, low-contrast lump) was too subtle to compete on raw contrast.
+    let minCx = Infinity;
+    let maxCx = -Infinity;
+    let minCy = Infinity;
+    let maxCy = -Infinity;
+    for (const i of comp) {
+      const px = i % width;
+      const py = (i / width) | 0;
+      if (px < minCx) minCx = px;
+      if (px > maxCx) maxCx = px;
+      if (py < minCy) minCy = py;
+      if (py > maxCy) maxCy = py;
+    }
+    const clipped = minCx <= x0 || maxCx >= x1 - 1 || minCy <= y0 || maxCy >= y1 - 1;
+
     let sx = 0;
     let sy = 0;
     for (const i of comp) {
@@ -338,9 +368,20 @@ export function locateLesion(
     // Skin is warm and not dark: red leads blue, some saturation, reasonable brightness.
     const skin =
       cnt > 4 && ar > 70 && ar > ab + 8 && ar >= ag && Math.max(ar, ag, ab) - Math.min(ar, ag, ab) > 6;
-    const tooBig = (2 * r) / shortEdge > 0.7;
+    // Reject only a blob that is essentially the whole frame — that's whole-image shading/vignette,
+    // not a photographed lesion, which always shows a skin margin. 0.95 matches FULL_FRAME in
+    // lesion-detector.ts, the ML detector's identical guard, for the same reason.
+    //
+    // This used to reject anything over 0.7, which also threw out a real close-up photo where the
+    // lesion legitimately fills most of the frame: the loop then kept searching and locked onto a
+    // smaller, wrong sub-feature (a hair strand, a highlight) inside the very lesion just discarded,
+    // and framed THAT at the viewfinder's target fill — the reported "already-zoomed photo zooms in
+    // even further, onto the wrong spot" bug. A large-but-real blob is now accepted; the caller's own
+    // crop-size clamp (crop.tsx's `Math.min(shortSide, ...)`) already keeps an oversized box from
+    // forcing a tighter crop than the image allows, so it naturally ends up with little/no extra zoom.
+    const tooBig = (2 * r) / shortEdge > 0.95;
 
-    if (skin && !tooBig) {
+    if (skin && !tooBig && !clipped) {
       // Collect rather than return: the strongest response is not always the lesion. On real
       // uploads a figure caption or a spectacle frame can out-peak the lesion, so all plausible
       // candidates are scored below and the most central one wins.
@@ -355,7 +396,12 @@ export function locateLesion(
     }
     for (const i of comp) excluded[i] = 1; // consumed — move on to the next strongest peak
   }
-  return bestCandidate ? bestCandidate.box : null;
+  // The winner still has to clear an absolute confidence floor, not just be the best of what
+  // turned up: on a photo where nothing present is really a lesion, the "best" candidate is still
+  // whatever incidental dark region scored highest (background clutter, a shadow), and zooming in
+  // on it is worse than not zooming at all. Declining here falls through to the caller's existing
+  // "no box -> leave the default framing" path.
+  return bestCandidate && bestCandidate.score >= minScore ? bestCandidate.box : null;
 }
 
 /**

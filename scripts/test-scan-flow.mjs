@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideQuality, nextStepAfterQuality, decideAnalysis } = await import(
+const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -32,6 +32,36 @@ const fails = [];
 const check = (name, cond) => (cond ? pass++ : fails.push(name));
 
 const READS = ['pending', 'ok', 'unreadable', 'timeout'];
+
+/* ---------------------------------------------------------------------- decideIqa */
+// Every term is a veto and no term waives another. This is the function three separate reported
+// failures came back to, so each veto gets its own case.
+const ok = {
+  error: false, brightnessOk: true, sharpOk: true, skinOk: true, presenceOk: true, detectorFound: true,
+};
+const iqa = (over = {}) => decideIqa({ ...ok, ...over });
+
+check('iqa: everything good passes', iqa().pass && iqa().lesionRowOk);
+check('iqa: error blocks', !iqa({ error: true }).pass);
+check('iqa: darkness blocks', !iqa({ brightnessOk: false }).pass);
+check('iqa: blur blocks', !iqa({ sharpOk: false }).pass);
+
+// The lesion ROW is a conjunction: a lesion cannot be in a frame that is not skin, and a green
+// tick on a photo of a street is a false statement rather than a mis-tuned threshold.
+check('iqa: not skin fails the lesion ROW, not just the pass', !iqa({ skinOk: false }).lesionRowOk);
+check('iqa: no presence fails the lesion row', !iqa({ presenceOk: false }).lesionRowOk);
+check('iqa: detector finding nothing fails the lesion row', !iqa({ detectorFound: false }).lesionRowOk);
+
+// No term may be waived by another — the 2026-08 bug was `skin` being waived when the detector
+// fired and presence passed, which is near-constant-true on an arbitrary photograph.
+check(
+  'iqa: a fired detector does NOT waive the skin check',
+  !iqa({ skinOk: false, detectorFound: true, presenceOk: true }).pass,
+);
+check(
+  'iqa: presence does NOT waive the detector',
+  !iqa({ presenceOk: true, detectorFound: false }).pass,
+);
 
 /* ------------------------------------------------------------------ decideQuality */
 const q = (iqaPass, read, checksSettled = true) => decideQuality({ iqaPass, read, checksSettled });

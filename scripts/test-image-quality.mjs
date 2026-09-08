@@ -23,7 +23,7 @@ execFileSync(
   { cwd: ROOT, stdio: 'inherit' },
 );
 const core = await import(pathToFileURL(join(out, 'image-quality-core.js')).href);
-const { analyzeRgba, hairCoverage, SIZE, BLUR, DIRECTIONAL_BLUR, LESION_EDGE_WIDTH, LESION_PRESENCE, LESION_SIDED_MIN, HAIR_ROI_MAX } = core;
+const { analyzeRgba, hairCoverage, SIZE, BLUR, DIRECTIONAL_BLUR, LESION_EDGE_WIDTH, LESION_PRESENCE, LESION_SIDED_MIN, LESION_HUE_MIN, HAIR_ROI_MAX } = core;
 
 const S = 64;
 const buf = (fn) => {
@@ -186,6 +186,51 @@ r = analyzeRgba(buf((x, y) => {
   return d ? [90 + n, 60 + n, 50 + n] : [190 + n, 140 + n, 120 + n];
 }), S, S);
 check('off-frame blob: lesion not ok', !r.lesion.ok);
+
+/* ------------------------------------------------------- a photo of the world ----------- */
+// The failure SKIN_MIN was raised for: presence answers "is there a compact dark blob", and an
+// ordinary photograph answers yes. Only the skin fraction can tell these from a lesion close-up.
+{
+  const W = 256;
+  const wbuf = (fn) => {
+    const d = new Uint8Array(W * W * 4);
+    for (let y = 0; y < W; y++)
+      for (let x = 0; x < W; x++) {
+        const i = (y * W + x) * 4;
+        const [r0, g0, b0] = fn(x, y);
+        d[i] = r0; d[i + 1] = g0; d[i + 2] = b0; d[i + 3] = 255;
+      }
+    return d;
+  };
+  // A navy t-shirt filling the lower half, pale neck above. A clean half-plane like this does not
+  // fool sidedness (round 2 handles edges), but the REAL photo did: it scored presence 63.7 and
+  // sidedness 53.8, against bars of 16 and 11, because a neckline is bounded on every side. What
+  // holds in both cases — and what this pins — is that the frame is not mostly skin.
+  const shirt = analyzeRgba(wbuf((x, y) => {
+    const n = noise(x, y);
+    const disc = Math.hypot(x - W * 0.5, y - W * 0.62) < W * 0.22;
+    return disc ? [42 + n, 52 + n, 78 + n] : [214 + n, 176 + n, 158 + n];
+  }), W, W);
+  check('navy blob: shape tests are fooled', shirt.lesion.score >= LESION_PRESENCE && shirt.lesion.sided >= LESION_SIDED_MIN);
+  check(`navy blob: hue ${shirt.lesion.hue.toFixed(0)} is below LESION_HUE_MIN`, shirt.lesion.hue < LESION_HUE_MIN);
+  check('navy blob: NOT a lesion', !shirt.lesion.ok);
+
+  // The same shape in a colour a lesion can actually be must still pass.
+  const brown = analyzeRgba(wbuf((x, y) => {
+    const n = noise(x, y);
+    const disc = Math.hypot(x - W * 0.5, y - W * 0.62) < W * 0.22;
+    return disc ? [96 + n, 62 + n, 48 + n] : [214 + n, 176 + n, 158 + n];
+  }), W, W);
+  check('brown blob of the same shape: IS a lesion', brown.lesion.ok);
+
+  // A real close-up: skin everywhere, a lesion in the middle.
+  const closeup = analyzeRgba(wbuf((x, y) => {
+    const n = noise(x, y);
+    return Math.hypot(x - W / 2, y - W / 2) < W * 0.13 ? [90 + n, 60 + n, 50 + n] : [214 + n, 176 + n, 158 + n];
+  }), W, W);
+  check('lesion close-up: skin ok at the raised bar', closeup.skin.ok);
+  check('lesion close-up: gate says yes', closeup.skin.ok && closeup.lesion.ok);
+}
 
 // A one-sided luminance ramp (shadow) must NOT block the pass — shadow is advisory.
 r = analyzeRgba(buf((x, y) => { const n = noise(x, y); const f = 1 - (x / S) * 0.5; return [(190 + n) * f, (140 + n) * f, (120 + n) * f]; }), S, S);

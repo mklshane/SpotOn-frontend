@@ -24,7 +24,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
-import { decideQuality, nextStepAfterQuality } from '@/lib/triage/scan-flow';
+import { decideIqa, decideQuality, nextStepAfterQuality } from '@/lib/triage/scan-flow';
 import {
   combineReadability,
   evaluateSafetyFloor,
@@ -54,11 +54,10 @@ const STEP_MS = 1300; // per-check reveal cadence
 const READABILITY_GRACE_MS = 2000;
 
 /**
- * Bound on the post-capture lesion detection (see `lesionDet` below). The detector is the same
- * ~6 MB model the camera already loaded, and one still takes well under the ~3.9s the rows spend
- * revealing — so on the camera path this is never spent. A gallery upload on a cold start is the
- * case that can reach it. Exceeding it degrades to the OLD behaviour (carried live verdict, else
- * skin presence) rather than blocking the user behind a spinner.
+ * Bound on the post-capture lesion detection. The detector is the same ~6 MB model the camera has
+ * already loaded and one still takes well under the ~3.9s the rows spend revealing, so on the
+ * camera path this is never spent; a gallery upload on a cold start is the case that can reach it.
+ * Exceeding it degrades to "could not answer", which does NOT veto the row.
  */
 const LESION_DETECT_TIMEOUT_MS = 4000;
 
@@ -93,9 +92,15 @@ export default function QualityScreen() {
   const [step, setStep] = useState(0);
   const [checks, setChecks] = useState<IqaChecks | null>(null);
   const [error, setError] = useState(false);
-  /** Post-capture lesion detection on the actual still — see the effect below. */
-  const [lesionDet, setLesionDet] = useState<'pending' | 'found' | 'absent' | 'failed'>('pending');
   const [readability, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
+  /**
+   * Did the still detector locate a lesion? Restored 2026-09-08 — see decideIqa for why.
+   *
+   * It cannot say whether a lesion is PRESENT (it fires on 88% of lesion-free skin), but it is the
+   * only term that rejects a photograph of a scene: 0.000 on a shoe strap on carpet, 0.031 on wood,
+   * where every colour-based term passes them.
+   */
+  const [lesionDet, setLesionDet] = useState<'pending' | 'found' | 'absent' | 'failed'>('pending');
   const proceeded = useRef(false);
 
   // Start inference the moment the photo lands, not at proceed(): that is what lets the
@@ -142,6 +147,38 @@ export default function QualityScreen() {
     return () => clearTimeout(t);
   }, [readability]);
 
+  /**
+   * Run the detector on the STILL, not on a preview frame.
+   *
+   * Lazy import for the same reason the classifier warm-up is lazy: keep TFLite off the app-startup
+   * path. The model is cached by lesion-model.ts, so on the camera path this is one inference.
+   * A detector FAILURE is not "no lesion" — it must not veto, so it falls through as 'failed'.
+   */
+  useEffect(() => {
+    if (!uri) return;
+    let alive = true;
+    import('@/lib/classifier/lesion-detector')
+      .then((m) => m.detectLesionBox(uri))
+      .then((box) => alive && setLesionDet(box ? 'found' : 'absent'))
+      .catch((e) => {
+        console.warn('[iqa] lesion detection failed', e);
+        if (alive) setLesionDet('failed');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
+
+  // Bound it: exceeding this degrades to "could not answer", which does not veto.
+  useEffect(() => {
+    if (lesionDet !== 'pending') return;
+    const t = setTimeout(
+      () => setLesionDet((s2) => (s2 === 'pending' ? 'failed' : s2)),
+      LESION_DETECT_TIMEOUT_MS,
+    );
+    return () => clearTimeout(t);
+  }, [lesionDet]);
+
   useEffect(() => {
     let alive = true;
     if (!uri) {
@@ -160,57 +197,28 @@ export default function QualityScreen() {
   }, [uri]);
 
   /**
-   * Decide "is there a lesion" from the PHOTO, not from the live preview.
+   * NO DETECTOR RUN ON THIS SCREEN (removed 2026-09-08).
    *
-   * This used to be inherited from the camera's green box (`detected`), which answers a different
-   * question: whether the detector fired on some preview frame *before* the shutter. The still is
-   * a different image — reframed, refocused, motion-blurred — so a photo could arrive here marked
-   * lesion-present while containing no findable lesion, and every gallery upload had no verdict at
-   * all and fell back to "is this skin-coloured", which passes a photo of a bare forearm.
+   * There used to be one here, whose only consumer was a waiver of the skin check ("the detector
+   * found a lesion, so this must be skin"). The detector has no background class and fires on 88%
+   * of lesion-free skin, so that waiver let photos of a street and a t-shirt through with all three
+   * rows green — see decideIqa in scan-flow.ts and synth/eval/NONSKIN_GATE.md. With the waiver
+   * gone nothing read the result, so the inference and its 4s timeout are gone too: one less
+   * ~6 MB-model run per photo, and one less caller contending for the single interpreter that
+   * detectorQueue (lesion-detector.ts) exists to serialize.
    *
-   * Running `detectLesionBox` on the still is also the only version of this check that agrees with
-   * what the classifier then does: DETECTOR_CROP_ENABLED means classify.ts runs this exact detector
-   * on this exact image to pick its crop. If it finds nothing there it silently falls back to the
-   * full frame — off the deployment geometry D7_s3_mm's threshold was fitted on. So a photo that
-   * fails here is precisely one the classifier could not have read properly anyway.
-   *
-   * Lazy import for the same reason the classifier warm-up above is lazy: keep TFLite off the
-   * app-startup path. The model is cached by lesion-model.ts, so on the camera path it is already
-   * resident and this is one inference, not a load.
+   * The detector is untouched and still owns the crop the classifier reads: classify.ts runs it on
+   * this same image under DETECTOR_CROP_ENABLED. Do not reinstate it here to answer "is there a
+   * lesion" — that is `checks.lesion`'s job, for the reasons above.
    */
-  useEffect(() => {
-    if (!uri) return;
-    let alive = true;
-    import('@/lib/classifier/lesion-detector')
-      .then((m) => m.detectLesionBox(uri))
-      .then((box) => alive && setLesionDet(box ? 'found' : 'absent'))
-      .catch((e) => {
-        // A detector FAILURE is not "no lesion" — falling through to the old signals is right.
-        console.warn('[iqa] lesion detection failed', e);
-        if (alive) setLesionDet('failed');
-      });
-    return () => {
-      alive = false;
-    };
-  }, [uri]);
-
-  useEffect(() => {
-    if (lesionDet !== 'pending') return;
-    const t = setTimeout(
-      () => setLesionDet((s) => (s === 'pending' ? 'failed' : s)),
-      LESION_DETECT_TIMEOUT_MS,
-    );
-    return () => clearTimeout(t);
-  }, [lesionDet]);
 
   useEffect(() => {
     const id = setInterval(() => setStep((s) => Math.min(ROW_META.length, s + 1)), STEP_MS);
     return () => clearInterval(id);
   }, []);
 
-  // Still gated on the detector even though the lesion row no longer is: `skinBlocks` below asks
-  // whether a lesion was LOCATED, and judging before that lands would show a "not skin" verdict the
-  // detection then contradicts. Bounded by LESION_DETECT_TIMEOUT_MS.
+  // The row must not be judged before the detection lands, or a slow device would show a verdict
+  // the detector then contradicts. Bounded by LESION_DETECT_TIMEOUT_MS.
   const settled = (checks != null || error) && lesionDet !== 'pending';
 
   const brightnessOk = checks?.brightness.ok ?? false;
@@ -233,18 +241,24 @@ export default function QualityScreen() {
    * here (doing so would cost ~10 points of recall and remove no false pass at all).
    *
    * The detector is untouched and still owns the crop the classifier reads (lesion-detector.ts).
+   *
+   * AND THE ROW IS `skin && presence` (changed 2026-09-08). Presence answers "is there a spot
+   * here", which is only a meaningful question about skin: these photos of a computer screen, a
+   * night street and a t-shirt all contain a compact dark blob and all scored a clean presence
+   * pass. The skin check used to be WAIVED for exactly such a frame — see decideIqa, which now
+   * owns this decision so that no term can waive another without a test failing.
    */
   const presenceOk = checks?.lesion.ok ?? false;
-  const lesionOk = presenceOk;
-  /**
-   * Skin coverage is a fallback signal, not a veto — it must not report "not skin" about a photo
-   * we have positive lesion evidence for (a pale forearm scores 0.149 against a 0.30 floor). But
-   * that escape now needs REAL evidence: the detector firing is not evidence of anything, so it
-   * takes a located lesion AND the presence signal to waive the skin check. Without that, this is
-   * what still turns away a photo of a desk or a wall.
-   */
-  const skinBlocks = !skinOk && !(lesionDet === 'found' && presenceOk);
-  const iqaPass = !error && brightnessOk && sharpOk && lesionOk && !skinBlocks;
+  const { pass: iqaPass, lesionRowOk: lesionOk } = decideIqa({
+    error,
+    brightnessOk,
+    sharpOk,
+    skinOk,
+    presenceOk,
+    // Only a detector that RAN and found nothing vetoes. A failure or a timeout cannot answer, and
+    // must not be read as "no lesion" — see decideIqa.
+    detectorFound: lesionDet !== 'absent',
+  });
   const readableOk = readability !== 'unreadable';
   // The verdict itself lives in scan-flow.ts so every branch is pinned by npm run test:flow.
   const { pass, analyzing } = decideQuality({
@@ -258,9 +272,23 @@ export default function QualityScreen() {
   // proceed()/addAnotherAngle() — hence the +1.
   const canAddAngle = pass && !analyzing && session.images.length + 1 < MAX_IMAGES_PER_SCREENING;
 
+  // The advisory hair tip is the one reason worth showing on a PASSING photo (see showReasons), so
+  // it is derived once here and reused there — two copies of this condition disagreed, and the
+  // second one kept surfacing "hair is covering the spot" on photos with no skin in them.
+  const hairTip = skinOk && !!checks?.hair && !checks.hair.ok;
+
   const reasons = useMemo(() => {
     if (error) return ['We couldn’t analyze this photo.'];
     if (!checks) return [];
+    /**
+     * On a frame that is not skin, the skin sentence is the ONLY truthful thing we can say.
+     *
+     * Every other line here is a sentence about skin, a spot, or a read of a lesion — "hair is
+     * covering the spot", "glare on the spot — tilt slightly", "center the spot in the frame".
+     * Three of them fired at once on a photo of a night street, which reads as the app confidently
+     * discussing a lesion that does not exist. Say what is actually wrong and stop.
+     */
+    if (!skinOk) return ['This doesn’t look like a photo of skin.'];
     const out: string[] = [];
     if (!brightnessOk) {
       out.push(
@@ -271,10 +299,9 @@ export default function QualityScreen() {
     }
     // Covers both ways this fails now: a missed focus lock and a moving hand (see LESION_EDGE_WIDTH).
     if (!sharpOk) out.push('The photo looks blurry — hold still, and tap the spot to focus.');
-    // "Not skin" is the stronger claim, so it wins when both fail — and it is never said about a
-    // photo we located a lesion in (see skinBlocks).
-    if (skinBlocks) out.push('This doesn’t look like a photo of skin.');
-    else if (!lesionOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
+    // Reached only on a skin frame (see the early return), so this is the honest reading: skin,
+    // but nothing on it that looks like a spot.
+    if (!presenceOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
     // Confidence is a readability signal like blur is — surfaced here rather than after the
     // questionnaire, so a retake costs the user a photo and not eight answers.
     if (!readableOk) out.push('We couldn’t get a clear read of this spot — a sharper, closer photo usually fixes it.');
@@ -292,11 +319,11 @@ export default function QualityScreen() {
     // photo in 8). And removing the hair for the user is not on the table — synth/eval/
     // HAIR_REMOVAL.md measured every variant of that and they all cost accuracy on exactly the
     // hairy images they were meant to help.
-    if (checks.hair && !checks.hair.ok) {
+    if (hairTip) {
       out.push('Tip: hair is covering the spot — move it aside and retake for a clearer read.');
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, skinBlocks, lesionOk, readableOk]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, readableOk, hairTip]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {
@@ -389,9 +416,9 @@ export default function QualityScreen() {
   );
 
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;
-  // The advisory hair tip is the one reason worth showing on a PASSING photo: hair over the lesion
-  // does not make a photo dark, blurry or badly framed, so nothing else would surface it.
-  const showReasons = !analyzing && (!pass || (!!checks?.hair && !checks.hair.ok));
+  // Hair over the lesion does not make a photo dark, blurry or badly framed, so nothing else would
+  // surface it — hence a tip on an otherwise passing photo. `hairTip` requires skin (see above).
+  const showReasons = !analyzing && (!pass || hairTip);
   const showRetakeFooter = !analyzing && !pass;
 
   return (
