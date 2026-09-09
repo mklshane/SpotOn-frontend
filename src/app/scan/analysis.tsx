@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -24,6 +24,7 @@ import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Radius, Space } from '@/constants/theme';
 import { useBlockAndroidBack } from '@/hooks/use-android-back';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -72,7 +73,7 @@ export default function AnalysisScreen() {
   useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const session = useScreeningSession();
   const { addEntry } = useScanHistory();
 

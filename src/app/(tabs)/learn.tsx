@@ -12,6 +12,7 @@ import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { SearchBar } from '@/components/ui/search-bar';
 import { SectionHeader } from '@/components/ui/section-header';
+import { TabContentInset } from '@/components/ui/tab-bar';
 import { Space } from '@/constants/theme';
 import {
   getCategoryLabel,
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
     // Clears the floating Scan button, which protrudes ~30px above the tab
     // bar's own top edge via a negative margin (a sibling view this screen's
     // layout doesn't otherwise know to leave room for).
-    paddingBottom: Space.lg,
+    paddingBottom: TabContentInset,
     gap: Space.base,
   },
   header: { gap: Space.xs, marginBottom: Space.xs },

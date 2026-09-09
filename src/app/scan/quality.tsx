@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -21,6 +21,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Screen } from '@/components/ui';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
@@ -73,7 +74,7 @@ export default function QualityScreen() {
   useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   // `detected` (the live camera's green-box verdict, forwarded by crop.tsx) is deliberately NOT
   // read here any more: it answers "did the detector fire on some preview frame", which this
   // screen now knows is true of bare skin too. The still decides, from checks.lesion below.
@@ -198,7 +199,7 @@ export default function QualityScreen() {
     return () => {
       alive = false;
     };
-  }, [uri]);
+  }, [uri, upscale]);
 
   /**
    * NO DETECTOR RUN ON THIS SCREEN (removed 2026-09-08).

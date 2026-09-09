@@ -29,7 +29,7 @@ const out = mkdtempSync(join(tmpdir(), 'scratch-files-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/scratch-files.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019,dom', '--moduleResolution', 'bundler'],
+  ['src/lib/scratch-files.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 

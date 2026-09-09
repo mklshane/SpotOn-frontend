@@ -49,7 +49,11 @@ export function SettingsRow({
     );
   } else if (accessory === "switch") {
     accessoryNode = (
-      <Switch value={switchValue} onChange={(next) => onSwitchChange?.(next)} />
+      <Switch
+        value={switchValue}
+        onChange={(next) => onSwitchChange?.(next)}
+        accessibilityLabel={label}
+      />
     );
   } else {
     accessoryNode = accessory;
@@ -60,7 +64,11 @@ export function SettingsRow({
   return (
     <Pressable
       onPress={isInteractive ? onPress : undefined}
-      disabled={!isInteractive}
+      // Deliberately NOT `disabled` when the row is non-interactive. A switch row and a purely
+      // informational row are both non-interactive *as rows* — but react-native-web turns
+      // `disabled` into aria-disabled="true" plus tabIndex=-1, so the whole row announced as
+      // disabled and left the tab order, taking the working Switch inside it along. Omitting
+      // onPress is enough to make the row inert.
       accessibilityRole={isInteractive ? "button" : undefined}
       style={({ pressed }) => [
         styles.row,

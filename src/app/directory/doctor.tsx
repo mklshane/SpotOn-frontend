@@ -329,7 +329,7 @@ export default function DoctorDetailScreen() {
                         ) : null}
                         {link.last_verified ? (
                           <ThemedText type="caption" themeColor="muted">
-                            {t("Verified")}{formatShortDate(link.last_verified)}
+                            {t("Verified")} {formatShortDate(link.last_verified)}
                           </ThemedText>
                         ) : null}
                       </View>

@@ -18,6 +18,7 @@ import {
   IdentifierField,
   type IdentifierMode,
 } from '@/components/ui/identifier-field';
+import { LanguagePicker } from '@/components/ui/language-picker';
 import { Logo } from '@/components/ui/logo';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
@@ -112,6 +113,7 @@ export default function RegisterScreen() {
 
   return (
     <Screen key={locale} variant="gradient" gradient="dawnSoft">
+      <LanguagePicker compact />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}
@@ -241,7 +243,7 @@ export default function RegisterScreen() {
               </Checkbox>
               {errors.isAdult ? (
                 <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
-                  {errors.isAdult}
+                  {t(errors.isAdult)}
                 </ThemedText>
               ) : null}
 
@@ -272,7 +274,7 @@ export default function RegisterScreen() {
               </Checkbox>
               {errors.acceptedTerms ? (
                 <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
-                  {errors.acceptedTerms}
+                  {t(errors.acceptedTerms)}
                 </ThemedText>
               ) : null}
             </View>

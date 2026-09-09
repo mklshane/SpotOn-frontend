@@ -151,7 +151,7 @@ export default function ResultScreen() {
                 {/* `topClass` is the raw model enum — this printed "78% probability for MEL
                     pattern" in the most important sentence on the screen. */}
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}{t("% match to")}{cls.lay}.
+                  {pct}{t("% match to")} {cls.lay}.
                 </ThemedText>
               </View>
             </View>
@@ -207,7 +207,7 @@ export default function ResultScreen() {
               <View style={styles.photoCaptionText}>
                 <ThemedText type="headline">{mark?.region ?? 'Location not marked'}</ThemedText>
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  {t("Checked on")}{date}
+                  {t("Checked on")} {date}
                   {record.images.length > 1 ? ` · ${record.images.length} photos` : ''}
                 </ThemedText>
               </View>
@@ -221,7 +221,7 @@ export default function ResultScreen() {
           <View style={[styles.priority, { backgroundColor: colors.bg }]}>
             <View style={[styles.priorityDot, { backgroundColor: colors.fg }]} />
             <ThemedText type="subhead" style={[styles.priorityText, { color: colors.fg }]}>
-              {t("Priority action:")}{tier.priorityAction}
+              {t("Priority action:")} {tier.priorityAction}
             </ThemedText>
           </View>
           <View style={styles.disclaimerRow}>
@@ -271,7 +271,7 @@ export default function ResultScreen() {
               {reported.length > 0 ? (
                 <View style={[styles.countPill, { backgroundColor: colors.bg }]}>
                   <ThemedText type="caption" style={{ color: colors.fg }}>
-                    {reported.length} {t("of")}{QUESTIONS.length}
+                    {reported.length} {t("of")} {QUESTIONS.length}
                   </ThemedText>
                 </View>
               ) : null}
@@ -427,7 +427,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">{t("About")}{cls.full.toLowerCase()}</ThemedText>
+      <ThemedText type="headline">{t("About")} {cls.full.toLowerCase()}</ThemedText>
       <ThemedText type="body" themeColor="textSecondary">
         {cls.about}
       </ThemedText>

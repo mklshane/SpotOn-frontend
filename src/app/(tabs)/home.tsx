@@ -18,6 +18,7 @@ import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
+import { TabContentInset } from '@/components/ui/tab-bar';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -417,7 +418,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.xl,
-    paddingBottom: Space.giant,
+    // Clears the tab bar and the Scan ring protruding from it — see TabContentInset.
+    paddingBottom: TabContentInset,
   },
   header: {
     paddingTop: Space.xxl,

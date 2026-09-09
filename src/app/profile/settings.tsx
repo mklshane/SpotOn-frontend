@@ -82,7 +82,15 @@ export default function SettingsScreen() {
     }
   }
 
+  // expo-notifications cannot schedule anything in a browser (lib/notifications.ts bails on web),
+  // so the toggle silently springs back. Say so up front instead of describing a feature the
+  // user cannot have here.
+  const remindersUnsupported = Platform.OS === "web";
+
   const reminderSublabel = (() => {
+    if (remindersUnsupported) {
+      return t("Not available in the browser — use the SpotOn app to get re-screening reminders");
+    }
     if (!remindersEnabled) return t("Reminders to re-check a spot after 30 days");
     if (!reminderDueAt) return t("On — set after your next low-risk result");
     const due = new Date(reminderDueAt);
@@ -265,7 +273,7 @@ export default function SettingsScreen() {
               icon="bell.fill"
               label={t("Re-screening reminders")}
               sublabel={reminderSublabel}
-              accessory="switch"
+              accessory={remindersUnsupported ? null : "switch"}
               switchValue={remindersEnabled}
               onSwitchChange={handleToggleReminders}
             />

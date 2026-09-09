@@ -52,6 +52,9 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // Swapped in 2026-06-30/07-01 from `yolo_best_float16` (21.4 MB, 640) with no recorded rationale,
 // which is why detector_ab.py exists at all. It remains in assets/models as the fallback to revert
 // to; do not delete it.
+// Metro resolves non-JS assets through require() and registers them for bundling; an ESM
+// import would not produce an asset module here.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const MODEL_ASSET = require('../../assets/models/lesion_det_y11n_v1_float16.tflite');
 
 let modelPromise: Promise<LesionModel> | null = null;

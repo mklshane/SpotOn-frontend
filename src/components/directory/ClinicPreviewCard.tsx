@@ -11,7 +11,7 @@ import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
-import { formatHours, isOpenNow } from '@/lib/hours';
+import { formatHoursLine, isOpenNow } from '@/lib/hours';
 
 export type ClinicPreviewCardProps = {
   facility: FacilitySync | FacilityWithDistance;
@@ -80,10 +80,10 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
       {expanded ? (
         <View style={styles.hoursDetail}>
           <ThemedText type="caption" themeColor="muted">
-            {t("Mon–Fri")}{formatHours(facility.weekday_hours)}
+            {formatHoursLine("Mon–Fri", facility.weekday_hours)}
           </ThemedText>
           <ThemedText type="caption" themeColor="muted">
-            {t("Sat–Sun")}{formatHours(facility.weekend_hours)}
+            {formatHoursLine("Sat–Sun", facility.weekend_hours)}
           </ThemedText>
         </View>
       ) : null}

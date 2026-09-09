@@ -19,7 +19,7 @@ const tmp = mkdtempSync(join(tmpdir(), 'body-glyphs-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/body-glyphs.ts', 'src/lib/body-icons.ts', 'src/lib/body-figure.ts', '--ignoreConfig', '--outDir', tmp, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/lib/body-glyphs.ts', 'src/lib/body-icons.ts', 'src/lib/body-figure.ts', '--ignoreConfig', '--outDir', tmp, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 

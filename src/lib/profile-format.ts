@@ -1,4 +1,4 @@
-import { localizedCopy } from "./i18n/core";
+import { getIntlLocale, localizedCopy } from "./i18n/core";
 /**
  * Display formatting for UserProfile fields.
  *
@@ -17,20 +17,6 @@ export const SEX_LABELS: Record<string, string> = localizedCopy({
 
 export const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
 
 export function computeAge(dob: string | null | undefined): number | null {
   if (!dob) return null;
@@ -75,4 +61,3 @@ export function formatLongDate(isoDate: string | null | undefined): string | nul
     year: 'numeric',
   }).format(new Date(y, m - 1, d));
 }
-import { getIntlLocale } from './i18n/core';

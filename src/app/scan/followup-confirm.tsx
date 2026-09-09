@@ -99,9 +99,9 @@ export default function FollowUpConfirmScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Space.giant }]}
         showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown} style={styles.intro}>
-          <ThemedText type="title1">{t("Re-checking")}{title}</ThemedText>
+          <ThemedText type="title1">{t("Re-checking")} {title}</ThemedText>
           <ThemedText type="body" themeColor="textSecondary">
-            {t("Last checked")}{priorDate} · {days} {days === 1 ? 'day' : 'days'} {t("ago")}</ThemedText>
+            {t("Last checked")} {priorDate} · {days} {days === 1 ? 'day' : 'days'} {t("ago")}</ThemedText>
         </Animated.View>
 
         {/* The previous photo — the reference the new one will be compared against. */}

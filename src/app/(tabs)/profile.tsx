@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
 import { computeAge, SEX_LABELS, skinTypeLabel } from "@/lib/profile-format";
 import { useScanHistory } from "@/lib/scan-history";
+import { TabContentInset } from '@/components/ui/tab-bar';
 
 export default function ProfileScreen() {
   useLocale();
@@ -83,6 +84,7 @@ export default function ProfileScreen() {
           <Pressable
             onPress={() => router.push("/profile/edit")}
             accessibilityRole="button"
+            accessibilityLabel={t("Edit profile")}
             style={styles.avatarWrap}
           >
             <View style={styles.avatarFrost}>
@@ -174,7 +176,7 @@ export default function ProfileScreen() {
               </ThemedText>
               {lastScanLabel ? (
                 <ThemedText type="footnote" themeColor="textSecondary">
-                  {t("Last screening")}{lastScanLabel}
+                  {t("Last screening")} {lastScanLabel}
                 </ThemedText>
               ) : null}
             </View>
@@ -267,7 +269,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.xl,
-    paddingBottom: 20,
+    paddingBottom: TabContentInset,
   },
   sectionLabel: {
     fontWeight: "700",

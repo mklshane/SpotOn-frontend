@@ -17,7 +17,12 @@ export function Checkbox({ checked, onChange, children }: CheckboxProps) {
       onPress={() => onChange(!checked)}
       hitSlop={6}
       accessibilityRole="checkbox"
+      // `accessibilityState` alone does not render aria-checked on react-native-web (verified:
+      // the div carried only role/tabindex/class), so assistive tech and automated tests saw a
+      // checkbox that never appeared to tick. RN has supported aria-* since 0.71, so setting it
+      // directly works on both platforms. Same fix as select-card.tsx.
       accessibilityState={{ checked }}
+      aria-checked={checked}
       style={styles.row}>
       <View
         style={[

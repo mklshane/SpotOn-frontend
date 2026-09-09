@@ -59,7 +59,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
             </ThemedText>
           </View>
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-            {pct}{t("% confidence ·")}{date}
+            {pct}{t("% confidence ·")} {date}
           </ThemedText>
         </View>
         <View style={[styles.tierPill, { backgroundColor: bg }]}>

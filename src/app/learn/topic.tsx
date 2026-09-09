@@ -1,6 +1,6 @@
 import { t, useLocale } from '@/lib/i18n';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import { EducationCard } from '@/components/learn/EducationCard';
@@ -12,6 +12,7 @@ import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
 import { getArticleReadMinutes, getTopic } from '@/data/learn-content';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 
 // The three artworks, ordered least to most serious, so the intro reads as a
@@ -21,7 +22,7 @@ const INTRO_ARTWORK: CancerTypeKind[] = ['bcc', 'scc', 'melanoma'];
 export default function LearnTopicScreen() {
   useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const compact = width < 375;
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
   const topic = topicId ? getTopic(topicId) : undefined;

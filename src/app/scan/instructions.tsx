@@ -7,7 +7,6 @@ import {
   type ListRenderItemInfo,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
   type ViewToken,
 } from 'react-native';
@@ -19,6 +18,7 @@ import { Icon } from '@/components/ui/icon';
 import { OnboardingHero } from '@/components/ui/onboarding-hero';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 
 type Slide = {
@@ -68,7 +68,7 @@ const SLIDES: Slide[] = localizedCopy([
 export default function InstructionsScreen() {
   useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const listRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
   const isLast = index === SLIDES.length - 1;

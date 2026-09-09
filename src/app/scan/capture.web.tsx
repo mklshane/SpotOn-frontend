@@ -39,7 +39,38 @@ const JPEG_QUALITY = 0.92;
 /** Digital zoom ceiling. Past ~4x a phone sensor is only magnifying noise. */
 const MAX_ZOOM = 4;
 
-type Status = 'starting' | 'live' | 'denied' | 'unavailable';
+/**
+ * How long to wait for getUserMedia before giving up.
+ *
+ * A *denied* prompt rejects immediately, but a *dismissed* one (Esc, ignored, tab blurred
+ * before answering) leaves the promise pending forever — which stranded the screen on
+ * "Starting camera…" with a permanently disabled shutter and no way back.
+ */
+const CAMERA_START_TIMEOUT_MS = 10_000;
+/** Longest we'll wait for the first real frame after play() before calling the camera dead. */
+const FIRST_FRAME_TIMEOUT_MS = 4_000;
+const TIMED_OUT = '__spoton_camera_timeout__';
+
+/**
+ * Resolve once the video reports real dimensions. play() can reject under an autoplay policy —
+ * we swallow that — leaving a 0x0 element; going 'live' on one arms a shutter that shoot()
+ * silently drops, so the preview has to prove itself first.
+ */
+function waitForFirstFrame(video: HTMLVideoElement): Promise<boolean> {
+  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (ok: boolean) => {
+      clearTimeout(timer);
+      video.removeEventListener('loadedmetadata', onMeta);
+      resolve(ok);
+    };
+    const onMeta = () => done(video.videoWidth > 0 && video.videoHeight > 0);
+    const timer = setTimeout(() => done(false), FIRST_FRAME_TIMEOUT_MS);
+    video.addEventListener('loadedmetadata', onMeta);
+  });
+}
+
+type Status = 'starting' | 'live' | 'denied' | 'unavailable' | 'timeout';
 
 export default function CaptureWebScreen() {
   useLocale();
@@ -96,10 +127,12 @@ export default function CaptureWebScreen() {
   useEffect(() => {
     if (status === 'unavailable' && attempt === 0) return; // no camera API at all
     let cancelled = false;
+    let gaveUp = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       try {
         // `environment` asks for the rear camera on phones and is simply ignored on desktops.
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const request = navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: 'environment' },
             width: { ideal: 1920 },
@@ -107,6 +140,24 @@ export default function CaptureWebScreen() {
           },
           audio: false,
         });
+        // If the prompt is answered after we've stopped waiting, the stream still lands here.
+        // Stop it, or the browser keeps the camera indicator lit on a screen that moved on.
+        request
+          .then((late) => {
+            if (gaveUp || cancelled) late.getTracks().forEach((t) => t.stop());
+          })
+          .catch(() => {});
+
+        const stream = await Promise.race([
+          request,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              gaveUp = true;
+              reject(new Error(TIMED_OUT));
+            }, CAMERA_START_TIMEOUT_MS);
+          }),
+        ]);
+        clearTimeout(timer);
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -115,6 +166,13 @@ export default function CaptureWebScreen() {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => {});
+          const running = await waitForFirstFrame(videoRef.current);
+          if (cancelled) return;
+          if (!running) {
+            console.warn('[capture.web] preview never produced a frame');
+            setStatus('unavailable');
+            return;
+          }
         }
         // What this particular camera can actually do. iOS reports neither.
         const track = stream.getVideoTracks()[0];
@@ -130,7 +188,13 @@ export default function CaptureWebScreen() {
           setStatus('live');
         }
       } catch (e) {
+        clearTimeout(timer);
         if (cancelled) return;
+        if ((e as Error)?.message === TIMED_OUT) {
+          console.warn('[capture.web] camera did not start within %dms', CAMERA_START_TIMEOUT_MS);
+          setStatus('timeout');
+          return;
+        }
         // NotAllowedError is a refusal; everything else (no device, in use) is unavailability.
         console.warn('[capture.web] camera unavailable', e);
         setStatus((e as Error)?.name === 'NotAllowedError' ? 'denied' : 'unavailable');
@@ -138,6 +202,7 @@ export default function CaptureWebScreen() {
     })();
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       stop();
     };
     // `status` is deliberately not a dependency: it is written by this effect, and re-running on
@@ -228,19 +293,30 @@ export default function CaptureWebScreen() {
     router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
   }
 
-  if (status === 'denied' || status === 'unavailable') {
-    const denied = status === 'denied';
+  if (status === 'denied' || status === 'unavailable' || status === 'timeout') {
+    // 'unavailable' is the only one retrying can't help with — there is no camera to reach.
+    const canRetry = status !== 'unavailable';
+    const title =
+      status === 'denied'
+        ? t("Camera access needed")
+        : status === 'timeout'
+          ? t("Camera didn't start")
+          : t("No camera available");
+    const body =
+      status === 'denied'
+        ? t("SpotOn uses your camera to capture the skin spot for triage. Allow camera access in your browser, then try again.")
+        : status === 'timeout'
+          ? t("Your browser never answered the camera permission prompt. Look for a blocked-camera icon in the address bar, then try again — or upload a photo instead.")
+          : t("This device or browser has no camera SpotOn can use. You can still upload a photo instead.");
     return (
       <View style={[styles.black, styles.permission, { paddingTop: insets.top + Space.huge }]}>
         <ThemedText type="title2" style={styles.permTitle}>
-          {denied ? t("Camera access needed") : 'No camera available'}
+          {title}
         </ThemedText>
         <ThemedText type="body" style={styles.permBody}>
-          {denied
-            ? 'SpotOn uses your camera to capture the skin spot for triage. Allow camera access in your browser, then try again.'
-            : 'This device or browser has no camera SpotOn can use. You can still upload a photo instead.'}
+          {body}
         </ThemedText>
-        {denied ? (
+        {canRetry ? (
           <Button
             label={t("Try again")}
             variant="brand"
@@ -284,7 +360,7 @@ export default function CaptureWebScreen() {
 
       <View style={[styles.banner, { top: insets.top + Space.xxl }]} pointerEvents="none">
         <ThemedText type="subhead" style={styles.bannerText}>
-          {status === 'live' ? 'Fill the circle with the spot' : 'Starting camera…'}
+          {status === 'live' ? t("Fill the circle with the spot") : t("Starting camera…")}
         </ThemedText>
       </View>
 
@@ -349,7 +425,7 @@ export default function CaptureWebScreen() {
         {session.images.length > 0 ? (
           <View style={styles.shotCount} pointerEvents="none">
             <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} {t("of")}{MAX_IMAGES_PER_SCREENING}
+              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
             </ThemedText>
           </View>
         ) : null}

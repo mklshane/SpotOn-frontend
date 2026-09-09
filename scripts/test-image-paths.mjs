@@ -24,7 +24,7 @@ const out = mkdtempSync(join(tmpdir(), 'image-paths-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/data/image-paths.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/data/image-paths.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 

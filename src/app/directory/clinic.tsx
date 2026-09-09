@@ -135,7 +135,7 @@ export default function ClinicDetailScreen() {
               {facility.photo_attribution ? (
                 <View style={styles.attributionWrap}>
                   <ThemedText type="caption" style={styles.attributionText}>
-                    {t("Photo:")}{facility.photo_attribution}
+                    {t("Photo:")} {facility.photo_attribution}
                   </ThemedText>
                 </View>
               ) : null}
@@ -149,7 +149,7 @@ export default function ClinicDetailScreen() {
               </ThemedText>
               {nameParts?.affiliation ? (
                 <ThemedText type="callout" themeColor="textSecondary">
-                  {t("at")}{nameParts.affiliation}
+                  {t("at")} {nameParts.affiliation}
                 </ThemedText>
               ) : null}
               <View style={styles.badges}>
@@ -345,7 +345,7 @@ export default function ClinicDetailScreen() {
                   <View style={styles.infoRow}>
                     <IconCircle icon="banknote" variant="tint" size={36} />
                     <ThemedText type="footnote" style={styles.infoText}>
-                      {t("Consultation fee")}{feeRange}
+                      {t("Consultation fee")} {feeRange}
                     </ThemedText>
                   </View>
                 </>

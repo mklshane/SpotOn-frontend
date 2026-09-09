@@ -282,7 +282,7 @@ export function ClinicsView({
                 return (
                   <Chip
                     key={item}
-                    label={item}
+                    label={t(item)}
                     active={openOnly}
                     onPress={() => setOpenOnly((v) => !v)}
                   />

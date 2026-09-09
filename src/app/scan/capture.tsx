@@ -907,7 +907,7 @@ export default function CaptureScreen() {
         {session.images.length > 0 ? (
           <View style={styles.shotCount} pointerEvents="none">
             <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} {t("of")}{MAX_IMAGES_PER_SCREENING}
+              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
             </ThemedText>
           </View>
         ) : null}

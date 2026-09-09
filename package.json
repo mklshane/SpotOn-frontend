@@ -87,6 +87,8 @@
     "preview:glyphs": "node scripts/preview-body-glyphs.mjs",
     "test:report": "node scripts/test-report-html.mjs",
     "test:localizer": "node scripts/test-localizer.mjs",
+    "test:i18n-spacing": "node scripts/test-i18n-spacing.mjs",
+    "test:i18n-coverage": "node scripts/test-i18n-coverage.mjs",
     "postinstall": "patch-package && node scripts/copy-litert-wasm.mjs",
     "test:multiview": "node scripts/test-multiview.mjs",
     "test:flow": "node scripts/test-scan-flow.mjs",

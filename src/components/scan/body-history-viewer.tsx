@@ -165,7 +165,15 @@ export function BodyHistoryViewer({
         <Rig azimuth={azimuth} polar={polar} radius={radius} sceneRef={sceneRef} />
       </Canvas>
       <GestureDetector gesture={gesture}>
-        <View style={StyleSheet.absoluteFill} />
+        <View
+          // As in body-viewer.tsx: the canvas exposes nothing on its own. Unlike /scan/body,
+          // this screen already ships a non-3D alternative ("See all screenings as a list").
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={t("3D body model showing your tracked spots")}
+          accessibilityHint={t("Drag to rotate · pinch to zoom · tap a spot to see how it has changed")}
+          style={StyleSheet.absoluteFill}
+        />
       </GestureDetector>
 
       {status !== 'ready' ? (

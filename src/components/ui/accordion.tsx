@@ -78,6 +78,7 @@ export function Accordion<T extends string>({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         onHoverIn={() => setTriggerHovered(true)}
         onHoverOut={() => setTriggerHovered(false)}
         onPress={() => setOpenAnimated(!open)}
@@ -113,7 +114,8 @@ export function Accordion<T extends string>({
 
       {error ? (
         <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-          {error}
+          {/* Source-keyed error string — translate on read, as TextField does. */}
+          {t(error)}
         </ThemedText>
       ) : null}
     </View>
@@ -145,7 +147,11 @@ function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRow
   return (
     <Pressable
       accessibilityRole="radio"
+      // role="radio" is described by aria-checked, and react-native-web does not derive it from
+      // accessibilityState — same gap as checkbox.tsx / select-card.tsx. Without it a screen
+      // reader cannot tell which option is selected.
       accessibilityState={{ selected: isSelected }}
+      aria-checked={isSelected}
       onHoverIn={() => {
         hovered.value = true;
         setHighlighted(true);

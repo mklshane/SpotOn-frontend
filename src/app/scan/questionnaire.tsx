@@ -2,7 +2,7 @@ import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -17,6 +17,7 @@ import { Button, ConfirmDialog, Screen, SelectCard } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useAndroidBack } from '@/hooks/use-android-back';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { useScreeningSession } from '@/lib/screening-session';
 import { ANSWER_OPTIONS, QUESTIONS, type QuestionDef } from '@/lib/triage/questions';
@@ -38,7 +39,7 @@ export default function QuestionnaireScreen() {
   useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const {
     answers,
     setAnswer,

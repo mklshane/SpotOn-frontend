@@ -506,14 +506,14 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
             accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
             style={styles.creditRow}>
             <ThemedText type="caption" themeColor="textSecondary">
-              {t("Image source:")}{credit.org} ({credit.licence})
+              {t("Image source:")} {credit.org} ({credit.licence})
             </ThemedText>
             <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
           </PressableScale>
         ) : (
           <View key={credit.org} style={styles.creditRow}>
             <ThemedText type="caption" themeColor="textSecondary">
-              {t("Image source:")}{credit.org} ({credit.licence})
+              {t("Image source:")} {credit.org} ({credit.licence})
             </ThemedText>
           </View>
         ),

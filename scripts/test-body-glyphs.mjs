@@ -12,7 +12,7 @@
  * Run:  npm run test:glyphs
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -22,9 +22,32 @@ const out = mkdtempSync(join(tmpdir(), 'body-glyphs-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/body-glyphs.ts', 'src/lib/body-parts.ts', 'src/lib/body-icons.ts', 'src/lib/body-figure.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/lib/body-glyphs.ts', 'src/lib/body-parts.ts', 'src/lib/body-icons.ts', 'src/lib/body-figure.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler', '--resolveJsonModule'],
   { cwd: ROOT, stdio: 'inherit' },
 );
+
+/**
+ * body-parts.ts pulls in lib/i18n/core.ts (for `localizedCopy`), which is the first time this
+ * compile emitted more than one module. tsc leaves import specifiers exactly as written, and
+ * Node's ESM loader — unlike a bundler — needs the '.js' and a type attribute on JSON. Rewrite
+ * both rather than reshaping the source to suit the test.
+ */
+for (const dir of [out, join(out, 'i18n')]) {
+  for (const f of readdirSync(dir, { withFileTypes: true })) {
+    if (!f.isFile() || !f.name.endsWith('.js')) continue;
+    const file = join(dir, f.name);
+    writeFileSync(
+      file,
+      readFileSync(file, 'utf8').replace(
+        /(\bfrom\s+')(\.\.?\/[^']+)(')/g,
+        (_m, a, spec, z) =>
+          spec.endsWith('.json')
+            ? `${a}${spec}${z} with { type: 'json' }`
+            : `${a}${spec}.js${z}`,
+      ),
+    );
+  }
+}
 
 const { regionGlyph, glyphIcon } = await import(pathToFileURL(join(out, 'body-glyphs.js')).href);
 const { BODY_PARTS } = await import(pathToFileURL(join(out, 'body-parts.js')).href);

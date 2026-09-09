@@ -18,8 +18,12 @@ export function LanguagePicker({ compact = false }: { compact?: boolean }) {
     if (saving) return;
     setSaving(true);
     setError(false);
-    try { await setLanguage(next); setVisible(false); }
-    catch { setError(true); }
+    // Close first: the auth/onboarding screens key their <Screen> on the locale, so a successful
+    // setLanguage() remounts this component and every setState after the await lands on a dead
+    // instance. Only the failure path still has a component to report into.
+    setVisible(false);
+    try { await setLanguage(next); }
+    catch { setError(true); setVisible(true); }
     finally { setSaving(false); }
   }
   return <>
@@ -31,7 +35,7 @@ export function LanguagePicker({ compact = false }: { compact?: boolean }) {
         <View accessibilityViewIsModal style={[styles.sheet, { backgroundColor: theme.surface }]}>
           <ThemedText type="title2">Language / Wika</ThemedText>
           <ThemedText type="body">{t('Choose your preferred language')}</ThemedText>
-          {(['en', 'fil'] as const).map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: locale === value, disabled: saving }} disabled={saving} onPress={() => void choose(value)} style={[styles.option, { backgroundColor: locale === value ? theme.brandTint : theme.elementBg }]}>
+          {(['en', 'fil'] as const).map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: locale === value, disabled: saving }} aria-checked={locale === value} disabled={saving} onPress={() => void choose(value)} style={[styles.option, { backgroundColor: locale === value ? theme.brandTint : theme.elementBg }]}>
             <View style={styles.copy}>
               <ThemedText type="headline">{value === 'en' ? 'English' : 'Tagalog'}</ThemedText>
               {value === 'fil' && <ThemedText type="footnote" themeColor="textSecondary">Simpleng Tagalog na may English words na madalas gamitin</ThemedText>}

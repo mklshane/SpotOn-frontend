@@ -20,7 +20,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), 'detection-smoothing-'));
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/detection-smoothing.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/lib/detection-smoothing.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 const m = await import(pathToFileURL(join(out, 'detection-smoothing.js')).href);

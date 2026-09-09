@@ -84,6 +84,11 @@ export default function EditProfileScreen() {
   }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Errors are only recomputed on submit, so without this a corrected field keeps showing the
+  // old message until the user presses Save again. Mirrors complete-profile.tsx.
+  const clearError = (field: keyof typeof errors) =>
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+
   function validate() {
     const next: typeof errors = {};
     if (!fullName.trim()) next.fullName = "Please enter your name.";
@@ -163,14 +168,20 @@ export default function EditProfileScreen() {
               placeholder={t("Your name")}
               inputMode="text"
               value={fullName}
-              onChangeText={setFullName}
+              onChangeText={(value) => {
+                setFullName(value);
+                clearError('fullName');
+              }}
               transformInput={sanitizeName}
               error={errors.fullName}
             />
             <DateField
               label={t("Date of birth")}
               value={dob}
-              onChange={setDob}
+              onChange={(value) => {
+                setDob(value);
+                clearError('dob');
+              }}
               error={errors.dob}
             />
             <Accordion
@@ -178,7 +189,10 @@ export default function EditProfileScreen() {
               placeholder={t("Select")}
               value={sex}
               options={SEX_OPTIONS}
-              onChange={setSex}
+              onChange={(value) => {
+                setSex(value);
+                clearError('sex');
+              }}
               error={errors.sex}
             />
             <TextField

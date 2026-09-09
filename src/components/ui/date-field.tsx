@@ -73,14 +73,16 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
         onPress={openPicker}
         style={[styles.field, { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 }]}>
         <ThemedText type="body" themeColor={date ? 'text' : 'muted'}>
-          {date ? format(date) : 'Select date'}
+          {date ? format(date) : t("Select date")}
         </ThemedText>
         <Icon name="calendar" tintColor={theme.muted} size={18} />
       </Pressable>
 
       {error ? (
         <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-          {error}
+          {/* Validation messages arrive as English source keys — translate at the display site,
+              the way TextField and IdentifierField already do. */}
+          {t(error)}
         </ThemedText>
       ) : null}
 

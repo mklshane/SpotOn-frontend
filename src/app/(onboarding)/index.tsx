@@ -9,7 +9,6 @@ import {
   type ListRenderItemInfo,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
   type ViewToken,
 } from 'react-native';
@@ -20,6 +19,7 @@ import { Dots } from '@/components/ui/dots';
 import { OnboardingHero } from '@/components/ui/onboarding-hero';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { markOnboardingSeen } from '@/lib/onboarding';
 
@@ -69,7 +69,7 @@ const SLIDES: Slide[] = localizedCopy([
 export default function OnboardingScreen() {
   const locale = useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const listRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
   const isLast = index === SLIDES.length - 1;
@@ -154,7 +154,7 @@ export default function OnboardingScreen() {
       <View style={styles.footer}>
         <Dots count={SLIDES.length} activeIndex={index} />
         <Button
-          label={isLast ? 'Get Started' : t("Continue")}
+          label={isLast ? t("Get Started") : t("Continue")}
           variant="ink"
           onPress={handleNext}
           style={styles.cta}

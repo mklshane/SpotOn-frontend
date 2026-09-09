@@ -11,7 +11,7 @@ import { Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
-import { formatHours, isOpenNow } from '@/lib/hours';
+import { formatHoursLine, isOpenNow } from '@/lib/hours';
 import { callNumber, openDirections } from '@/lib/links';
 
 export type ClinicCardProps = {
@@ -72,7 +72,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                 {facility.address}
               </ThemedText>
               <ThemedText type="footnote" themeColor="muted">
-                {t("Mon–Fri")}{formatHours(facility.weekday_hours)}
+                {formatHoursLine("Mon–Fri", facility.weekday_hours)}
               </ThemedText>
               {facility.phone ? (
                 <ThemedText type="footnote" themeColor="muted">

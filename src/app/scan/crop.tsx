@@ -2,11 +2,12 @@ import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image as RNImage, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image as RNImage, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { releaseBlobUri } from '@/lib/blob-uri';
 import { isDebug } from '@/lib/debug-flag';
 import { transformToUri } from '@/lib/image-ops';
@@ -41,7 +42,7 @@ export default function CropScreen() {
     lh?: string;
   }>();
   const fromGallery = source === 'gallery';
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const insets = useSafeAreaInsets();
 
   const frame = width - Space.xl * 2;
@@ -109,7 +110,7 @@ export default function CropScreen() {
     if (hasDetectorBox) return;
 
     // NB: the ref is set only once the transform is actually applied, never up-front. `frame`
-    // comes from useWindowDimensions, which commonly updates just after mount on iOS — marking
+    // comes from which commonly updates just after mount on iOS — marking
     // early meant that re-render cancelled the in-flight localization and the retry then bailed on
     // the ref, so the preframe silently never happened. Letting the re-run retry is the fix.
     let alive = true;

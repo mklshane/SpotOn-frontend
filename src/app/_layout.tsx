@@ -5,17 +5,18 @@ import {
   HankenGrotesk_700Bold,
   useFonts,
 } from '@expo-google-fonts/hanken-grotesk';
-import { DefaultTheme, ThemeProvider } from 'expo-router';
-import { Stack } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { LogBox, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { enableScreens } from 'react-native-screens';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { DevTools } from '@/components/ui/dev-tools';
+import { AppMaxWidth } from '@/constants/theme';
 import { AuthProvider } from '@/lib/auth';
 import { initNotifications } from '@/lib/notifications';
 import { ScanHistoryProvider } from '@/lib/scan-history';
@@ -25,6 +26,17 @@ import { ScreeningSessionProvider } from '@/lib/screening-session';
 // Runs at module evaluation — before the router mounts and rewrites the URL, which is the only
 // moment `?debug=1` is still readable. See lib/debug-flag.ts.
 captureDebugFlag();
+
+// react-native-screens defaults itself off on web (`ENABLE_SCREENS = isNativePlatformSupported`),
+// which quietly makes the navigators' `detachInactiveScreens` a no-op: expo-router's `MaybeScreen`
+// fallback drops the `enabled`/`active` props and renders a plain View, so every tab visited once
+// stays mounted, absolutely-filled, merely pushed behind with `zIndex: -1`. The result is stale
+// screens sitting in the DOM, the accessibility tree and the keyboard tab order. The library ships
+// working web variants (Screen.web.js hides inactive scenes with `display: none`); they just need
+// the flag. On web `enableScreens` sets it and returns before any native-module check.
+if (Platform.OS === 'web') {
+  enableScreens(true);
+}
 
 // The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
 // intentional, correct pattern that Reanimated v4 strict mode over-flags. Disable strict mode
@@ -94,7 +106,7 @@ export default function RootLayout() {
         { flex: 1 },
         Platform.OS === 'web' && {
           width: '100%',
-          maxWidth: 430,
+          maxWidth: AppMaxWidth,
           alignSelf: 'center',
           overflow: 'hidden',
         },

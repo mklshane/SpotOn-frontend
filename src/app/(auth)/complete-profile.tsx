@@ -8,6 +8,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Accordion } from '@/components/ui/accordion';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
+import { LanguagePicker } from '@/components/ui/language-picker';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
 import { Space } from '@/constants/theme';
@@ -35,12 +36,17 @@ export default function CompleteProfileScreen() {
   const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
+  // Errors are only recomputed on submit, so without this a corrected field keeps showing the
+  // old message until the user presses Continue again. Register already does this per-field.
+  const clearError = (field: keyof typeof errors) =>
+    setErrors((prev) => (prev[field] ? { ...prev, [field]: undefined } : prev));
+
   function validate() {
     const next: typeof errors = {};
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
     if (phone.trim() && !normalizePhilippinePhone(phone)) {
-      next.phone = 'Enter a valid PH mobile number (e.g. 0917 123 4567).';
+      next.phone = 'Enter a valid PH mobile number.';
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -66,6 +72,7 @@ export default function CompleteProfileScreen() {
 
   return (
     <Screen key={locale} variant="gradient" gradient="dawnSoft">
+      <LanguagePicker compact />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -80,14 +87,24 @@ export default function CompleteProfileScreen() {
           </View>
 
           <View style={styles.form}>
-            <DateField label={t("Date of birth")} onChange={setDob} error={errors.dob} />
+            <DateField
+              label={t("Date of birth")}
+              onChange={(value) => {
+                setDob(value);
+                clearError('dob');
+              }}
+              error={errors.dob}
+            />
 
             <Accordion
               label={t("Sex")}
               placeholder={t("Select")}
               value={sex}
               options={SEX_OPTIONS}
-              onChange={setSex}
+              onChange={(value) => {
+                setSex(value);
+                clearError('sex');
+              }}
               error={errors.sex}
             />
 
@@ -98,7 +115,10 @@ export default function CompleteProfileScreen() {
                 keyboardType="phone-pad"
                 textContentType="telephoneNumber"
                 value={phone}
-                onChangeText={(value) => setPhone(sanitizePhone(value))}
+                onChangeText={(value) => {
+                  setPhone(sanitizePhone(value));
+                  clearError('phone');
+                }}
                 error={errors.phone}
               />
             )}

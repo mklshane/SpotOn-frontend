@@ -2,7 +2,7 @@ import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { InteractionManager, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -439,8 +439,18 @@ function ActionBar({
           paddingBottom: insets.bottom + Space.md,
         },
       ]}>
+      {Platform.OS === 'web' ? (
+        // Both actions open the browser's print dialog. Without this the screen looked inert:
+        // the dialog is chrome, not DOM, so nothing on the page changes when it appears.
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.barNote}>
+          {t("Opens your browser's print dialog — choose \"Save as PDF\" there to keep a copy.")}
+        </ThemedText>
+      ) : null}
       <Button
-        label={t("Share or save")}
+        // On web there is no share sheet: report-pdf.web.ts routes both actions through the
+        // browser's own print dialog, from which the user saves a PDF. Naming it "Share or save"
+        // there promises a sheet that never appears.
+        label={Platform.OS === 'web' ? t("Save as PDF") : t("Share or save")}
         variant="brand"
         icon="square.and.arrow.up"
         loading={busy}
@@ -451,6 +461,7 @@ function ActionBar({
         label={t("Print")}
         variant="outline"
         icon="printer.fill"
+        loading={busy}
         onPress={onPrint}
         style={styles.barButton}
       />
@@ -553,10 +564,14 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     flexDirection: 'row',
+    // The web-only print note is a full-width row child; without wrapping it would compete with
+    // the buttons for horizontal space instead of sitting above them.
+    flexWrap: 'wrap',
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  barNote: { width: '100%', textAlign: 'center', marginBottom: Space.xs },
   barButton: { flex: 1 },
 });

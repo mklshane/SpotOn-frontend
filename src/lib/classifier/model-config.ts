@@ -307,6 +307,9 @@ import type { LesionClass } from '../triage/types';
 // thr90 is 0.4057 and its thrF1 is 0.6188, and those do NOT converge, so the value is a policy
 // choice rather than a measured optimum. Settle it with `~/Downloads/D7_vs_D8_heldout.ipynb`,
 // which scores both models on the identical held-out split.
+// Metro resolves non-JS assets through require() and registers them for bundling; an ESM
+// import would not produce an asset module here.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 export const MODEL_ASSET = require('../../../assets/models/spoton_d13_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
