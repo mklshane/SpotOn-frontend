@@ -25,7 +25,7 @@ import { QUESTIONS } from '@/lib/triage/questions';
 import {
   CLASS_DISPLAY,
   CONFIDENCE_QUALIFIER,
-  DISCLAIMER,
+  AVOID_SELF_MEDICATION_WARNING,
   MALIGNANT_GATE,
   TIER_CONTENT,
 } from '@/lib/triage/recommendations';
@@ -58,7 +58,7 @@ export default function ResultScreen() {
   const flowTerminal = from === 'scan';
   const goBack = useCallback(() => {
     if (!flowTerminal) {
-      // Pushed from home / a lesion timeline / a list — popping is exactly right.
+      // Pushed from home / a lesion timeline / a list - popping is exactly right.
       if (router.canGoBack()) router.back();
       else router.replace('/(tabs)/home');
       return;
@@ -97,7 +97,7 @@ export default function ResultScreen() {
   const tier = TIER_CONTENT[triage.tier];
   const colors = tierColor(triage.tier);
   const qualifier = triage.confidenceQualifier;
-  // The gate raising the tier is only worth explaining when the photo *was* readable — otherwise
+  // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
   const cls = CLASS_DISPLAY[classification.topClass];
@@ -122,7 +122,7 @@ export default function ResultScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
         showsVerticalScrollIndicator={false}>
-        {/* 1 · Hero — classified type, tier, confidence ring. A gradient + colored glow keyed to
+        {/* 1 · Hero - classified type, tier, confidence ring. A gradient + colored glow keyed to
             the risk level so it lifts off the page while staying tonally on-tier. */}
         <Animated.View entering={FadeInDown}>
           <LinearGradient
@@ -132,7 +132,7 @@ export default function ResultScreen() {
             style={[styles.hero, { shadowColor: colors.fg }]}>
             <View style={styles.heroTop}>
               {/* `cls.name` ("Melanoma-like"), not `cls.full` ("Melanoma"). CLASS_DISPLAY ships
-                  both for exactly this reason and scan-timeline already uses the hedged one — this
+                  both for exactly this reason and scan-timeline already uses the hedged one - this
                   headline sat directly above an "AI confidence" ring, so the unhedged name read as
                   a diagnosis. */}
               <ThemedText type="title1" style={styles.heroTitle}>
@@ -148,7 +148,7 @@ export default function ResultScreen() {
               <ConfidenceRing pct={pct} color={colors.fg} />
               <View style={styles.heroConfText}>
                 <ThemedText type="headline">{t("AI confidence")}</ThemedText>
-                {/* `topClass` is the raw model enum — this printed "78% probability for MEL
+                {/* `topClass` is the raw model enum - this printed "78% probability for MEL
                     pattern" in the most important sentence on the screen. */}
                 <ThemedText type="subhead" themeColor="textSecondary">
                   {pct}{t("% match to")} {cls.lay}.
@@ -158,7 +158,7 @@ export default function ResultScreen() {
           </LinearGradient>
         </Animated.View>
 
-        {/* 2 · The photo, straight under the verdict — it's what the user just captured, so it
+        {/* 2 · The photo, straight under the verdict - it's what the user just captured, so it
             belongs in the first screenful rather than buried below the explanations. */}
         <Animated.View entering={FadeInDown.delay(60)}>
           <Card padded={false} style={styles.photoCard}>
@@ -215,8 +215,7 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 3 · The one action to take, with the disclaimer riding underneath as a light footnote
-            rather than a card of its own. */}
+        {/* 3 · The one action to take, with the safety warning immediately underneath. */}
         <Animated.View entering={FadeInDown.delay(110)} style={styles.priorityBlock}>
           <View style={[styles.priority, { backgroundColor: colors.bg }]}>
             <View style={[styles.priorityDot, { backgroundColor: colors.fg }]} />
@@ -224,12 +223,7 @@ export default function ResultScreen() {
               {t("Priority action:")} {tier.priorityAction}
             </ThemedText>
           </View>
-          <View style={styles.disclaimerRow}>
-            <Icon name="info.circle" tintColor={theme.muted} size={14} />
-            <ThemedText type="footnote" themeColor="muted" style={styles.disclaimerText}>
-              {t(DISCLAIMER)}
-            </ThemedText>
-          </View>
+          <WarningBanner />
         </Animated.View>
 
         {/* 4 · What this means */}
@@ -337,16 +331,16 @@ export default function ResultScreen() {
 /**
  * Leave the capture flow from its final screen.
  *
- * Everything under a just-finished result belongs to a session that has already been reset —
- * followup-confirm, capture, crop, quality, questionnaire — so `router.back()` walks the user
+ * Everything under a just-finished result belongs to a session that has already been reset -
+ * followup-confirm, capture, crop, quality, questionnaire - so `router.back()` walks the user
  * through a stack of empty states. (The reported symptom: back from a re-scan result landed on the
  * camera, then on "Nothing to re-check".) The flow needs an exit, not a pop.
  *
  * A FOLLOW-UP returns to the tracked spot it started from. `dismissTo` pops the flow off in one go
  * and lands on the lesion screen that is still in the stack; scan history is a context the whole
  * app shares, and `addEntry` has already updated it, so that screen renders with the new scan in
- * its timeline without reloading anything. A FIRST scan has no lesion screen underneath — it began
- * at the body picker from home — so home is where it goes, matching where the user started.
+ * its timeline without reloading anything. A FIRST scan has no lesion screen underneath - it began
+ * at the body picker from home - so home is where it goes, matching where the user started.
  */
 function exitFlow(lesionId: string | null | undefined, isFollowUp: boolean): void {
   const lesionHref = lesionId ? ({ pathname: '/scan/lesion', params: { id: lesionId } } as const) : null;
@@ -382,6 +376,28 @@ function Header({ onBack }: { onBack?: () => void }) {
       <ThemedText type="headline" themeColor="textSecondary">
         {t("Result")}</ThemedText>
       <View style={styles.headerSpacer} />
+    </View>
+  );
+}
+
+function WarningBanner() {
+  useLocale();
+  const theme = useTheme();
+  return (
+    <View
+      style={[
+        styles.warningBanner,
+        { backgroundColor: theme.riskModerateBg, borderColor: theme.riskModerate },
+      ]}>
+      <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={18} />
+      <View style={styles.warningCopy}>
+        <ThemedText type="subhead" style={{ color: theme.riskModerate }}>
+          {t('Avoid self-medication')}
+        </ThemedText>
+        <ThemedText type="footnote" themeColor="textSecondary">
+          {t(AVOID_SELF_MEDICATION_WARNING).replace('Avoid self-medication. ', '')}
+        </ThemedText>
+      </View>
     </View>
   );
 }
@@ -470,7 +486,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
               );
             })}
             <ThemedText type="caption" themeColor="muted">
-              {t("These are pattern similarities seen by the on-device model — not a diagnosis.")}</ThemedText>
+              {t("These are pattern similarities seen by the on-device model - not a diagnosis.")}</ThemedText>
           </Animated.View>
         ) : null}
       </LayoutAnimationConfig>
@@ -516,7 +532,7 @@ function FindingGroup({
   );
 }
 
-/** "October 3" — the reminder date, without a year the user doesn't need for a 30-day horizon. */
+/** "October 3" - the reminder date, without a year the user doesn't need for a 30-day horizon. */
 function formatDue(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
 }
@@ -524,7 +540,7 @@ function formatDue(iso: string): string {
 /**
  * Low-tier 30-day self-monitoring reminder opt-in. Tapping it asks the OS for notification
  * permission and hands it a dated alarm, so the reminder arrives even if the app is never
- * reopened — which is the case this whole row exists for.
+ * reopened - which is the case this whole row exists for.
  */
 function ReminderRow({ lesionId }: { lesionId?: string | null }) {
   useLocale();
@@ -577,7 +593,7 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
     );
   }
 
-  // Permission refused (or previously refused and no longer promptable) — the only way back is the
+  // Permission refused (or previously refused and no longer promptable) - the only way back is the
   // system settings screen, so say so instead of leaving a button that silently does nothing.
   if (state === 'denied') {
     return (
@@ -644,7 +660,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm, gap: Space.base },
   center: { textAlign: 'center' },
-  // Hero — gradient is set inline from the tier color; shadowColor is the tier color too.
+  // Hero - gradient is set inline from the tier color; shadowColor is the tier color too.
   hero: {
     borderRadius: Radius.xl,
     padding: Space.xl,
@@ -706,8 +722,15 @@ const styles = StyleSheet.create({
   },
   priorityDot: { width: 8, height: 8, borderRadius: 4 },
   priorityText: { flex: 1 },
-  disclaimerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
-  disclaimerText: { flex: 1 },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    padding: Space.md,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+  },
+  warningCopy: { flex: 1, gap: 2 },
   // Cards
   section: { gap: Space.md },
   sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },

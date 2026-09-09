@@ -21,7 +21,7 @@ export const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 export function computeAge(dob: string | null | undefined): number | null {
   if (!dob) return null;
   // Parse "YYYY-MM-DD" as a local date, not `new Date(dob)`'s UTC-midnight
-  // parsing — the latter can roll the birth date back a day in timezones
+  // parsing - the latter can roll the birth date back a day in timezones
   // behind UTC once read back via local getMonth()/getDate().
   const [y, m, d] = dob.split('-').map(Number);
   if (!y || !m || !d) return null;
@@ -37,7 +37,7 @@ export function computeAge(dob: string | null | undefined): number | null {
 }
 
 export function skinTypeLabel(type: number | null | undefined): string {
-  if (type == null || type < 1 || type > 6) return '—';
+  if (type == null || type < 1 || type > 6) return '-';
   return `Type ${SKIN_TYPE_ROMAN[type - 1]}`;
 }
 
@@ -48,7 +48,7 @@ export function sexLabel(sex: string | null | undefined): string | null {
 }
 
 /**
- * "1985-03-14" -> "March 14, 1985". Field-wise, not Intl — a date-only string has no
+ * "1985-03-14" -> "March 14, 1985". Field-wise, not Intl - a date-only string has no
  * timezone and must never be shifted by one.
  */
 export function formatLongDate(isoDate: string | null | undefined): string | null {

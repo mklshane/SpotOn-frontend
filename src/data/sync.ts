@@ -1,5 +1,5 @@
 /**
- * Offline sync — pulls the directory from the backend `/sync` feed into SQLite.
+ * Offline sync - pulls the directory from the backend `/sync` feed into SQLite.
  *
  * Strategy: call /sync?since=<cursor>. Upsert every collection. While any
  * collection reports has_more, advance the cursor to the SMALLEST next_cursor
@@ -10,7 +10,7 @@
  * Change timestamps: doctors/facilities/booking_links use updated_at; platforms
  * use created_at (no updated_at on that table). Hard deletes aren't tracked by
  * the server, so a FULL sync additionally sweeps local rows the server did not
- * return — see runSync/sweepDeleted.
+ * return - see runSync/sweepDeleted.
  */
 import { api } from "../api/client";
 import type {
@@ -46,7 +46,7 @@ type Tombstoned = { id: string; deleted_at?: string | null };
 /**
  * Split a synced collection into rows to upsert and rows to purge.
  *
- * /sync deliberately RETURNS tombstones — that is how a client finds out a row
+ * /sync deliberately RETURNS tombstones - that is how a client finds out a row
  * is gone. Before 014 a deletion was simply never mentioned again, so it stayed
  * on the device forever (deleted pathology labs were still listed in the app).
  */
@@ -236,7 +236,7 @@ export interface SyncResult {
  *
  * The sweep exists because /sync carries no tombstones: a hard-deleted row was
  * simply never mentioned again, and since every write here is INSERT OR REPLACE,
- * it survived on the device forever. That is not hypothetical — pathology labs
+ * it survived on the device forever. That is not hypothetical - pathology labs
  * deleted server-side were still listed in the app's Clinics tab.
  *
  * Mark-and-sweep rather than clear-then-refill: the ids seen during the pass are
@@ -258,7 +258,7 @@ export async function runSync(opts: { full?: boolean } = {}): Promise<SyncResult
   let pages = 0;
   let syncedAt = new Date().toISOString();
 
-  // Only populated on a full pass — an incremental pass sees only what changed,
+  // Only populated on a full pass - an incremental pass sees only what changed,
   // so sweeping against it would delete the entire unchanged directory.
   const seen: Record<string, Set<string>> = {
     facilities: new Set(),
@@ -305,7 +305,7 @@ export async function runSync(opts: { full?: boolean } = {}): Promise<SyncResult
       fac.dead.length + doc.dead.length + dfa.dead.length +
       bl.dead.length + plat.dead.length;
 
-    // Tombstones are deliberately NOT marked as seen — a full pass must let the
+    // Tombstones are deliberately NOT marked as seen - a full pass must let the
     // sweep remove them too, not resurrect them as "known to the server".
     if (full) {
       for (const f of fac.live) seen.facilities.add(f.id);
@@ -348,7 +348,7 @@ export async function runSync(opts: { full?: boolean } = {}): Promise<SyncResult
 
 /**
  * True if this install has never run a sweeping full sync at the current
- * reconcile version — i.e. it may still hold rows deleted server-side.
+ * reconcile version - i.e. it may still hold rows deleted server-side.
  */
 export async function needsReconcile(): Promise<boolean> {
   return (await getMeta(RECONCILE_KEY)) !== RECONCILE_VERSION;

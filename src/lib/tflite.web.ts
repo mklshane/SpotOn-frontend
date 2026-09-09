@@ -8,7 +8,7 @@
  * VERIFIED AT PARITY 2026-09-08 against the Python `tf.lite.Interpreter` reference, same input:
  * max abs logit deviation 3.8e-6 (wasm) / 9.5e-6 (webgpu), identical argmax, softmax equal to six
  * decimals. Introspected shapes match the documented contract exactly, including the classifier's
- * NCHW [1,3,260,260] — so readClassifierLayout()'s layout sniffing works here unchanged and must
+ * NCHW [1,3,260,260] - so readClassifierLayout()'s layout sniffing works here unchanged and must
  * not be short-circuited.
  *
  * The returned handle deliberately mimics fast-tflite's: `inputs`/`outputs` carrying `shape`, and
@@ -72,7 +72,7 @@ function describe(d: { name: string; dtype: string; shape: Int32Array }): Tensor
  * Wrap a compiled model in the fast-tflite-shaped handle the app consumes.
  *
  * `reload` lets `run()` recover from a WebGPU failure at INFERENCE time. The compile-time
- * try/catch below only covers loadAndCompile — but a WebGPU device can be lost later (iOS Safari
+ * try/catch below only covers loadAndCompile - but a WebGPU device can be lost later (iOS Safari
  * drops it under memory pressure), and that surfaced as an unrecoverable
  * ClassifierError('inference') with no fallback.
  */
@@ -119,7 +119,7 @@ function wrap(model: CompiledModel, reload?: () => Promise<CompiledModel>): Tfli
     runSync(): Float32Array[] {
       // Only the live frame processor in scan/capture.tsx calls this, and the web build replaces
       // that screen with scan/capture.web.tsx (still capture). LiteRT.js has no sync entry point.
-      throw new Error('runSync is not available on web — use run()');
+      throw new Error('runSync is not available on web - use run()');
     },
   };
 }
@@ -138,7 +138,7 @@ export async function loadTensorflowModel(
   const accelerator = isWebGPUSupported() ? 'webgpu' : 'wasm';
   const onCpu = () => loadAndCompile(source.url, { accelerator: 'wasm' });
   try {
-    // Only a WebGPU model gets a reload hook — a wasm model has nowhere left to fall back to.
+    // Only a WebGPU model gets a reload hook - a wasm model has nowhere left to fall back to.
     return wrap(await loadAndCompile(source.url, { accelerator }), accelerator === 'webgpu' ? onCpu : undefined);
   } catch (e) {
     if (accelerator === 'wasm') throw e;

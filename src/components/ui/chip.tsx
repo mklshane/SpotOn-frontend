@@ -23,8 +23,8 @@ export type ChipProps = {
   icon?: IconName;
   /**
    * `tint` (default) is the quiet toggle used inside a filter sheet.
-   * `solid` is the higher-contrast browse filter — white when idle, filled
-   * brand when selected — for chip rails that sit directly on a page.
+   * `solid` is the higher-contrast browse filter - white when idle, filled
+   * brand when selected - for chip rails that sit directly on a page.
    */
   variant?: 'tint' | 'solid';
   onPress?: () => void;

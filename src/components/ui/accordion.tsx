@@ -114,7 +114,7 @@ export function Accordion<T extends string>({
 
       {error ? (
         <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-          {/* Source-keyed error string — translate on read, as TextField does. */}
+          {/* Source-keyed error string - translate on read, as TextField does. */}
           {t(error)}
         </ThemedText>
       ) : null}
@@ -148,7 +148,7 @@ function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRow
     <Pressable
       accessibilityRole="radio"
       // role="radio" is described by aria-checked, and react-native-web does not derive it from
-      // accessibilityState — same gap as checkbox.tsx / select-card.tsx. Without it a screen
+      // accessibilityState - same gap as checkbox.tsx / select-card.tsx. Without it a screen
       // reader cannot tell which option is selected.
       accessibilityState={{ selected: isSelected }}
       aria-checked={isSelected}

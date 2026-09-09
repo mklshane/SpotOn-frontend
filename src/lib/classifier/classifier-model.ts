@@ -12,7 +12,7 @@ let modelPromise: Promise<ClassifierModel> | null = null;
 
 /**
  * Load the classifier once and cache it (same pattern as lesion-model.ts). In dev,
- * Metro serves the asset over http, which the native loader can't fetch directly —
+ * Metro serves the asset over http, which the native loader can't fetch directly -
  * download it to a local file first. Call early (e.g. on quality-screen mount) to
  * overlap the load with UI time the user is already spending.
  */
@@ -44,7 +44,7 @@ export type InputLayout = 'nhwc' | 'nchw';
  * ([1,H,W,3] or [1,3,H,W] → [1,N]).
  *
  * The layout is READ, not assumed: exports up to D9 are NHWC, the litert-torch D10 export is NCHW,
- * and the two are indistinguishable by byte count — feeding the wrong one is silently wrong rather
+ * and the two are indistinguishable by byte count - feeding the wrong one is silently wrong rather
  * than an error. model-config's MODEL_INPUT_LAYOUT records what the bundled file is expected to be
  * and prepareModel cross-checks it against this.
  */

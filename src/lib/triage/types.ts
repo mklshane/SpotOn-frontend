@@ -32,7 +32,7 @@ export type QuestionnaireResponse = {
 };
 
 /**
- * A tracked lesion — the spot itself, as distinct from any one observation of it.
+ * A tracked lesion - the spot itself, as distinct from any one observation of it.
  *
  * The body mark lives HERE rather than on the screening: it is a property of the lesion, and a
  * follow-up scan of the same spot must not require the user to re-place it. Screenings keep their
@@ -48,7 +48,7 @@ export type Lesion = {
   createdAt: string;
   /** ISO timestamp, bumped whenever a screening is linked. */
   updatedAt: string;
-  /** User nickname. Null renders as "{region} spot" at display time — never stored derived. */
+  /** User nickname. Null renders as "{region} spot" at display time - never stored derived. */
   label: string | null;
   mark: BodyMark | null;
   screeningCount: number;
@@ -63,7 +63,7 @@ export type Lesion = {
   userId: string | null;
 };
 
-/** One photo in a screening run. Index 0 is the primary — the hero, the thumbnail, the PDF image. */
+/** One photo in a screening run. Index 0 is the primary - the hero, the thumbnail, the PDF image. */
 export type ScreeningImage = {
   uri: string;
   index: number;
@@ -76,7 +76,7 @@ export type ScreeningImage = {
 
 /**
  * One image's own classification within a multi-photo screening. Recorded even when pooling is
- * disabled (model-config MULTI_IMAGE_AGGREGATION_ENABLED) — it is the field evidence a future
+ * disabled (model-config MULTI_IMAGE_AGGREGATION_ENABLED) - it is the field evidence a future
  * held-out refit of MALIGNANT_THRESHOLD would need.
  */
 export type PerImageResult = {
@@ -124,7 +124,7 @@ export type ClassificationOutput = {
   aggregate?: 'single' | 'logit-mean';
   /** Every captured image's own classification, whether or not it was pooled. */
   perImage?: PerImageResult[];
-  /** True when confident per-image predictions disagreed — the multi-image analogue of
+  /** True when confident per-image predictions disagreed - the multi-image analogue of
    *  scaleUnstable. Recorded always; whether it routes is IMAGE_AGREEMENT_CHECK_ENABLED. */
   imageDisagreement?: boolean;
 };

@@ -1,4 +1,4 @@
-# SpotOn production QA — onboarding & app pass
+# SpotOn production QA - onboarding & app pass
 
 Target: https://spoton-dlsl.vercel.app
 Date: 2026-09-09 (Asia/Manila)
@@ -8,7 +8,7 @@ Playwright, plus spot checks against the deployed build.
 
 ## Outcome
 
-22 findings were filed. They were **not 22 independent defects** — eleven of them collapse into
+22 findings were filed. They were **not 22 independent defects** - eleven of them collapse into
 three root causes, three did not reproduce in source, and two turned out to be observation
 artifacts rather than product bugs.
 
@@ -39,7 +39,7 @@ artifacts rather than product bugs.
 
 ## Findings
 
-### QA-ONB-001 — Onboarding route is not directly addressable — **FIXED**
+### QA-ONB-001 - Onboarding route is not directly addressable - **FIXED**
 
 - Severity: Medium · Area: Functional / navigation
 - Confirmed: `(onboarding)` is a route group, so its index resolves to `/`; there is no
@@ -49,20 +49,20 @@ artifacts rather than product bugs.
   rewrite, which would mask genuine 404s.
 - Verified: `GET /onboarding` → 200, carousel renders.
 
-### QA-ONB-002 — Registration content extends below the viewport — **NOT REPRODUCED**
+### QA-ONB-002 - Registration content extends below the viewport - **NOT REPRODUCED**
 
 - Severity: High (as filed) · Reclassified: test-method artifact
 - `/register` has a `ScrollView` and the flex chain is intact. The measurement in the original
   report (`documentElement.scrollHeight === 720`) is expected: Expo's web shell sets
-  `body{overflow:hidden}` deliberately, so the *document* never scrolls — the inner ScrollView does.
+  `body{overflow:hidden}` deliberately, so the *document* never scrolls - the inner ScrollView does.
 - Verified: scrolling the inner scroller brings the CTA to `bottom=658` within a 720px viewport.
   No code change.
 
-### QA-ONB-003 — Tagalog validation errors are hard-coded in English — **FIXED**
+### QA-ONB-003 - Tagalog validation errors are hard-coded in English - **FIXED**
 
 - Severity: Medium · Area: Localization
 - Confirmed, with a more precise cause than filed: two separate problems.
-  1. Render sites that printed `error` raw instead of `t(error)` — `date-field.tsx`,
+  1. Render sites that printed `error` raw instead of `t(error)` - `date-field.tsx`,
      `accordion.tsx`, and both consent errors in `register.tsx`. `TextField`/`IdentifierField`
      already did it correctly, so this was an inconsistency, not a missing mechanism.
   2. Six strings had no catalog entry, and `complete-profile.tsx` used a near-miss key
@@ -74,26 +74,26 @@ artifacts rather than product bugs.
   errors QA quoted (`Kumpirmahin na 18 anyos ka na o mas matanda pa.`,
   `Tanggapin ang Terms at Privacy Policy para makatuloy.`).
 
-### QA-ONB-004 — English login screen retains Tagalog strings — **NOT REPRODUCED**
+### QA-ONB-004 - English login screen retains Tagalog strings - **NOT REPRODUCED**
 
 - Severity: Medium (as filed) · Reclassified: symptom of QA-APP-001
 - All three quoted strings go through `t()`; the Tagalog only comes from the catalog under `fil`.
 - Checked against the **deployed** build in English: `Welcome back`, `New here?`,
-  `Create an account` — no Tagalog present.
+  `Create an account` - no Tagalog present.
 - Most likely what was observed: the language switch remounts the screen (`key={locale}`) while
-  the previous scene stayed in the DOM — exactly QA-APP-001. Fixing that removes the mechanism.
+  the previous scene stayed in the DOM - exactly QA-APP-001. Fixing that removes the mechanism.
   No login-specific change.
 
-### QA-ONB-005 — Language picker inconsistent across auth screens — **FIXED**
+### QA-ONB-005 - Language picker inconsistent across auth screens - **FIXED**
 
 - Severity: Low · Confirmed: `LanguagePicker` rendered on onboarding, login and settings only.
 - Fix: added `<LanguagePicker compact />` to `register.tsx` and `complete-profile.tsx`. Also
-  fixed a latent bug in the picker itself — it called `setVisible(false)` *after* awaiting
+  fixed a latent bug in the picker itself - it called `setVisible(false)` *after* awaiting
   `setLanguage()`, by which point the locale change had already unmounted it; it now closes first
   and only reopens on failure.
 - Verified: `Language / Wika` present on `/register`.
 
-### QA-ONB-006 — Complete-profile errors do not clear after correction — **FIXED**
+### QA-ONB-006 - Complete-profile errors do not clear after correction - **FIXED**
 
 - Severity: High · Area: Form validation
 - Confirmed, with one correction to the report: `validate()` skips the phone check when the
@@ -104,18 +104,18 @@ artifacts rather than product bugs.
 - Verified: after an empty submit, picking `Female` clears `Please select one.` immediately while
   the still-unset date keeps its own error.
 
-### QA-ONB-007 — Consent checkboxes do not expose checked state — **FIXED**
+### QA-ONB-007 - Consent checkboxes do not expose checked state - **FIXED**
 
 - Severity: Medium · Area: Accessibility
 - Confirmed on the deployed build: `aria-checked` is absent before *and* after clicking.
   The component does set `accessibilityState={{ checked }}`, but **react-native-web does not
-  derive `aria-checked` from it** — a gap this codebase had already discovered and documented in
+  derive `aria-checked` from it** - a gap this codebase had already discovered and documented in
   `select-card.tsx`, then fixed only there.
 - Fix: set `aria-checked` directly on `checkbox.tsx`, and swept the same class into
   `switch.tsx`, `accordion.tsx` (radio options + `aria-expanded`) and `language-picker.tsx`.
 - Verified: `aria-checked` now goes `false → true` on click.
 
-### QA-APP-001 / QA-APP-006 — Inactive tab screens stay in the DOM — **FIXED**
+### QA-APP-001 / QA-APP-006 - Inactive tab screens stay in the DOM - **FIXED**
 
 - Severity: High / Medium · Root cause 2 above.
 - Fix: `enableScreens(true)` on web in `src/app/_layout.tsx`. The library ships complete web
@@ -132,45 +132,45 @@ artifacts rather than product bugs.
 - Risk noted: this also moves the root `Stack` onto its web variant. Stack navigation was
   re-tested (scan flow, profile sub-screens, directory, back navigation) with no regression.
 
-### QA-APP-002 / QA-APP-014 — 3D body screens have no accessible representation — **PARTIALLY FIXED**
+### QA-APP-002 / QA-APP-014 - 3D body screens have no accessible representation - **PARTIALLY FIXED**
 
 - Severity: Medium · Area: Accessibility
 - Confirmed: both gesture surfaces had no `accessible`, role, label or hint; on web the r3f
   canvas exposes nothing at all.
 - Fix (this pass): the surfaces now carry `accessible`, `accessibilityRole="image"`, a label and
   a hint carrying the on-screen gesture instructions.
-- Deferred: an operable non-3D region picker — see *Deferred* below. `/scan/history` already
+- Deferred: an operable non-3D region picker - see *Deferred* below. `/scan/history` already
   ships a list alternative (`See all screenings as a list`); `/scan/body` still does not.
 
-### QA-APP-003 — LiteRT/WebNN startup diagnostics logged as console errors — **DEFERRED (not our code)**
+### QA-APP-003 - LiteRT/WebNN startup diagnostics logged as console errors - **DEFERRED (not our code)**
 
 - Severity: Low
 - Confirmed and traced: `src/` contains exactly one `console.error` (font loading). The red
   startup entries come from Emscripten's `var err = console.error.bind(console)` at line 153 of
   all three `public/litert/litert_wasm_*_internal.js`, which routes the WASM module's entire
-  stderr — where TFLite/XNNPACK write routine `INFO:` diagnostics.
+  stderr - where TFLite/XNNPACK write routine `INFO:` diagnostics.
 - Not fixed: it is vendored third-party runtime code. The cheap fix, if wanted, is ~3 lines in
   `scripts/copy-litert-wasm.mjs` to rewrite that line to `console.debug` while staging the files.
 
-### QA-APP-004 — Notification setting disabled without explanation — **FIXED (partly reclassified)**
+### QA-APP-004 - Notification setting disabled without explanation - **FIXED (partly reclassified)**
 
 - Severity: Medium
 - The `Switch` was **not** disabled. `settings-row.tsx` passed `disabled` whenever a row was
   non-interactive *as a row*, which react-native-web turns into `aria-disabled="true"` plus
-  `tabIndex=-1` — on every switch row **and** every informational row on the screen.
+  `tabIndex=-1` - on every switch row **and** every informational row on the screen.
 - Fix: stopped passing `disabled` for non-interactive-by-design rows (omitting `onPress` is
   enough); gave `Switch` an `accessibilityLabel` fed from the row label; and, since
   `expo-notifications` cannot schedule in a browser, the row now says so up front instead of
   offering a toggle that silently springs back.
 - Verified: `aria-disabled` nodes on Settings went 5 → **0**; the row reads
-  "Not available in the browser — use the SpotOn app to get re-screening reminders".
+  "Not available in the browser - use the SpotOn app to get re-screening reminders".
 
-### QA-APP-005 — Profile edit control lacks an accessible name — **FIXED**
+### QA-APP-005 - Profile edit control lacks an accessible name - **FIXED**
 
 - Severity: Medium · Confirmed: role but no label.
 - Fix: `accessibilityLabel={t("Edit profile")}`. Verified present.
 
-### QA-APP-007 — Directory listing display values — **SPLIT: partly fixed, partly deferred**
+### QA-APP-007 - Directory listing display values - **SPLIT: partly fixed, partly deferred**
 
 - `Photo:Cezanne Angel Cescar` → root cause 3; now `Photo: Cezanne Angel Cescar`.
 - `Mon–FriHours unavailable` → root cause 3, but a space alone still read as a claim about
@@ -179,7 +179,7 @@ artifacts rather than product bugs.
 - Rating without a review count → **deferred**: facilities have no `review_count` column
   (`src/data/db.ts`, `src/api/types.ts`); it exists only on doctor booking links. Backend change.
 
-### QA-APP-008 — Missing spaces in result screen text — **FIXED**
+### QA-APP-008 - Missing spaces in result screen text - **FIXED**
 
 - Severity: Medium · Root cause 3. Fixed at 20 sites across 11 files (the 4 reported plus 16 more
   in profile, follow-up confirm, capture, clinic/doctor detail, clinic cards, screening rows and
@@ -189,23 +189,23 @@ artifacts rather than product bugs.
 - Regression guard added: `npm run test:i18n-spacing` fails on any `{t("…")}{` join without a
   separator (with an allow-list for deliberate ones). Confirmed it catches a reintroduced defect.
 
-### QA-APP-009 — Questionnaire headings horizontally clipped — **FIXED**
+### QA-APP-009 - Questionnaire headings horizontally clipped - **FIXED**
 
-- Severity: High · Root cause 1 — not a text-style issue; the heading had no `numberOfLines` or
+- Severity: High · Root cause 1 - not a text-style issue; the heading had no `numberOfLines` or
   width constraint at all.
 - Verified: questionnaire pages are now `[430 × 8]` with no text crossing the shell edge.
 
-### QA-APP-010 — Report/share controls produce no visible feedback — **FIXED (reclassified)**
+### QA-APP-010 - Report/share controls produce no visible feedback - **FIXED (reclassified)**
 
 - Severity: Medium
 - Not "unsupported": `report-pdf.web.ts` deliberately routes **both** actions through the
   browser's print dialog. That dialog is browser chrome, not DOM, so an automated pass sees
-  nothing change — which is what was observed.
+  nothing change - which is what was observed.
 - Real gaps, now fixed: `Print` had no `loading` state (Share did); the primary action was
   labelled "Share or save" on a platform with no share sheet; and nothing told the user a print
   dialog would open. Web now shows "Save as PDF" plus an explanatory line.
 
-### QA-APP-011 — Image quality screen accepts blurry imagery — **DEFERRED**
+### QA-APP-011 - Image quality screen accepts blurry imagery - **DEFERRED**
 
 - Severity: Medium
 - Not actioned deliberately: the blur thresholds were **relaxed on purpose** in `6980aa7`
@@ -213,37 +213,37 @@ artifacts rather than product bugs.
   blind would undo a deliberate calibration. This needs real poor-quality photographs and the
   offline IQA eval harness, not a constant change.
 
-### QA-APP-012 / QA-APP-013 — Directory "Open Now" and sort controls inert — **NOT REPRODUCED**
+### QA-APP-012 / QA-APP-013 - Directory "Open Now" and sort controls inert - **NOT REPRODUCED**
 
 - Severity: High / Medium (as filed) · Reclassified
-- The filter and sort logic were already correct in source. Driving the live UI — with both a
-  real mouse click and a synthetic DOM click — both controls work:
+- The filter and sort logic were already correct in source. Driving the live UI - with both a
+  real mouse click and a synthetic DOM click - both controls work:
   - `Open Now`: 4 clinics (2 marked Closed) → **2 clinics, 0 Closed cards**.
   - Sort: `sorted by name` → `rating` → `name`.
 - A candidate cause (the bottom sheet's content-panning gesture swallowing taps on web) was
   implemented and then **reverted** when A/B testing showed the controls worked without it.
   Note "200 clinics" in the original report is the query's `limit`, not a stable count.
-- Only change kept: the `Open Now` chip label was untranslated, unlike its sibling — now `t(item)`.
+- Only change kept: the `Open Now` chip label was untranslated, unlike its sibling - now `t(item)`.
 
-### QA-APP-015 — Mobile Home content obscured by the bottom navigation — **FIXED**
+### QA-APP-015 - Mobile Home content obscured by the bottom navigation - **FIXED**
 
 - Severity: Medium · Confirmed: `home.tsx` hard-coded `paddingBottom: Space.giant` (64), and
-  Learn/Profile were worse at 20 — despite comments claiming to clear a ring that protrudes 30px.
+  Learn/Profile were worse at 20 - despite comments claiming to clear a ring that protrudes 30px.
   Nothing in the app read the tab bar's height.
 - Fix: `tab-bar.tsx` now exports `TabBarHeight` (66), `TabBarOverhang` (30) and
   `TabContentInset`, and the three tab screens use it.
 - Verified at 390×844: Home scroll content `paddingBottom: 96px`.
 
-### QA-APP-020 — Sign-out and re-login are slow — **DEFERRED**
+### QA-APP-020 - Sign-out and re-login are slow - **DEFERRED**
 
 - Severity: Low. Backend cold start (Render), not a frontend defect.
 
-### QA-APP-021 — Camera stuck on "Starting camera…" — **FIXED**
+### QA-APP-021 - Camera stuck on "Starting camera…" - **FIXED**
 
 - Severity: High
 - Confirmed and root-caused precisely: a *denied* prompt rejects immediately, but a **dismissed**
   one leaves `getUserMedia` **pending forever**. `capture.web.tsx` had no timers at all, and the
-  `Try again` button existed only in the `denied` branch — unreachable from `starting`.
+  `Try again` button existed only in the `denied` branch - unreachable from `starting`.
 - Fix: a 10s race on `getUserMedia` with a new `timeout` state offering `Try again` /
   `Upload a photo`; a late-arriving stream is stopped so the camera indicator does not stay lit;
   and `live` is now gated on a real first frame, since `play()` can reject silently under an
@@ -251,12 +251,12 @@ artifacts rather than product bugs.
 - Verified by stubbing `getUserMedia` to a never-settling promise: `Starting camera…` at 6s →
   `Camera didn't start` with working retry/upload by 13s. Previously it never recovered.
 
-### QA-APP-022 — Instructions/onboarding carousel uses full browser width — **FIXED**
+### QA-APP-022 - Instructions/onboarding carousel uses full browser width - **FIXED**
 
 - Severity: High · Root cause 1.
 - Fix: `AppMaxWidth` exported from `theme.ts`, new `useSurfaceWidth()` hook returning
   `min(windowWidth, AppMaxWidth)` on web, applied at all page-width sites. Derived rather than
-  measured deliberately — an `onLayout` provider reports 0 on first paint, and this value is
+  measured deliberately - an `onLayout` provider reports 0 on first paint, and this value is
   baked into `getItemLayout`, where a 0 breaks paging.
 - Verified: deployed build `[1280 × 5]` inside a 430px shell → local build `[430 × 5]`, with no
   text crossing the shell edge. Same for onboarding (`[430 × 4]`) and the questionnaire.
@@ -277,7 +277,7 @@ test:i18n-spacing   (new)  no missing separators after t() calls
 test:i18n-coverage  (new)  every t() key is translated (1223 catalog entries)
 ```
 
-**On the 25 lint errors — these are not release defects.** 24 of 25 are
+**On the 25 lint errors - these are not release defects.** 24 of 25 are
 `react-hooks/immutability` and `react-hooks/refs` firing on Reanimated shared values and Gesture
 worklets. A shared value is a native-backed handle, not React state; the codebase already
 documents this false positive inline (`body-viewer.tsx`, `_layout.tsx`). Silencing them with 25
@@ -289,7 +289,7 @@ effect dependency in `quality.tsx`, dead `MONTHS` in `profile-format.ts`, and tw
 imports that are Metro's asset mechanism and now carry a justified disable. Dead component
 `body-marker-view.tsx` (referenced nowhere) was deleted.
 
-`test:glyphs` was silently broken before this pass — it compiles with `--lib es2019` but
+`test:glyphs` was silently broken before this pass - it compiles with `--lib es2019` but
 `i18n/core.ts` (reached via `body-parts.ts`) uses `Object.hasOwn`, an ES2022 method. Every
 `test:*` script was moved to es2022 and the glyph script now rewrites emitted ESM specifiers for
 Node. The region↔glyph invariant is guarded again (30 regions).
@@ -299,16 +299,16 @@ Node. The region↔glyph invariant is guarded again (30 regions).
 ## Deferred, with rationale
 
 - **Accessible non-3D body-region picker (QA-APP-002).** The labelling half is done. A real
-  picker is a screen-level control and deserves its own pass — every ingredient exists
+  picker is a screen-level control and deserves its own pass - every ingredient exists
   (`BODY_PARTS`, `BodyGlyph`, the `BodyAreasBlock` grid, `SelectCard`'s radio semantics, the
   `ActionSheet` `body.tsx` already uses), and `test:glyphs` guards the invariant. It matters:
   `/scan/body`'s only non-3D path is `Skip`, which discards the body region that the report and
   history both depend on.
-- **LiteRT console noise (QA-APP-003)** — vendored third-party code; fix available on request.
-- **Facility review counts (QA-APP-007)** — no such column exists; backend/ingestion change.
-- **Image-quality thresholds (QA-APP-011)** — deliberately relaxed; needs real photos + the eval harness.
-- **Auth latency (QA-APP-020)** — backend cold start.
-- **i18n Priority 2/3** — the Screening Summary Report still needs the open decision from
+- **LiteRT console noise (QA-APP-003)** - vendored third-party code; fix available on request.
+- **Facility review counts (QA-APP-007)** - no such column exists; backend/ingestion change.
+- **Image-quality thresholds (QA-APP-011)** - deliberately relaxed; needs real photos + the eval harness.
+- **Auth latency (QA-APP-020)** - backend cold start.
+- **i18n Priority 2/3** - the Screening Summary Report still needs the open decision from
   `language-review/HANDOFF.md`: does the artefact a patient hands a doctor follow the app language?
 
 ## Issues found during this pass, not in the original report
@@ -316,10 +316,10 @@ Node. The region↔glyph invariant is guarded again (30 regions).
 - **The web build points at the production API.** `.env` sets
   `EXPO_PUBLIC_API_BASE_URL=https://spoton-api.onrender.com`, while
   `src/lib/secure-store.web.ts` carries an explicit warning in its own header: *"Do not point the
-  web build at production auth, and do not let it hold real patient data"* — because on web it
+  web build at production auth, and do not let it hold real patient data"* - because on web it
   stores access/refresh tokens and the cached profile (name, email, phone) as **plain-text
   localStorage**. Worth resolving before wider testing.
-- **Local web development cannot reach the API at all** — the API's CORS policy allows only the
+- **Local web development cannot reach the API at all** - the API's CORS policy allows only the
   Vercel origin, so `http://localhost:8082` gets `ERR_FAILED` on `/sync`. This pass worked around
   it with a fixture. Allowing localhost in the API's dev CORS config would remove real friction.
 - **Tab bar buttons have no `accessibilityLabel`** (they do have visible text, so this is minor).

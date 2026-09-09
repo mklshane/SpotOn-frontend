@@ -3,7 +3,7 @@
  *
  * The migrate() loop is NOT transactional and tolerates only the literal string "duplicate column",
  * so a database killed mid-upgrade has to recover on the next open. That property is invisible to
- * tsc and painful to discover in the field — a user whose upgrade was interrupted gets a database
+ * tsc and painful to discover in the field - a user whose upgrade was interrupted gets a database
  * that never converges. This replays the REAL SCHEMA / MIGRATION_V* strings (parsed out of db.ts,
  * never retyped) against an in-process SQLite and asserts:
  *
@@ -32,15 +32,15 @@ function check(name, cond, detail = '') {
   if (cond) {
     passed++;
   } else {
-    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
-    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+    failures.push(`${name}${detail ? ` - ${detail}` : ''}`);
+    console.log(`  FAIL ${name}${detail ? ` - ${detail}` : ''}`);
   }
 }
 
 // ---------------------------------------------------------------- parse db.ts
 /**
  * Read `const NAME = <template literal | array literal>;` out of the source.
- * `scope` supplies constants the literal references — MIGRATION_V4 is defined in terms of SCHEMA.
+ * `scope` supplies constants the literal references - MIGRATION_V4 is defined in terms of SCHEMA.
  */
 function grab(name, scope = {}) {
   const marker = `const ${name} = `;
@@ -131,7 +131,7 @@ INSERT INTO screenings VALUES
 const SEEDED_SCREENINGS = 3;
 /**
  * The schema version `V9_SCREENINGS` actually represents. Upgrade paths are only tested from
- * versions at or below this — claiming a higher starting version would skip the very migrations
+ * versions at or below this - claiming a higher starting version would skip the very migrations
  * this fixture still needs, and "test" a state that cannot exist in the field.
  * Bump this (and the DDL above) only when adding a fixture for a later version.
  */
@@ -170,7 +170,7 @@ function assertLinked(db, label, expectedScreenings = SEEDED_SCREENINGS) {
 console.log(`db.ts SCHEMA_VERSION = ${SCHEMA_VERSION}\n`);
 
 // 0) MIGRATION_V4 slices SCHEMA at the first occurrence of its marker text. Any earlier occurrence
-// — including inside a comment — silently truncates the replayed statement for v<4 upgrades.
+// - including inside a comment - silently truncates the replayed statement for v<4 upgrades.
 {
   const MARKER = 'CREATE TABLE IF NOT EXISTS screenings';
   const first = SCHEMA.indexOf(MARKER);
@@ -210,7 +210,7 @@ for (let from = 4; from <= FIXTURE_VERSION; from++) {
   db.close();
 }
 
-// 3) idempotent replay — opening an already-migrated database changes nothing
+// 3) idempotent replay - opening an already-migrated database changes nothing
 {
   const db = v9Database();
   apply(db, plan(FIXTURE_VERSION));
@@ -231,7 +231,7 @@ for (let from = 4; from <= FIXTURE_VERSION; from++) {
   for (let cut = 1; cut <= stmts.length; cut++) {
     const db = v9Database();
     try {
-      apply(db, stmts, cut); // interrupted upgrade — user_version never stamped
+      apply(db, stmts, cut); // interrupted upgrade - user_version never stamped
       apply(db, stmts); // next open replays from the same version
       const unlinked = count(db, 'SELECT COUNT(*) AS n FROM screenings WHERE lesion_id IS NULL');
       const lesions = count(db, 'SELECT COUNT(*) AS n FROM lesions');

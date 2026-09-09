@@ -41,7 +41,7 @@ const todayLabel = () => new Date().toLocaleDateString(getIntlLocale(), {
 });
 
 function formatActivityDate(value?: string): string {
-  if (!value) return '—';
+  if (!value) return '-';
   return new Date(value).toLocaleDateString(undefined, {
     month: 'long',
     day: 'numeric',
@@ -129,7 +129,7 @@ export default function HomeScreen() {
   const recent = entries.slice(0, 2);
   const lastScreening = entries[0];
 
-  // Archived spots are hidden but never deleted — same predicate the Spots list uses (all.tsx).
+  // Archived spots are hidden but never deleted - same predicate the Spots list uses (all.tsx).
   const spots = useMemo(
     () =>
       lesions
@@ -266,7 +266,7 @@ export default function HomeScreen() {
                 {'TOTAL\nSCREENINGS'}
               </ThemedText>
               <ThemedText type="title2" style={styles.activityValue}>
-                {loading ? '—' : entries.length}
+                {loading ? '-' : entries.length}
               </ThemedText>
               <ThemedText
                 type="footnote"
@@ -299,7 +299,7 @@ export default function HomeScreen() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.7}
                 style={styles.activityValue}>
-                {loading ? '—' : formatActivityDate(lastScreening?.createdAt)}
+                {loading ? '-' : formatActivityDate(lastScreening?.createdAt)}
               </ThemedText>
               <ThemedText
                 type="footnote"
@@ -319,7 +319,7 @@ export default function HomeScreen() {
           {entries.length > recent.length ? (
             <Pressable
               hitSlop={8}
-              // Lands on "All scans" rather than the screen's default "Spots" tab — a "See all"
+              // Lands on "All scans" rather than the screen's default "Spots" tab - a "See all"
               // beside a list of screenings should open the list of screenings.
               onPress={() => router.push({ pathname: '/scan/all', params: { tab: 'scans' } })}
               accessibilityRole="button"
@@ -362,7 +362,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Tracked spots — the repeat-check loop tracking exists for, which until now was only
+        {/* Tracked spots - the repeat-check loop tracking exists for, which until now was only
             reachable by digging into /scan/all. Hidden entirely when empty: every scan mints a
             lesion, so "screenings but no spots" isn't a state worth an empty card. */}
         {spots.length > 0 ? (
@@ -418,7 +418,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.xl,
-    // Clears the tab bar and the Scan ring protruding from it — see TabContentInset.
+    // Clears the tab bar and the Scan ring protruding from it - see TabContentInset.
     paddingBottom: TabContentInset,
   },
   header: {

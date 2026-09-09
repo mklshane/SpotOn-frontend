@@ -83,7 +83,7 @@ export default function AnalysisScreen() {
   const [statusIdx, setStatusIdx] = useState(0);
   // Dev-only diagnostic: which step failed (ClassifierError kind + message + cause).
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  /** Distinguishes "the save failed" from "the analysis failed" — very different for the user. */
+  /** Distinguishes "the save failed" from "the analysis failed" - very different for the user. */
   const [saveFailed, setSaveFailed] = useState(false);
   // Snapshot the low-confidence output so "continue anyway" works even after
   // beginRescan clears the session's run state.
@@ -133,14 +133,14 @@ export default function AnalysisScreen() {
       });
       s.reset();
       // `from: 'scan'` tells the result screen it is the END of a capture run rather than a row
-      // someone tapped in a list. Back from here must LEAVE the flow — every screen underneath
+      // someone tapped in a list. Back from here must LEAVE the flow - every screen underneath
       // (followup-confirm, capture, crop, quality, questionnaire) belongs to a session that has
       // just been reset, so popping into them shows empty states. See result.tsx `exitFlow`.
       router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
     } catch (e) {
       // NOT the same failure as "we couldn't analyze": by this point classification has already
       // succeeded and only the save threw. Saying "something went wrong while analyzing … your
-      // answers are saved" was doubly wrong — nothing was wrong with the analysis, and the
+      // answers are saved" was doubly wrong - nothing was wrong with the analysis, and the
       // answers were precisely what did not save. db.ts now degrades to an in-memory database
       // rather than throwing, so reaching here means something else broke.
       console.warn('[analysis] persist failed', e);
@@ -156,13 +156,13 @@ export default function AnalysisScreen() {
   /**
    * Nothing to analyse. The questionnaire now refuses to route here without a photo, so this is a
    * backstop for any other path that might: `getClassification()` would throw 'classification
-   * never started', and the resulting error state is a trap — its "Try again" calls
+   * never started', and the resulting error state is a trap - its "Try again" calls
    * `retryClassification`, which returns early on an empty URI list, and back is blocked on this
    * screen. Leaving instead of failing keeps the session (and the user's answers) alive.
    */
   useEffect(() => {
     if (session.images.length > 0 || session.imageUri) return;
-    console.warn('[analysis] reached with no photo — returning to the capture step');
+    console.warn('[analysis] reached with no photo - returning to the capture step');
     if (router.canGoBack()) router.back();
     else router.replace(session.followUp ? '/scan/followup-confirm' : '/scan/body');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -179,7 +179,7 @@ export default function AnalysisScreen() {
         if (!alive) return;
         // Independent readability checks: confidence (Safety Floor), framing stability (scale
         // check), and cross-image agreement. Any one failing routes to a rescan, then to the
-        // Moderate floor. The agreement check is off by default — it is recorded on every record
+        // Moderate floor. The agreement check is off by default - it is recorded on every record
         // either way, but the measured flag-rate/accuracy trade did not justify the friction
         // (model-config IMAGE_AGREEMENT_CHECK_ENABLED, synth/eval/MULTIVIEW_EVAL.md).
         const verdict = combineReadability(
@@ -222,7 +222,7 @@ export default function AnalysisScreen() {
   async function repickFromGallery() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) return;
-    // Send to our crop screen (with the lesion-framing guide) rather than the OS cropper — a
+    // Send to our crop screen (with the lesion-framing guide) rather than the OS cropper - a
     // too-wide rescan is exactly what got us here.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images',
@@ -253,8 +253,8 @@ export default function AnalysisScreen() {
   }
 
   // Android back is swallowed here, the same way `gestureEnabled: false` swallows the iOS swipe.
-  // While analysing there is nothing valid to go back TO — the screens underneath belong to a run
-  // that is mid-flight — and in the retake/error states the way out is one of this screen's own
+  // While analysing there is nothing valid to go back TO - the screens underneath belong to a run
+  // that is mid-flight - and in the retake/error states the way out is one of this screen's own
   // buttons, each of which says what it discards. A silent pop would throw the photo and answers
   // away without asking.
   useBlockAndroidBack();
@@ -325,7 +325,7 @@ export default function AnalysisScreen() {
             <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
               {saveFailed
                 ? t("The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.")
-                : t("Something went wrong while analyzing on your device. Your answers are saved — you can try again, or come back later.")}</ThemedText>
+                : t("Something went wrong while analyzing on your device. Your answers are saved - you can try again, or come back later.")}</ThemedText>
             {isDebug() && errorDetail ? (
               <ThemedText type="footnote" themeColor="muted" style={styles.center}>
                 {errorDetail}

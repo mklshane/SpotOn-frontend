@@ -4,7 +4,7 @@
  *
  * capture.tsx had no automated coverage at all, and the coordinate mapping is the highest-risk
  * untested code in the app: a sign error there does not throw or look broken, it silently crops
- * off-target and quietly degrades every classification. Nothing downstream can detect it — which is
+ * off-target and quietly degrades every classification. Nothing downstream can detect it - which is
  * exactly why it is asserted here as an algebraic round-trip rather than eyeballed on a phone.
  *
  * Run:  npm run test:capture
@@ -41,7 +41,7 @@ const boxNear = (a, b, eps = 1e-9) =>
 /* ------------------------------------------------------------------ coaching */
 const M = (o = {}) => ({ cx: 0.5, cy: 0.5, w: 0.4, h: 0.4, locked: true, stable: true, ...o });
 
-// Lighting and focus outrank position — there is no point asking someone to centre a spot they
+// Lighting and focus outrank position - there is no point asking someone to centre a spot they
 // cannot see, and stacked messages are worse than one.
 for (const [gate, expected] of [[GATE_DARK, 'dark'], [GATE_BLURRY, 'blurry']]) {
   check(`gate ${expected} outranks framing`, computeCoach(true, gate, M({ cx: 0.9, w: 0.01 })) === expected);
@@ -82,7 +82,7 @@ const run = (inputs) => {
   return { state: s, seen };
 };
 
-// A weak box can never START a track, however long it persists — that is the CREATE bar.
+// A weak box can never START a track, however long it persists - that is the CREATE bar.
 {
   const { seen } = run(Array.from({ length: 20 }, () => ({ score: CREATE_SCORE - 0.01 })));
   check('weak detections never start a track', seen.every((r) => !r.visible));
@@ -148,7 +148,7 @@ check('sub-deadband move is suppressed', applyDeadband(0.5 + DEADBAND / 2, 0.5, 
 check('real move passes through', near(applyDeadband(0.5 + DEADBAND * 2, 0.5, DEADBAND), 0.5 + DEADBAND * 2));
 check('no previous value → accept', applyDeadband(0.42, null, DEADBAND) === 0.42);
 check('deadband is symmetric', applyDeadband(0.5 - DEADBAND / 2, 0.5, DEADBAND) === 0.5);
-// Repeated sub-threshold nudges must not accumulate — that is the creep this exists to stop.
+// Repeated sub-threshold nudges must not accumulate - that is the creep this exists to stop.
 {
   let v = 0.5;
   for (let i = 0; i < 500; i++) v = applyDeadband(v + DEADBAND * 0.4, v, DEADBAND);
@@ -167,7 +167,7 @@ const BOXES = [
 ];
 
 // Round-trip: translate out and back, and you must land exactly where you started. This is what
-// catches a sign error or a swapped dimension — the failure mode that otherwise shows up only as
+// catches a sign error or a swapped dimension - the failure mode that otherwise shows up only as
 // "the model seems worse than it should be".
 let rtCrop = 0, rtPreview = 0;
 for (const [fw, fh] of FRAMES) {
@@ -206,12 +206,12 @@ for (const [fw, fh] of FRAMES) {
   check('crop undo compresses height on a portrait frame', top.h < 0.1);
   check('crop undo leaves width alone', near(top.w, 0.1));
 }
-// A square frame has no crop band to undo — the mapping must be the identity.
+// A square frame has no crop band to undo - the mapping must be the identity.
 check('square frame is an identity crop', boxNear(modelCropToFullFrame(BOXES[1], 1440, 1440), BOXES[1]));
 
 // Axis independence: move the lesion in ONE axis and only that axis may respond. Moving both at
 // once (as a naive monotonicity check does) is passed by a cx/cy swap, so it has to be one at a
-// time — a swapped axis is a real failure mode that still round-trips on square-ish shapes.
+// time - a swapped axis is a real failure mode that still round-trips on square-ish shapes.
 {
   let ok = 0, total = 0;
   for (const [fw, fh] of FRAMES) for (const [sw, sh] of SCREENS) {

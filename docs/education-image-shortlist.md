@@ -76,8 +76,8 @@ Licence **CC-0**.
 | `scc-example` | ISIC_0024211 | Squamous cell carcinoma, NOS |
 | `melanoma-example` | ISIC_0024292 | Melanoma, invasive |
 
-Alternates: BCC — ISIC_0024221, ISIC_0024224, ISIC_0024230, ISIC_0024250.
-SCC — ISIC_0024212, ISIC_0024223, ISIC_0024225, ISIC_0024237.
+Alternates: BCC - ISIC_0024221, ISIC_0024224, ISIC_0024230, ISIC_0024250.
+SCC - ISIC_0024212, ISIC_0024223, ISIC_0024225, ISIC_0024237.
 
 ## Two slots I could not fill
 
@@ -104,7 +104,7 @@ recorded diameter above 6 mm would be the cleaner choice. Finding one needs anot
 query, because the API rejects range syntax (`[6 TO 20]` and `>6` both return HTTP
 400), so it has to be done by checking candidates individually.
 
-### `abcde-evolving-earlier` / `abcde-evolving-later` — RESOLVED
+### `abcde-evolving-earlier` / `abcde-evolving-later` - RESOLVED
 
 **Filled from outside ISIC**, as expected. ISIC holds single images per lesion, so
 no dated same-lesion pair was findable there.
@@ -235,7 +235,7 @@ Two consequences worth recording:
 
 **The four melanoma subtypes are no longer dermoscopic.** ISIC only labels
 melanoma subtype on dermoscopic images, so those four slots previously showed a
-magnified instrument view — accurate, but not what a reader sees in a mirror.
+magnified instrument view - accurate, but not what a reader sees in a mirror.
 The replacements are clinical, so `modality: 'dermoscopic'` was dropped from all
 four and the frame no longer carries the dermoscopy caveat. Alt text was
 rewritten to describe the lesion rather than the instrument.
@@ -251,9 +251,9 @@ the replacements have been reviewed on device.
 
 ### Provenance: DDI and SCIN
 
-The nine come from two datasets — [DDI](https://ddi-dataset.github.io/) (Stanford
+The nine come from two datasets - [DDI](https://ddi-dataset.github.io/) (Stanford
 Medicine) and [SCIN](https://github.com/google-research-datasets/scin) (Google
-Health with Stanford Medicine) — and which image came from which was not recorded.
+Health with Stanford Medicine) - and which image came from which was not recorded.
 All nine therefore share one `DATASET_CREDIT` naming both, rather than either being
 guessed at per image. That credit carries no `url`, since no single page would be
 honest to link to; `ImageCredit.url` was made optional and such rows render as plain
@@ -284,7 +284,7 @@ Three ways out, in order of effort:
    clear immediately, and only the DDI ones need handling.
 2. Request written permission from Stanford (roxanad@stanford.edu is the contact on
    the DDI page) for the DDI images used.
-3. Replace the DDI ones. SCIN alone, or ISIC, can cover most of these slots — the
+3. Replace the DDI ones. SCIN alone, or ISIC, can cover most of these slots - the
    melanoma subtypes are the hard case, which is what pushed them to dermoscopic
    ISIC images in the first place.
 

@@ -10,7 +10,7 @@ import { useSyncExternalStore } from 'react';
  * tuning for the worst device and making good ones feel sluggish, the camera reads this tier and
  * scales its cadence, its analysis resolution, and its decorative animations.
  *
- * Deliberately two-valued. A finer scale would imply a precision we can't justify — `totalMemory`
+ * Deliberately two-valued. A finer scale would imply a precision we can't justify - `totalMemory`
  * and `deviceYearClass` are the only signals available before the camera starts, and neither
  * measures the thing we actually care about (sustained CPU under thermal load).
  */
@@ -20,7 +20,7 @@ const GB = 1024 * 1024 * 1024;
 
 /**
  * Below this reported RAM the device is treated as low-end. Note Android's `totalMem` reports
- * what the kernel can address, which lands a few hundred MB *under* the nominal spec — so a
+ * what the kernel can address, which lands a few hundred MB *under* the nominal spec - so a
  * phone marketed as "4 GB" reports ~3.7 GB and correctly falls on the low side of this line.
  * iOS reports `physicalMemory` exactly, so a 4 GB iPhone sits on the high side.
  */
@@ -54,7 +54,7 @@ export function getDeviceTier(): DeviceTier {
   return override ?? detected;
 }
 
-/** What the hardware actually reports, ignoring any override — for the dev HUD. */
+/** What the hardware actually reports, ignoring any override - for the dev HUD. */
 export const DETECTED_TIER: DeviceTier = detected;
 
 /**
@@ -75,7 +75,7 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-/** Reactive tier — re-renders when a dev override flips it. */
+/** Reactive tier - re-renders when a dev override flips it. */
 export function useDeviceTier(): DeviceTier {
   return useSyncExternalStore(subscribe, getDeviceTier, getDeviceTier);
 }

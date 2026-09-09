@@ -1,6 +1,6 @@
 import { t, useLocale } from '@/lib/i18n';
 /**
- * Web capture — still photo instead of the live frame-processor viewfinder.
+ * Web capture - still photo instead of the live frame-processor viewfinder.
  *
  * The native screen (capture.tsx) runs the YOLO detector on every camera frame through
  * VisionCamera frame processors and react-native-worklets-core, neither of which exists on web.
@@ -8,7 +8,7 @@ import { t, useLocale } from '@/lib/i18n';
  * the *existing* still pipeline do the work: classify.ts runs the detector on the captured image
  * via lesion-detector.ts, and falls back to full-frame + DoG zoom refinement when no box is found.
  *
- * That is not a special web-only path — it is exactly what a native capture does when the live
+ * That is not a special web-only path - it is exactly what a native capture does when the live
  * detector doesn't fire (about 9.5% of stills with y11n_v1). So the triage answer a web tester
  * gets is produced by the same code as on the phone. What they don't exercise is the framing
  * coach, so framing-UX feedback from web does not transfer to the native capture experience.
@@ -43,7 +43,7 @@ const MAX_ZOOM = 4;
  * How long to wait for getUserMedia before giving up.
  *
  * A *denied* prompt rejects immediately, but a *dismissed* one (Esc, ignored, tab blurred
- * before answering) leaves the promise pending forever — which stranded the screen on
+ * before answering) leaves the promise pending forever - which stranded the screen on
  * "Starting camera…" with a permanently disabled shutter and no way back.
  */
 const CAMERA_START_TIMEOUT_MS = 10_000;
@@ -52,8 +52,8 @@ const FIRST_FRAME_TIMEOUT_MS = 4_000;
 const TIMED_OUT = '__spoton_camera_timeout__';
 
 /**
- * Resolve once the video reports real dimensions. play() can reject under an autoplay policy —
- * we swallow that — leaving a 0x0 element; going 'live' on one arms a shutter that shoot()
+ * Resolve once the video reports real dimensions. play() can reject under an autoplay policy -
+ * we swallow that - leaving a 0x0 element; going 'live' on one arms a shutter that shoot()
  * silently drops, so the preview has to prove itself first.
  */
 function waitForFirstFrame(video: HTMLVideoElement): Promise<boolean> {
@@ -91,7 +91,7 @@ export default function CaptureWebScreen() {
   const [guide, setGuide] = useState(true);
   /**
    * Digital zoom, 1–4x. Applied by cropping the source rect at capture time, so the model sees
-   * the zoomed frame rather than just the user seeing a bigger preview — a lesion framed at 3x
+   * the zoomed frame rather than just the user seeing a bigger preview - a lesion framed at 3x
    * really does arrive larger in the pixels the classifier reads.
    *
    * Deliberately NOT the MediaStreamTrack `zoom` constraint: WebKit does not expose it, and every
@@ -122,7 +122,7 @@ export default function CaptureWebScreen() {
    *
    * Inlined rather than called out to a helper so every setState lands in a promise
    * continuation: React's lint rules reject a synchronous setState reached directly from an
-   * effect body, and rightly — the state here is only ever known after getUserMedia resolves.
+   * effect body, and rightly - the state here is only ever known after getUserMedia resolves.
    */
   useEffect(() => {
     if (status === 'unavailable' && attempt === 0) return; // no camera API at all
@@ -230,7 +230,7 @@ export default function CaptureWebScreen() {
     const track = streamRef.current?.getVideoTracks()[0];
     if (!track || !caps.torch) return;
     track
-      // `torch` is likewise non-standard — Chromium-only in practice.
+      // `torch` is likewise non-standard - Chromium-only in practice.
       .applyConstraints({ advanced: [{ torch: torchOn }] } as unknown as MediaTrackConstraints)
       .catch(() => { /* torch can fail while the camera is warming up */ });
   }, [torchOn, caps.torch]);
@@ -245,7 +245,7 @@ export default function CaptureWebScreen() {
       const vh = video.videoHeight;
       if (!vw || !vh) return;
       // Digital zoom = take a centred sub-rect of the frame. The output stays the same size, so
-      // the lesion occupies more pixels — which is the whole point, since the classifier crops
+      // the lesion occupies more pixels - which is the whole point, since the classifier crops
       // from this image. `native` already applied optical zoom on top where it was supported.
       const z = Math.max(1, Math.min(zoom, MAX_ZOOM));
       const sw = vw / z;
@@ -294,7 +294,7 @@ export default function CaptureWebScreen() {
   }
 
   if (status === 'denied' || status === 'unavailable' || status === 'timeout') {
-    // 'unavailable' is the only one retrying can't help with — there is no camera to reach.
+    // 'unavailable' is the only one retrying can't help with - there is no camera to reach.
     const canRetry = status !== 'unavailable';
     const title =
       status === 'denied'
@@ -306,7 +306,7 @@ export default function CaptureWebScreen() {
       status === 'denied'
         ? t("SpotOn uses your camera to capture the skin spot for triage. Allow camera access in your browser, then try again.")
         : status === 'timeout'
-          ? t("Your browser never answered the camera permission prompt. Look for a blocked-camera icon in the address bar, then try again — or upload a photo instead.")
+          ? t("Your browser never answered the camera permission prompt. Look for a blocked-camera icon in the address bar, then try again - or upload a photo instead.")
           : t("This device or browser has no camera SpotOn can use. You can still upload a photo instead.");
     return (
       <View style={[styles.black, styles.permission, { paddingTop: insets.top + Space.huge }]}>
@@ -381,7 +381,7 @@ export default function CaptureWebScreen() {
           {t("Instructions")}</ThemedText>
       </Pressable>
 
-      {/* Zoom — always available: it is a canvas crop, so it works even on iOS where the
+      {/* Zoom - always available: it is a canvas crop, so it works even on iOS where the
           MediaStreamTrack zoom constraint does not exist. */}
       {status === 'live' ? (
         <View style={[styles.zoomBar, { bottom: insets.bottom + 132 }]}>

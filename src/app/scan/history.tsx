@@ -13,7 +13,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useScanHistory } from '@/lib/scan-history';
 
 /**
- * The body model, one marker per TRACKED LESION rather than per screening — so three re-checks of
+ * The body model, one marker per TRACKED LESION rather than per screening - so three re-checks of
  * one mole are one dot with a history, not three dots stacked on each other. Markers are tinted by
  * the lesion's latest tier, which makes the model read as a risk map at a glance.
  *
@@ -82,10 +82,10 @@ export default function BodyLesionsScreen() {
           {loading
             ? ' '
             : loadError
-              ? 'We couldn’t open your saved spots. They are still on this device — close the app and open it again.'
+              ? 'We couldn’t open your saved spots. They are still on this device - close the app and open it again.'
               : tracked.length === 0
                 ? entries.length > 0
-                  ? 'Your screenings aren’t placed on the body yet — mark a location when you scan.'
+                  ? 'Your screenings aren’t placed on the body yet - mark a location when you scan.'
                   : 'Scan a spot to start tracking it here.'
                 : `Drag to rotate · pinch to zoom · tap a spot to see how it has changed${
                     unplaced > 0 ? ` · ${unplaced} without a marked location` : ''

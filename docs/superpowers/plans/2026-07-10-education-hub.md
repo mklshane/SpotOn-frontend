@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the placeholder "Learn" tab with a real Education Hub — a topic list, sub-list
+**Goal:** Replace the placeholder "Learn" tab with a real Education Hub - a topic list, sub-list
 screens for topics with multiple articles, article detail screens, and a coming-soon placeholder
-for the future Questionnaire — per `docs/superpowers/specs/2026-07-10-education-hub-design.md`.
+for the future Questionnaire - per `docs/superpowers/specs/2026-07-10-education-hub-design.md`.
 
-**Architecture:** All content is static TypeScript data (`src/data/learn-content.ts`) — no
+**Architecture:** All content is static TypeScript data (`src/data/learn-content.ts`) - no
 backend, no SQLite, no sync. A new `src/app/learn/` route group holds the sub-list/article/
 questionnaire screens; the tab root (`src/app/(tabs)/learn.tsx`) is replaced with the real hub.
 One new shared component, `TopicRow`, is reused by both the hub and the sub-list screen.
@@ -17,14 +17,14 @@ One new shared component, `TopicRow`, is reused by both the hub and the sub-list
 
 ## Before you start
 
-**No test runner in this project** — verification is `npx tsc --noEmit` and `npx expo lint`,
+**No test runner in this project** - verification is `npx tsc --noEmit` and `npx expo lint`,
 same convention as the Directory feature.
 
 **One deliberate deviation from the design spec, decided during planning, not implementation:**
 the spec's §2 "Coming soon" screen said it would "reuse `ScreenPlaceholder`... wrapped in the
 same header pattern." `ScreenPlaceholder` renders its own full `<Screen>` internally, so wrapping
 it in a separate header would mean nesting two `Screen`s and absolutely-positioning the header on
-top with a hardcoded offset — fragile and against this codebase's "no arbitrary values" rule.
+top with a hardcoded offset - fragile and against this codebase's "no arbitrary values" rule.
 Task 6 below builds the coming-soon screen directly (manual header + centered icon/title/
 subtitle/badge, the same visual content `ScreenPlaceholder` would have shown) instead. Same look,
 cleaner structure.
@@ -34,12 +34,12 @@ cleaner structure.
 ## File structure
 
 **New:**
-- `src/data/learn-content.ts` — all topic/article content + `getTopic`/`getArticle` lookups
-- `src/components/learn/TopicRow.tsx` — the icon+title+subtitle+chevron row, shared by hub + sub-list
+- `src/data/learn-content.ts` - all topic/article content + `getTopic`/`getArticle` lookups
+- `src/components/learn/TopicRow.tsx` - the icon+title+subtitle+chevron row, shared by hub + sub-list
 - `src/app/learn/_layout.tsx`
-- `src/app/learn/topic.tsx` — sub-list screen
-- `src/app/learn/article.tsx` — article detail screen
-- `src/app/learn/questionnaire.tsx` — coming-soon placeholder
+- `src/app/learn/topic.tsx` - sub-list screen
+- `src/app/learn/article.tsx` - article detail screen
+- `src/app/learn/questionnaire.tsx` - coming-soon placeholder
 
 **Modify:**
 - `src/components/ui/icon.tsx` (3 new `VECTOR_MAP` entries)
@@ -56,7 +56,7 @@ cleaner structure.
 
 - [ ] **Step 1: Add 3 new `VECTOR_MAP` entries**
 
-In `src/components/ui/icon.tsx`, insert into `VECTOR_MAP` (anywhere — e.g. after the `// directory` group):
+In `src/components/ui/icon.tsx`, insert into `VECTOR_MAP` (anywhere - e.g. after the `// directory` group):
 
 ```ts
   // learn
@@ -101,19 +101,19 @@ export const LEARN_TOPICS: Topic[] = [
       sections: [
         {
           paragraphs: [
-            'Skin cancer happens when skin cells grow abnormally, usually because of damage from ultraviolet (UV) light — most often from the sun, but tanning beds too. It is the most common type of cancer worldwide, and also one of the most treatable when caught early.',
+            'Skin cancer happens when skin cells grow abnormally, usually because of damage from ultraviolet (UV) light - most often from the sun, but tanning beds too. It is the most common type of cancer worldwide, and also one of the most treatable when caught early.',
           ],
         },
         {
           heading: 'Why early detection matters',
           paragraphs: [
-            'Most skin cancers develop slowly and visibly, on skin you can see and check yourself. Spotting a change early — before it grows or spreads — usually means simpler treatment and better outcomes.',
+            'Most skin cancers develop slowly and visibly, on skin you can see and check yourself. Spotting a change early - before it grows or spreads - usually means simpler treatment and better outcomes.',
           ],
         },
         {
           heading: "SpotOn's role",
           paragraphs: [
-            'SpotOn helps you track spots on your skin over time and get an early, informal read on whether a spot looks worth showing a doctor. It is a screening aid, not a diagnosis — always follow up with a dermatologist for anything that concerns you.',
+            'SpotOn helps you track spots on your skin over time and get an early, informal read on whether a spot looks worth showing a doctor. It is a screening aid, not a diagnosis - always follow up with a dermatologist for anything that concerns you.',
           ],
         },
       ],
@@ -140,7 +140,7 @@ export const LEARN_TOPICS: Topic[] = [
           {
             heading: 'Risk level',
             paragraphs: [
-              'The most common and least dangerous type — it grows slowly and rarely spreads beyond the skin, but can damage surrounding tissue if left untreated.',
+              'The most common and least dangerous type - it grows slowly and rarely spreads beyond the skin, but can damage surrounding tissue if left untreated.',
             ],
           },
           {
@@ -180,13 +180,13 @@ export const LEARN_TOPICS: Topic[] = [
           {
             heading: 'What it looks like',
             paragraphs: [
-              'A new or changing mole — often asymmetric, with an irregular border, uneven color, and larger than a pencil eraser. See the ABCDE rule for the full checklist.',
+              'A new or changing mole - often asymmetric, with an irregular border, uneven color, and larger than a pencil eraser. See the ABCDE rule for the full checklist.',
             ],
           },
           {
             heading: 'Risk level',
             paragraphs: [
-              'The least common but most serious type — it can spread to other parts of the body if not caught early, so prompt evaluation matters most here.',
+              'The least common but most serious type - it can spread to other parts of the body if not caught early, so prompt evaluation matters most here.',
             ],
           },
           {
@@ -285,7 +285,7 @@ export const LEARN_TOPICS: Topic[] = [
         },
         {
           heading: 'Timing',
-          paragraphs: ['UV rays are strongest between 10am and 4pm — seek shade during peak hours when possible.'],
+          paragraphs: ['UV rays are strongest between 10am and 4pm - seek shade during peak hours when possible.'],
         },
         {
           heading: 'Regular self-checks',
@@ -352,7 +352,7 @@ export function getArticle(topicId: string, articleId?: string): Article | undef
 
 - [ ] **Step 3: Verify**
 
-Run: `npx tsc --noEmit` — expected: no errors (this file has no consumers yet, so nothing else can break; it must be internally type-correct on its own).
+Run: `npx tsc --noEmit` - expected: no errors (this file has no consumers yet, so nothing else can break; it must be internally type-correct on its own).
 
 - [ ] **Step 4: Commit**
 
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
 
 - [ ] **Step 2: Verify**
 
-Run: `npx tsc --noEmit` — expected: no errors.
+Run: `npx tsc --noEmit` - expected: no errors.
 
 - [ ] **Step 3: Commit**
 
@@ -487,15 +487,15 @@ const styles = StyleSheet.create({
 });
 ```
 
-Note: `router.push` here targets `/learn/article`, `/learn/topic`, `/learn/questionnaire` — none
+Note: `router.push` here targets `/learn/article`, `/learn/topic`, `/learn/questionnaire` - none
 of these routes exist until Tasks 4-6 land, so `npx tsc --noEmit` will show typed-route errors
 after this task, same pattern as the Directory feature's mid-sequence route references. This is
 expected and resolves once Task 6 finishes.
 
 - [ ] **Step 2: Verify**
 
-Run: `npx tsc --noEmit` — expected: errors about `/learn/article`, `/learn/topic`,
-`/learn/questionnaire` not being valid routes yet (expected, see note above) — confirm there are
+Run: `npx tsc --noEmit` - expected: errors about `/learn/article`, `/learn/topic`,
+`/learn/questionnaire` not being valid routes yet (expected, see note above) - confirm there are
 no OTHER errors.
 
 - [ ] **Step 3: Commit**
@@ -580,8 +580,8 @@ const styles = StyleSheet.create({
 
 - [ ] **Step 2: Verify**
 
-Run: `npx tsc --noEmit` — expected: the `/learn/article` reference in this file will also show as
-an unresolved typed route until Task 5 lands (same expected-transient pattern) — confirm no other
+Run: `npx tsc --noEmit` - expected: the `/learn/article` reference in this file will also show as
+an unresolved typed route until Task 5 lands (same expected-transient pattern) - confirm no other
 new errors beyond the ones already expected from Task 3.
 
 - [ ] **Step 3: Commit**
@@ -677,8 +677,8 @@ const styles = StyleSheet.create({
 
 - [ ] **Step 2: Verify**
 
-Run: `npx tsc --noEmit` — expected: only the `/learn/questionnaire` reference (Task 3) still
-unresolved (Task 6 not done yet) — confirm no other new errors.
+Run: `npx tsc --noEmit` - expected: only the `/learn/questionnaire` reference (Task 3) still
+unresolved (Task 6 not done yet) - confirm no other new errors.
 
 - [ ] **Step 3: Commit**
 
@@ -786,9 +786,9 @@ In `src/app/_layout.tsx`, add `<Stack.Screen name="learn" />` after `<Stack.Scre
 
 - [ ] **Step 4: Verify**
 
-Run: `npx tsc --noEmit` — expected: **zero errors project-wide** (this is the last task; every
+Run: `npx tsc --noEmit` - expected: **zero errors project-wide** (this is the last task; every
 `/learn/...` route reference from Tasks 3-5 now resolves).
-Run: `npx expo lint` — expected: clean on every file this feature touched (pre-existing,
+Run: `npx expo lint` - expected: clean on every file this feature touched (pre-existing,
 unrelated repo lint debt in other files is not in scope).
 
 - [ ] **Step 5: Commit**
@@ -804,9 +804,9 @@ git commit -m "feat(learn): add coming-soon screen and register the learn detail
 
 **Files:** none (verification only)
 
-- [ ] **Step 1:** `npx tsc --noEmit` — zero errors.
-- [ ] **Step 2:** `npx expo lint` — clean on all `learn`-related files.
-- [ ] **Step 3:** `npx expo export --platform ios` — bundles cleanly (JS-level proof every new
+- [ ] **Step 1:** `npx tsc --noEmit` - zero errors.
+- [ ] **Step 2:** `npx expo lint` - clean on all `learn`-related files.
+- [ ] **Step 3:** `npx expo export --platform ios` - bundles cleanly (JS-level proof every new
   route/import resolves).
 - [ ] **Step 4 (manual, on a device/simulator/emulator):** Learn tab shows all 7 topics → tapping
   "Types of Skin Cancer" shows BCC/SCC/Melanoma → tapping one opens its article with hero icon,

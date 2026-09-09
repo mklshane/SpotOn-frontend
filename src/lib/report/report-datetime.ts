@@ -2,7 +2,7 @@
  * Date/time labels for the Screening Summary Report, in Philippine time.
  *
  * Deliberately Intl-free. `toLocaleString(…, { timeZone: 'Asia/Manila' })` depends on the
- * ICU data bundled with the JS engine — Hermes on Android ships a reduced set and can
+ * ICU data bundled with the JS engine - Hermes on Android ships a reduced set and can
  * silently ignore the zone. The Philippines has never observed DST in the app's lifetime,
  * so a fixed +08:00 shift is exact rather than an approximation.
  */
@@ -35,14 +35,14 @@ function toPht(iso: string): Date | null {
 /** ISO instant -> "May 13, 2026". */
 export function phtDateLabel(iso: string): string {
   const d = toPht(iso);
-  if (!d) return '—';
+  if (!d) return '-';
   return t('{{month}} {{day}}, {{year}}', { month: t(MONTHS_SHORT[d.getUTCMonth()]), day: d.getUTCDate(), year: d.getUTCFullYear() });
 }
 
 /** ISO instant -> "09:42 AM PHT". */
 export function phtTimeLabel(iso: string): string {
   const d = toPht(iso);
-  if (!d) return '—';
+  if (!d) return '-';
   const h24 = d.getUTCHours();
   const meridiem = h24 < 12 ? 'AM' : 'PM';
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;

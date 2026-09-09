@@ -1,5 +1,5 @@
 /**
- * Web stand-in for expo-secure-store — localStorage, which is NOT secure storage.
+ * Web stand-in for expo-secure-store - localStorage, which is NOT secure storage.
  *
  * expo-secure-store has no web implementation: there is no browser equivalent of the iOS
  * Keychain, so anything stored here is readable by any script on the origin and survives in
@@ -7,7 +7,7 @@
  *
  * THIS IS ACCEPTABLE ONLY BECAUSE THE WEB BUILD EXISTS FOR REMOTE UX TESTING WITH THROWAWAY
  * ACCOUNTS. Do not point the web build at production auth, and do not let it hold real patient
- * data — auth-api.ts puts access/refresh tokens and the cached profile (name, email, phone)
+ * data - auth-api.ts puts access/refresh tokens and the cached profile (name, email, phone)
  * through here, all of which app.json declares as collected personal data.
  *
  * Keys are namespaced so they can't collide with anything else the origin stores.
@@ -43,6 +43,6 @@ export async function deleteItemAsync(key: string): Promise<void> {
   try {
     store()?.removeItem(NS + key);
   } catch {
-    // Nothing to do — a key we can't remove is a key we probably never wrote.
+    // Nothing to do - a key we can't remove is a key we probably never wrote.
   }
 }

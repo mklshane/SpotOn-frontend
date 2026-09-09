@@ -41,7 +41,7 @@ export function LesionCard({ lesion, latest }: { lesion: Lesion; latest?: Screen
           {/* The body part, not the lesion photo: a patch of skin at this size identifies nothing,
               whereas "left hand" vs "right foot" tells the spots apart at a glance. */}
           <BodyGlyph region={lesion.mark?.region} size={104} />
-          {/* Tier as a solid pill rather than a bare dot — the same treatment the lesion
+          {/* Tier as a solid pill rather than a bare dot - the same treatment the lesion
               timeline uses. */}
           <View style={[styles.tier, { backgroundColor: theme.surface }]}>
             <View style={[styles.tierDot, { backgroundColor: fg }]} />

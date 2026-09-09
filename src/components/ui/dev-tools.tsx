@@ -36,7 +36,7 @@ const JUMPS: Jump[] = [
 
 // A real lesion photo (from SpotOn-synthetic/dataset_real/MEL) bundled to seed a dev screening,
 // so the questionnaire jump can run the real classifier end-to-end (jumping straight to the
-// questionnaire otherwise skips capture/quality, where startClassification() normally fires —
+// questionnaire otherwise skips capture/quality, where startClassification() normally fires -
 // analysis then has nothing to join on). Classifies cleanly as MEL, unlike a random web image.
 const TEST_PHOTO = require('../../../assets/dev/test-lesion.jpg');
 
@@ -64,7 +64,7 @@ export function DevTools() {
   const { setImageUri, setSource, startClassification } = useScreeningSession();
 
   // Seed a real photo + kick off classification (as a gallery upload), then jump into the
-  // questionnaire — so the dev shortcut reaches a genuine result instead of the "classification
+  // questionnaire - so the dev shortcut reaches a genuine result instead of the "classification
   // never started" error. Resolve the bundled asset to a local file:// URI (what the real flow
   // feeds the classifier), rather than the Metro http URL.
   async function startTestQuestionnaire() {
@@ -86,7 +86,7 @@ export function DevTools() {
         c === mock.topClass ? mock.conf : rest,
       ]),
     ) as Record<LesionClass, number>;
-    // Seed the bundled photo rather than '' — otherwise every mock result (and the Screening
+    // Seed the bundled photo rather than '' - otherwise every mock result (and the Screening
     // Summary Report generated from it) is photo-less, which is the degraded path, not the
     // representative one.
     const photo = await Asset.fromModule(TEST_PHOTO).downloadAsync();
@@ -120,12 +120,12 @@ export function DevTools() {
 
   // The re-screening reminder is a real OS notification 30 days out, which is untestable by hand.
   // Scheduling it with a 0-day interval clamps to a minute from now (see `reminderDate`) and
-  // exercises the whole path — permission, OS delivery while backgrounded, tap, deep link.
+  // exercises the whole path - permission, OS delivery while backgrounded, tap, deep link.
   async function fireTestReminder() {
     setOpen(false);
     const lesionId = entries.find((e) => e.lesionId)?.lesionId ?? null;
     const outcome = await scheduleSelfCheckReminder(0, { lesionId });
-    console.log(`[dev] reminder ${outcome} (lesion ${lesionId ?? 'none'}) — background the app now`);
+    console.log(`[dev] reminder ${outcome} (lesion ${lesionId ?? 'none'}) - background the app now`);
   }
 
   if (!__DEV__) return null;
@@ -137,7 +137,7 @@ export function DevTools() {
       {open ? (
         <View style={[styles.panel, { backgroundColor: theme.surface }, Elevation.md]}>
           <ThemedText type="caption" themeColor="muted" style={styles.heading}>
-            DEV — JUMP TO
+            DEV - JUMP TO
           </ThemedText>
           {JUMPS.map((j) => (
             <Pressable

@@ -5,14 +5,14 @@ import type { TriageTier } from '../triage/tps-core';
  *
  * The PDF is a clinician-facing artifact, so the document body uses the clinical navy/cream
  * palette of the approved layout (`SpotOn-frontend/screeningsummary.png`) rather than the
- * app's warm sunset theme — brand presence comes from the wordmark in the header and from
+ * app's warm sunset theme - brand presence comes from the wordmark in the header and from
  * the risk-tier colors, which are the same four pairs as `Colors.light.risk*` in
  * `src/constants/theme.ts`, print-tuned for contrast on paper.
  *
  * Shared by the PDF template and the in-app preview so the two cannot drift.
  */
 export const PrintColors = {
-  /** Navy — title, section rules, table header. */
+  /** Navy - title, section rules, table header. */
   ink: '#1A3557',
   body: '#252525',
   /** Small-caps section labels and profile-grid keys. */
@@ -39,11 +39,11 @@ export const PrintTier: Record<TriageTier, { fg: string; bg: string; border: str
   critical: { fg: '#B4232A', bg: '#FDECEC', border: '#F2C9C9' },
 };
 
-/** A4 in PostScript points (1/72"). `Print.printToFileAsync` takes points. */
-export const A4 = { width: 595, height: 842, margin: 36 } as const;
+/** US Letter in PostScript points (1/72"). Expo Print defaults to this page size. */
+export const PRINT_PAGE = { width: 612, height: 792, margin: 30 } as const;
 
-/** 523pt of usable width inside the margins. */
-export const CONTENT_WIDTH = A4.width - A4.margin * 2;
+/** Usable width inside the print margins. */
+export const CONTENT_WIDTH = PRINT_PAGE.width - PRINT_PAGE.margin * 2;
 
 /**
  * The lesion photo box, in points (~2.6in square). Under the reference figure's 216pt: the
@@ -51,11 +51,11 @@ export const CONTENT_WIDTH = A4.width - A4.margin * 2;
  * answer "Unsure", three rows wrapping to two lines) this is the cheapest space to reclaim
  * to keep the report on a single page.
  */
-export const PHOTO_PT = 186;
+export const PHOTO_PT = 180;
 
 /** Source pixels fed into the data URI: 640px in a 216pt box is ~213 dpi. */
 export const PHOTO_PX = 640;
 
-/** Additional-view thumbnails print at 58pt, so 240px is ~300 dpi — sharp, and ~15 KB each. */
+/** Additional-view thumbnails print at 58pt, so 240px is ~300 dpi - sharp, and ~15 KB each. */
 export const EXTRA_PHOTO_PT = 58;
 export const EXTRA_PHOTO_PX = 240;

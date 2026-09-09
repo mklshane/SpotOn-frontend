@@ -4,7 +4,7 @@
  * WHY THIS EXISTS. expo-image-manipulator's web implementation resamples in JavaScript with a
  * Hermite filter, which smooths edges hard. Every threshold in image-quality-core.ts was fitted
  * against the native resampler ("REFITTED FOR SIZE = 1024"), and the blur gate is explicitly
- * scale- and resample-sensitive — so the web build was measuring a materially different image
+ * scale- and resample-sensitive - so the web build was measuring a materially different image
  * from the one the gate was calibrated on, and rejecting perfectly sharp photos as blurry.
  *
  * Measured 2026-09-09 on one real phone photo, same source, resampled to 1024²:
@@ -16,7 +16,7 @@
  *
  * The limit is edgeWidth <= 14, so Hermite failed a photo that clears the bar three times over on
  * a phone. Canvas lands on the native reference, which means the calibrated thresholds hold on web
- * without being relaxed — relaxing them would have weakened the gate on mobile too, where the
+ * without being relaxed - relaxing them would have weakened the gate on mobile too, where the
  * calibration is correct (BLUR_GATE.md: the real blurry captures measure 23.7 and 24.4).
  *
  * This also feeds the classifier and detector, so it is not only about the gate: the model was
@@ -96,7 +96,7 @@ export async function transformToUri(
   return { uri: URL.createObjectURL(blob), width: canvas.width, height: canvas.height };
 }
 
-/** Crop/resize and return raw RGBA — no JPEG round-trip at all. */
+/** Crop/resize and return raw RGBA - no JPEG round-trip at all. */
 export async function transformToRgba(uri: string, actions: Action[]): Promise<Rgba> {
   const canvas = await draw(uri, actions);
   const ctx = canvas.getContext('2d');
@@ -107,9 +107,9 @@ export async function transformToRgba(uri: string, actions: Action[]): Promise<R
 
 /**
  * Decode an already-correctly-sized image. The native twin decodes base64 with jpeg-js; on web the
- * caller has a URI, so this re-reads it through the same canvas path with no resize — which keeps
+ * caller has a URI, so this re-reads it through the same canvas path with no resize - which keeps
  * one decoder, and therefore one set of pixel values, across the web build.
  */
 export async function decodeRgbaFromBase64(): Promise<Rgba> {
-  throw new Error('decodeRgbaFromBase64 is native-only — use transformToRgba(uri, []) on web');
+  throw new Error('decodeRgbaFromBase64 is native-only - use transformToRgba(uri, []) on web');
 }

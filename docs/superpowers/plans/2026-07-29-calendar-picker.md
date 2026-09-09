@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the native `@react-native-community/datetimepicker` calendar (a system dialog on Android, an inline native widget on iOS — neither stylable beyond accent color) with one fully custom, on-brand `CalendarPicker` component shared by both platforms in `DateField`.
+**Goal:** Replace the native `@react-native-community/datetimepicker` calendar (a system dialog on Android, an inline native widget on iOS - neither stylable beyond accent color) with one fully custom, on-brand `CalendarPicker` component shared by both platforms in `DateField`.
 
 **Architecture:** A new controlled presentational primitive `src/components/ui/calendar-picker.tsx` owns three internal views (day grid / month grid / year list) and pure date-math helpers. `date-field.tsx` drops its `Platform.OS` fork and wraps `CalendarPicker` in a single themed bottom sheet (same chrome as `ActionSheet`), with a `temp` draft state committed on "Done".
 
-**Tech Stack:** React Native, TypeScript, existing `theme.ts` tokens (`Colors`, `Radius`, `Space`), existing `ThemedText`/`Button`/`Icon` primitives. No new dependencies. No test runner is configured in this project — verification is `npx tsc --noEmit` after each code change, plus manual emulator testing in the final task.
+**Tech Stack:** React Native, TypeScript, existing `theme.ts` tokens (`Colors`, `Radius`, `Space`), existing `ThemedText`/`Button`/`Icon` primitives. No new dependencies. No test runner is configured in this project - verification is `npx tsc --noEmit` after each code change, plus manual emulator testing in the final task.
 
 **Reference:** `docs/superpowers/specs/2026-07-29-calendar-picker-design.md`
 
@@ -394,7 +394,7 @@ export { Card } from './card';
 - [ ] **Step 3: Type-check**
 
 Run: `npx tsc --noEmit`
-Expected: no errors mentioning `calendar-picker.tsx` (pre-existing unrelated errors elsewhere in the repo, if any, are not this task's concern — only confirm nothing new is introduced by this file).
+Expected: no errors mentioning `calendar-picker.tsx` (pre-existing unrelated errors elsewhere in the repo, if any, are not this task's concern - only confirm nothing new is introduced by this file).
 
 - [ ] **Step 4: Commit**
 
@@ -408,7 +408,7 @@ git commit -m "feat(ui): add custom CalendarPicker primitive"
 ### Task 2: Wire `CalendarPicker` into `DateField`
 
 **Files:**
-- Modify: `src/components/ui/date-field.tsx` (full rewrite — replaces the whole file)
+- Modify: `src/components/ui/date-field.tsx` (full rewrite - replaces the whole file)
 
 - [ ] **Step 1: Replace the file contents**
 
@@ -595,7 +595,7 @@ Expected: npm reports the package removed; `package.json`'s `dependencies` no lo
 - [ ] **Step 3: Regenerate the native Android project**
 
 Run: `npx expo prebuild --platform android`
-Expected: ends with `✔ Finished prebuild`. (The `android/` directory is gitignored/generated — this just keeps it in sync with `app.json`/`package.json`; nothing here needs to be committed.)
+Expected: ends with `✔ Finished prebuild`. (The `android/` directory is gitignored/generated - this just keeps it in sync with `app.json`/`package.json`; nothing here needs to be committed.)
 
 - [ ] **Step 4: Commit**
 
@@ -612,7 +612,7 @@ git commit -m "chore: remove unused @react-native-community/datetimepicker depen
 
 - [ ] **Step 1: Rebuild and launch on the Android emulator**
 
-Use the `run` skill (or `npx expo run:android` directly) to build and install, since Task 3 changed native dependencies — a Metro reload alone isn't enough here.
+Use the `run` skill (or `npx expo run:android` directly) to build and install, since Task 3 changed native dependencies - a Metro reload alone isn't enough here.
 
 - [ ] **Step 2: Walk through the checklist from the design spec**
 
@@ -631,4 +631,4 @@ In both `profile/edit.tsx`'s "Date of birth" field and `(auth)/complete-profile.
 
 - [ ] **Step 3: Report results**
 
-Note any visual or interaction issues found during the walkthrough for follow-up — this task doesn't have automated pass/fail, so explicitly confirm each bullet above worked before considering the plan complete.
+Note any visual or interaction issues found during the walkthrough for follow-up - this task doesn't have automated pass/fail, so explicitly confirm each bullet above worked before considering the plan complete.

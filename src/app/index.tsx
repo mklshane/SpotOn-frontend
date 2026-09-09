@@ -25,7 +25,7 @@ import { consumeReminderColdStart } from '@/lib/notifications';
 import { hasSeenOnboarding } from '@/lib/onboarding';
 import { isProfileComplete } from '@/lib/profile';
 
-// Enough of a beat that the brand lands and the route swap doesn't read as a flicker — but this
+// Enough of a beat that the brand lands and the route swap doesn't read as a flicker - but this
 // is a floor paid on *every* launch, so it stays short. It used to be 1100 ms, which on a fast
 // path was almost all of the perceived start-up time.
 const MIN_SPLASH_MS = 400;
@@ -65,7 +65,7 @@ export default function SplashScreenRoute() {
   useLocale();
   const theme = useTheme();
   const { user, loading } = useAuth();
-  // The splash runs at the single most contended moment in the process — JS bundle evaluation,
+  // The splash runs at the single most contended moment in the process - JS bundle evaluation,
   // font registration, SQLite open and the auth restore are all in flight. On a low-end device
   // the decorative layers (four full-screen passes plus a 540px tinted PNG decode) are exactly
   // the wrong thing to be doing then, so they're dropped there. The entrance animations stay:
@@ -123,7 +123,7 @@ export default function SplashScreenRoute() {
     (async () => {
       const [seen, reminderTap] = await Promise.all([
         hasSeenOnboarding().catch(() => false),
-        // If a re-screening reminder launched the app, it's this route that has to honour it —
+        // If a re-screening reminder launched the app, it's this route that has to honour it -
         // a deep link pushed before the redirect below would be replaced right out from under it.
         consumeReminderColdStart().catch(() => null),
         new Promise((r) => setTimeout(r, MIN_SPLASH_MS)),
@@ -195,7 +195,7 @@ export default function SplashScreenRoute() {
           {t("Made for the Philippines")}</ThemedText>
       </View>
 
-      {/* Edge vignette for focus & depth — a second full-screen gradient pass, so it goes first
+      {/* Edge vignette for focus & depth - a second full-screen gradient pass, so it goes first
           on devices that can't afford it. */}
       {rich ? (
         <LinearGradient

@@ -82,7 +82,7 @@ export async function clearCachedProfile(): Promise<void> {
  * and app-scoped local preferences (onboarding-seen, notification prefs).
  * Called before `signOut()` when an account is deleted, so a fresh install/login
  * on the same device never inherits a deleted account's stray local flags.
- * Does NOT touch the directory sync cache (facilities/doctors) — that data isn't
+ * Does NOT touch the directory sync cache (facilities/doctors) - that data isn't
  * user-specific.
  */
 export async function clearAllLocalData(): Promise<void> {
@@ -90,7 +90,7 @@ export async function clearAllLocalData(): Promise<void> {
   await clearCachedProfile();
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
   await setMeta(STORAGE_KEYS.reengagementRemindersEnabled, '');
-  // The re-screening reminder lives in the OS, not in this database — clearing the preference
+  // The re-screening reminder lives in the OS, not in this database - clearing the preference
   // alone would leave a deleted account's device still being pinged 30 days from now.
   await cancelSelfCheckReminder();
 }

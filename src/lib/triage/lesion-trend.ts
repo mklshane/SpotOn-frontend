@@ -1,7 +1,7 @@
 /**
  * Change summary for a tracked lesion.
  *
- * A clinician reads *change*, not a single reading — a stable mole and a mole that went
+ * A clinician reads *change*, not a single reading - a stable mole and a mole that went
  * Low → High in three months are completely different situations even when today's tier is the
  * same. This turns a lesion's screenings into the deltas worth showing.
  *
@@ -52,7 +52,7 @@ export type LesionTrend = {
   classChanged: boolean;
   /** Answers that differ between the two most recent screenings. */
   answerFlips: AnswerFlip[];
-  /** The TPS series, oldest first — the sparkline's input. */
+  /** The TPS series, oldest first - the sparkline's input. */
   tpsSeries: { at: string; tps: number; tier: TrendTier }[];
 };
 
@@ -74,7 +74,7 @@ export function daysBetween(fromIso: string, toIso: string): number {
 }
 
 /**
- * Summarize a lesion's screenings. Input may be in any order — it is sorted oldest-first here so
+ * Summarize a lesion's screenings. Input may be in any order - it is sorted oldest-first here so
  * callers can pass a cache slice without worrying about it.
  *
  * `now` is injected rather than read from the clock so the summary is deterministic under test.
@@ -97,7 +97,7 @@ export function summarizeLesionTrend(
     tierDirection = d > 0 ? 1 : d < 0 ? -1 : 0;
   }
 
-  // Flips are measured between the two most recent screenings — "what changed since last time" —
+  // Flips are measured between the two most recent screenings - "what changed since last time" -
   // rather than against the first, which would keep re-reporting a change the user already saw.
   const answerFlips: AnswerFlip[] = [];
   if (latest && previous) {

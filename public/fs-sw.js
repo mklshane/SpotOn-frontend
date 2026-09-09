@@ -3,7 +3,7 @@
  *
  * expo-file-system has no web implementation, so the web replica stores captured photos and
  * generated reports in OPFS instead. OPFS handles aren't URLs, though, and the app hands file
- * URIs straight to <Image>, expo-image-manipulator and the report renderer — all of which need
+ * URIs straight to <Image>, expo-image-manipulator and the report renderer - all of which need
  * something fetchable.
  *
  * So: fs.web.ts writes bytes into OPFS under `doc/` and `cache/`, and this worker serves them

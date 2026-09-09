@@ -49,12 +49,12 @@ function queryString(params?: QueryParams): string {
 }
 
 // Render's free tier sleeps after ~15 min idle and can take 30-60s to wake, and RN's fetch has
-// no built-in timeout — an unreachable server would otherwise hang forever, which on cold start
+// no built-in timeout - an unreachable server would otherwise hang forever, which on cold start
 // blocks the splash screen from ever routing anywhere.
 //
 // This was 15_000, i.e. BELOW the cold start the comment itself described, so the first request
 // after any quiet period aborted and the user was told "Can't reach the server. Check your
-// internet connection" — on a perfectly healthy backend, and with nothing wrong with their
+// internet connection" - on a perfectly healthy backend, and with nothing wrong with their
 // connection. Reported 2026-09-09 on the deployed web build; the service answered in 1.4s once
 // warm. 60s clears a cold start with margin.
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -64,7 +64,7 @@ const REQUEST_TIMEOUT_MS = 60_000;
  *
  * Cheaper than a long wait at the point of use: the app calls this at startup, so the free-tier
  * instance is usually already up by the time someone has finished typing their password. Errors
- * are ignored on purpose — this is an optimisation, never a prerequisite.
+ * are ignored on purpose - this is an optimisation, never a prerequisite.
  */
 export function warmUpApi(): void {
   const controller = new AbortController();
@@ -102,7 +102,7 @@ async function request<T>(
 ): Promise<T> {
   // A FormData body (file uploads) must be left untouched: it can't be
   // JSON-stringified (that silently drops the file, serializing to "{}"),
-  // and its Content-Type — including the multipart boundary — has to be set
+  // and its Content-Type - including the multipart boundary - has to be set
   // by `fetch` itself, not by us.
   const isFormData =
     typeof FormData !== "undefined" && opts.body instanceof FormData;

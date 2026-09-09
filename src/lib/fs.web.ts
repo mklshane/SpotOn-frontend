@@ -1,7 +1,7 @@
 /**
  * Web implementation of the expo-file-system surface the app uses, backed by OPFS.
  *
- * expo-file-system ships nothing usable on web — both the legacy and current APIs are
+ * expo-file-system ships nothing usable on web - both the legacy and current APIs are
  * `console.warn('expo-file-system is not supported on web')` stubs whose documentDirectory and
  * cacheDirectory are null. Everything the scan flow does with files (persisting a capture,
  * caching a downloaded model, writing a report PDF) would silently do nothing.
@@ -12,7 +12,7 @@
  * treating a URI as an opaque fetchable string, exactly as on device, and image-paths.ts's
  * relative-path rebasing needs no web branch.
  *
- * Only the calls the app actually makes are implemented. Widen deliberately — a stub that
+ * Only the calls the app actually makes are implemented. Widen deliberately - a stub that
  * resolves to nothing is worse than a missing export, which at least fails the build.
  */
 
@@ -40,7 +40,7 @@ export function ensureFsReady(): Promise<void> {
   if (!swPromise) {
     swPromise = (async () => {
       if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-        throw new Error('service workers unavailable — the web filesystem cannot serve files');
+        throw new Error('service workers unavailable - the web filesystem cannot serve files');
       }
       await navigator.serviceWorker.register('/fs-sw.js', { scope: '/' });
       await navigator.serviceWorker.ready;
@@ -116,7 +116,7 @@ async function writeBlob(uri: string, blob: Blob): Promise<void> {
 
 /**
  * Read any source the app might copy *from*: an /_fs/ path, a blob: URL from the camera canvas,
- * a data: URI, or an http(s) asset. fetch() handles all four — /_fs/ included, via the worker.
+ * a data: URI, or an http(s) asset. fetch() handles all four - /_fs/ included, via the worker.
  */
 async function fetchBlob(uri: string): Promise<Blob> {
   if (isOwned(uri)) await ensureFsReady();

@@ -31,7 +31,7 @@ function isNetworkError(e: unknown): boolean {
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) return e.detail;
   // A timeout on a free-tier host usually means the server is waking, not that the user's
-  // connection is broken — telling them to check their internet sends them to fix the wrong
+  // connection is broken - telling them to check their internet sends them to fix the wrong
   // thing. client.ts throws exactly 'timed out' for an aborted request.
   if (e instanceof Error && /timed out/i.test(e.message)) {
     return t('The server is waking up. Give it a moment and try again.');
@@ -75,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await authApi.cacheProfile(me);
       } catch {
         // If the refresh failed the session is gone (tokens cleared) → log out. Otherwise it's
-        // just offline — keep the cached profile so the user stays signed in.
+        // just offline - keep the cached profile so the user stays signed in.
         if (!authApi.hasTokens() && mounted) setUserState(null);
       } finally {
         if (mounted) setLoading(false);

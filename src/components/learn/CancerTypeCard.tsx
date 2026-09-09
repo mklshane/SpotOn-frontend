@@ -20,9 +20,9 @@ export type CancerTypeKind = 'melanoma' | 'scc' | 'bcc';
 export type CancerTypeCardProps = {
   kind: CancerTypeKind;
   title: string;
-  /** Saturated accent (risk-tier color) — the learn-more link. */
+  /** Saturated accent (risk-tier color) - the learn-more link. */
   color: string;
-  /** Soft tint (risk-tier bg color) — card background. */
+  /** Soft tint (risk-tier bg color) - card background. */
   tint: string;
   onPress: () => void;
 };
@@ -30,7 +30,7 @@ export type CancerTypeCardProps = {
 const ART_SIZE = 84;
 
 /**
- * A circular "skin swatch" illustration per cancer type — abstract, not
+ * A circular "skin swatch" illustration per cancer type - abstract, not
  * clinical imagery. Each lesion is drawn on the same warm skin-tone disc so
  * the three cards read as a set: melanoma = an asymmetric, irregular-border,
  * unevenly colored mole (the A/B/C of ABCDE); SCC = a rough, scaly,
@@ -165,7 +165,7 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
 const styles = StyleSheet.create({
   // Fixed width (horizontal rail item). Height comes out equal across cards
   // because the title below reserves 2 lines' worth of space regardless of
-  // whether it actually wraps — not from cross-sibling flex stretch, which is
+  // whether it actually wraps - not from cross-sibling flex stretch, which is
   // unreliable for a ScrollView's content-container children on native.
   wrap: { width: 168 },
   card: {

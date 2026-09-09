@@ -26,7 +26,7 @@ export default function BodyAreaScreen() {
   useEffect(() => {
     reset();
     // Start loading the detector now. Choosing a body part takes the user seconds; building the
-    // interpreter and paying TFLite's first-invoke cost takes a fraction of one — but done in
+    // interpreter and paying TFLite's first-invoke cost takes a fraction of one - but done in
     // capture.tsx's mount effect, as it was, that fraction lands while they are already pointing
     // the camera at a lesion waiting for a box. Fire-and-forget; capture.tsx still owns the load.
     prewarmLesionModel();
@@ -45,7 +45,7 @@ export default function BodyAreaScreen() {
     });
     if (result.canceled || !result.assets[0]) return;
     // One photo, like the camera. A second angle is offered on the quality screen once this one has
-    // actually passed its checks — asking up front would make every single-photo upload pay for it.
+    // actually passed its checks - asking up front would make every single-photo upload pay for it.
     session.setSource('gallery');
     router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
   }

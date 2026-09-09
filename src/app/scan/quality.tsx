@@ -39,7 +39,7 @@ const STEP_MS = 1300; // per-check reveal cadence
  *
  * Once this screen started offering a second photo, the timer stopped being a convenience and
  * became a race: it fired before the offer could be read, so the choice was theoretical. An
- * explicit Proceed costs the single-photo path one tap and is the honest trade — the screen is
+ * explicit Proceed costs the single-photo path one tap and is the honest trade - the screen is
  * showing the user a verdict about their photo, which is a reasonable moment to ask for a decision.
  */
 /**
@@ -47,11 +47,11 @@ const STEP_MS = 1300; // per-check reveal cadence
  * pass before giving up and advancing anyway.
  *
  * The point of this screen is that every "this photo won't work" verdict lands HERE, next to the
- * IQA result — not eight questions later. Confidence is a readability signal exactly like blur is,
+ * IQA result - not eight questions later. Confidence is a readability signal exactly like blur is,
  * and telling someone to retake after they have answered the whole questionnaire wastes their
  * effort. Inference starts on mount and the rows take ~3.9s to reveal, so on most devices the
  * result is already in by then and this grace is never spent. When it IS exceeded we advance as
- * before and analysis.tsx catches it — degraded to today's behaviour, never worse.
+ * before and analysis.tsx catches it - degraded to today's behaviour, never worse.
  */
 const READABILITY_GRACE_MS = 2000;
 
@@ -82,7 +82,7 @@ export default function QualityScreen() {
   const session = useScreeningSession();
   const { setImageUri, questionnaireComplete } = session;
 
-  // Warm up the classifier while the IQA animation plays — the load (1–3s) is free here.
+  // Warm up the classifier while the IQA animation plays - the load (1–3s) is free here.
   // Lazy import keeps the TFLite module off the app-startup path.
   useEffect(() => {
     import('@/lib/classifier/classifier-model')
@@ -97,7 +97,7 @@ export default function QualityScreen() {
   const [error, setError] = useState(false);
   const [readability, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
   /**
-   * Did the still detector locate a lesion? Restored 2026-09-08 — see decideIqa for why.
+   * Did the still detector locate a lesion? Restored 2026-09-08 - see decideIqa for why.
    *
    * It cannot say whether a lesion is PRESENT (it fires on 88% of lesion-free skin), but it is the
    * only term that rejects a photograph of a scene: 0.000 on a shoe strap on carpet, 0.031 on wood,
@@ -155,7 +155,7 @@ export default function QualityScreen() {
    *
    * Lazy import for the same reason the classifier warm-up is lazy: keep TFLite off the app-startup
    * path. The model is cached by lesion-model.ts, so on the camera path this is one inference.
-   * A detector FAILURE is not "no lesion" — it must not veto, so it falls through as 'failed'.
+   * A detector FAILURE is not "no lesion" - it must not veto, so it falls through as 'failed'.
    */
   useEffect(() => {
     if (!uri) return;
@@ -189,7 +189,7 @@ export default function QualityScreen() {
       return;
     }
     // How far crop.tsx had to enlarge the capture. Without it the gate reads a tight auto-zoom
-    // as a blurry photo — the enlargement, not the focus, is what widens the measured edge.
+    // as a blurry photo - the enlargement, not the focus, is what widens the measured edge.
     assessImage(uri, Number(upscale) || 1)
       .then((c) => alive && setChecks(c))
       .catch((e) => {
@@ -207,14 +207,14 @@ export default function QualityScreen() {
    * There used to be one here, whose only consumer was a waiver of the skin check ("the detector
    * found a lesion, so this must be skin"). The detector has no background class and fires on 88%
    * of lesion-free skin, so that waiver let photos of a street and a t-shirt through with all three
-   * rows green — see decideIqa in scan-flow.ts and synth/eval/NONSKIN_GATE.md. With the waiver
+   * rows green - see decideIqa in scan-flow.ts and synth/eval/NONSKIN_GATE.md. With the waiver
    * gone nothing read the result, so the inference and its 4s timeout are gone too: one less
    * ~6 MB-model run per photo, and one less caller contending for the single interpreter that
    * detectorQueue (lesion-detector.ts) exists to serialize.
    *
    * The detector is untouched and still owns the crop the classifier reads: classify.ts runs it on
    * this same image under DETECTOR_CROP_ENABLED. Do not reinstate it here to answer "is there a
-   * lesion" — that is `checks.lesion`'s job, for the reasons above.
+   * lesion" - that is `checks.lesion`'s job, for the reasons above.
    */
 
   useEffect(() => {
@@ -236,13 +236,13 @@ export default function QualityScreen() {
    * with no lesion in it sail through with a green "Lesion in frame" tick: measured on 33
    * lesion-free skin patches cut from real clinical photos, `detectLesionBox` fires on 88% of
    * them, because it was trained only on images that contain a lesion and has never been shown a
-   * negative. It answers "where", never "whether" — and no confidence bar separates the two
+   * negative. It answers "where", never "whether" - and no confidence bar separates the two
    * (bare-skin median 0.278 vs real-lesion median 0.315).
    *
    * `checks.lesion` answers "whether": the centre-surround contrast of the strongest blob in the
    * middle of the frame (image-quality-core.ts). Against the same three sets, it holds 95.6% /
    * 93.5% recall on app-framed and held-out lesion photos while cutting bare-skin passes from 88%
-   * to 18% — better than the old row in BOTH directions, which is why the detector is not ANDed in
+   * to 18% - better than the old row in BOTH directions, which is why the detector is not ANDed in
    * here (doing so would cost ~10 points of recall and remove no false pass at all).
    *
    * The detector is untouched and still owns the crop the classifier reads (lesion-detector.ts).
@@ -250,7 +250,7 @@ export default function QualityScreen() {
    * AND THE ROW IS `skin && presence` (changed 2026-09-08). Presence answers "is there a spot
    * here", which is only a meaningful question about skin: these photos of a computer screen, a
    * night street and a t-shirt all contain a compact dark blob and all scored a clean presence
-   * pass. The skin check used to be WAIVED for exactly such a frame — see decideIqa, which now
+   * pass. The skin check used to be WAIVED for exactly such a frame - see decideIqa, which now
    * owns this decision so that no term can waive another without a test failing.
    */
   const presenceOk = checks?.lesion.ok ?? false;
@@ -261,7 +261,7 @@ export default function QualityScreen() {
     skinOk,
     presenceOk,
     // Only a detector that RAN and found nothing vetoes. A failure or a timeout cannot answer, and
-    // must not be read as "no lesion" — see decideIqa.
+    // must not be read as "no lesion" - see decideIqa.
     detectorFound: lesionDet !== 'absent',
   });
   const readableOk = readability !== 'unreadable';
@@ -273,12 +273,12 @@ export default function QualityScreen() {
   });
 
   // Offer a second angle only where it makes sense: a clean camera photo, still under the cap, with
-  // no gallery selection queued behind it. `images` doesn't include this photo yet — it is added by
-  // proceed()/addAnotherAngle() — hence the +1.
+  // no gallery selection queued behind it. `images` doesn't include this photo yet - it is added by
+  // proceed()/addAnotherAngle() - hence the +1.
   const canAddAngle = pass && !analyzing && session.images.length + 1 < MAX_IMAGES_PER_SCREENING;
 
   // The advisory hair tip is the one reason worth showing on a PASSING photo (see showReasons), so
-  // it is derived once here and reused there — two copies of this condition disagreed, and the
+  // it is derived once here and reused there - two copies of this condition disagreed, and the
   // second one kept surfacing "hair is covering the spot" on photos with no skin in them.
   const hairTip = skinOk && !!checks?.hair && !checks.hair.ok;
 
@@ -288,8 +288,8 @@ export default function QualityScreen() {
     /**
      * On a frame that is not skin, the skin sentence is the ONLY truthful thing we can say.
      *
-     * Every other line here is a sentence about skin, a spot, or a read of a lesion — "hair is
-     * covering the spot", "glare on the spot — tilt slightly", "center the spot in the frame".
+     * Every other line here is a sentence about skin, a spot, or a read of a lesion - "hair is
+     * covering the spot", "glare on the spot - tilt slightly", "center the spot in the frame".
      * Three of them fired at once on a photo of a night street, which reads as the app confidently
      * discussing a lesion that does not exist. Say what is actually wrong and stop.
      */
@@ -299,33 +299,33 @@ export default function QualityScreen() {
       out.push(
         checks.brightness.issue === 'dark'
           ? 'The photo looks too dark.'
-          : 'Glare on the spot — tilt slightly to avoid the reflection.',
+          : 'Glare on the spot - tilt slightly to avoid the reflection.',
       );
     }
     // Covers both ways this fails now: a missed focus lock and a moving hand (see LESION_EDGE_WIDTH).
-    if (!sharpOk) out.push('The photo looks blurry — hold still, and tap the spot to focus.');
+    if (!sharpOk) out.push('The photo looks blurry - hold still, and tap the spot to focus.');
     // Reached only on a skin frame (see the early return), so this is the honest reading: skin,
     // but nothing on it that looks like a spot.
-    if (!presenceOk) out.push('We couldn’t find a clear lesion — center the spot in the frame.');
-    // Confidence is a readability signal like blur is — surfaced here rather than after the
+    if (!presenceOk) out.push('We couldn’t find a clear lesion - center the spot in the frame.');
+    // Confidence is a readability signal like blur is - surfaced here rather than after the
     // questionnaire, so a retake costs the user a photo and not eight answers.
-    if (!readableOk) out.push('We couldn’t get a clear read of this spot — a sharper, closer photo usually fixes it.');
+    if (!readableOk) out.push('We couldn’t get a clear read of this spot - a sharper, closer photo usually fixes it.');
     // Shadow is advisory: it never blocks, but when we're already asking for a retake, surface it.
     if (checks.shadow && !checks.shadow.ok) {
-      out.push('Tip: even out the lighting — avoid casting a shadow across the spot.');
+      out.push('Tip: even out the lighting - avoid casting a shadow across the spot.');
     }
     // Hair is advisory too, but UNLIKE shadow it is surfaced even on a passing photo (see
     // showFooter). The failure it addresses is a well-exposed, sharp, correctly framed photo whose
-    // lesion happens to be under hair — retrain/WHY_CONFIDENT_ERRORS.md records one called MEL at
+    // lesion happens to be under hair - retrain/WHY_CONFIDENT_ERRORS.md records one called MEL at
     // 99.2%. A tip that only appeared alongside other complaints would never have fired on it.
     //
     // It is a tip and not a gate because it CANNOT be better justified than that: there are no
     // hair-mask annotations to fit HAIR_ROI_MAX against, so it is set to a target flag rate (~1
-    // photo in 8). And removing the hair for the user is not on the table — synth/eval/
+    // photo in 8). And removing the hair for the user is not on the table - synth/eval/
     // HAIR_REMOVAL.md measured every variant of that and they all cost accuracy on exactly the
     // hairy images they were meant to help.
     if (hairTip) {
-      out.push('Tip: hair is covering the spot — move it aside and retake for a clearer read.');
+      out.push('Tip: hair is covering the spot - move it aside and retake for a clearer read.');
     }
     return out;
   }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, readableOk, hairTip]);
@@ -381,7 +381,7 @@ export default function QualityScreen() {
     if (session.source === 'gallery') {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 0.9 });
       if (result.canceled || !result.assets[0]) {
-        proceeded.current = false; // they backed out — this photo is already accepted, so just move on
+        proceeded.current = false; // they backed out - this photo is already accepted, so just move on
         return;
       }
       router.replace({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
@@ -411,8 +411,8 @@ export default function QualityScreen() {
     : pass
       ? canAddAngle
         ? 'Proceed, or add another photo of the same spot.'
-        : // At the photo cap — "preparing your result" would be a lie now that nothing auto-advances.
-          `That's ${MAX_IMAGES_PER_SCREENING} photos — ready when you are.`
+        : // At the photo cap - "preparing your result" would be a lie now that nothing auto-advances.
+          `That's ${MAX_IMAGES_PER_SCREENING} photos - ready when you are.`
       : 'You can still continue if you’d like';
 
   const rows = useMemo(
@@ -422,7 +422,7 @@ export default function QualityScreen() {
 
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;
   // Hair over the lesion does not make a photo dark, blurry or badly framed, so nothing else would
-  // surface it — hence a tip on an otherwise passing photo. `hairTip` requires skin (see above).
+  // surface it - hence a tip on an otherwise passing photo. `hairTip` requires skin (see above).
   const showReasons = !analyzing && (!pass || hairTip);
   const showRetakeFooter = !analyzing && !pass;
 
@@ -501,9 +501,9 @@ export default function QualityScreen() {
       </ScrollView>
 
       {/* The whole multi-photo offer: one line, on the screen the user is already on, only when a
-          second angle is actually possible. Ignoring it advances as normal — it never blocks. */}
+          second angle is actually possible. Ignoring it advances as normal - it never blocks. */}
       {/* Clean pass: Proceed is the primary action, with the second-photo offer beneath it. There is
-          no auto-advance — a timer that fires before the offer can be read isn't an offer. */}
+          no auto-advance - a timer that fires before the offer can be read isn't an offer. */}
       {!analyzing && pass ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
           <Button label={t("Proceed")} variant="brand" onPress={proceed} style={styles.useAnyway} />

@@ -3,8 +3,8 @@
  *
  * `BODY_PARTS` in body-parts.ts is the authoritative region list; every string it can produce
  * (`region` for a front hit, `regionBack` for a back one) must land on a real glyph here, which is
- * what scripts/test-body-glyphs.mjs asserts. A region with no match falls back to `body` — the
- * plain silhouette — so a spot recorded without a body mark still renders something sensible.
+ * what scripts/test-body-glyphs.mjs asserts. A region with no match falls back to `body` - the
+ * plain silhouette - so a spot recorded without a body mark still renders something sensible.
  *
  * Some regions deliberately share a glyph: two line-art limb segments (upper arm vs forearm,
  * thigh vs lower leg) are indistinguishable at card size, and the region name is printed beneath
@@ -57,7 +57,7 @@ const BY_REGION: Record<string, GlyphKind> = {
 /**
  * The glyph for a region label, or `body` when there is no mark or the label is unrecognised.
  *
- * Sidedness is dropped on purpose — a left hand and a right hand get the same drawing. Mirroring
+ * Sidedness is dropped on purpose - a left hand and a right hand get the same drawing. Mirroring
  * the art per side would imply an anatomical precision the mannequin's raycast does not have.
  */
 export function regionGlyph(region: string | null | undefined): GlyphKind {
@@ -70,7 +70,7 @@ export function regionGlyph(region: string | null | undefined): GlyphKind {
  * Which glyph kinds use published Health Icons artwork (body-icons.ts), and which fall back to
  * our own drawings (body-figure.ts).
  *
- * Health Icons is used wherever it has a real match — its head, arm, leg, foot, hand and spine
+ * Health Icons is used wherever it has a real match - its head, arm, leg, foot, hand and spine
  * are better than anything drawn by hand here. But the set has no neck and no torso, and exactly
  * one generic `joints` icon, so mapping everything onto it made face/head-back/neck render
  * identically and shoulder/elbow/hip/knee render identically. `null` marks the seven kinds that
@@ -78,7 +78,7 @@ export function regionGlyph(region: string | null | undefined): GlyphKind {
  *
  * `ppe-gloves` is the set's only hand-shaped icon and reads as a hand at a glance, which is the
  * job. Both torsos are ours: `spine` was tried for the back and read as three floating vertebrae,
- * and it broke the pair with torso-front — the two are only ever judged against each other. The
+ * and it broke the pair with torso-front - the two are only ever judged against each other. The
  * unmarked fallback keeps the `body` icon and is told apart from a located spot by colour: brand
  * orange when located, muted grey when not.
  */
@@ -107,7 +107,7 @@ export function glyphIcon(kind: GlyphKind): string | null {
 /**
  * Which side of the body a region names, or null for the midline ones (head, torso, neck).
  *
- * Anatomical left, so it draws on the viewer's right — the same convention the 3D mannequin uses
+ * Anatomical left, so it draws on the viewer's right - the same convention the 3D mannequin uses
  * (body-parts.ts: "the model's anatomical LEFT side is at +X"). The glyph needs this because the
  * illustration is one whole figure with a part picked out, so a left hand and a right hand
  * highlight opposite arms rather than sharing a drawing.

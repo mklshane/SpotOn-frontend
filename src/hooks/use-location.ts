@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 export type Coords = { latitude: number; longitude: number };
 export type LocationStatus = 'idle' | 'granted' | 'denied';
 
-/** Foreground GPS fix. Works fully offline — only map tiles need connectivity. */
+/** Foreground GPS fix. Works fully offline - only map tiles need connectivity. */
 export function useLocation(): { coords: Coords | null; status: LocationStatus } {
   const [coords, setCoords] = useState<Coords | null>(null);
   const [status, setStatus] = useState<LocationStatus>('idle');
@@ -26,7 +26,7 @@ export function useLocation(): { coords: Coords | null; status: LocationStatus }
           setCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         }
       } catch {
-        // GPS fix unavailable — leave coords null, callers fall back to a name-sorted list.
+        // GPS fix unavailable - leave coords null, callers fall back to a name-sorted list.
       }
     })();
 

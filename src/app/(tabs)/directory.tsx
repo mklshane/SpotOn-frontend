@@ -40,7 +40,7 @@ export default function DirectoryScreen() {
   useEffect(() => {
     (async () => {
       if (await needsInitialSync()) {
-        // First-ever sync — if this fails offline-first screens fall back to an
+        // First-ever sync - if this fails offline-first screens fall back to an
         // empty local DB with no distinct "sync failed" signal, so at least log it.
         await runSync({ full: true }).catch((err) =>
           console.warn("[directory] initial sync failed", err),
@@ -62,7 +62,7 @@ export default function DirectoryScreen() {
 
   // Rendered as a prop rather than a sibling: for ClinicsView it needs to sit
   // INSIDE its own stacking order (between its map and its bottom sheet), not
-  // beside it — see the comment on `ClinicsViewProps.header` for why zIndex
+  // beside it - see the comment on `ClinicsViewProps.header` for why zIndex
   // alone can't make a sheet cover a sibling of its parent. DoctorsView has
   // no map/sheet to stack against, but it still takes the same prop so the
   // header (and its onLayout, which drives `overlayH`) stays mounted and
@@ -98,7 +98,7 @@ export default function DirectoryScreen() {
             themeColor="brand"
             style={styles.offlineLabel}
           >
-            {t("Offline — showing cached results")}</ThemedText>
+            {t("Offline - showing cached results")}</ThemedText>
         </View>
       ) : null}
     </View>

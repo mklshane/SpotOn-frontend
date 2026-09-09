@@ -19,7 +19,7 @@ export type DoctorsViewProps = {
   /**
    * The search bar / segmented-control overlay, rendered by the parent
    * screen. Unlike ClinicsView, there's no map+bottom-sheet stacking to
-   * worry about here — it just renders directly so it's always present
+   * worry about here - it just renders directly so it's always present
    * (and its onLayout keeps `topInset` accurate) regardless of which
    * segment is active.
    */

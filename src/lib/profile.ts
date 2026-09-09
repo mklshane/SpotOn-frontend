@@ -17,15 +17,15 @@ export type ProfileInput = {
   phone?: string;
   fitzpatrickSkinType?: number; // 1-6
   /**
-   * `undefined` — not touched, leave the stored avatar as-is.
-   * `null` — the user removed their photo, clear it.
-   * `string` — a new local file URI (from the image picker) to upload.
+   * `undefined` - not touched, leave the stored avatar as-is.
+   * `null` - the user removed their photo, clear it.
+   * `string` - a new local file URI (from the image picker) to upload.
    */
   avatarUri?: string | null;
 };
 
 export type SaveProfileResult = {
-  /** Server-authoritative profile, re-fetched after all PATCH attempts — never assembled from local input. */
+  /** Server-authoritative profile, re-fetched after all PATCH attempts - never assembled from local input. */
   user: UserProfile;
   /** Field names (matching the API's snake_case) that failed to save, if any. */
   failedFields: string[];
@@ -34,7 +34,7 @@ export type SaveProfileResult = {
 /**
  * Uploads a local image file to the backend as the user's avatar.
  *
- * ASSUMPTION — I don't have `api/client.ts`, so this assumes:
+ * ASSUMPTION - I don't have `api/client.ts`, so this assumes:
  *   1. `api` exposes a `post` method that accepts a `FormData` body (multipart).
  *   2. There's a `POST /me/avatar` endpoint accepting a `file` field and
  *      updating the user's avatar server-side.

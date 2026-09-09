@@ -1,4 +1,4 @@
-# Custom Calendar Picker — Design
+# Custom Calendar Picker - Design
 
 ## Goal
 
@@ -11,22 +11,22 @@ platforms.
 
 ## Scope
 
-- Add `src/components/ui/calendar-picker.tsx` — a pure, controlled calendar primitive.
+- Add `src/components/ui/calendar-picker.tsx` - a pure, controlled calendar primitive.
 - Rewrite `src/components/ui/date-field.tsx` to use it via a single cross-platform bottom sheet,
   removing the `Platform.OS` fork entirely.
 - Remove the `@react-native-community/datetimepicker` dependency and its `app.json` plugin
   entry (nothing else in the codebase uses it), then re-run `expo prebuild`.
-- The `withAndroidAccentColor` plugin (added separately) stays — it still benefits other native
+- The `withAndroidAccentColor` plugin (added separately) stays - it still benefits other native
   Android widgets.
 
 Out of scope: changing `DateField`'s public props/API (`label`, `error`, `value`, `onChange`,
 `containerStyle` stay the same, so `profile/edit.tsx` and `(auth)/complete-profile.tsx` need no
-changes), automated tests (no test runner is configured in this project — verification is manual
+changes), automated tests (no test runner is configured in this project - verification is manual
 in the emulator).
 
 ## 1. `CalendarPicker` component
 
-`src/components/ui/calendar-picker.tsx`. Fully controlled, presentational only — owns no
+`src/components/ui/calendar-picker.tsx`. Fully controlled, presentational only - owns no
 "selected date" concept beyond what it's given.
 
 Props:
@@ -42,8 +42,8 @@ type CalendarPickerProps = {
 
 Internal state:
 
-- `cursor: Date` — the year/month currently browsed in day-grid view. Initialized from `value`.
-- `view: 'day' | 'month' | 'year'` — which grid is showing. Initialized to `'day'`.
+- `cursor: Date` - the year/month currently browsed in day-grid view. Initialized from `value`.
+- `view: 'day' | 'month' | 'year'` - which grid is showing. Initialized to `'day'`.
 
 ### Day grid (default view)
 
@@ -57,10 +57,10 @@ Internal state:
   - In-range day (between `minDate`/`maxDate`), plain: `theme.text`, no fill.
   - Out-of-range day (before `minDate` or after `maxDate`): `theme.muted`, not pressable.
   - Leading/trailing days from adjacent months: rendered dimmed (`theme.muted`, lower opacity)
-    to fill the grid, but still tappable — tapping one moves `cursor` to that month and fires
+    to fill the grid, but still tappable - tapping one moves `cursor` to that month and fires
     `onChange` for that day (standard calendar-app convenience).
   - Tapping any enabled day calls `onChange(day)` immediately. The component doesn't manage a
-    "confirm" step itself — `DateField` owns the draft/commit behavior (see below).
+    "confirm" step itself - `DateField` owns the draft/commit behavior (see below).
 
 ### Month grid (year-jump step 2)
 
@@ -68,7 +68,7 @@ Internal state:
 - 3×4 grid of month abbreviations (Jan…Dec) for the chosen year, `Radius.md` rounded-rect cells.
 - Same selected/current/disabled color logic as day cells (a month counts "disabled" only if
   every day in it falls outside `[minDate, maxDate]`, which in practice is just future months
-  in the current year — day-level disabling still applies once inside that month).
+  in the current year - day-level disabling still applies once inside that month).
 - Tapping a month sets `cursor` to that year/month and switches `view` back to `'day'`.
 
 ### Year list (year-jump step 1)
@@ -84,7 +84,7 @@ Internal state:
 
 `date-field.tsx` drops both the Android imperative-dialog branch and the iOS-only `Modal`
 branch, replacing them with one `Modal` (reusing the existing sheet chrome: grabber,
-`Radius.xl` top corners, `theme.surface` background, safe-area bottom padding — matching
+`Radius.xl` top corners, `theme.surface` background, safe-area bottom padding - matching
 `ActionSheet`) that renders on both platforms:
 
 - A `temp: Date` draft state, seeded from `value ?? DEFAULT_DATE` when the sheet opens (same

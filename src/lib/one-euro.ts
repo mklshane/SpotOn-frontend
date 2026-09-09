@@ -1,11 +1,11 @@
 /**
- * 1€ (One-Euro) filter — an adaptive low-pass filter for noisy real-time signals.
+ * 1€ (One-Euro) filter - an adaptive low-pass filter for noisy real-time signals.
  * Casiez, Roussel & Vogel, "1€ Filter: A Simple Speed-based Low-pass Filter for Noisy Input in
  * Interactive Systems" (CHI 2012).
  *
  * Why we use it: the live lesion box jitters when the camera shifts slightly. A fixed EMA either
  * lags (when smooth enough to kill jitter) or stays jittery (when responsive). The 1€ filter
- * adapts to speed — it smooths hard when the value is nearly still (killing jitter from tiny
+ * adapts to speed - it smooths hard when the value is nearly still (killing jitter from tiny
  * hand shifts) and eases off as real motion speeds up (so it follows without lag). It's
  * frame-rate independent because it uses timestamps, which matters at our ~8 fps detection rate.
  *

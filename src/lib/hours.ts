@@ -21,7 +21,7 @@ export function formatHours(period: HoursPeriod | null): string {
  * "Mon–Fri 9 AM – 5 PM", or just "Hours unavailable" when there is no period.
  *
  * Pairing a day label with the fallback produced "Mon–Fri Hours unavailable", which reads as a
- * claim about weekday hours rather than an absence of data — so the label is dropped with it.
+ * claim about weekday hours rather than an absence of data - so the label is dropped with it.
  */
 export function formatHoursLine(label: string, period: HoursPeriod | null): string {
   return period ? `${t(label)} ${formatHours(period)}` : formatHours(null);

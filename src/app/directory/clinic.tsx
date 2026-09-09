@@ -74,7 +74,7 @@ export default function ClinicDetailScreen() {
     (dept.has_derm_department || dept.department_name || dept.opd_notes)
   );
 
-  // Full-bleed hero only once we actually have a facility with a photo — otherwise
+  // Full-bleed hero only once we actually have a facility with a photo - otherwise
   // fall back to the plain header so Back always works during loading/error states.
   const showHero = !loading && !error && !!facility?.photo_url;
 

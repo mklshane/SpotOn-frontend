@@ -19,7 +19,7 @@ export type SettingsRowProps = {
    * `'chevron'` (default) shows a nav arrow. `'switch'` renders a `Switch` wired
    * to `switchValue`/`onSwitchChange` and the row's own `onPress` is ignored (no
    * nested-touchable conflict). Any other `ReactNode` (including `null` for a
-   * plain informational row) is rendered as-is — an interactive `ReactNode`
+   * plain informational row) is rendered as-is - an interactive `ReactNode`
    * accessory is the caller's responsibility to keep out of the row's own
    * touch target.
    */
@@ -65,7 +65,7 @@ export function SettingsRow({
     <Pressable
       onPress={isInteractive ? onPress : undefined}
       // Deliberately NOT `disabled` when the row is non-interactive. A switch row and a purely
-      // informational row are both non-interactive *as rows* — but react-native-web turns
+      // informational row are both non-interactive *as rows* - but react-native-web turns
       // `disabled` into aria-disabled="true" plus tabIndex=-1, so the whole row announced as
       // disabled and left the tab order, taking the working Switch inside it along. Omitting
       // onPress is enough to make the row inert.
@@ -110,7 +110,7 @@ export type ContactLinkProps = {
 };
 
 /**
- * A small inline, tappable email link — brand-colored, underlined, with a
+ * A small inline, tappable email link - brand-colored, underlined, with a
  * leading mail icon. Meant to sit inside body copy (e.g. a "Contact us"
  * paragraph) rather than in a settings list, unlike `SettingsRow`.
  */

@@ -6,8 +6,8 @@ import * as FileSystem from './fs';
  * Every capture attempt writes three JPEGs the user never sees again: the raw sensor still
  * (VisionCamera → the container's tmp/), the upright/resized copy and the square crop (both
  * expo-image-manipulator → Caches/ImageManipulator/). Gallery picks add a fourth in
- * Caches/ImagePicker/. Only the crop is ever copied somewhere permanent — scan-history's
- * persistImage puts that one under documentDirectory/screenings/ — so the rest are dead the
+ * Caches/ImagePicker/. Only the crop is ever copied somewhere permanent - scan-history's
+ * persistImage puts that one under documentDirectory/screenings/ - so the rest are dead the
  * moment the next stage exists. Nothing used to unlink them: screening-repo's deleteImageFiles
  * only fires when the user deletes a saved screening, which leaves every abandoned or retaken
  * scan on disk forever at ~4-8 MB a go.
@@ -21,7 +21,7 @@ const DEFAULT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Kept regardless of age. In dev, Metro serves the models over http and the loaders
- * (classifier-model.ts, lesion-model.ts) cache ~35 MB of .tflite here under fixed names — bounded,
+ * (classifier-model.ts, lesion-model.ts) cache ~35 MB of .tflite here under fixed names - bounded,
  * not accumulating, and re-downloading it on every launch would cost more than the space.
  */
 const KEEP = /\.tflite$/i;
@@ -35,7 +35,7 @@ const SCRATCH_SUBDIRS = ['ImageManipulator', 'ImagePicker'];
 
 /**
  * The container's tmp/, where VisionCamera writes stills (FileManager.temporaryDirectory).
- * expo-file-system doesn't expose it, so derive it from documentDirectory —
+ * expo-file-system doesn't expose it, so derive it from documentDirectory -
  * `<container>/Documents/` and `<container>/tmp/` are siblings. Returns null when the path
  * doesn't have the iOS shape, so a failed derivation can never alias documentDirectory itself.
  */
@@ -67,7 +67,7 @@ function isScratch(uri: string): boolean {
 
 /**
  * Best-effort unlink of files that are provably ours and provably disposable. Anything outside
- * the scratch roots is ignored rather than deleted — a photo-library asset or a persisted
+ * the scratch roots is ignored rather than deleted - a photo-library asset or a persisted
  * screening must survive being passed here by mistake. Never throws: losing a temp file is not
  * worth failing a capture over.
  */

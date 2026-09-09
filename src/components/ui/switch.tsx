@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-na
 import { useTheme } from '@/hooks/use-theme';
 
 export type SwitchProps = {
-  /** Names the control for assistive tech — a bare switch announces as an unlabeled control. */
+  /** Names the control for assistive tech - a bare switch announces as an unlabeled control. */
   accessibilityLabel?: string;
   value: boolean;
   onChange: (next: boolean) => void;
@@ -19,7 +19,7 @@ const THUMB_TRAVEL = TRACK_WIDTH - THUMB_SIZE - 4; // 2px inset each side
 
 /**
  * On/off toggle matching the app's warm-sunset design language (not the OS-native
- * Switch look). Only the thumb's `translateX` is animated — that's native-driver
+ * Switch look). Only the thumb's `translateX` is animated - that's native-driver
  * eligible. The track's background color is set directly from `value`, not
  * animated, since animating `backgroundColor` can't use the native driver.
  */
@@ -39,7 +39,7 @@ export function Switch({ value, onChange, disabled = false, accessibilityLabel }
     <Pressable
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
-      // react-native-web drops accessibilityState — see checkbox.tsx / select-card.tsx.
+      // react-native-web drops accessibilityState - see checkbox.tsx / select-card.tsx.
       accessibilityState={{ checked: value, disabled }}
       aria-checked={value}
       onPress={() => !disabled && onChange(!value)}

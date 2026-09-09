@@ -1,21 +1,20 @@
 import * as FileSystem from '@/lib/fs';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Platform } from 'react-native';
 
 import { loadReportAssets } from './report-assets';
 import { phtFileStamp } from './report-datetime';
 import { buildReportHtml } from './report-html';
-import { A4 } from './report-tokens';
+import { PRINT_PAGE } from './report-tokens';
 import { ReportError } from './report-error';
 import type { GeneratedReport } from './report-error';
 import type { ReportModel } from './summary-report';
 
 /**
- * Screening Summary Report — PDF generation, sharing and printing.
+ * Screening Summary Report - PDF generation, sharing and printing.
  *
  * Isolated from summary-report.ts (which stays pure and node-testable) because everything
- * here is native: expo-print, expo-sharing and the filesystem. The whole path is offline —
+ * here is native: expo-print, expo-sharing and the filesystem. The whole path is offline -
  * see report-html.ts's assertNoRemoteRefs, which throws if a remote reference ever creeps
  * into the template.
  */
@@ -41,14 +40,18 @@ export async function generateReportPdf(model: ReportModel): Promise<GeneratedRe
   }
 
   try {
-    const { uri } = await Print.printToFileAsync({
+    const { uri, numberOfPages } = await Print.printToFileAsync({
       html,
-      width: A4.width,
-      height: A4.height,
+      width: PRINT_PAGE.width,
+      height: PRINT_PAGE.height,
       base64: false,
     });
+    if (numberOfPages !== 1) {
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      throw new Error(`Screening Summary Report rendered to ${numberOfPages} pages.`);
+    }
     // printToFileAsync writes a random cache filename. Rename it so the share sheet and the
-    // receiving app show something meaningful — on Android the display name comes straight
+    // receiving app show something meaningful - on Android the display name comes straight
     // from the file on disk.
     const fileName = `SpotOn-Screening-Summary-${phtFileStamp(model.scanDate)}.pdf`;
     const dest = `${FileSystem.cacheDirectory}${fileName}`;
@@ -82,15 +85,11 @@ export async function shareReportPdf(report: GeneratedReport): Promise<void> {
  *
  * iOS prints the already-generated file, so what prints is exactly what was shared.
  * Android's print adapter for an existing PDF is unreliable across OEM print services, so it
- * re-renders from the identical HTML instead — same input, same output.
+ * re-renders from the identical HTML instead - same input, same output.
  */
 export async function printReportPdf(report: GeneratedReport): Promise<void> {
   try {
-    if (Platform.OS === 'ios') {
-      await Print.printAsync({ uri: report.uri });
-    } else {
-      await Print.printAsync({ html: report.html, width: A4.width, height: A4.height });
-    }
+    await Print.printAsync({ uri: report.uri });
   } catch (e) {
     throw new ReportError('print-failed', 'The summary could not be printed.', e);
   }

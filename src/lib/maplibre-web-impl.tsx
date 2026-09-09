@@ -3,7 +3,7 @@
  *
  * `@maplibre/maplibre-react-native` is a native module, so on web `maplibre.ts` resolves
  * MAP_AVAILABLE to false and the directory falls back to a list with "the map needs a dev
- * build". Browsers don't need a dev build — maplibre-gl is the same renderer, so this module
+ * build". Browsers don't need a dev build - maplibre-gl is the same renderer, so this module
  * reimplements the handful of declarative components ClinicMap.tsx uses on top of it and the
  * map simply appears.
  *
@@ -26,7 +26,7 @@ import { createPortal } from 'react-dom';
 
 import { MAP_STYLE_URL } from '@/config';
 
-/** The style URL is the real gate on web — no native module to be missing. */
+/** The style URL is the real gate on web - no native module to be missing. */
 export const MAP_AVAILABLE = MAP_STYLE_URL.length > 0;
 
 /**
@@ -34,12 +34,12 @@ export const MAP_AVAILABLE = MAP_STYLE_URL.length > 0;
  *
  * Metro cannot bundle it: maplibre parses tiles in a Web Worker, and through Metro's bundling of
  * the ESM build that worker never answers. The map then fetches its style, renders nothing,
- * requests zero tiles, and emits no error at all — a silently blank map that looks like a CSS or
+ * requests zero tiles, and emits no error at all - a silently blank map that looks like a CSS or
  * sizing bug. Verified 2026-09-08: a map built straight from the bundled constructor into a bare
  * 300x300 div also never fired `load`, while the same style in the UMD build loaded immediately.
  *
  * scripts/copy-litert-wasm.mjs stages dist/maplibre-gl.{js,css} into public/maplibre/, so this is
- * same-origin — no CDN in the request path for a health app, and no COEP complications.
+ * same-origin - no CDN in the request path for a health app, and no COEP complications.
  */
 const MAPLIBRE_JS = '/maplibre/maplibre-gl.js';
 const MAPLIBRE_CSS = '/maplibre/maplibre-gl.css';
@@ -150,12 +150,12 @@ export function MapLibreMap({
           attributionControl: false,
         });
         if (compass) m.addControl(new maplibregl.NavigationControl({ showZoom: false }), 'top-right');
-        // Style/tile failures are silent otherwise — a blank map with no clue why.
+        // Style/tile failures are silent otherwise - a blank map with no clue why.
         m.on('error', (e) => console.warn('[map]', (e as { error?: Error }).error?.message ?? e));
         // Children mount against a live style; adding a source before 'load' throws.
         m.on('load', () => {
           // react-native-web lays the container out after the map is constructed, so the map can
-          // come up believing it has no size — in which case it renders the style background and
+          // come up believing it has no size - in which case it renders the style background and
           // never requests a single tile.
           m?.resize();
           if (!cancelled) setMap(m);
@@ -201,7 +201,7 @@ export const Camera = forwardRef<CameraRef, { initialViewState?: { center: LngLa
 
     useEffect(() => {
       if (!map || !initialViewState || applied.current) return;
-      applied.current = true; // "initial" — later prop changes must not yank the user's view
+      applied.current = true; // "initial" - later prop changes must not yank the user's view
       map.jumpTo({ center: initialViewState.center, zoom: initialViewState.zoom });
     }, [map, initialViewState]);
 
@@ -309,7 +309,7 @@ export function GeoJSONSource({ id, data, onPress, children }: SourceProps) {
   }, [map, id, onPress]);
 
   // Children render immediately; each Layer waits for this source to exist on its own, because
-  // React runs child effects BEFORE the parent's — so the source is not added yet at this point.
+  // React runs child effects BEFORE the parent's - so the source is not added yet at this point.
   return <SourceCtx.Provider value={id}>{children}</SourceCtx.Provider>;
 }
 
@@ -336,7 +336,7 @@ export function Layer({ id, type, filter, paint, layout }: LayerProps) {
       if (cancelled || map.getLayer(id) || !map.getSource(source)) return false;
       // Only include optional keys when they have a value: maplibre validates the spec and
       // rejects `layout: undefined` outright ("object expected, undefined found"), which
-      // silently drops the layer — the pins just never appear.
+      // silently drops the layer - the pins just never appear.
       const spec: Record<string, unknown> = { id, type, source };
       if (paint) spec.paint = paint;
       if (layout) spec.layout = layout;
@@ -414,7 +414,7 @@ export function Marker({ lngLat, anchor = 'center', offset, children }: MarkerPr
 
 /**
  * Offline tile packs are a native-only feature. The browser's HTTP cache already keeps recently
- * viewed tiles, so this no-ops rather than pretending to download a pack — map-offline.ts treats
+ * viewed tiles, so this no-ops rather than pretending to download a pack - map-offline.ts treats
  * a rejection as best-effort and only logs it.
  */
 export const OfflineManager = {

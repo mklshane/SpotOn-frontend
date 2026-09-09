@@ -6,7 +6,7 @@
 
 **Architecture:** A new `src/components/ui/accordion.tsx` renders a collapsed trigger (same look as today's `Select` trigger) plus an in-flow (not overlaid) animated options list built from `SelectCard`s. The three call sites (`Sex` in two screens, `Skin type` in one) switch from `Select` to `Accordion`; skin type's options gain a `description` field for two-line rows. `select.tsx` is then deleted since nothing else uses it.
 
-**Tech Stack:** React Native, TypeScript, Reanimated (already a dependency, used the same way in `button.tsx`/`select-card.tsx`), existing `theme.ts` tokens, existing `SelectCard`/`ThemedText`/`Icon` primitives. No new dependencies. No test runner is configured in this project — verification is `npx tsc --noEmit` after each code change, plus manual emulator testing in the final task.
+**Tech Stack:** React Native, TypeScript, Reanimated (already a dependency, used the same way in `button.tsx`/`select-card.tsx`), existing `theme.ts` tokens, existing `SelectCard`/`ThemedText`/`Icon` primitives. No new dependencies. No test runner is configured in this project - verification is `npx tsc --noEmit` after each code change, plus manual emulator testing in the final task.
 
 **Reference:** `docs/superpowers/specs/2026-07-29-accordion-field-design.md`
 
@@ -148,7 +148,7 @@ export { Accordion } from './accordion';
 export { Button } from './button';
 ```
 
-(Leave the existing `export { Select } from './select';` line in place for now — Task 3 removes it, after Task 2 has migrated every caller off of it.)
+(Leave the existing `export { Select } from './select';` line in place for now - Task 3 removes it, after Task 2 has migrated every caller off of it.)
 
 - [ ] **Step 3: Type-check**
 
@@ -369,7 +369,7 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
 
 export default function CompleteProfileScreen() {
   const { user } = useAuth();
-  // Already captured at sign-up if they registered by phone — don't ask again.
+  // Already captured at sign-up if they registered by phone - don't ask again.
   const hasPhone = Boolean(user?.phone);
   const [dob, setDob] = useState<string | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
@@ -472,8 +472,8 @@ const styles = StyleSheet.create({
 - [ ] **Step 3: Type-check**
 
 Run: `npx tsc --noEmit`
-Expected: no errors in either file. (`Select` is still exported/present at this point — Task 3
-removes it — so this step just confirms nothing outside these two files broke.)
+Expected: no errors in either file. (`Select` is still exported/present at this point - Task 3
+removes it - so this step just confirms nothing outside these two files broke.)
 
 - [ ] **Step 4: Commit**
 
@@ -510,7 +510,7 @@ export { Select } from './select';
 - [ ] **Step 4: Type-check**
 
 Run: `npx tsc --noEmit`
-Expected: clean — confirms nothing still references `Select` or `./select`.
+Expected: clean - confirms nothing still references `Select` or `./select`.
 
 - [ ] **Step 5: Commit**
 
@@ -527,28 +527,28 @@ git commit -m "chore: remove unused Select component (replaced by Accordion)"
 
 - [ ] **Step 1: Reload the app**
 
-This task only changed JS (no native dependency changes), so a Metro reload is enough — no
+This task only changed JS (no native dependency changes), so a Metro reload is enough - no
 native rebuild needed. Use the `run` skill, or just reload (`r` in the Metro terminal, or
 shake/`Ctrl+M` → Reload in the emulator).
 
 - [ ] **Step 2: Walk through the checklist from the design spec**
 
 On `profile/edit.tsx`:
-- Tap "Sex" — it expands in place (pushes "Phone number" and "Skin type" down, doesn't overlay
+- Tap "Sex" - it expands in place (pushes "Phone number" and "Skin type" down, doesn't overlay
   them). Options show as brand-tint/checkmark cards when selected.
-- Pick a Sex option — it selects, closes the accordion, and the following fields settle back up.
-- Tap "Skin type" — expands showing all 6 options as two-line cards (bold "Type I" etc. +
+- Pick a Sex option - it selects, closes the accordion, and the following fields settle back up.
+- Tap "Skin type" - expands showing all 6 options as two-line cards (bold "Type I" etc. +
   muted description below). Scrolls naturally with the rest of the form, nothing clipped.
-- Pick a skin type option — selects and closes.
-- Clear "Sex", tap "Save changes" — error state shows: red border on the Sex trigger, error
+- Pick a skin type option - selects and closes.
+- Clear "Sex", tap "Save changes" - error state shows: red border on the Sex trigger, error
   message below it (same as before).
 
 On `(auth)/complete-profile.tsx`:
-- Tap "Sex" — same expand-in-place behavior, pushes phone number field (if shown) down.
-- Leave it unset and tap "Continue" — same error-state check as above.
+- Tap "Sex" - same expand-in-place behavior, pushes phone number field (if shown) down.
+- Leave it unset and tap "Continue" - same error-state check as above.
 
 - [ ] **Step 3: Report results**
 
-Note any visual or interaction issues found during the walkthrough for follow-up — this task
+Note any visual or interaction issues found during the walkthrough for follow-up - this task
 doesn't have automated pass/fail, so explicitly confirm each bullet above worked before
 considering the plan complete.

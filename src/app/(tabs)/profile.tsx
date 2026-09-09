@@ -35,7 +35,7 @@ export default function ProfileScreen() {
   const sexLabel = user?.sex ? (SEX_LABELS[user.sex] ?? user.sex) : null;
   const skinLabel = skinTypeLabel(user?.fitzpatrick_skin_type ?? null);
 
-  // Cache-bust on `updated_at` — the backend reuses the same avatar_url on
+  // Cache-bust on `updated_at` - the backend reuses the same avatar_url on
   // every re-upload, and without this the cached image from before the edit
   // would keep rendering even though the URL "changed" server-side.
   const avatarSource = user?.avatar_url
@@ -130,7 +130,7 @@ export default function ProfileScreen() {
               <ThemedText type="caption" style={styles.statLabel}>
                 {t("AGE")}</ThemedText>
               <ThemedText type="headline" themeColor="onBrand">
-                {age != null ? age : "—"}
+                {age != null ? age : "-"}
               </ThemedText>
             </View>
             <View style={styles.statDivider} />
@@ -138,7 +138,7 @@ export default function ProfileScreen() {
               <ThemedText type="caption" style={styles.statLabel}>
                 {t("SEX")}</ThemedText>
               <ThemedText type="headline" themeColor="onBrand">
-                {sexLabel ?? "—"}
+                {sexLabel ?? "-"}
               </ThemedText>
             </View>
             <View style={styles.statDivider} />

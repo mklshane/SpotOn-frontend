@@ -45,7 +45,7 @@ function scene(cxN, cyN, rPx, { skin = [205, 150, 120], lesion = [60, 40, 35], h
     for (let x = 0; x < W; x++) {
       const p = (y * W + x) * 4;
       const inLesion = rPx > 0 && (x - cx) ** 2 + (y - cy) ** 2 <= rPx * rPx;
-      // thin dark diagonal strands, like body hair — must NOT be mistaken for a lesion
+      // thin dark diagonal strands, like body hair - must NOT be mistaken for a lesion
       const onHair = hair && (x + y) % 11 === 0;
       const c = inLesion ? lesion : onHair ? [70, 55, 45] : skin;
       d[p] = c[0]; d[p + 1] = c[1]; d[p + 2] = c[2]; d[p + 3] = 255;
@@ -87,7 +87,7 @@ check('declines when surround is not skin', locateLesion(grey, W, W) === null);
 // REGRESSION GUARD (over-zoom bug): a close-up photo where the lesion already fills most of the
 // frame must still be found as-is, not discarded as "too big" in favor of a smaller wrong
 // sub-feature. Widen centralFrac here so the test isolates the size ceiling from the separate
-// edge-clip guard below — a perfect circle scaled to >70% of an 80px frame necessarily grazes the
+// edge-clip guard below - a perfect circle scaled to >70% of an 80px frame necessarily grazes the
 // default centralFrac=0.7 search window, which real photos (with natural margin) don't do; that
 // case is exactly what the real-photo sanity check (not this synthetic one) validates.
 box = locateLesion(scene(0.5, 0.5, 30), W, W, { targetFill: 0.45, centralFrac: 0.95 });
@@ -96,7 +96,7 @@ if (box) {
   check('large lesion: centroid stays centered', near(box.cx, 0.5, 0.1) && near(box.cy, 0.5, 0.1));
 }
 
-// REGRESSION GUARD (wrong-area zoom bug): found on a real upload — a strong, high-contrast mass
+// REGRESSION GUARD (wrong-area zoom bug): found on a real upload - a strong, high-contrast mass
 // anchored to the frame edge (hair spilling toward the top) out-peaks a real but faint, small
 // central lesion. It must not win just because it's darker; a real lesion sits with margin inside
 // the search window, while this one is clipped by the boundary. The small central lesion must

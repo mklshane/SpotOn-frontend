@@ -20,7 +20,7 @@ export const TabBarOverhang = 30;
 /**
  * Bottom padding a tab screen's scroll content needs to clear the bar *and* the ring that
  * protrudes from it. The bar is a sibling the screens don't otherwise know about, so each one
- * used to hard-code a guess — Home 64, Learn and Profile 20 — and the two 20s did not even
+ * used to hard-code a guess - Home 64, Learn and Profile 20 - and the two 20s did not even
  * clear the overhang their own comments claimed to.
  */
 export const TabContentInset = TabBarHeight + TabBarOverhang;
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     // Android elevation renders as an ambient shadow spreading in all
     // directions (not just the declared offset), and this ring floats
-    // (marginTop: -30) up into the content area above the bar — at 10 it
+    // (marginTop: -30) up into the content area above the bar - at 10 it
     // washed a wide orange glow over cards sitting near the tab bar.
     elevation: 4,
   },

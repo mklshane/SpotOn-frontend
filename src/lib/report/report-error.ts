@@ -2,7 +2,7 @@
  * Report types shared by the native and web PDF paths.
  *
  * Split out of report-pdf.ts so report-pdf.web.ts can reuse the error class rather than declare
- * a second one — `e instanceof ReportError` in scan/report.tsx must hold on both platforms, and
+ * a second one - `e instanceof ReportError` in scan/report.tsx must hold on both platforms, and
  * two separate class declarations would quietly fail that check on web.
  */
 

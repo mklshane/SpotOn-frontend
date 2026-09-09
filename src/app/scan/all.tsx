@@ -30,16 +30,16 @@ export default function AllScreeningsScreen() {
   const { tab: tabParam } = useLocalSearchParams<{ tab?: string }>();
   const [tab, setTab] = useState<Tab>(tabParam === 'scans' ? 'scans' : 'lesions');
 
-  // Archived lesions drop off the list but are never deleted — the scans still exist under "All scans".
+  // Archived lesions drop off the list but are never deleted - the scans still exist under "All scans".
   const visible = useMemo(() => lesions.filter((l) => !l.archived), [lesions]);
 
   const empty = tab === 'lesions' ? visible.length === 0 : entries.length === 0;
   // Three states, not two. A failed read used to fall through to "you don't have any screenings
-  // yet" — telling a user their history is gone when it is merely unread.
+  // yet" - telling a user their history is gone when it is merely unread.
   const emptyCopy = loading
     ? 'Loading your screenings…'
     : loadError
-      ? 'We couldn’t open your saved screenings. They are still on this device — close the app and open it again.'
+      ? 'We couldn’t open your saved screenings. They are still on this device - close the app and open it again.'
       : tab === 'lesions'
         ? 'No tracked spots yet. Every scan you take starts tracking the spot it was taken of.'
         : 'You don’t have any screenings yet.';
@@ -73,9 +73,14 @@ export default function AllScreeningsScreen() {
           ItemSeparatorComponent={Separator}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <ThemedText type="footnote" themeColor="muted" style={styles.count}>
-              {visible.length} {visible.length === 1 ? 'spot tracked' : 'spots tracked'}
-            </ThemedText>
+            <HistoryListIntro
+              count={visible.length}
+              copy={
+                visible.length === 1
+                  ? 'Open this spot to review its previous screening session.'
+                  : 'Open a spot to review its previous screening sessions.'
+              }
+            />
           }
         />
       ) : (
@@ -87,9 +92,10 @@ export default function AllScreeningsScreen() {
           ItemSeparatorComponent={Separator}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <ThemedText type="footnote" themeColor="muted" style={styles.count}>
-              {entries.length} {entries.length === 1 ? 'screening' : 'screenings'}
-            </ThemedText>
+            <HistoryListIntro
+              count={entries.length}
+              copy="Each session keeps its date, lesion thumbnail, classification result, and urgency level."
+            />
           }
         />
       )}
@@ -121,6 +127,19 @@ function Separator() {
   return <View style={styles.separator} />;
 }
 
+function HistoryListIntro({ count, copy }: { count: number; copy: string }) {
+  return (
+    <View style={styles.intro}>
+      <ThemedText type="footnote" themeColor="muted" style={styles.count}>
+        {count} {count === 1 ? 'screening session' : 'screening sessions'}
+      </ThemedText>
+      <ThemedText type="caption" themeColor="muted" style={styles.introCopy}>
+        {copy}
+      </ThemedText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   header: {
     height: 48,
@@ -134,6 +153,8 @@ const styles = StyleSheet.create({
   emptyBody: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.xl },
   center: { textAlign: 'center' },
   listContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm },
-  count: { marginBottom: Space.md },
+  intro: { gap: Space.xs, marginBottom: Space.md },
+  count: {},
+  introCopy: { maxWidth: 520 },
   separator: { height: Space.md },
 });

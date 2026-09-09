@@ -1,4 +1,4 @@
-# SpotOn — Mobile Frontend (Plan)
+# SpotOn - Mobile Frontend (Plan)
 
 Offline-first mobile app for early skin-cancer **triage** and telemedicine referral,
 for Filipino users in low-connectivity, underserved areas. Undergraduate CS thesis,
@@ -10,17 +10,17 @@ De La Salle Lipa, AY 2025–2026.
 > always rests with a medical professional.
 
 This README is the **frontend architecture + roadmap plan**. Code is greenfield; the old
-HTML mockup is **not** the basis for this build — the UI is being designed fresh.
+HTML mockup is **not** the basis for this build - the UI is being designed fresh.
 
 ---
 
 ## Core user flow
 
-1. **Capture** a smartphone photo of a suspicious lesion — with **live, guided framing**.
+1. **Capture** a smartphone photo of a suspicious lesion - with **live, guided framing**.
 2. Answer the **8-feature symptom questionnaire** (Yes / Unsure / No).
 3. **On-device** AI classifies the lesion → `MEL` / `SCC` / `BCC` / `OTHER`.
 4. Compute the **Triage Priority Score (TPS)** locally.
-5. Generate a **Screening Summary Report** (offline, on-device PDF) and — if **Moderate+** —
+5. Generate a **Screening Summary Report** (offline, on-device PDF) and - if **Moderate+** -
    show the **localized clinic directory**.
 6. Works **offline** end to end.
 
@@ -31,9 +31,9 @@ HTML mockup is **not** the basis for this build — the UI is being designed fre
 **React Native + Expo (dev build / EAS) + TypeScript.**
 
 - Two on-device models run cross-platform from **a single TFLite (INT8) artifact each**,
-  hardware-accelerated per platform (GPU/NNAPI on Android, **Core ML delegate** on iOS) —
+  hardware-accelerated per platform (GPU/NNAPI on Android, **Core ML delegate** on iOS) -
   avoiding the maintenance cost of separate TFLite + Core ML exports.
-- Requires an **Expo dev build (EAS)**, not Expo Go — custom native ML modules aren't
+- Requires an **Expo dev build (EAS)**, not Expo Go - custom native ML modules aren't
   available in the Expo Go sandbox. The Expo/EAS workflow is otherwise unchanged.
 
 ### Why this stack
@@ -81,7 +81,7 @@ Live preview (vision-camera)
 ```
 
 ### Screening Summary Report (offline, on-device)
-Generated entirely on-device with `expo-print` (HTML template → PDF) — **never uploaded**,
+Generated entirely on-device with `expo-print` (HTML template → PDF) - **never uploaded**,
 since it embeds the lesion image and PII. Shared/saved via `expo-sharing`. One A4 page,
 matching `screeningsummary.png`. Every asset is inlined as a base64 data URI and
 `assertNoRemoteRefs()` (`src/lib/report/report-html.ts`) throws if a remote reference ever
@@ -89,7 +89,7 @@ reaches the template, so the print WebView cannot make a network request while r
 Contents:
 - **Header:** SpotOn wordmark + "Screening Summary Report" + date/time (PHT).
 - **Profile:** name, date of birth (+ age), sex, contact (from the cached user profile;
-  missing fields print as a dash rather than blocking generation). No address row —
+  missing fields print as a dash rather than blocking generation). No address row -
   `UserProfile` has no address field.
 - **Lesion image + classification:** the captured photo, predicted class (e.g. Melanoma /
   MEL) and model confidence %.
@@ -101,7 +101,7 @@ Contents:
 
 ### Model responsibilities
 - **Detection (live):** localize the lesion to guide framing and crop the ROI. Must be
-  **tiny** — target ~30–60 ms/inference on low-end Android (the primary device class).
+  **tiny** - target ~30–60 ms/inference on low-end Android (the primary device class).
   MobileNet-SSD-lite / YOLO-nano-class, not a heavy backbone.
 - **Classification (still):** the 4-class CNN (EfficientNet-B2 / MobileNetV3-Large /
   ConvNeXt-Tiny per the selected model), INT8-quantized, run once on the cropped ROI.
@@ -116,7 +116,7 @@ Tiers: Low 0–1.99 | Moderate 2–3.99 | High 4–5.99 | Critical 6–8
 ```
 
 ### Performance notes
-Continuous frame inference is the main battery/heat risk — the auto-capture quality gate
+Continuous frame inference is the main battery/heat risk - the auto-capture quality gate
 ends the live loop quickly. Use the GPU delegate, downscale frames before inference, and
 throttle fps. Keep the detection model and classifier as separate `.tflite` assets bundled
 with the app (offline).
@@ -150,11 +150,11 @@ visible (e.g. a "needs internet" state on the Book button when offline).
 |---|---|---|
 | Capture → detect → classify → TPS | ✅ Full | On-device models + local scoring. |
 | Screening Summary Report (PDF) | ✅ Full | Generated locally with `expo-print`; embeds lesion image + PII, never uploaded. |
-| Clinic / doctor list — browse, search, filter | ✅ Full | Read from the SQLite mirror seeded via `/sync`. |
+| Clinic / doctor list - browse, search, filter | ✅ Full | Read from the SQLite mirror seeded via `/sync`. |
 | Enriched fields (services, phone, address, website, booking_url, has_philhealth, coords) | ✅ Full | All cached locally. |
 | "Nearest clinic" / distance sort | ✅ Full | Computed on-device from cached lat/lng + phone GPS (haversine); no server radius query needed. |
 | Tap-to-call, "open in Maps", copy website | ✅ Full | OS intents; the device's own Maps app may have its own offline maps. |
-| **Map view (base tiles)** | ⚠️ Partial | Markers/coords are offline; the visual base map streams tiles. **Plan:** online interactive map with **offline fallback to the distance-sorted list**. A true offline map (pre-downloaded MapLibre/MBTiles tiles for target cities) is optional and costs app size — only if explicitly required. |
+| **Map view (base tiles)** | ⚠️ Partial | Markers/coords are offline; the visual base map streams tiles. **Plan:** online interactive map with **offline fallback to the distance-sorted list**. A true offline map (pre-downloaded MapLibre/MBTiles tiles for target cities) is optional and costs app size - only if explicitly required. |
 | **Booking a teleconsult** | ❌ Needs signal | The booking URL/platform/fee are cached and *viewable* offline, but the booking itself is a live external service. "See options offline, book when you have signal." |
 | Opening a clinic website | ❌ Needs signal | External URL. |
 | Sign-in / profile sync (`/me`, Supabase auth) | ❌ Needs signal | Auth + profile writes are online; cached profile can still feed the report offline. |
@@ -213,7 +213,7 @@ npx expo start --dev-client
 `API_BASE_URL` is configured per environment (`.env` / `app.config.ts`); never commit
 secrets. Camera, location and notification permissions are declared via Expo config plugins.
 The 30-day re-screening reminder is a *local* OS notification (`expo-notifications`), scheduled
-on-device when the user opts in on a Low-tier result — no server or push token is involved.
+on-device when the user opts in on a Low-tier result - no server or push token is involved.
 
 ---
 
@@ -221,16 +221,16 @@ on-device when the user opts in on a Low-tier result — no server or push token
 
 Build the **ML-independent** parts first so progress isn't blocked on model training.
 
-1. **Scaffold** — Expo dev build, expo-router, TS, theme tokens, typed API client.
-2. **Offline data layer** — SQLite schema + `/sync` client + repositories.
-3. **Clinic directory feature** *(ready now — backend + data complete)* — browse, search,
+1. **Scaffold** - Expo dev build, expo-router, TS, theme tokens, typed API client.
+2. **Offline data layer** - SQLite schema + `/sync` client + repositories.
+3. **Clinic directory feature** *(ready now - backend + data complete)* - browse, search,
    filter by service, facility/doctor detail, offline.
-4. **Questionnaire + TPS** — pure logic + UI; no model dependency.
-5. **Camera + guided framing** — vision-camera preview + Skia overlay + **stubbed**
+4. **Questionnaire + TPS** - pure logic + UI; no model dependency.
+5. **Camera + guided framing** - vision-camera preview + Skia overlay + **stubbed**
    detection frame processor (drop in `detection.tflite` when trained).
-6. **Classification + result** — wire `classifier.tflite`, compute TPS, result screen with
+6. **Classification + result** - wire `classifier.tflite`, compute TPS, result screen with
    disclaimer and routing.
-7. **Screening Summary Report** — offline HTML→PDF (`expo-print`) with lesion image +
+7. **Screening Summary Report** - offline HTML→PDF (`expo-print`) with lesion image +
    profile + classification + questionnaire + urgency + disclaimer; share/save.
 8. **Auth** (Supabase) + history, polish, EAS production builds, DPA 2012 review.
 

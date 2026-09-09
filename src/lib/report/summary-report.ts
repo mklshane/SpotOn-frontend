@@ -7,6 +7,7 @@ import { computeAge, formatLongDate, sexLabel } from '../profile-format';
 import { QUESTIONS } from '../triage/questions';
 import {
   CLASS_DISPLAY,
+  AVOID_SELF_MEDICATION_WARNING,
   confidenceBand,
   CONFIDENCE_QUALIFIER,
   DISCLAIMER,
@@ -19,11 +20,11 @@ import type { LesionClass, QuestionId, ScreeningRecord, TriageTier } from '../tr
 import { phtDateLabel, phtTimeLabel } from './report-datetime';
 
 /**
- * Screening Summary Report — the data contract.
+ * Screening Summary Report - the data contract.
  *
  * `buildReportModel` is a pure projection: the screening comes from `useScanHistory()` and
  * the profile from `useAuth()`, and both are passed in so this module stays testable in node
- * and free of React. The model deliberately carries no base64 — image bytes are loaded
+ * and free of React. The model deliberately carries no base64 - image bytes are loaded
  * separately by report-assets.ts, so the model stays cheap to memoize.
  */
 
@@ -36,18 +37,18 @@ export type ReportPatient = {
   /** "March 14, 1985" */
   dobDisplay: string | null;
   age: number | null;
-  /** "March 14, 1985  (41 y/o)" — pre-composed so the template stays dumb. */
+  /** "March 14, 1985  (41 y/o)" - pre-composed so the template stays dumb. */
   dobLine: string | null;
   sex: string | null;
   /** phone, falling back to email. */
   contact: string | null;
-  /** True when any of name/dob/sex/contact is missing — drives the in-app nudge. */
+  /** True when any of name/dob/sex/contact is missing - drives the in-app nudge. */
   incomplete: boolean;
 };
 
 export type ReportSymptom = {
   id: QuestionId;
-  /** The full question, as asked — the report's table column. */
+  /** The full question, as asked - the report's table column. */
   question: string;
   /** Short recap label, for the compact in-app rows. */
   label: string;
@@ -59,7 +60,7 @@ export type ReportModel = {
   locale: Locale;
   generatedAt: string;
   scanDate: string;
-  /** "May 13, 2026" — the scan date in Philippine time. */
+  /** "May 13, 2026" - the scan date in Philippine time. */
   dateLabel: string;
   /** "09:42 AM PHT" */
   timeLabel: string;
@@ -68,12 +69,12 @@ export type ReportModel = {
 
   /** 'MEL' */
   classificationCode: LesionClass;
-  /** "Melanoma" — the disease name, for the report's "Melanoma (MEL)" line. */
+  /** "Melanoma" - the disease name, for the report's "Melanoma (MEL)" line. */
   classificationFull: string;
-  /** "Melanoma-like" — the lay pattern label used by in-app surfaces. */
+  /** "Melanoma-like" - the lay pattern label used by in-app surfaces. */
   classificationName: string;
   confidencePct: number;
-  /** "87.4%" — one decimal, as on the approved layout. */
+  /** "87.4%" - one decimal, as on the approved layout. */
   confidenceLabel: string;
   probs: { label: string; pct: number }[];
 
@@ -81,9 +82,9 @@ export type ReportModel = {
   yesCount: number;
 
   tier: TriageTier;
-  /** "Priority" — TIER_CONTENT[tier].name, the app's wording. */
+  /** "Priority" - TIER_CONTENT[tier].name, the app's wording. */
   urgencyTier: string;
-  /** "PRIORITY" — the same wording, set in caps for the urgency box. */
+  /** "PRIORITY" - the same wording, set in caps for the urgency box. */
   urgencyLabel: string;
   urgencyHeadline: string;
   /** The assembled lead sentence, with structural bold runs. */
@@ -94,7 +95,7 @@ export type ReportModel = {
 
   tps: string;
   bodyRegion: string | null;
-  /** The primary photo — the one the classifier read and the one printed at full size. */
+  /** The primary photo - the one the classifier read and the one printed at full size. */
   imageUri: string;
   /**
    * Every photo of this lesion, primary first. Length 1 for a single-photo screening (and for
@@ -103,7 +104,7 @@ export type ReportModel = {
   imageUris: string[];
   safetyFloorApplied: boolean;
   /**
-   * Plain-language reason the urgency is not the classifier's own verdict — the Safety Floor's
+   * Plain-language reason the urgency is not the classifier's own verdict - the Safety Floor's
    * "we could not read the photo", or the Malignant Gate's "the closest match was not a cancer
    * type but enough certainty pointed at one". Null when neither fired.
    *
@@ -113,14 +114,16 @@ export type ReportModel = {
    * handed to a clinician did not.
    */
   assessmentNote: string | null;
-  /** Summed MEL+SCC+BCC probability, as a percentage — the Malignant Gate's input. */
+  /** Summed MEL+SCC+BCC probability, as a percentage - the Malignant Gate's input. */
   malignantPct: number;
   malignantGateApplied: boolean;
 
-  /** DISCLAIMER — user-facing, shown in the app. */
+  /** DISCLAIMER - user-facing, shown in the app. */
   disclaimer: string;
-  /** REPORT_DISCLAIMER — clinician-facing, printed on the PDF. */
+  /** REPORT_DISCLAIMER - clinician-facing, printed on the PDF. */
   printDisclaimer: string;
+  /** Safety warning shown on every result and report surface. */
+  avoidSelfMedicationWarning: string;
 };
 
 const DASH = null;
@@ -145,7 +148,7 @@ function buildPatient(profile: UserProfile | null | undefined): ReportPatient {
 /**
  * Pure projection of a ScreeningRecord (+ the signed-in profile) into report-ready fields.
  * `profile` is optional: a null profile degrades every patient field to a placeholder rather
- * than blocking generation — a report with a photo and a triage tier is still useful.
+ * than blocking generation - a report with a photo and a triage tier is still useful.
  */
 export function buildReportModel(
   record: ScreeningRecord,
@@ -219,7 +222,7 @@ export function buildReportModel(
     safetyFloorApplied: record.triage.safetyFloorApplied,
     // Safety Floor takes precedence: when the photo could not be read, that is the whole
     // explanation and the gate's reasoning about spread-out probabilities is not meaningful on top
-    // of it. result.tsx picks `qualifier` over `gated` for the same reason — the two surfaces agree.
+    // of it. result.tsx picks `qualifier` over `gated` for the same reason - the two surfaces agree.
     assessmentNote: record.triage.safetyFloorApplied
       ? CONFIDENCE_QUALIFIER.body
       : record.triage.malignantGateApplied
@@ -230,5 +233,6 @@ export function buildReportModel(
 
     disclaimer: t(DISCLAIMER),
     printDisclaimer: t(REPORT_DISCLAIMER),
+    avoidSelfMedicationWarning: t(AVOID_SELF_MEDICATION_WARNING),
   };
 }

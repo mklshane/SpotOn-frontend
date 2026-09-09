@@ -34,11 +34,11 @@ export type ClinicsViewProps = {
   topInset: number;
   /**
    * The search bar / segmented-control overlay, rendered by the parent
-   * screen but placed here — between the map and the bottom sheet — so
+   * screen but placed here - between the map and the bottom sheet - so
    * normal paint order (not zIndex) makes the sheet cover it once it grows
    * tall enough to reach it, and lets it float above the plain map the rest
    * of the time. A sibling of `ClinicsView` could never sit "inside" the
-   * sheet's stacking this way — zIndex only reorders siblings under the
+   * sheet's stacking this way - zIndex only reorders siblings under the
    * same parent, and the sheet lives one level deeper than that.
    */
   header?: ReactNode;
@@ -52,7 +52,7 @@ const ALL_CHIP = "All Clinics";
 const OPEN_CHIP = "Open Now";
 
 // `topInset` stays part of the props contract (the parent screen still needs it
-// to size/position the search header itself) but is no longer consumed here —
+// to size/position the search header itself) but is no longer consumed here -
 // see the snapPoints/topInset comments below for why the sheet stopped using it.
 export function ClinicsView({
   query,
@@ -71,7 +71,7 @@ export function ClinicsView({
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
-  // Live top-edge Y position of the bottom sheet, in screen space — kept in
+  // Live top-edge Y position of the bottom sheet, in screen space - kept in
   // sync by BottomSheet itself as it's dragged/snapped. Drives the floating
   // map controls (zoom buttons, location chip) so they track the sheet's
   // actual current position instead of a snapshot of its collapsed height.
@@ -105,7 +105,7 @@ export function ClinicsView({
      *
      * `nearbyFacilities` defaults to a 15 km box (`repositories.ts` `radiusM`), and passing no
      * override meant a user outside a metro area got an empty list and "No clinics found. Try a
-     * different search or filter." — while the local DB held the full national directory. Granting
+     * different search or filter." - while the local DB held the full national directory. Granting
      * location made the app strictly worse than denying it. An empty proximity result now falls
      * back to the unfiltered list rather than being reported as "none exist".
      */
@@ -120,7 +120,7 @@ export function ClinicsView({
       .then((rows) => {
         if (cancelled) return;
         // Clear on success: `setError(true)` had no counterpart anywhere, so one failed read
-        // latched the error state for the screen's lifetime — including over this fallback.
+        // latched the error state for the screen's lifetime - including over this fallback.
         setError(false);
         setFacilities(rows);
       })
@@ -173,7 +173,7 @@ export function ClinicsView({
   // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
   //
   // The top point is the full screen height (not `SCREEN_H - topInset`) so
-  // dragging all the way up covers the whole screen, Google-Maps-style — the
+  // dragging all the way up covers the whole screen, Google-Maps-style - the
   // header stays visible above it purely because it renders with higher
   // elevation/zIndex as a sibling, not because the sheet stops short of it.
   const snapPoints = useMemo(() => ["20%", "50%", "96%"], []);
@@ -194,7 +194,7 @@ export function ClinicsView({
       <BottomSheet
         index={0}
         snapPoints={snapPoints}
-        // `topInset` acts as a hard ceiling in this library — the sheet's top
+        // `topInset` acts as a hard ceiling in this library - the sheet's top
         // edge can never rise above it, regardless of what any snap point
         // says. Since the tallest snap point is meant to reach the very top
         // of the screen, `topInset` has to stay 0 here; it's no longer used

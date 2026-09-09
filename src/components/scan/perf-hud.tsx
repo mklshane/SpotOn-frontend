@@ -16,16 +16,16 @@ import {
  *
  * Exists because the device that actually lags (a low-end Android) isn't the device we develop on.
  * Rather than guess, the frame processor writes its own timings into worklet shared values and
- * this panel drains them on the JS thread twice a second — so the numbers can be read off any
+ * this panel drains them on the JS thread twice a second - so the numbers can be read off any
  * phone the app is installed on, with no profiler attached.
  *
  * What the four numbers mean:
- *   fp     — wall time of one frame-processor pass (resize + TFLite + YOLO decode). This is the
+ *   fp     - wall time of one frame-processor pass (resize + TFLite + YOLO decode). This is the
  *            budget: at 12 fps anything over ~80 ms means the camera thread is saturated.
- *   det    — detector passes actually completed per second (what `runAtTargetFps` achieved).
- *   js     — JS-thread frame rate. Drops below ~50 mean React work is starving the UI, which is
+ *   det    - detector passes actually completed per second (what `runAtTargetFps` achieved).
+ *   js     - JS-thread frame rate. Drops below ~50 mean React work is starving the UI, which is
  *            the symptom the per-frame `setState` used to cause.
- *   tier   — resolved device tier; tap it to force one and exercise the low-end path on a fast phone.
+ *   tier   - resolved device tier; tap it to force one and exercise the low-end path on a fast phone.
  */
 
 /** Counters written from the frame-processor worklet, drained by the HUD. */
@@ -39,14 +39,14 @@ export type PerfCounters = {
 };
 
 /**
- * Allocate the counters. Safe (and cheap) to call in production builds — the frame processor only
+ * Allocate the counters. Safe (and cheap) to call in production builds - the frame processor only
  * writes to them when `PERF_ENABLED` is set, and `PerfHud` renders nothing outside `__DEV__`.
  */
 export function usePerfCounters(): PerfCounters {
   const frames = useSharedValue(0);
   const sumMs = useSharedValue(0);
   const maxMs = useSharedValue(0);
-  // Stable identity — this lands in the frame processor's dependency array, and a fresh object
+  // Stable identity - this lands in the frame processor's dependency array, and a fresh object
   // each render would rebuild the worklet on every render.
   return useMemo(() => ({ frames, sumMs, maxMs }), [frames, sumMs, maxMs]);
 }

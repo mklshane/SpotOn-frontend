@@ -8,12 +8,12 @@
  * real anchors vs. controlled dark/bright/glare/blur/non-skin degradations. Two findings drove
  * the current values:
  *   - The old BLUR=0.001 rejected ~half of real anchors (raw Laplacian variance of a good photo
- *     sits at ~5e-5..5e-3). Recalibrated to 5e-5 — good/blur separate cleanly (AUROC 1.0).
+ *     sits at ~5e-5..5e-3). Recalibrated to 5e-5 - good/blur separate cleanly (AUROC 1.0).
  *   - The old shadow gate (directional luminance gradient) barely separated a cast shadow from
  *     normal lighting falloff (AUROC ~0.61) and rejected good photos. Shadow is now ADVISORY: it
  *     surfaces an "even out the lighting" tip but never blocks the pass.
- * The gate blocks on brightness (dark / central glare), focus, skin presence, and —
- * since 2026-08-25 — lesion presence (see LESION_PRESENCE, which took that decision away from the
+ * The gate blocks on brightness (dark / central glare), focus, skin presence, and -
+ * since 2026-08-25 - lesion presence (see LESION_PRESENCE, which took that decision away from the
  * YOLO detector after it was measured firing on 88% of lesion-free skin).
  */
 export type IqaChecks = {
@@ -27,16 +27,16 @@ export type IqaChecks = {
   sharpness: {
     ok: boolean;
     value: number; // variance-of-Laplacian on the centered lesion ROI
-    directional: number; // weaker-axis gradient energy — catches motion smear the Laplacian misses
+    directional: number; // weaker-axis gradient energy - catches motion smear the Laplacian misses
     edgeWidth: number; // lesion contrast ÷ steepest denoised slope ≈ how many pixels its edge spans
   };
-  shadow: { ok: boolean; value: number }; // directional light gradient (0..1) — ADVISORY, non-blocking
-  skin: { ok: boolean; coverage: number }; // fraction of skin-coloured pixels — blocks non-skin photos
+  shadow: { ok: boolean; value: number }; // directional light gradient (0..1) - ADVISORY, non-blocking
+  skin: { ok: boolean; coverage: number }; // fraction of skin-coloured pixels - blocks non-skin photos
   // ok = something lesion-like is actually present. `score` is the centre-surround contrast of the
   // strongest blob in the middle of the frame and `sided` is the same contrast against its WEAKEST
   // side; both must clear their bar. See LESION_PRESENCE and LESION_SIDED_MIN.
   lesion: { ok: boolean; score: number; sided: number; hue: number };
-  // ok = the lesion is not buried under hair. ADVISORY, non-blocking — like `shadow`. This is a
+  // ok = the lesion is not buried under hair. ADVISORY, non-blocking - like `shadow`. This is a
   // DETECTION, deliberately not a removal: see synth/eval/HAIR_REMOVAL.md for the measured reason
   // digital hair removal is not in the pipeline.
   hair: { ok: boolean; coverage: number };
@@ -51,7 +51,7 @@ export type IqaChecks = {
  * is the single biggest lever on blur sensitivity, and it costs 1.78x the pixels (decode + one
  * O(W*H) pass) on a screen that already spends ~3.9s revealing its result.
  *
- * BLUR and DIRECTIONAL_BLUR below are BOTH scale-dependent and were refitted for this value — see
+ * BLUR and DIRECTIONAL_BLUR below are BOTH scale-dependent and were refitted for this value - see
  * their notes. The other thresholds (DARK, GLARE_ROI_MAX, SHADOW_GRAD, SKIN_MIN) are ratios
  * or means and measured <0.1% drift between the two sizes, so they are unchanged.
  */
@@ -62,8 +62,8 @@ export const GLARE_ROI_MAX = 0.2; // fraction of the lesion ROI blown out (>245)
 /**
  * Variance-of-Laplacian on the ROI below this = too blurry.
  *
- * REFITTED FOR SIZE = 1024 (2026-08-04): 5e-5 -> 4.1e-5. The metric is scale-dependent — the same
- * photos measure 0.75x at 1024px as at 768px — so carrying the old value over would have silently
+ * REFITTED FOR SIZE = 1024 (2026-08-04): 5e-5 -> 4.1e-5. The metric is scale-dependent - the same
+ * photos measure 0.75x at 1024px as at 768px - so carrying the old value over would have silently
  * tightened the gate and started rejecting good photos. The new value is the one that reproduces
  * the OLD false-reject rate (3.0% of real held-out photos) at the new resolution, so the resolution
  * change banks its sensitivity gain without costing the user anything.
@@ -72,14 +72,14 @@ export const GLARE_ROI_MAX = 0.2; // fraction of the lesion ROI blown out (>245)
  * the user considered fine. Measured across 270 app-framed real photos, the gate warned about 8.5%
  * of them and this term was the largest single contributor at 7.0%. The relaxation is close to free
  * because of WHAT this term can still catch: it is a per-pixel difference, so on a real (grainy)
- * capture it is already blind — LESION_EDGE_WIDTH is what catches those, and it is unchanged. All
+ * capture it is already blind - LESION_EDGE_WIDTH is what catches those, and it is unchanged. All
  * this bar loses is some of the CLEAN-blur detection it was never needed for:
  *
  *   value     app-framed warned     gaussian σ=5, clean     σ=5 + grain
  *   4.1e-5          8.5%                   100%                38.5%
  * → 2.4e-5          5.6%                  72.3%                38.5%
  *
- * At 2.4e-5 this term accounts for only 0.4% of the remaining warnings — lowering it further buys
+ * At 2.4e-5 this term accounts for only 0.4% of the remaining warnings - lowering it further buys
  * almost nothing. Full table: synth/eval/BLUR_GATE.md round 3.
  */
 export const BLUR = 2.4e-5;
@@ -89,10 +89,10 @@ export const BLUR = 2.4e-5;
  * The Laplacian above is nearly blind to directional blur: it sums both axes, so a horizontal
  * smear that destroys all vertical detail still scores ~half its sharp value. Measured on 198
  * held-out ISIC clinical photos through the app's own crop geometry, the shipped gate rejected
- * only 35% of a *severe* 25px smear (and 8% of a 9px one) — which is exactly the "it accepts
+ * only 35% of a *severe* 25px smear (and 8% of a 9px one) - which is exactly the "it accepts
  * blurry lesions" failure, and motion is the usual cause on a hand-held macro shot.
  *
- * 2e-5 is chosen for the cost asymmetry, not for a clean separation — there isn't one. Real
+ * 2e-5 is chosen for the cost asymmetry, not for a clean separation - there isn't one. Real
  * clinical photos overlap smeared ones (a smooth-skinned close-up genuinely has low gradient
  * energy), so the calibration curve is a trade, not a threshold:
  *
@@ -102,7 +102,7 @@ export const BLUR = 2.4e-5;
  *   5e-5             16.2%                            98%
  *
  * A false reject here is cheap: this screen warns and offers "continue anyway", it never blocks.
- * Raising it buys more detection at a real cost in good photos turned away — don't, without
+ * Raising it buys more detection at a real cost in good photos turned away - don't, without
  * re-measuring.
  *
  * REFITTED FOR SIZE = 1024 (2026-08-04): 2e-5 -> 1.5e-5, by the same cost-matching rule as BLUR
@@ -118,7 +118,7 @@ export const BLUR = 2.4e-5;
 export const DIRECTIONAL_BLUR = 0.6e-5;
 
 /**
- * EDGE WIDTH — the focus term that sensor grain cannot fool.
+ * EDGE WIDTH - the focus term that sensor grain cannot fool.
  *
  * WHY THIS EXISTS. Both terms above are variances of a per-pixel difference, and **grain is a
  * per-pixel difference**. Measured 2026-08-25 on 65 full-resolution held-out photos, adding
@@ -131,19 +131,19 @@ export const DIRECTIONAL_BLUR = 0.6e-5;
  *   25px motion smear                           56%
  *   **25px motion smear + grain**                **0%**
  *
- * A blurred, grainy photo measures a variance-of-Laplacian of 2.2e-3 — nearly 7× a SHARP photo's
+ * A blurred, grainy photo measures a variance-of-Laplacian of 2.2e-3 - nearly 7× a SHARP photo's
  * 3.3e-4, and 50× the BLUR floor. The gate was reading the grain, not the focus. That is why two
  * obviously bad captures (hand-shake and out-of-focus) came back "Looks great".
  *
  * WHAT THIS MEASURES INSTEAD. Blur is not "less high-frequency energy", it is "edges spread over
- * more pixels" — so measure that directly. Smooth with a 5×5 box first, which averages grain away
+ * more pixels" - so measure that directly. Smooth with a 5×5 box first, which averages grain away
  * (uncorrelated, so it drops by 5×) while leaving any structure wider than 5px intact, then take
  * the steepest remaining slope in the lesion ROI (99th percentile of |∇|, so one hot pixel cannot
  * carry it). Divide the lesion's own contrast by that slope and the answer is a length: the number
  * of pixels its edge takes to complete. A step edge lands at ~3px however dark the lesion is, so
  * unlike the two terms above this one does not scale with subject contrast.
  *
- * The reused numerator is `lesion.score` — the same centre-surround contrast LESION_PRESENCE is
+ * The reused numerator is `lesion.score` - the same centre-surround contrast LESION_PRESENCE is
  * built on, so the two checks cannot disagree about how strong the lesion is.
  *
  * Noise invariance, same 65 photos: sharp scores 3.60, **the same photos plus grain score 3.59**.
@@ -151,7 +151,7 @@ export const DIRECTIONAL_BLUR = 0.6e-5;
 /** Box side for the pre-smooth. 5 kills grain; 9 also flattens real edges (sharp p50 3.6 → 5.9). */
 export const EDGE_SMOOTH = 5;
 /**
- * Gradient percentile taken as "the steepest slope" — robust to a handful of hot pixels.
+ * Gradient percentile taken as "the steepest slope" - robust to a handful of hot pixels.
  *
  * Measured over the WHOLE frame, not the lesion ROI, because the question is whether the PHOTO is
  * in focus, and blur from a shaking hand or a missed focus lock is global. Asking it of the ROI
@@ -171,7 +171,7 @@ export const EDGE_GRAD_BINS = 1024;
  * Edge width (pixels) above this = out of focus or smeared.
  *
  * Calibrated on 65 full-resolution held-out photos (native ≥1024, i.e. what a phone actually
- * produces — lower-resolution web images are upscaled to SIZE and their edges are artificially
+ * produces - lower-resolution web images are upscaled to SIZE and their edges are artificially
  * wide, which is what makes the mixed-resolution sets look noisier than they are):
  *
  *   value   sharp warned   sharp+grain   σ=2+grain   σ=5+grain   25px smear+grain
@@ -182,7 +182,7 @@ export const EDGE_GRAD_BINS = 1024;
  * RAISED 12 -> 14 (2026-08-26) on a second "the gate is too strict" report, after relaxing the two
  * older terms had taken app-framed warnings only from 8.5% to 5.6% and left them inert. This is the
  * term that does the work on real captures, so raising it is the one relaxation that genuinely
- * costs detection — σ=5+grain falls 38.5% -> 21.5% — and it was done knowingly, at the user's
+ * costs detection - σ=5+grain falls 38.5% -> 21.5% - and it was done knowingly, at the user's
  * repeated request, to get warnings to 3.0%. It is the FIRST thing to lower again if blurry photos
  * start getting through.
  *
@@ -195,10 +195,10 @@ export const SHADOW_GRAD = 0.25; // one side this much darker than the other (0.
 export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
 
 /* -----------------------------------------------------------------------------------------------
- * Hair over the lesion — ADVISORY, and a DETECTION rather than a removal.
+ * Hair over the lesion - ADVISORY, and a DETECTION rather than a removal.
  *
  * WHY DETECT AND NOT REMOVE. Digital hair removal was evaluated at length against this exact
- * pipeline and rejected on measurement, not on principle — synth/eval/HAIR_REMOVAL.md, 294 images
+ * pipeline and rejected on measurement, not on principle - synth/eval/HAIR_REMOVAL.md, 294 images
  * through the shipped D13 geometry. The short version: every masking variant costs accuracy
  * precisely on the hairy images it was meant to help (the mildest one drops hairy-subset AUROC
  * 0.780 -> 0.736 while doing nothing on clean images); classic DullRazor masks 43-53% of the frame
@@ -208,7 +208,7 @@ export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
  * So the deployable value is telling the user to move the hair, which costs no model risk at all.
  *
  * WHAT IT MEASURES, and why it takes two terms. Hair is thin, darker than the skin immediately
- * around it, and — the part that matters — locally ORIENTED. Neither property alone is enough:
+ * around it, and - the part that matters - locally ORIENTED. Neither property alone is enough:
  *   - Darkness alone fires on pigment texture, pores and grain. Without the coherence term below,
  *     bare skin scores 7.3%, well over the threshold.
  *   - Orientation alone fires on any edge, including the lesion's own rim.
@@ -225,16 +225,16 @@ export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
  * -------------------------------------------------------------------------------------------- */
 
 /**
- * Radius (px at SIZE) of the grayscale CLOSING the blackhat is taken against — so strands up to
+ * Radius (px at SIZE) of the grayscale CLOSING the blackhat is taken against - so strands up to
  * 2*HAIR_HAT_RADIUS across are filled and detected.
  *
  * A closing rather than a box mean, and the difference is the whole ballgame. A linear local mean
  * also fires on a lesion's RIM, because a step edge is dark relative to its neighbourhood and
- * strongly oriented — with a box mean at radius 8 a plain dark blob scored 1.65% against 1.24% for
+ * strongly oriented - with a box mean at radius 8 a plain dark blob scored 1.65% against 1.24% for
  * actual hair, i.e. the metric preferred lesions to strands. A closing leaves a step edge alone
  * (the window on the dark side is already all dark) and only fills structures thinner than the
  * kernel. Measured on the same fixtures at this radius: blob 0.10%, strands 1.76%, bare skin 0.00%
- * — a 17x separation instead of 0.75x. This is also why DullRazor uses morphology.
+ * - a 17x separation instead of 0.75x. This is also why DullRazor uses morphology.
  */
 export const HAIR_HAT_RADIUS = 4;
 /** Blackhat response, in grey levels, above which a pixel is strand-dark. Below this it is grain. */
@@ -252,7 +252,7 @@ export const HAIR_ENERGY_MIN = 4;
  * Fraction of the lesion ROI that may look like hair before the tip is shown.
  *
  * Measured at SIZE over three local sets: median 0.55% (94 real phone photos), 0.55% (200 ISIC
- * clinical), 0.00% (37 bare-skin negatives). 0.02 fires on 13.8% / 17.5% / 5.4% of each — and the
+ * clinical), 0.00% (37 bare-skin negatives). 0.02 fires on 13.8% / 17.5% / 5.4% of each - and the
  * only two bare-skin images it fires on are two crops of the same genuinely hairy forearm, which
  * scores 10.6%, six times anything else in that set. That set is the closest thing available to a
  * labelled negative: it is 37 photos chosen for having no lesion, and it contains exactly one hairy
@@ -265,7 +265,7 @@ export const HAIR_ROI_MAX = 0.02;
  *
  * Both classic rules (YCbCr box + Kovac RGB) assume WARM skin, and a very pale forearm under bright
  * light is neither warm nor saturated. Measured on the reported false rejection: mean cr 131.6
- * against a 133 floor and mean |r-g| 4.9 against a >15 requirement — it missed on both, scoring
+ * against a 133 floor and mean |r-g| 4.9 against a >15 requirement - it missed on both, scoring
  * 0.149 coverage against SKIN_MIN 0.30 and reporting "This doesn't look like a photo of skin" for a
  * clean, well-lit photo of skin. This is a Fitzpatrick I–II failure, the opposite end from the tone
  * bias this project usually has to watch.
@@ -273,28 +273,28 @@ export const HAIR_ROI_MAX = 0.02;
  * Not a one-photo fix: across 1320 real lesion photos the old thresholds falsely reject 5.0%
  * (66 photos). At 131/10 that drops to 3.1%, and the reported photo scores 0.666.
  *
- * WHY NOT LOOSER. CR_MIN cannot approach 128, because a neutral grey has cr == 128 exactly — the
+ * WHY NOT LOOSER. CR_MIN cannot approach 128, because a neutral grey has cr == 128 exactly - the
  * floor is the only thing separating skin from any grey surface. Measured on synthetic negatives at
  * SKIN_MIN 0.30: at 129 a grey wall scores 0.298 and at 128 it scores 0.324, i.e. a wall starts
  * passing as skin. 131 keeps grey at 0.239 and white at 0.231, a comfortable margin below the gate,
  * while still recovering most pale skin. Blue and green scenes score ~0.000 at every setting.
  *
- * KNOWN AND UNCHANGED: warm-toned non-skin still passes this rule — bare wood scores ~0.998 and a
+ * KNOWN AND UNCHANGED: warm-toned non-skin still passes this rule - bare wood scores ~0.998 and a
  * cream UI ~0.73 at the OLD thresholds too. This gate rejects blue/green/dark scenes, not
  * everything that isn't skin; widening it does not make that weakness worse.
  */
-export const SKIN_CR_MIN = 131; // was 133 — the pale-skin floor; 128 is neutral grey, never go there
-export const SKIN_RG_DIFF = 10; // was 15 — desaturated skin has a small red-green gap
+export const SKIN_CR_MIN = 131; // was 133 - the pale-skin floor; 128 is neutral grey, never go there
+export const SKIN_RG_DIFF = 10; // was 15 - desaturated skin has a small red-green gap
 
 /**
- * LESION PRESENCE — is there actually a lesion in this photo, or is this bare skin?
+ * LESION PRESENCE - is there actually a lesion in this photo, or is this bare skin?
  *
  * WHY THIS EXISTS. This check used to be the YOLO detector's verdict alone: `detectLesionBox`
  * returns a box, the row passes. Measured 2026-08-25 on 33 curated lesion-free skin patches (bare
- * forearm, knuckle creases, hairy skin, wrinkled forehead — cut out of real clinical photos away
+ * forearm, knuckle creases, hairy skin, wrinkled forehead - cut out of real clinical photos away
  * from their lesion, see synth/eval/LESION_PRESENCE.md), the shipped detector fires on **88% of
  * them** at its DET_CONF 0.2. It scores bare skin (median conf 0.278) essentially the same as real
- * lesions (median 0.315), because it was trained only on images that contain one — it has never
+ * lesions (median 0.315), because it was trained only on images that contain one - it has never
  * been shown a negative, so it always answers "there, roughly". No confidence threshold fixes
  * that: at 0.35 the false-fire rate reaches 0 but 57% of REAL lesions are rejected with it.
  *
@@ -303,12 +303,12 @@ export const SKIN_RG_DIFF = 10; // was 15 — desaturated skin has a small red-g
  * that is DARKER (pigmented) or REDDER (inflamed, vascular) than the skin around it; bare skin has
  * no such region at any scale, whatever its texture, tone or hair.
  *
- * The detector is unchanged and still owns the crop — see lesion-detector.ts. It just no longer
+ * The detector is unchanged and still owns the crop - see lesion-detector.ts. It just no longer
  * decides whether a photo has a lesion in it.
  */
 /** Analysis grid for the blob response. Coarse on purpose: pores and hair are not lesions. */
 export const LESION_GRID = 256;
-/** Central fraction of the frame searched — the crop guide centres the lesion. */
+/** Central fraction of the frame searched - the crop guide centres the lesion. */
 export const LESION_ROI_FRAC = 0.6;
 /** Inner box radii, in LESION_GRID cells: blobs from ~9% to ~25% of the frame across. */
 export const LESION_RADII = [12, 16, 24, 32];
@@ -331,32 +331,32 @@ export const LESION_RED_WEIGHT = 2;
  *
  * (For comparison, the detector-only gate this replaces: 86.7% / 90.5% recall, **88%** of bare
  * skin passed.) 16 is the knee: it improves on the old gate in BOTH directions, and 20 buys 5
- * points of false-pass at 12 points of held-out recall — including OTHER dropping to 50%, which is
+ * points of false-pass at 12 points of held-out recall - including OTHER dropping to 50%, which is
  * the class whose lesions are flattest. Re-measure with synth/eval/lesion_presence_eval.py before
  * moving it.
  *
- * This bar alone is NOT the gate — LESION_SIDED_MIN below narrows it, and the 24.3% here becomes
+ * This bar alone is NOT the gate - LESION_SIDED_MIN below narrows it, and the 24.3% here becomes
  * 10.8%. Read the two together.
  */
 export const LESION_PRESENCE = 16;
 /**
- * SIDEDNESS — the same contrast, measured against the WEAKEST of the four sides.
+ * SIDEDNESS - the same contrast, measured against the WEAKEST of the four sides.
  *
  * `LESION_PRESENCE` compares the centre against the average of the ring around it, and an average
  * hides a sign change: at the silhouette of a limb, or across a broad shading gradient, the "ring"
  * is bright skin on one side and dark background on the other, and its mean still sits far above
  * the middle. That is how a photo of a bare knee with the bed behind it scored 30.0 and got a green
- * "Lesion in frame" tick — the response peaked at x=0.79, on the leg's edge against the room.
+ * "Lesion in frame" tick - the response peaked at x=0.79, on the leg's edge against the room.
  *
  * A lesion, unlike an edge or a gradient, is darker (or redder) than the skin on EVERY side. So the
- * surround is measured as four rectangles flanking the centre — left, right, above, below — and
+ * surround is measured as four rectangles flanking the centre - left, right, above, below - and
  * this is the smallest of the four contrasts. An edge scores ~0 on the side that faces the
  * background; a gradient scores ~0 on its bright side; a lesion scores its true contrast on all
  * four.
  *
  * Calibrated against the same three sets, holding LESION_PRESENCE at 16:
  *
- * Calibrated with LESION_PRESENCE held at 16. The "limb edge" column is 297 procedural negatives —
+ * Calibrated with LESION_PRESENCE held at 16. The "limb edge" column is 297 procedural negatives -
  * each of the 33 curated bare-skin patches composited behind a curved limb silhouette against dark,
  * mid and bright backgrounds, with limb shading, and no lesion anywhere (see LESION_PRESENCE.md):
  *
@@ -369,7 +369,7 @@ export const LESION_PRESENCE = 16;
  *     14          88.1%              84.5%           10.8%       11.1%          blocked
  *
  * **80.8% is the bug**: with only the ring test, four out of five photos of a limb against a room
- * background read as having a lesion in them. 11 is the knee of that curve — 10 is where the one
+ * background read as having a lesion in them. 11 is the knee of that curve - 10 is where the one
  * reported photo (9.98) *just* stops passing, which is a threshold fitted to a single sample, and
  * 12 buys 1.4 more points of limb edge for 1.5 points of held-out recall.
  *
@@ -382,7 +382,7 @@ export const LESION_PRESENCE = 16;
  */
 export const LESION_SIDED_MIN = 11;
 /**
- * HUE — the blob has to be the colour a lesion can be.
+ * HUE - the blob has to be the colour a lesion can be.
  *
  * Presence and sidedness are shape tests: they ask whether a compact region is darker or redder
  * than the skin on every side. **An ordinary photograph answers yes.** A navy t-shirt against a
@@ -390,25 +390,25 @@ export const LESION_SIDED_MIN = 11;
  * scored 57.4 and 51.7. Both were reported passing the gate, and nothing shape-based can help:
  *
  *   - Skin fraction cannot. The t-shirt frame is 0.539 skin, which is *above* the 5th percentile of
- *     real clinical photos — advanced ulcerated malignancies score 0.43–0.55, because the lesion
+ *     real clinical photos - advanced ulcerated malignancies score 0.43–0.55, because the lesion
  *     itself stops counting as skin. Any bar that rejects the t-shirt rejects those too, and
  *     turning away an ulcerated SCC is a far worse error than accepting a t-shirt.
  *   - The YOLO detector cannot. It fires HARDER on the t-shirt (0.752) and the night street (0.744)
  *     than on most of those malignancies (0.089–0.845, several under 0.35). It is anti-correlated.
  *
- * What does separate them is colour. A lesion is skin tissue — pigment, blood, crust, scale — so it
+ * What does separate them is colour. A lesion is skin tissue - pigment, blood, crust, scale - so it
  * lives in the warm half of the colour space; r > b holds for brown, black, red and yellow alike.
  * Cloth, sky, asphalt and shadow do not. Mean r−b inside the winning blob:
  *
  *   set                                       min      p1     p2     p5   median
  *   app-framed lesions (n=270)              -10.3    -6.3    2.5   15.0    64.9
- *   held-out lesions (n=200)                -48.6    -1.7    2.8   15.4      —
- *   good anchors (n=28)                     -16.0   -15.0  -14.0  -10.9      —
+ *   held-out lesions (n=200)                -48.6    -1.7    2.8   15.4      -
+ *   good anchors (n=28)                     -16.0   -15.0  -14.0  -10.9      -
  *   **the reported t-shirt / night street**  **-53.0 / -53.7**
  *
  * -20 sits in the empty band between them: it keeps 100% / 99.5% / 100% of the three positive sets
  * and rejects both reported frames by 33 points. It is a sanity check on the colour of the thing
- * being called a lesion, not a tuned threshold — do not creep it upward to catch warm-coloured
+ * being called a lesion, not a tuned threshold - do not creep it upward to catch warm-coloured
  * non-skin (wood, a brown sofa). That needs a different signal, not a tighter bar on this one.
  */
 export const LESION_HUE_MIN = -20;
@@ -416,7 +416,7 @@ export const LESION_HUE_MIN = -20;
 /**
  * Steepest slope anywhere in the frame, in luma units per pixel, after a 5×5 box smooth.
  *
- * The smooth is the whole point — see LESION_EDGE_WIDTH. It is separable: one horizontal pass into
+ * The smooth is the whole point - see LESION_EDGE_WIDTH. It is separable: one horizontal pass into
  * a scratch frame, then a vertical pass that only ever holds two rows, so the term costs O(W·H)
  * time and one extra frame-sized buffer.
  *
@@ -485,7 +485,7 @@ function steepestSlope(gray: ArrayLike<number>, W: number, H: number): number {
  * and g−r (inflamed / vascular ones read redder). For each, the image is reduced to a
  * LESION_GRID² mean-pooled grid and, at each radius, the mean of a (2r+1)² box is subtracted from
  * the mean of the surrounding (2·2.5r+1)² box. That difference is large only where a compact
- * region differs from the skin around it — which is what "a lesion is in frame" means, and what
+ * region differs from the skin around it - which is what "a lesion is in frame" means, and what
  * bare skin does not have at any scale.
  *
  * Mean-pooling first is what makes this immune to skin texture: pores, hair and creases live far
@@ -560,7 +560,7 @@ function lesionPresence(
           const inner = rectMean(t, y - rIn, y + rIn + 1, x - rIn, x + rIn + 1);
           const ring = (rectMean(t, y - rOut, y + rOut + 1, x - rOut, x + rOut + 1) - inner) * weight;
           if (ring > best) best = ring;
-          // The four flanking rectangles. `sided` is the weakest of them — see LESION_SIDED_MIN.
+          // The four flanking rectangles. `sided` is the weakest of them - see LESION_SIDED_MIN.
           const left = rectMean(t, y - rIn, y + rIn + 1, x - rOut, x - rIn);
           const right = rectMean(t, y - rIn, y + rIn + 1, x + rIn + 1, x + rOut + 1);
           const top = rectMean(t, y - rOut, y - rIn, x - rIn, x + rIn + 1);
@@ -585,7 +585,7 @@ function lesionPresence(
 }
 
 /**
- * Separable box blur with clamped edges — a mean over a (2r+1)^2 window in O(W*H) regardless of r.
+ * Separable box blur with clamped edges - a mean over a (2r+1)^2 window in O(W*H) regardless of r.
  *
  * Same sliding-window recipe as `locateLesion`'s blur in classifier/preprocess.ts, and the same
  * border behaviour as OpenCV's BORDER_REPLICATE, which is what the Python mirror in
@@ -625,8 +625,8 @@ function boxBlur(
 /**
  * Grayscale blackhat: closing(gray) - gray, over a (2r+1)^2 square.
  *
- * The square closing is separable — a 1-D max along x then along y gives the square dilation, and
- * the same with min gives the erosion — so this is four O(W*H*r) sweeps and two buffers. Window
+ * The square closing is separable - a 1-D max along x then along y gives the square dilation, and
+ * the same with min gives the erosion - so this is four O(W*H*r) sweeps and two buffers. Window
  * indices are clamped at the borders, which for a min or max is identical to ignoring the pixels
  * outside (the clamped value is already the edge pixel, which is in the window anyway), so this
  * matches OpenCV's default morphology border and the Python mirror exactly.
@@ -702,7 +702,7 @@ export function hairCoverage(gray: Float32Array, W: number, H: number): number {
   const sxx = boxBlur(jxx, W, H, HAIR_COH_RADIUS, new Float32Array(n), tmp);
   const syy = boxBlur(jyy, W, H, HAIR_COH_RADIUS, new Float32Array(n), tmp);
   const sxy = boxBlur(jxy, W, H, HAIR_COH_RADIUS, new Float32Array(n), tmp);
-  const blackhat = grayBlackhat(gray, W, H, HAIR_HAT_RADIUS, jxx, tmp); // jxx is spent — reuse it
+  const blackhat = grayBlackhat(gray, W, H, HAIR_HAT_RADIUS, jxx, tmp); // jxx is spent - reuse it
 
   const rx0 = Math.max(0, Math.floor((W * (1 - ROI_FRAC)) / 2));
   const rx1 = Math.min(W, Math.floor((W * (1 + ROI_FRAC)) / 2));
@@ -776,7 +776,7 @@ export function analyzeRgba(
   }
 
   // Sharpness = variance of the 3x3 Laplacian over the CENTERED ROI (the lesion region). In the
-  // same pass we count blown-out pixels INSIDE the ROI — a specular glare hotspot on the lesion is
+  // same pass we count blown-out pixels INSIDE the ROI - a specular glare hotspot on the lesion is
   // the real over-exposure failure, and it hides from a whole-frame mean.
   const rx0 = Math.max(1, Math.floor((W * (1 - ROI_FRAC)) / 2));
   const rx1 = Math.min(W - 1, Math.floor((W * (1 + ROI_FRAC)) / 2));
@@ -786,7 +786,7 @@ export function analyzeRgba(
   let lapSumSq = 0;
   let lapN = 0;
   let roiBlown = 0;
-  // Per-axis gradient energy, accumulated in the same pass — see DIRECTIONAL_BLUR below.
+  // Per-axis gradient energy, accumulated in the same pass - see DIRECTIONAL_BLUR below.
   let gxSq = 0;
   let gySq = 0;
   for (let y = ry0; y < ry1; y++) {
@@ -827,7 +827,7 @@ export function analyzeRgba(
   const skinCov = skinCount / n;
   const { score: lesionScore, sided: lesionSided, hue: lesionHue } = lesionPresence(data, W, H);
   // How many pixels the lesion's edge takes to complete. A photo with no lesion in it has nothing
-  // to measure, so it scores ~0 and this term abstains — that verdict belongs to `lesion`, below.
+  // to measure, so it scores ~0 and this term abstains - that verdict belongs to `lesion`, below.
   const slope = steepestSlope(gray, W, H);
   const hairCov = hairCoverage(gray, W, H);
   const edgeWidth = slope > 0 ? lesionScore / slope : 0;
@@ -840,9 +840,9 @@ export function analyzeRgba(
     brightness: { ok: issue === 'ok', value: brightness, issue },
     // All three must hold: the Laplacian catches symmetric softness, the directional term catches
     // motion smear, and edgeWidth catches both when grain is masking them. Additive by
-    // construction — each can only ever reject MORE than the ones before it.
+    // construction - each can only ever reject MORE than the ones before it.
     // edgeWidth counts PIXELS, so enlarging the image before measuring inflates it in exact
-    // proportion — a 2.28x upscale turns a true 8.3px edge into 18.9px and fails a limit of 14.
+    // proportion - a 2.28x upscale turns a true 8.3px edge into 18.9px and fails a limit of 14.
     // That is what the auto-zoom does whenever the lesion is small in frame: it crops a few
     // hundred pixels and stretches them to OUTPUT, and the gate then reports manufactured
     // softness as a blurry photo. Reported 2026-09-09 on a visibly sharp capture, rejected on

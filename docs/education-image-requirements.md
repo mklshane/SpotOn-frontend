@@ -130,13 +130,13 @@ Filter for those explicitly; they are a smaller subset.
 
 ### Others
 
-- **Open-access journals** (PLOS, BMC, some JAAD Case Reports) — usually CC BY,
+- **Open-access journals** (PLOS, BMC, some JAAD Case Reports) - usually CC BY,
   which permits reuse with attribution. Slow, image by image, but reliable, and the
   best bet for the `abcde-evolving-*` pair: ISIC is overwhelmingly single images,
   whereas longitudinal case reports actually follow one lesion over time.
-- **National Cancer Institute Visuals Online** — many US government works are public
+- **National Cancer Institute Visuals Online** - many US government works are public
   domain, but not all; check each item.
-- **DermNet NZ** — large and well catalogued, but licensing is restrictive for
+- **DermNet NZ** - large and well catalogued, but licensing is restrictive for
   commercial use and needs a written agreement.
 
 Do not remove watermarks or attribution from any of these.

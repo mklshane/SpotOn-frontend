@@ -15,9 +15,9 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // final ten, so the notebook treats ep53 as the finished model rather than a truncated one. Its
 // recorded score is **mAP50 0.710**; that is the only number the export carries, and there is no
 // matching figure for the predecessor on this disk, so it cannot be read as an improvement on its
-// own — see DETECTOR_AB.md / `synth/eval/detector_ab.py` for the comparison that can.
+// own - see DETECTOR_AB.md / `synth/eval/detector_ab.py` for the comparison that can.
 //
-// DROP-IN ON CONTRACT, verified by interpreter inspection 2026-08-20 — both models are
+// DROP-IN ON CONTRACT, verified by interpreter inspection 2026-08-20 - both models are
 // input "images" [1, 768, 768, 3] float32 NHWC (0..1 RGB) and output "Identity" [1, 5, 12096]
 // float32, i.e. channel-major YOLO head with 4 box channels + 1 class over 12096 anchors. So
 // `readLayout` below, the still path (classifier/lesion-detector.ts) and the frame processor
@@ -32,20 +32,20 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // p90 38.7 -> 43.3 ms, still inside the ~83 ms live budget.
 //
 // THE ONE REAL REGRESSION IS DETECTION RATE: 99.0% -> 90.5%, i.e. 19 of 200 stills produce no box
-// against 2. On a miss, classify.ts falls back to the full frame plus the DoG zoom refinement —
-// the weaker path that DETECTOR_CROP_ENABLED exists to avoid — so this swap moves ~8.5% of stills
+// against 2. On a miss, classify.ts falls back to the full frame plus the DoG zoom refinement -
+// the weaker path that DETECTOR_CROP_ENABLED exists to avoid - so this swap moves ~8.5% of stills
 // onto it. Nothing the classifier scores got worse; how often the detector fires did.
 //
 // THE LIVE-PATH BARS ARE UNREFITTED, AND THEY NO LONGER FIT. CREATE_SCORE / KEEP_SCORE /
 // LOCK_SCORE in capture-core.ts were set against the itobos score distribution. This model is more
 // polarized (median confidence 0.363 -> 0.316, but p90 0.529 -> 0.799), so KEEP_SCORE 0.28 now
-// rejects 35.9% of real lesions against 15.2% before — on the live camera, a box that appears less
+// rejects 35.9% of real lesions against 15.2% before - on the live camera, a box that appears less
 // often. They were deliberately left alone: DETECTOR_AB.md's round-1 rule is that lowering a bar
 // which can admit FALSE boxes needs the recall-vs-non-skin-FPR sweep in
 // `synth/eval/detector_eval.py`, and the lesion-only holdout cannot measure that side. Run that
 // sweep against this model before moving either bar.
 //
-// DET_CONF 0.2 on the still path is unaffected — it sits below this model's p1 (0.202), so it
+// DET_CONF 0.2 on the still path is unaffected - it sits below this model's p1 (0.202), so it
 // rejects nothing that fired.
 //
 // --- previously bundled: itobos_plus_large_v2_float16_best (6.2 MB, 768) ---
@@ -63,9 +63,9 @@ let modelPromise: Promise<LesionModel> | null = null;
  * Load the lesion-detection model once and cache it, so the live camera
  * (`scan/capture.tsx`) and the still-image quality gate (`scan/quality.tsx`) share
  * a single instance. In dev, Metro serves the asset over http, which the native
- * loader can't fetch directly — so download it to a local file first.
+ * loader can't fetch directly - so download it to a local file first.
  *
- * Idempotent and safe to call before the camera exists — see `prewarmLesionModel`, which is what
+ * Idempotent and safe to call before the camera exists - see `prewarmLesionModel`, which is what
  * the body-part screen uses to get the load off the capture screen's critical path.
  */
 export function getLesionModel(): Promise<LesionModel> {
@@ -81,14 +81,14 @@ export function getLesionModel(): Promise<LesionModel> {
       // Warm up before handing the model out. TFLite defers a chunk of its setup (XNNPACK delegate
       // partitioning, buffer allocation) to the first invoke, which measures ~12 ms slower than the
       // steady state on desktop and more on a phone. Paying that here, inside the load promise,
-      // means no caller can be handed a model whose first real frame is its slowest — and since
+      // means no caller can be handed a model whose first real frame is its slowest - and since
       // this resolves before anyone holds the handle, it cannot race the camera's interpreter use.
       try {
         const s = m.inputs[0]?.shape ?? [];
         const n = s.length === 4 ? s[1] * s[2] * s[3] : 0;
         if (n > 0) await m.run([new Float32Array(n).buffer as ArrayBuffer]);
       } catch {
-        // A failed warm-up is not a failed load — the model is usable either way.
+        // A failed warm-up is not a failed load - the model is usable either way.
       }
       return m;
     })().catch((e) => {
@@ -121,7 +121,7 @@ export function readLayout(model: LesionModel) {
  * unhurried tapping immediately before capture, which is free time to spend on it.
  *
  * Fire-and-forget: failures are swallowed here because this is an optimisation, not a
- * prerequisite — capture.tsx still calls getLesionModel() and still surfaces a real load failure.
+ * prerequisite - capture.tsx still calls getLesionModel() and still surfaces a real load failure.
  */
 export function prewarmLesionModel(): void {
   getLesionModel().catch(() => {});

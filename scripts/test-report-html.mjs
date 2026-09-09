@@ -6,7 +6,7 @@
  * questionnaire rows.
  *
  * Also writes each rendered page to a temp dir so the layout can be eyeballed in a browser
- * without a simulator — that is the fast loop for iterating on the print CSS. To check the
+ * without a simulator - that is the fast loop for iterating on the print CSS. To check the
  * one-page budget (the report must never paginate), print one of them headlessly:
  *
  *   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
@@ -19,15 +19,17 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const out = mkdtempSync(join(tmpdir(), 'spoton-report-'));
 
 // CommonJS output: the modules import each other by extensionless relative specifier, which
 // node's ESM loader rejects but its CJS loader resolves.
 execFileSync(
-  join(ROOT, 'node_modules/.bin/tsc'),
+  process.execPath,
   [
+    join(ROOT, 'node_modules/typescript/bin/tsc'),
     'src/lib/report/report-html.ts',
     'src/lib/report/summary-report.ts',
     '--ignoreConfig',
@@ -56,7 +58,7 @@ function check(name, condition, detail = '') {
     console.log(`  ok   ${name}`);
   } else {
     failures += 1;
-    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+    console.log(`  FAIL ${name}${detail ? ` - ${detail}` : ''}`);
   }
 }
 
@@ -198,11 +200,11 @@ const CASES = [
       record({ tier: 'high', answerSpec: Array(8).fill('unsure'), tps: 4.9 }),
       PROFILE,
     ),
-    assets: PHOTO,
+    assets: MULTI,
   },
 ];
 
-console.log('\nScreening Summary Report — template checks\n');
+console.log('\nScreening Summary Report - template checks\n');
 
 for (const c of CASES) {
   const html = buildReportHtml(c.model, c.assets);
@@ -215,6 +217,7 @@ for (const c of CASES) {
   check(`${c.name}: single <tbody>`, (html.match(/<tbody>/g) ?? []).length === 1);
   check(`${c.name}: no remote references`, safe(() => assertNoRemoteRefs(html)));
   check(`${c.name}: styles inlined`, html.includes('-webkit-print-color-adjust: exact'));
+  check(`${c.name}: self-medication warning`, html.includes(c.model.avoidSelfMedicationWarning));
 }
 
 // Placeholder handling
@@ -243,7 +246,7 @@ for (const c of CASES) {
       gatedHtml.includes('closest single match'),
     );
 
-    // The floor is the whole explanation when both fire — the gate's reasoning about spread-out
+    // The floor is the whole explanation when both fire - the gate's reasoning about spread-out
     // probabilities is not meaningful on top of "we could not read it".
     const both = buildReportHtml(
       buildReportModel(
@@ -263,16 +266,16 @@ for (const c of CASES) {
 
   check('missing photo renders a placeholder', html.includes('photoMissing'));
   check('missing photo emits no <img', !html.includes('<img class="photo"'));
-  check('missing profile renders em dashes', (html.match(/—/g) ?? []).length >= 4);
+  check('missing profile renders safe placeholders', (html.match(/>-</g) ?? []).length >= 4);
 }
 
 
-// Additional views — the multi-photo strip must be strictly additive: absent for one photo,
+// Additional views - the multi-photo strip must be strictly additive: absent for one photo,
 // present and captioned for several, and never able to reach the network.
 {
   const single = buildReportHtml(CASES[0].model, PHOTO);
   check('single photo emits no additional-views block', !single.includes('class="views"'));
-  // Match the ELEMENT, not the class name — `.viewThumb` is always present in the stylesheet.
+  // Match the ELEMENT, not the class name - `.viewThumb` is always present in the stylesheet.
   check('single photo emits no view thumbnails', !single.includes('<img class="viewThumb"'));
 
   const multi = buildReportHtml(CASES[0].model, MULTI);
@@ -288,7 +291,7 @@ for (const c of CASES) {
     try { assertNoRemoteRefs(multi); return true; } catch { return false; }
   })());
 
-  // An empty array is the same as no array — a screening whose extra photos all failed to load
+  // An empty array is the same as no array - a screening whose extra photos all failed to load
   // must not print an empty captioned box.
   const emptyExtras = buildReportHtml(CASES[0].model, { ...PHOTO, extraPhotos: [] });
   check('empty extraPhotos renders nothing', !emptyExtras.includes('class="views"'));
@@ -362,5 +365,5 @@ function safe(fn) {
   }
 }
 
-console.log(`\n${failures === 0 ? 'PASS' : `FAIL — ${failures} check(s)`}\n`);
+console.log(`\n${failures === 0 ? 'PASS' : `FAIL - ${failures} check(s)`}\n`);
 process.exit(failures === 0 ? 0 : 1);

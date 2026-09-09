@@ -3,7 +3,7 @@
  *
  * Native re-exports the existing `expo-image-manipulator` + `jpeg-js` behaviour verbatim, so
  * device output is bit-for-bit what it was. The web build resolves `image-ops.web.ts`, which uses
- * the browser's own downscaler instead — see that file for why that is a correctness fix and not
+ * the browser's own downscaler instead - see that file for why that is a correctness fix and not
  * an optimisation.
  */
 import { Buffer } from 'buffer';
@@ -35,7 +35,7 @@ export async function transformToRgba(uri: string, actions: Action[]): Promise<R
   return { data: raw.data as Uint8Array, width: raw.width, height: raw.height };
 }
 
-/** Decode an image that already has the right dimensions — no resample. */
+/** Decode an image that already has the right dimensions - no resample. */
 export async function decodeRgbaFromBase64(base64: string): Promise<Rgba> {
   const raw = jpeg.decode(Buffer.from(base64, 'base64'), { useTArray: true, formatAsRGBA: true });
   return { data: raw.data as Uint8Array, width: raw.width, height: raw.height };

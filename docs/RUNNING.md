@@ -1,10 +1,10 @@
 # Running SpotOn on a device / emulator
 
-The native `ios/` and `android/` folders are **gitignored** — they're regenerated from
+The native `ios/` and `android/` folders are **gitignored** - they're regenerated from
 `app.json` (Expo Continuous Native Generation). All native setup, including the MapLibre map used
 by the Directory screen, is wired by config plugins in `app.json`, so a **clean checkout builds
 with no manual native edits**. The one gotcha is a *stale* local `ios/`/`android/` from before a
-native dependency was added — that's what `prebuild --clean` fixes.
+native dependency was added - that's what `prebuild --clean` fixes.
 
 ## First-time setup (any platform)
 
@@ -14,7 +14,7 @@ cp .env.example .env         # optional: add EXPO_PUBLIC_MAPTILER_KEY to light u
 npm run prebuild:clean       # regenerate ios/ + android/ from app.json (applies MapLibre etc.)
 ```
 
-Without a MapTiler key or a native build, the map safely **degrades to a clinic list** — the app
+Without a MapTiler key or a native build, the map safely **degrades to a clinic list** - the app
 never crashes (see `src/lib/maplibre.ts`).
 
 ## Android
@@ -41,7 +41,7 @@ sdk.dir=/absolute/path/to/your/Android/sdk
 npx expo run:ios             # or: --device "<your device>"
 ```
 
-If a first build fails on `MapLibre/MapLibre.h file not found`, your Pods are stale — run
+If a first build fails on `MapLibre/MapLibre.h file not found`, your Pods are stale - run
 `npm run prebuild:clean` (regenerates the Podfile with the MapLibre SPM wiring). If SwiftPM errors
 with `cannot use bare repository … safe.bareRepository is 'explicit'`, run once:
 `git config --global safe.bareRepository all`.

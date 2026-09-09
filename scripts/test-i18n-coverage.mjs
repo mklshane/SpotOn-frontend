@@ -5,8 +5,8 @@
  * string renders as English inside an otherwise Tagalog screen and nothing warns. That is how
  * the register/complete-profile validation errors ended up mixed-language in production.
  *
- * Only literal `t("…")` call sites are checked. Strings routed through a variable — the
- * form-validation messages, translated at the display site by TextField/DateField/Accordion —
+ * Only literal `t("…")` call sites are checked. Strings routed through a variable - the
+ * form-validation messages, translated at the display site by TextField/DateField/Accordion -
  * are listed in INDIRECT so they are covered too.
  *
  * Run:  npm run test:i18n-coverage

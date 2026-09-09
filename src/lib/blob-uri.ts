@@ -17,6 +17,6 @@ export function releaseBlobUri(uri: string | null | undefined): void {
   try {
     URL.revokeObjectURL(uri);
   } catch {
-    // No URL global, or already revoked — nothing to reclaim either way.
+    // No URL global, or already revoked - nothing to reclaim either way.
   }
 }

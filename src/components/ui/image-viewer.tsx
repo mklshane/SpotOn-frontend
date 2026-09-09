@@ -25,7 +25,7 @@ export function ImageViewer({ visible, uri, onClose }: ImageViewerProps) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      {/* Dark glyphs are unreadable over this near-black backdrop — see the note in capture.tsx. */}
+      {/* Dark glyphs are unreadable over this near-black backdrop - see the note in capture.tsx. */}
       <StatusBar style="light" />
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("Close photo")}>
         {uri ? (

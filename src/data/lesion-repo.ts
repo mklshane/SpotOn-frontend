@@ -1,5 +1,5 @@
 /**
- * SQLite repository for tracked lesions — the spot itself, as distinct from any one screening of it.
+ * SQLite repository for tracked lesions - the spot itself, as distinct from any one screening of it.
  *
  * The rollup columns (screening_count, first/last_screened_at, last_screening_id, last_tier) are
  * denormalized from `screenings` so the lesion list and the 3D body model render without a
@@ -137,7 +137,7 @@ export async function setLesionArchived(id: string, archived: boolean): Promise<
 }
 
 /**
- * Recompute the rollups from `screenings`. Idempotent — safe to call after any insert, delete or
+ * Recompute the rollups from `screenings`. Idempotent - safe to call after any insert, delete or
  * relink. A lesion with no screenings left keeps its row (the user may still be tracking the spot)
  * with a zeroed count.
  */
@@ -172,7 +172,7 @@ export async function refreshLesionRollup(id: string): Promise<Lesion | null> {
 }
 
 /**
- * Delete the lesion and unlink its screenings — they survive as standalone history rather than
+ * Delete the lesion and unlink its screenings - they survive as standalone history rather than
  * disappearing. Callers that also want the photos gone must delete the screenings explicitly.
  */
 export async function deleteLesion(id: string): Promise<void> {

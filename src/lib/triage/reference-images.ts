@@ -9,7 +9,7 @@ import type { QuestionId } from './types';
  *
  * Sources are openly licensed (public domain / CC) clinical images from Wikimedia Commons,
  * center-cropped to 700×420 and bundled under assets/reference/. Attribution + licenses live
- * in REFERENCE_IMAGE_CREDITS below and in assets/reference/ATTRIBUTION.md — keep them in sync.
+ * in REFERENCE_IMAGE_CREDITS below and in assets/reference/ATTRIBUTION.md - keep them in sync.
  * Metro requires static require() literals, so this is an explicit map, not a computed path.
  */
 export const REFERENCE_IMAGES: Partial<Record<QuestionId, ImageSourcePropType>> = {
@@ -47,41 +47,41 @@ export type ReferenceImageCredit = {
 /** Attribution for the reference photos, for an in-app licenses/credits screen. */
 export const REFERENCE_IMAGE_CREDITS: readonly ReferenceImageCredit[] = localizedCopy([
   // NOTE: the five entries below were replaced 2026-07-15 with images supplied directly by the
-  // product owner. Provenance/licensing is UNVERIFIED — some carry third-party watermarks
+  // product owner. Provenance/licensing is UNVERIFIED - some carry third-party watermarks
   // (e.g. sciencephoto.com, VisualDx). Confirm rights before shipping to production.
   {
     id: 'evolution',
     title: 'Evolving mole (before / after)',
     author: 'Provided by product owner',
-    license: 'Unverified — confirm before release',
+    license: 'Unverified - confirm before release',
     sourceUrl: '',
   },
   {
     id: 'bleeding_nonhealing',
     title: 'Crusted non-healing lesion',
     author: 'Provided by product owner',
-    license: 'Unverified — confirm before release',
+    license: 'Unverified - confirm before release',
     sourceUrl: '',
   },
   {
     id: 'irregular_border',
     title: 'Irregular-bordered pigmented lesion',
     author: 'Provided by product owner',
-    license: 'Unverified — confirm before release',
+    license: 'Unverified - confirm before release',
     sourceUrl: '',
   },
   {
     id: 'spontaneous_bleeding',
     title: 'Spontaneously bleeding lesion',
     author: 'Provided by product owner',
-    license: 'Unverified — confirm before release',
+    license: 'Unverified - confirm before release',
     sourceUrl: '',
   },
   {
     id: 'rough_scaly',
     title: 'Rough, scaly plaque',
     author: 'Provided by product owner',
-    license: 'Unverified — confirm before release',
+    license: 'Unverified - confirm before release',
     sourceUrl: '',
   },
   {

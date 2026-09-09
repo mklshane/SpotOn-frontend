@@ -2,7 +2,7 @@
  * Opt-in diagnostics for builds where there is no console.
  *
  * The deployed web replica has no telemetry, and on a phone browser there is no practical way to
- * open a console — so a tester hitting an error could report nothing beyond the message on screen.
+ * open a console - so a tester hitting an error could report nothing beyond the message on screen.
  * `?debug=1` turns detail on and remembers it; `?debug=0` clears it. Always on in development.
  *
  * ORDERING MATTERS. The URL parameter must be read while it is still in the address bar: most
@@ -10,7 +10,7 @@
  * expo-router has navigated and the query is gone. So `captureDebugFlag()` is called once from the
  * root layout at boot, and everything else asks `isDebug()`, which reads the persisted value.
  *
- * Never gate anything that changes RESULTS on this — it reveals what happened, it does not alter
+ * Never gate anything that changes RESULTS on this - it reveals what happened, it does not alter
  * behaviour.
  */
 import { Platform } from 'react-native';
@@ -30,7 +30,7 @@ function storage(): Storage | null {
 let sessionFlag = false;
 
 /**
- * Read `?debug=` and persist it. Call once, as early as possible — see the ordering note above.
+ * Read `?debug=` and persist it. Call once, as early as possible - see the ordering note above.
  */
 export function captureDebugFlag(): void {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;

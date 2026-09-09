@@ -18,7 +18,7 @@ const SEARCHING = 'rgba(255,255,255,0.85)';
 
 /**
  * Critically damped (see detection-smoothing.ts). This spring's only job is to carry the box
- * between detections — filling the ~83 ms between inference results at display refresh rate. It is
+ * between detections - filling the ~83 ms between inference results at display refresh rate. It is
  * NOT the smoothing layer; the 1€ filter upstream is, and a spring asked to smooth as well would
  * only add lag. Stiffness is unchanged from the value that shipped, so arrival is no slower; what
  * changed is the damping, which was 0.67 of critical and therefore overshot every detection.
@@ -33,7 +33,7 @@ const SPRING = boxSpring();
  * lag on low-end Android. Writing shared values instead keeps the animation entirely on the UI
  * thread: the spring interpolates the 12 Hz detections up to display rate, but React never runs.
  *
- * `active` is a 0..1 cross-fade between the two views below, not a visibility flag — see
+ * `active` is a 0..1 cross-fade between the two views below, not a visibility flag - see
  * DetectionBox for why that distinction is what removes the teleport on detection loss.
  */
 export type DetectionBoxValues = {
@@ -65,7 +65,7 @@ export function useDetectionBoxValues(): DetectionBoxValues {
 
 /**
  * Spring the box to a detected lesion. `bbox` is normalized to the preview, matching what the frame
- * processor produces. Safe to call from the JS thread — Reanimated runs the spring on the UI thread
+ * processor produces. Safe to call from the JS thread - Reanimated runs the spring on the UI thread
  * without a React render.
  *
  * `snap` places the box instantly instead of springing, and is what re-acquisition and lesion
@@ -100,7 +100,7 @@ export function trackDetectionBox(
 
 /**
  * Detection lost: cross-fade back to the searching guide. The tracked box fades out WHERE IT
- * STANDS — its pose is left untouched, because it is a different view from the guide — so the user
+ * STANDS - its pose is left untouched, because it is a different view from the guide - so the user
  * never sees it travel back to the centre.
  *
  * `immediate` skips the fade for teardown paths (leaving the screen, switching the Guide off),
@@ -116,16 +116,16 @@ export function resetDetectionBox(v: DetectionBoxValues, opts?: { immediate?: bo
  *
  * TWO VIEWS, ON PURPOSE. A single view that both tracked the lesion and served as the searching
  * guide had to be moved back to the centre when detection was lost, and any way of doing that is
- * visible — spring it and the box flies across the screen, jump it and it teleports. Separating
+ * visible - spring it and the box flies across the screen, jump it and it teleports. Separating
  * them means the tracked box can simply fade out in place while the guide fades in behind it, and
  * neither one ever moves anywhere the user did not expect.
  *
  * Colour semantics are unchanged from the single-view version: green means "a lesion is being
  * tracked", white means "looking". Green is deliberately NOT wired to the detector's `locked` flag
- * (LOCK_SCORE) — that governs the coach's 'ready' state, and repointing the colour at it would
+ * (LOCK_SCORE) - that governs the coach's 'ready' state, and repointing the colour at it would
  * quietly change what green tells the user.
  *
- * Corner radius and stroke width are constants on both views, so they never scale with the box —
+ * Corner radius and stroke width are constants on both views, so they never scale with the box -
  * that is what keeps a resizing box reading as movement rather than deformation.
  */
 export function DetectionBox({ values }: { values: DetectionBoxValues }) {

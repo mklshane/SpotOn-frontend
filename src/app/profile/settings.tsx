@@ -89,10 +89,10 @@ export default function SettingsScreen() {
 
   const reminderSublabel = (() => {
     if (remindersUnsupported) {
-      return t("Not available in the browser — use the SpotOn app to get re-screening reminders");
+      return t("Not available in the browser - use the SpotOn app to get re-screening reminders");
     }
     if (!remindersEnabled) return t("Reminders to re-check a spot after 30 days");
-    if (!reminderDueAt) return t("On — set after your next low-risk result");
+    if (!reminderDueAt) return t("On - set after your next low-risk result");
     const due = new Date(reminderDueAt);
     return `${t("Next reminder on")} ${due.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
   })();
@@ -120,7 +120,7 @@ export default function SettingsScreen() {
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? "This isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : "Couldn't change your password. Check your connection and try again.",
@@ -145,7 +145,7 @@ export default function SettingsScreen() {
       Alert.alert(
         t("Could not delete account"),
         isNotDeployed(e)
-          ? t("This isn't available yet — check back soon.")
+          ? t("This isn't available yet - check back soon.")
           : e instanceof ApiError
             ? e.detail
             : t("Something went wrong. Please try again."),
@@ -169,7 +169,7 @@ export default function SettingsScreen() {
       Alert.alert(
         t("Could not request export"),
         isNotDeployed(e)
-          ? t("Data export isn't available yet — check back soon.")
+          ? t("Data export isn't available yet - check back soon.")
           : e instanceof ApiError
             ? e.detail
             : t("Something went wrong. Please try again."),

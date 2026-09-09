@@ -5,7 +5,7 @@
  *
  * These branches decide whether a photo is usable, whether the user is asked to retake, and where
  * they go next. Getting them wrong either wastes the user's effort (a retake prompt after all
- * eight questions) or, worse, reports a triage tier from a photo the model could not read — so
+ * eight questions) or, worse, reports a triage tier from a photo the model could not read - so
  * every path is enumerated here rather than checked by walking the app.
  *
  * Run:  npm run test:flow
@@ -52,7 +52,7 @@ check('iqa: not skin fails the lesion ROW, not just the pass', !iqa({ skinOk: fa
 check('iqa: no presence fails the lesion row', !iqa({ presenceOk: false }).lesionRowOk);
 check('iqa: detector finding nothing fails the lesion row', !iqa({ detectorFound: false }).lesionRowOk);
 
-// No term may be waived by another — the 2026-08 bug was `skin` being waived when the detector
+// No term may be waived by another - the 2026-08 bug was `skin` being waived when the detector
 // fired and presence passed, which is near-constant-true on an arbitrary photograph.
 check(
   'iqa: a fired detector does NOT waive the skin check',
@@ -74,7 +74,7 @@ check('good photo + good read passes', q(true, 'ok').pass && !q(true, 'ok').anal
 check('good photo + unreadable does not pass', !q(true, 'unreadable').pass);
 check('good photo + unreadable stops analyzing (shows the retake UI)', !q(true, 'unreadable').analyzing);
 
-// A photo that already failed the image checks must NOT wait on inference — it is showing its
+// A photo that already failed the image checks must NOT wait on inference - it is showing its
 // retake UI either way, and waiting would only make a "no" slower.
 for (const read of READS) {
   check(`failed IQA never waits on the read (${read})`, !q(false, read).analyzing);
@@ -97,7 +97,7 @@ check('unsettled checks keep analyzing even on failure', q(false, 'ok', false).a
 /* ------------------------------------------------------------------ nextStepAfterQuality */
 const step = (questionnaireComplete) => nextStepAfterQuality({ questionnaireComplete });
 
-// One photo per pass, from either source, and no detour — the only remaining question is whether
+// One photo per pass, from either source, and no detour - the only remaining question is whether
 // the questionnaire still needs asking.
 check('unanswered → questionnaire', step(false).kind === 'questionnaire');
 check('answered → analysis', step(true).kind === 'analysis');
@@ -121,7 +121,7 @@ check('accepted low confidence still applies the floor', a('prompt-rescan', true
 check('acceptance does not floor an ok result', a('ok', true).applyFloor === false);
 check('acceptance does not change the second strike', a('apply-floor', true).applyFloor === true);
 
-// Whatever happens, a non-ok verdict is never finalized WITHOUT the floor — that is the invariant
+// Whatever happens, a non-ok verdict is never finalized WITHOUT the floor - that is the invariant
 // that keeps an unreadable photo from being reported as a confident tier.
 for (const v of ['prompt-rescan', 'apply-floor']) {
   for (const accepted of [true, false]) {

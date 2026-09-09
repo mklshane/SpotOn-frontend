@@ -6,7 +6,7 @@
  * to be reachable only by pointing a real phone at a real mole.
  *
  * The coordinate mapping is the reason this file exists. The detector reports a box in its own
- * space — a centred square crop of the sensor frame — and that has to be translated twice before it
+ * space - a centred square crop of the sensor frame - and that has to be translated twice before it
  * can be drawn or forwarded to the cropper. A sign error there does not throw or look broken; it
  * silently crops slightly off-target, feeds the classifier the wrong skin, and quietly degrades
  * every result. Nothing downstream can detect it.
@@ -26,7 +26,7 @@
  * refused to move this bar without.
  *
  * The negatives it needed are lesion-FREE SKIN, not the procedural gray/blue/checker patterns
- * synth/eval/detector_eval.py uses — a detector rejecting a blue screen says nothing about whether
+ * synth/eval/detector_eval.py uses - a detector rejecting a blue screen says nothing about whether
  * a box appears on a plain forearm. They are 40%-size patches cut from the 200 holdout photos, kept
  * only where they clear EVERY detector's own box, so both models are scored on identical negatives.
  * Read the rate as an upper bound: a patch may clip an undetected second lesion, and a 40% crop
@@ -41,13 +41,13 @@
  *
  * READ THE FIRST TWO ROWS TOGETHER: keeping 0.35 across the detector swap silently cut the share of
  * lesions that can start a track from 53% to 40%, because y11n_v1's confidences sit lower
- * (median 0.300 vs 0.360). That is why the box became slow to appear — the bar stopped matching the
+ * (median 0.300 vs 0.360). That is why the box became slow to appear - the bar stopped matching the
  * distribution under it. At 0.28 the new detector reaches the SAME measured false-box rate as the
  * old one did at its shipped bar, while finding MORE lesions (58% vs 53%). This is a recalibration
  * to preserve behaviour, not a relaxation of it.
  *
  * Limits, stated because 31 patches is not many: the negative set is small, so treat 25.8% as
- * "about a quarter" rather than a precise figure, and it is measured on stills — live preview
+ * "about a quarter" rather than a precise figure, and it is measured on stills - live preview
  * frames are noisier and score lower, which pushes both columns down together.
  */
 export const CREATE_SCORE = 0.28;
@@ -69,29 +69,29 @@ export const CREATE_SCORE = 0.28;
  * re-acquired repeatedly. The exact parity point is 0.2363; 0.24 rounds toward the stricter side.
  *
  * SAFE TO REFIT ON LESION-ONLY DATA, by the rule round 1 of DETECTOR_AB.md established for
- * LOCK_SCORE: this bar cannot summon a box out of nothing — CREATE_SCORE gates that — so it cannot
+ * LOCK_SCORE: this bar cannot summon a box out of nothing - CREATE_SCORE gates that - so it cannot
  * manufacture a false positive. It only decides how long a track that already exists survives a
  * confidence dip. CREATE_SCORE is untouched for exactly that reason: lowering it WOULD admit false
  * boxes, and that needs the recall-vs-non-skin-FPR sweep in synth/eval/detector_eval.py, which a
  * lesion-only holdout cannot provide.
  *
- * This is a VISUAL bar. It has no bearing on classification — the still path runs its own detector
+ * This is a VISUAL bar. It has no bearing on classification - the still path runs its own detector
  * pass at DET_CONF (classifier/lesion-detector.ts) and the triage decision is
  * MALIGNANT_THRESHOLD's. Neither changed.
  */
 export const KEEP_SCORE = 0.24;
 /**
- * Above this the box is "locked" — green, and eligible for the ready coach.
+ * Above this the box is "locked" - green, and eligible for the ready coach.
  *
  * Lowered 0.5 -> 0.38 (2026-08-04). Measured on 198 held-out clinical photos through the shipping
  * detector (synth/eval/detector_ab.py), 0.5 rejected **86% of real lesions**: the box almost never
  * turned green, computeCoach almost never reached 'ready', and the user almost never saw
- * "Looks good — tap to capture". The old detector scores the same (92% rejected at 0.5, median
- * 0.364 vs 0.363), so this was never a model-swap artifact — the bar has simply always been set
+ * "Looks good - tap to capture". The old detector scores the same (92% rejected at 0.5, median
+ * 0.364 vs 0.363), so this was never a model-swap artifact - the bar has simply always been set
  * above where this family of detectors actually scores.
  *
  * 0.38 sits just above the median, so roughly half of real detections can lock. That is not lax:
- * `ready` is conjunctive — it also demands correct size, centring and a settled box — so LOCK is
+ * `ready` is conjunctive - it also demands correct size, centring and a settled box - so LOCK is
  * one term of four, and a bar that almost nothing clears makes the other three unreachable.
  *
  * Note this only governs whether an ALREADY-VISIBLE box turns green. It cannot create a false box;
@@ -99,7 +99,7 @@ export const KEEP_SCORE = 0.24;
  * skin which the lesion-only held-out set cannot provide. Left alone deliberately.
  *
  * Live preview frames are noisier than the stills this was measured on, so real confidences are
- * likely LOWER — which argues this is still on the conservative side.
+ * likely LOWER - which argues this is still on the conservative side.
  */
 export const LOCK_SCORE = 0.38;
 /** Consecutive qualifying frames before the box first appears. */
@@ -115,13 +115,13 @@ export const STABLE_FRAMES = 5;
  *
  * SUPERSEDED FOR THE LIVE BOX (2026-08-20): capture.tsx now uses `softDeadband` from
  * lib/detection-smoothing.ts, which damps sub-threshold movement instead of freezing it. The hard
- * version below accumulates — the 1€ filter behind it keeps advancing while the drawn value is
+ * version below accumulates - the 1€ filter behind it keeps advancing while the drawn value is
  * pinned, so crossing the band released the whole stored difference as one visible step. Kept here
  * with its tests because it is the reference the soft version is checked against, and because the
  * threshold values themselves moved to DETECTION_SMOOTHING_CONFIG unchanged.
  */
 export const DEADBAND = 0.004;
-/** Size deadband is looser than position — width/height are noisier than centre. */
+/** Size deadband is looser than position - width/height are noisier than centre. */
 export const SIZE_DEADBAND_SCALE = 1.5;
 
 /* ------------------------------------------------------------------ coaching thresholds */
@@ -157,12 +157,12 @@ export type FrameMetrics = {
 /**
  * The whole coaching decision, as one pure function of the latest gate + framing.
  *
- * Lighting and focus outrank position so messages never stack — there is no point asking someone to
+ * Lighting and focus outrank position so messages never stack - there is no point asking someone to
  * centre a spot they cannot see. Below that the positional ladder narrows toward a good frame the
  * way document scanners do, and only says "ready" once the box has actually settled.
  *
  * `guide` is the capture screen's Guide toggle (labelled "AI camera" until 2026-08-20). With it off
- * the positional coaching goes silent, because there is no box to coach against — but the lighting
+ * the positional coaching goes silent, because there is no box to coach against - but the lighting
  * and focus gates above still fire, since those are properties of the frame rather than of the
  * detector.
  */
@@ -219,20 +219,20 @@ export function stepStability(streak: number, moved: number): number {
  * `score` is null when the frame produced no box at all. The worklet only emits above KEEP_SCORE,
  * so the CREATE bar is enforced here: while inactive a weak box cannot build toward appearing, but
  * once active any emitted box sustains it, and it only drops after KEEP_GRACE consecutive misses.
- * That asymmetry is the whole point — one bar would make the box strobe as the score hovers.
+ * That asymmetry is the whole point - one bar would make the box strobe as the score hovers.
  *
  * ACQUISITION, 2026-08-20: the CONFIRMING frame counts at the KEEP bar, not the CREATE bar.
  *
  * The rule used to be "DETECT_SHOW frames at or above CREATE_SCORE", with anything weaker decaying
- * the streak — so the box needed two strong frames to appear and every intervening ordinary frame
+ * the streak - so the box needed two strong frames to appear and every intervening ordinary frame
  * pushed it back. Under the current detector only ~44% of frames on a real lesion clear 0.35, which
  * turns a 2-frame requirement into a wait for two lucky frames: measured against the confidence
  * distribution, a mean of ~7 detector frames (~0.6 s at 12 fps) before the box shows up, and
  * visibly longer whenever the lesion sits near the bar. That is the "takes a moment to find it"
  * complaint.
  *
- * Now: the FIRST frame of a track still has to clear CREATE_SCORE — the evidence bar for asserting
- * a lesion exists is unchanged, and so is the peak confidence a false box must reach — but once one
+ * Now: the FIRST frame of a track still has to clear CREATE_SCORE - the evidence bar for asserting
+ * a lesion exists is unchanged, and so is the peak confidence a false box must reach - but once one
  * strong frame is banked, the confirmation only has to clear KEEP_SCORE, which ~83% of frames do.
  * Expected acquisition drops to ~3.5 frames (~0.3 s). What is genuinely traded: a false box now
  * needs one strong frame plus one ordinary one rather than two strong ones. See the CREATE_SCORE
@@ -251,7 +251,7 @@ export function stepTrack(prev: TrackState, score: number | null): TrackStep {
 
   if (!state.active && score < CREATE_SCORE) {
     // A streak above zero can only have been built by a frame at or above CREATE_SCORE, so this
-    // frame is CONFIRMING a lesion that already showed itself — count it. With nothing banked it is
+    // frame is CONFIRMING a lesion that already showed itself - count it. With nothing banked it is
     // just a weak box: decay rather than reset, so one strong frame in a noisy sequence does not
     // have to start over.
     state.detectStreak =
@@ -309,7 +309,7 @@ export function modelCropToFullFrame(box: NormBox, frameW: number, frameH: numbe
   };
 }
 
-/** Inverse of modelCropToFullFrame — exists so the mapping can be round-trip tested. */
+/** Inverse of modelCropToFullFrame - exists so the mapping can be round-trip tested. */
 export function fullFrameToModelCrop(box: NormBox, frameW: number, frameH: number): NormBox {
   const Rw = Math.min(frameW, frameH);
   const Rh = Math.max(frameW, frameH);
@@ -345,7 +345,7 @@ export function fullFrameToPreview(
   };
 }
 
-/** Inverse of fullFrameToPreview — exists so the mapping can be round-trip tested. */
+/** Inverse of fullFrameToPreview - exists so the mapping can be round-trip tested. */
 export function previewToFullFrame(
   box: NormBox,
   frameW: number,

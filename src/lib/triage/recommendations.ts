@@ -2,7 +2,7 @@ import { t, localizedCopy } from "../i18n/core";
 import type { LesionClass, TriageTier } from './types';
 
 /**
- * All user-facing copy for triage results, keyed by tier — the single source for the
+ * All user-facing copy for triage results, keyed by tier - the single source for the
  * results screen, the analysis screen, and (later) the Screening Summary Report.
  *
  * Tone rules (physician-reviewed): plain language, warm, non-alarming; Critical is firm
@@ -32,7 +32,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
     name: 'Low',
     headline: 'No strong signs of concern right now',
     recommendation:
-      'Your spot does not show strong signs of concern at this time. Keep checking it monthly using the ABCDE guide, and scan again — or visit a skin doctor — if you notice any changes.',
+      'Your spot does not show strong signs of concern at this time. Keep checking it monthly using the ABCDE guide, and scan again - or visit a skin doctor - if you notice any changes.',
     timeframe: null,
     priorityAction: 'Self-check monthly with the ABCDE guide',
     showReport: false,
@@ -44,7 +44,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
     name: 'Moderate',
     headline: 'Worth having checked by a doctor',
     recommendation:
-      'Your spot has some features worth having checked. There is no immediate cause for alarm — we recommend scheduling an appointment with a dermatologist or general doctor within the next four weeks.',
+      'Your spot has some features worth having checked. There is no immediate cause for alarm - we recommend scheduling an appointment with a dermatologist or general doctor within the next four weeks.',
     timeframe: 'See a doctor within ~4 weeks',
     priorityAction: 'Book a dermatologist visit within ~4 weeks',
     showReport: true,
@@ -82,7 +82,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
 export const CONFIDENCE_QUALIFIER = localizedCopy({
   title: 'A precautionary result',
   body:
-    'We could not read your photos clearly enough for a confident assessment, so we are recommending a check-up as a precaution. This reflects photo uncertainty — not a detected risk.',
+    'We could not read your photos clearly enough for a confident assessment, so we are recommending a check-up as a precaution. This reflects photo uncertainty - not a detected risk.',
 });
 
 /**
@@ -109,7 +109,12 @@ export const RESCAN_PROMPT = localizedCopy({
 
 /** Mandatory on every results surface. Matches the Learn hub's established tone. */
 export const DISCLAIMER = localizedCopy(
-  'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation — always follow up with a dermatologist about anything that concerns you.',
+  'SpotOn is a screening aid, not a diagnosis. It cannot replace a professional evaluation - always follow up with a dermatologist about anything that concerns you.',
+);
+
+/** Shown on every result surface so users do not treat a preliminary screen as treatment advice. */
+export const AVOID_SELF_MEDICATION_WARNING = localizedCopy(
+  'Avoid self-medication. This result is only a preliminary risk assessment and is not a medical diagnosis. Consult a qualified healthcare professional for proper evaluation and treatment.',
 );
 
 /**
@@ -123,7 +128,7 @@ export const REPORT_DISCLAIMER = localizedCopy(
 
 /**
  * Sentence fragments for the report's urgency paragraph, assembled in summary-report.ts.
- * Kept here so the whole report reads from the same copy module — a Tagalog translation
+ * Kept here so the whole report reads from the same copy module - a Tagalog translation
  * stays a data change. The bold runs in the rendered sentence are structural (tier,
  * confidence band, symptom burden), never a regex over physician-reviewed prose.
  */
@@ -166,7 +171,7 @@ export const CLASS_DISPLAY: Record<
     name: 'Melanoma-like',
     lay: 'a pattern with features similar to melanoma',
     about:
-      'Melanoma is the most serious form of skin cancer. It begins in the skin’s pigment-producing cells and can spread to other parts of the body if it is not treated early. Found early, it is highly treatable — which is why prompt evaluation matters. Warning signs include a mole that is asymmetric, has an irregular border, uneven color, is larger than about 6 mm, or is changing.',
+      'Melanoma is the most serious form of skin cancer. It begins in the skin’s pigment-producing cells and can spread to other parts of the body if it is not treated early. Found early, it is highly treatable - which is why prompt evaluation matters. Warning signs include a mole that is asymmetric, has an irregular border, uneven color, is larger than about 6 mm, or is changing.',
   },
   SCC: {
     full: 'Squamous Cell Carcinoma',
@@ -194,6 +199,6 @@ export const CLASS_DISPLAY: Record<
     name: 'Likely benign',
     lay: 'a pattern that looks non-cancerous',
     about:
-      'Benign spots are non-cancerous — for example ordinary moles, freckles, or age-related growths such as seborrhoeic keratoses. They are very common and usually harmless, though it is still worth watching any spot that changes in size, shape, or color over time.',
+      'Benign spots are non-cancerous - for example ordinary moles, freckles, or age-related growths such as seborrhoeic keratoses. They are very common and usually harmless, though it is still worth watching any spot that changes in size, shape, or color over time.',
   },
 });

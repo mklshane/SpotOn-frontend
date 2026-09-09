@@ -19,7 +19,7 @@ const SPACERS = ['{" "}', "{' '}"];
 
 /** `file:line` sites where the join is deliberate. Keep this list short and explain each. */
 const ALLOW = new Set([
-  // "…pattern (MEL)" — no space wanted after an opening parenthesis.
+  // "…pattern (MEL)" - no space wanted after an opening parenthesis.
   'src/app/scan/result.tsx:251',
 ]);
 
@@ -58,7 +58,7 @@ if (findings.length) {
     console.error(`  ${f.site}\n      {t("${f.key}")}${f.next}`);
   }
   console.error(
-    '\nPut the space outside the call — {t("Checked on")} {date} — so the catalog key stays clean.',
+    '\nPut the space outside the call - {t("Checked on")} {date} - so the catalog key stays clean.',
   );
   process.exit(1);
 }

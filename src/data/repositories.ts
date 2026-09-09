@@ -109,7 +109,7 @@ export interface FacilityQuery {
   city?: string;
   type?: string; // collector type, e.g. dermatology_clinic
   hasBookingUrl?: boolean; // only facilities with an online booking page
-  includeExcluded?: boolean; // default false — hide status='excluded'
+  includeExcluded?: boolean; // default false - hide status='excluded'
   limit?: number;
   offset?: number;
 }
@@ -119,7 +119,7 @@ function facilityWhere(query: FacilityQuery): { clause: string; params: (string 
   const params: (string | number)[] = [];
   if (!query.includeExcluded) where.push("(status IS NULL OR status != 'excluded')");
   if (query.q) {
-    // "Search clinics or area…" — match the clinic's own name/address as well
+    // "Search clinics or area…" - match the clinic's own name/address as well
     // as where it's located, so typing a place (e.g. "Lipa") finds clinics
     // there, and typing a clinic's actual name or street still works too.
     where.push("(name LIKE ? OR address LIKE ? OR city LIKE ? OR province LIKE ?)");
@@ -234,7 +234,7 @@ export interface DoctorQuery {
   city?: string;
   pdsCertified?: boolean;
   hasBookingLink?: boolean; // only doctors with ≥1 active booking link
-  includeExcluded?: boolean; // default false — hide status='excluded'
+  includeExcluded?: boolean; // default false - hide status='excluded'
   limit?: number;
   offset?: number;
 }
@@ -267,7 +267,7 @@ export async function listDoctors(query: DoctorQuery = {}): Promise<DoctorSync[]
  * One doctor by id, or null if it is excluded.
  *
  * The list already filters, but a deep link or a stale navigation param can
- * carry an id straight here — the detail screen renders "Doctor not found",
+ * carry an id straight here - the detail screen renders "Doctor not found",
  * which is the right answer for a record the directory has hidden.
  */
 export async function getDoctor(id: string): Promise<DoctorSync | null> {
@@ -375,7 +375,7 @@ export async function listPlatforms(): Promise<PlatformSync[]> {
   return rows.map(toPlatform);
 }
 
-/** Row counts per table — useful for a sync/debug screen. */
+/** Row counts per table - useful for a sync/debug screen. */
 export async function getCounts(): Promise<Record<string, number>> {
   const db = await getDb();
   const tables = ["facilities", "doctors", "booking_links", "telemedicine_platforms"];

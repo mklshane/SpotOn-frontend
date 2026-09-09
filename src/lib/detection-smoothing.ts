@@ -8,8 +8,8 @@
  * actually fed) are deliberately NOT reachable from this file. A knob here can make the box calmer
  * or twitchier; it cannot change what the app concludes about a lesion.
  *
- * The detection BARS themselves — CREATE_SCORE / KEEP_SCORE / LOCK_SCORE / DETECT_SHOW /
- * KEEP_GRACE — stay in capture-core.ts, where each carries the measurement that set it. They are
+ * The detection BARS themselves - CREATE_SCORE / KEEP_SCORE / LOCK_SCORE / DETECT_SHOW /
+ * KEEP_GRACE - stay in capture-core.ts, where each carries the measurement that set it. They are
  * decisions about evidence; the values here are decisions about motion.
  *
  * Zero imports on purpose, like capture-core.ts: this compiles standalone under
@@ -26,7 +26,7 @@ export const DETECTION_SMOOTHING_CONFIG = {
    */
   position: { minCutoff: 1.5, beta: 0.05 },
   /**
-   * 1€ constants for WIDTH/HEIGHT — deliberately heavier than `position`.
+   * 1€ constants for WIDTH/HEIGHT - deliberately heavier than `position`.
    *
    * The detector's box dimensions are visibly noisier than its centre: the same lesion, held still,
    * produces a centre that wanders by a pixel or two while the extents move several. Filtering both
@@ -38,7 +38,7 @@ export const DETECTION_SMOOTHING_CONFIG = {
 
   /**
    * Deadband (fraction of the screen) below which movement is damped away rather than drawn, so
-   * the box does not creep while the user holds still. SOFT, not hard — see `softDeadband`.
+   * the box does not creep while the user holds still. SOFT, not hard - see `softDeadband`.
    */
   positionDeadband: 0.004,
   /** Size deadband multiplier: width/height are noisier than centre, so their band is wider. */
@@ -49,7 +49,7 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * this (fraction of the screen) from the tracked box is treated as a DIFFERENT object rather than
    * as this one having teleported.
    *
-   * 0.28 is a little over a quarter of the frame — far beyond anything a real lesion covers between
+   * 0.28 is a little over a quarter of the frame - far beyond anything a real lesion covers between
    * two frames 83 ms apart at 12 fps, and comfortably inside the distance between two separate moles
    * that the argmax might alternate between.
    */
@@ -63,7 +63,7 @@ export const DETECTION_SMOOTHING_CONFIG = {
   handoverFrames: 3,
 
   /**
-   * Fade in/out of the tracked box, in ms. This is the answer to "detection lost" — the box fades
+   * Fade in/out of the tracked box, in ms. This is the answer to "detection lost" - the box fades
    * where it stands instead of flying back to the centred searching guide, and the guide fades in
    * behind it. Short enough not to read as lag, long enough not to read as a snap. The border
    * colour rides the same fade, which is what removes the white->green snap.
@@ -76,7 +76,7 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * ~83 ms between inference results at display refresh rate.
    *
    * CRITICALLY DAMPED ON PURPOSE. The shipped value was {damping 24, stiffness 320}, which at
-   * Reanimated's default mass of 1 is a damping ratio of 24 / (2*sqrt(320)) = 0.67 — underdamped.
+   * Reanimated's default mass of 1 is a damping ratio of 24 / (2*sqrt(320)) = 0.67 - underdamped.
    * Every detection kicked a fresh ~6% overshoot that rang back before the next one arrived, so the
    * box vibrated at the detector's cadence even when the filtered target was perfectly still. That
    * was the largest single contributor to the jitter, and it sat downstream of a 1€ filter that was
@@ -107,7 +107,7 @@ export function boxSpring(): { stiffness: number; mass: number; damping: number 
  *
  * The hard version this replaces returned `prev` unchanged until the move exceeded epsilon. That
  * kills creep, but it also accumulates: the 1€ filter behind it keeps advancing, so when the target
- * finally drifts past the band the drawn box jumps the whole accumulated distance in one frame —
+ * finally drifts past the band the drawn box jumps the whole accumulated distance in one frame -
  * a stair-step, and (before the spring was fixed) an overshoot on top of it.
  *
  * Subtracting the band instead makes the response continuous: zero movement at the threshold,
@@ -136,7 +136,7 @@ export type AssociationStep = {
   state: AssociationState;
   /** Feed this detection into the filters? */
   accept: boolean;
-  /** Accepting a genuinely different object — reset the filters so it doesn't glide across. */
+  /** Accepting a genuinely different object - reset the filters so it doesn't glide across. */
   handover: boolean;
 };
 
@@ -146,7 +146,7 @@ export type AssociationStep = {
  * The worklet takes a global argmax over ~12k anchors every frame with no memory of the previous
  * one, so with two lesions in frame at similar confidence the winner can alternate and the box
  * teleports back and forth. Centre distance is the association metric rather than IoU because the
- * detector's SIZE is its noisiest output — an IoU gate would drop good detections of the tracked
+ * detector's SIZE is its noisiest output - an IoU gate would drop good detections of the tracked
  * lesion whenever its predicted extents wobbled, which is precisely the noise being filtered out.
  *
  * `prevCentre` null means nothing is being tracked yet: accept, with no handover (there is no

@@ -12,7 +12,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 export type FeaturedEducationCardProps = {
   image: ImageSourcePropType;
-  /** Alt text for the photo — describes the image, not the article. */
+  /** Alt text for the photo - describes the image, not the article. */
   imageLabel: string;
   /** Short category shown on the photo, e.g. "Warning Signs". */
   category: string;

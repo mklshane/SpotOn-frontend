@@ -3,7 +3,7 @@
  *
  * The bug this guards: iOS re-maps the data container to a new UUID on every install, so the
  * absolute file:// URIs the app used to store in `screenings.image_uri` stopped resolving after a
- * reinstall — history rows survived intact while every thumbnail rendered blank against JPEGs that
+ * reinstall - history rows survived intact while every thumbnail rendered blank against JPEGs that
  * were still on disk. The fix stores paths relative to documentDirectory and rebases them on read,
  * so the property that actually matters is: **a URI written under one container must still resolve
  * after documentDirectory changes.** That is what the container-change cases below pin.
@@ -28,7 +28,7 @@ execFileSync(
   { cwd: ROOT, stdio: 'inherit' },
 );
 
-// image-paths imports ../lib/fs, which re-exports expo-file-system/legacy — unloadable outside a
+// image-paths imports ../lib/fs, which re-exports expo-file-system/legacy - unloadable outside a
 // native runtime. fs.ts is compiled alongside (tsc needs it to typecheck) and mirrors the source
 // dirs, so the output is out/data/image-paths.js + out/lib/fs.js. Point image-paths at a stub
 // exporting a live, settable documentDirectory binding.
@@ -40,7 +40,7 @@ writeFileSync(
 const js = join(out, 'data', 'image-paths.js');
 const compiled = readFileSync(js, 'utf8');
 if (!compiled.includes('../lib/fs')) {
-  console.error('FATAL: compiled image-paths.js no longer imports ../lib/fs — the stub swap below');
+  console.error('FATAL: compiled image-paths.js no longer imports ../lib/fs - the stub swap below');
   console.error('is stale and the test would silently exercise nothing.');
   process.exit(1);
 }
@@ -136,8 +136,8 @@ for (const uri of [
 // Rebasing a path we do not own would invent a location that holds no file, turning a working URI
 // into a broken one. Ownership is "exactly one segment below screenings/", so a deeper path or a
 // bare directory is left alone. NOTE this is a shape test, not a provenance test: a foreign file
-// at <anything>/screenings/x.jpg would be claimed. Nothing produces one — persistImage() is the
-// only writer under screenings/, and its failure fallback yields tmp/ImagePicker paths — but if a
+// at <anything>/screenings/x.jpg would be claimed. Nothing produces one - persistImage() is the
+// only writer under screenings/, and its failure fallback yields tmp/ImagePicker paths - but if a
 // future caller stores third-party paths, tighten ownership here before it does.
 eq(
   'a nested path below screenings/ is not claimed',

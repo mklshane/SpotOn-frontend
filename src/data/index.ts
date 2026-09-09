@@ -1,4 +1,4 @@
-/** Offline data layer — public surface for the rest of the app. */
+/** Offline data layer - public surface for the rest of the app. */
 export { getDb, getMeta, setMeta } from "./db";
 export {
   runSync,

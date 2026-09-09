@@ -7,7 +7,7 @@
  *
  * LiteRT.js loads its runtime by URL at runtime (`loadLiteRt('/litert/')`), not through the
  * bundler, so the files have to exist as static assets. They live in node_modules and are far
- * too big to commit, hence this copy step — wired into postinstall so a fresh clone is ready
+ * too big to commit, hence this copy step - wired into postinstall so a fresh clone is ready
  * without anyone remembering it.
  *
  * All variants are copied because the right one depends on the browser (JSPI support, cross-
@@ -31,7 +31,7 @@ const litertDest = join(root, 'public', 'litert');
 //   const relaxedSimd = await supportsFeature("relaxedSimd")   (@litertjs/core dist/index.js)
 // and falls back to `litert_wasm_compat_internal.js` when the browser lacks it. Safari only
 // shipped relaxed SIMD in 18.4, so omitting `compat` 404s the runtime on older iOS and surfaces
-// as a bare ClassifierError('model-load') — this was shipped broken on 2026-09-08 and is why
+// as a bare ClassifierError('model-load') - this was shipped broken on 2026-09-08 and is why
 // `compat` is back.
 //
 // `threaded` stays out: it is only ever selected when `options.threads` is passed, which we never
@@ -57,7 +57,7 @@ if (existsSync(litertSrc)) {
   for (const f of files) bytes += (await stat(join(litertDest, f))).size;
   console.log(`[litert] staged ${files.length} files (${(bytes / 1e6).toFixed(1)} MB) -> public/litert/`);
 } else {
-  console.log('[litert] @litertjs/core not installed — skipping wasm copy');
+  console.log('[litert] @litertjs/core not installed - skipping wasm copy');
 }
 
 // --------------------------------------------------------------- maplibre-gl ----
@@ -65,7 +65,7 @@ if (existsSync(litertSrc)) {
 // maplibre-gl is loaded as a prebuilt UMD script at runtime rather than imported, because Metro
 // cannot bundle it correctly: maplibre runs tile parsing in a Web Worker, and when Metro bundles
 // the ESM build that worker never answers. The map then downloads its style, renders nothing,
-// requests zero tiles and reports no error — a silently blank map.
+// requests zero tiles and reports no error - a silently blank map.
 //
 // Serving dist/maplibre-gl.js ourselves keeps the worker inlined the way maplibre built it, and
 // avoids a third-party CDN for a health app. Note this is why the dependency is pinned to a 5.x
@@ -82,5 +82,5 @@ if (existsSync(join(mlSrc, 'maplibre-gl.js'))) {
   }
   console.log(`[maplibre] staged 2 files (${(bytes / 1e6).toFixed(1)} MB) -> public/maplibre/`);
 } else {
-  console.log('[maplibre] no UMD build found (is maplibre-gl 6.x installed? it has none) — skipping');
+  console.log('[maplibre] no UMD build found (is maplibre-gl 6.x installed? it has none) - skipping');
 }

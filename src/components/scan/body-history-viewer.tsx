@@ -22,11 +22,11 @@ const POLAR_MAX = Math.PI - 0.3;
  * The visible world height at radius r is 2*r*tan(fov/2) = 0.768*r, against a body normalised to
  * 3.7 units tall (body-model.tsx TARGET_HEIGHT), so:
  *     r 9.5  -> 7.3 units visible : the whole body with margin
- *     r 3.6  -> 2.8 units visible : about three quarters of the body — the old floor
+ *     r 3.6  -> 2.8 units visible : about three quarters of the body - the old floor
  *     r 1.0  -> 0.8 units visible : roughly a forearm, enough to put a dot on one spot
  * The zoom range goes from 2.6x to 9.5x. 1.0 rather than lower because the orbit target can sit
  * inside the mesh when someone zooms at the body's centre line, and the camera has to stay outside
- * it — a torso is roughly 0.25 units in half-depth at this scale, so 1.0 keeps clear with room to
+ * it - a torso is roughly 0.25 units in half-depth at this scale, so 1.0 keeps clear with room to
  * spare. Off-centre zoom moves the target toward the surface, which only adds margin.
  */
 const RADIUS_MIN = 1.0;
@@ -151,7 +151,7 @@ export function BodyHistoryViewer({
               {/*
                 Invisible tap target. The dot is small enough now that raycasting it directly would
                 make markers fiddly to hit, so the thing the user aims at and the thing they see are
-                separate spheres — this one is even a shade larger than the old dot, so tapping got
+                separate spheres - this one is even a shade larger than the old dot, so tapping got
                 easier rather than harder. Fully transparent rather than `visible={false}` so it is
                 unambiguously still raycastable, and low-poly because nothing ever shades it.
               */}

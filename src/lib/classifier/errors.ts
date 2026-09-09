@@ -46,7 +46,7 @@ function describeNonError(e: unknown): string {
     const json = JSON.stringify(e);
     if (json && json !== '{}') return json;
   } catch {
-    // Circular or exotic — fall through to the tag.
+    // Circular or exotic - fall through to the tag.
   }
   return Object.prototype.toString.call(e);
 }

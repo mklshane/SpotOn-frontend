@@ -51,8 +51,8 @@ screeningsummary.png
 public/litert/
 public/maplibre/
 
-# Vercel project link (contains project/org ids — machine-local)
+# Vercel project link (contains project/org ids - machine-local)
 .vercel/
 
-# Scratch uploads for manual testing — never commit (may contain personal photos)
+# Scratch uploads for manual testing - never commit (may contain personal photos)
 .tmp-upload/
