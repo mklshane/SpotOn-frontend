@@ -236,7 +236,7 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   }
   /* Optically centres the block against the photo, as on the approved layout - flex
      centring sits noticeably lower than the reference. */
-  .cls { flex: 1; padding-top: 48pt; text-align: center; }
+  .cls { flex: 1; padding-top: 38pt; text-align: center; }
   .clsLabel { font-size: 11pt; font-weight: 700; color: ${C.ink}; }
   .clsName { font-size: 19pt; font-weight: 700; color: ${C.ink}; margin: 5pt 0 4pt; letter-spacing: -.2pt; }
   .clsConf { font-size: 11pt; color: ${C.body}; }
