@@ -1,5 +1,5 @@
 /**
- * Triage Priority Score (TPS) — the pure clinical scoring engine.
+ * Triage Priority Score (TPS) - the pure clinical scoring engine.
  *
  * TPS = CS + SS ∈ [0, 8], where CS = W × C encodes the CNN's predicted class urgency
  * (NICE NG12 referral hierarchy) scaled by its softmax confidence, and SS is the
@@ -62,7 +62,7 @@ export const CLASS_WEIGHTS: Record<LesionClass, number> = {
 };
 
 /**
- * The three malignant classes. Their summed softmax mass is the Malignant Gate's input —
+ * The three malignant classes. Their summed softmax mass is the Malignant Gate's input -
  * a signal argmax throws away when probability is spread across several malignant classes.
  */
 export const MALIGNANT_CLASSES: readonly LesionClass[] = ['MEL', 'SCC', 'BCC'];
@@ -74,7 +74,7 @@ export const TIER_ORDER: readonly TriageTier[] = ['low', 'moderate', 'high', 'cr
  * The tier the Malignant Gate floors to. Moderate, deliberately: the gate only fires when
  * argmax *disagrees* with the summed malignant mass, which is enough to warrant a clinician
  * but not enough to assert urgency on the argmax path's behalf. Same ceiling as the Safety
- * Floor Rule, and for the same reason — a derived signal must not manufacture a High/Critical.
+ * Floor Rule, and for the same reason - a derived signal must not manufacture a High/Critical.
  */
 export const MALIGNANT_GATE_FLOOR_TIER: TriageTier = 'moderate';
 
@@ -176,7 +176,7 @@ export function evaluateSafetyFloor(
 
 /**
  * Malignant score = summed softmax mass over MEL+SCC+BCC. Throws on a malformed distribution,
- * matching pickTopClass — a fabricated 0 here would silently disarm the gate.
+ * matching pickTopClass - a fabricated 0 here would silently disarm the gate.
  */
 export function computeMalignantScore(probs: Record<LesionClass, number>): number {
   let sum = 0;
@@ -190,11 +190,11 @@ export function computeMalignantScore(probs: Record<LesionClass, number>): numbe
 
 /**
  * Malignant Gate. Fires when enough probability mass sits on the malignant classes, even if no
- * single one wins the argmax — the failure mode the 5-class CS path is blind to (e.g. BENIGN .45
+ * single one wins the argmax - the failure mode the 5-class CS path is blind to (e.g. BENIGN .45
  * beats BCC .25 / MEL .15 / SCC .05, yielding CS = 0 while 45% of the mass is malignant).
  *
  * The threshold is a property of the deployed model, not of the clinical spec, so it is passed in
- * from `classifier/model-config.ts` (MALIGNANT_THRESHOLD) rather than pinned here — this file
+ * from `classifier/model-config.ts` (MALIGNANT_THRESHOLD) rather than pinned here - this file
  * stays import-free and model-agnostic. Comparison is >= so the published operating point is
  * inclusive.
  */
@@ -222,7 +222,7 @@ export function applyMalignantFloor(result: TriageResult): TriageResult {
 /**
  * Scale-consistency rule. When the classifier's top class changes as the photo is re-cropped, the
  * answer is a property of the framing rather than of the lesion, and is not clinically actionable
- * — the same conclusion the Safety Floor draws from a low confidence, reached by a different
+ * - the same conclusion the Safety Floor draws from a low confidence, reached by a different
  * route. Handled identically (rescan first, floor on the second strike) so an unreadable photo can
  * never be reported as a risk finding.
  */
@@ -236,13 +236,13 @@ export function evaluateScaleConsistency(
 
 /**
  * Cross-image agreement, for a multi-photo screening. When two photos of the SAME lesion produce
- * different *confident* predictions, the answer is a property of the photograph — angle, lighting,
- * framing — rather than of the lesion, and is not clinically actionable. That is the identical
+ * different *confident* predictions, the answer is a property of the photograph - angle, lighting,
+ * framing - rather than of the lesion, and is not clinically actionable. That is the identical
  * conclusion evaluateScaleConsistency draws about re-cropping, reached by a different route, so it
  * is handled identically: rescan on the first strike, Moderate floor on the second.
  *
  * Whether this routes at all is gated by IMAGE_AGREEMENT_CHECK_ENABLED (model-config.ts), which
- * ships false — see synth/eval/MULTIVIEW_EVAL.md for the flag-rate/accuracy measurement behind that.
+ * ships false - see synth/eval/MULTIVIEW_EVAL.md for the flag-rate/accuracy measurement behind that.
  */
 export function evaluateImageAgreement(
   imageDisagreement: boolean,
@@ -265,7 +265,7 @@ export function combineReadability(
 }
 
 /**
- * Override a computed result to the Moderate floor. Only `tier` and the flags change —
+ * Override a computed result to the Moderate floor. Only `tier` and the flags change -
  * the arithmetic components are preserved so the audit trail records both the computed
  * truth and the override.
  */
@@ -279,7 +279,7 @@ export function applySafetyFloor(result: TriageResult): TriageResult {
  * chooses to continue with a low-confidence photo instead of retaking).
  *
  * When `malignantScore` and `malignantThreshold` are both supplied, the Malignant Gate runs
- * before the Safety Floor. Both floor to Moderate, so the order never changes the tier — it only
+ * before the Safety Floor. Both floor to Moderate, so the order never changes the tier - it only
  * keeps the two flags independently truthful about which rule did the raising.
  */
 export function computeTriage(
@@ -340,21 +340,21 @@ export function pickTopClass(probs: Record<LesionClass, number>): {
  * ------------------------------------------------------------------------------------------- */
 
 /**
- * The questionnaire measures symptoms that CHANGE — which is the entire reason a lesion is worth
- * tracking — so carrying every answer forward makes a follow-up TPS a record of the past rather
+ * The questionnaire measures symptoms that CHANGE - which is the entire reason a lesion is worth
+ * tracking - so carrying every answer forward makes a follow-up TPS a record of the past rather
  * than of today. The eight items split into three classes by how they behave over time.
  *
- * ALWAYS_REASK — defined over a time window, so a carried answer asserts an observation the user
+ * ALWAYS_REASK - defined over a time window, so a carried answer asserts an observation the user
  *   never made. `evolution` ("changed over the past few weeks or months") and `bleeding_nonhealing`
- *   ("for more than three weeks") are MAJOR items at +2 each — 4 of the 11 raw points — so
+ *   ("for more than three weeks") are MAJOR items at +2 each - 4 of the 11 raw points - so
  *   staleness here is the single largest way a follow-up score can be wrong. `spontaneous_bleeding`
  *   is episodic for the same reason.
  *
- * RATCHET — monotone in time. `persistent_2mo` ("present for more than two months") can only go
+ * RATCHET - monotone in time. `persistent_2mo` ("present for more than two months") can only go
  *   no → yes as the lesion ages. A carried "no" under-triages by exactly the elapsed time, so a
  *   prior "yes" is kept but a prior "no" is re-asked once enough time has passed for it to flip.
  *
- * CARRY — morphology (border, texture, size, ugly-duckling). These change slowly, and re-asking
+ * CARRY - morphology (border, texture, size, ugly-duckling). These change slowly, and re-asking
  *   all of them at every check is what makes people stop doing follow-ups. Prefilled, shown for
  *   confirmation in one step, individually editable.
  */

@@ -4,33 +4,33 @@
 
 **Goal:** Build the SpotOn Directory tab end-to-end per `docs/DIRECTORY_SCREEN.md`: a Clinics segment (full-screen MapLibre map + draggable bottom-sheet list, offline-first) and an Online Booking segment (searchable doctor list → booking links), plus clinic/doctor detail screens.
 
-**Architecture:** `src/app/(tabs)/directory.tsx` owns segment/search state and a floating top overlay; it renders either `ClinicsView` (map + `@gorhom/bottom-sheet` list, reading from `nearbyFacilities`/`listFacilities`) or `DoctorsView` (plain list, reading from `listDoctors`). All data comes from the **already-existing** offline SQLite mirror (`src/data/repositories.ts` — do not modify the schema or sync layer). The native map is defensively guarded (`src/lib/maplibre.ts`) so the app runs before a dev build exists; it degrades to a list until `expo prebuild` links the native module.
+**Architecture:** `src/app/(tabs)/directory.tsx` owns segment/search state and a floating top overlay; it renders either `ClinicsView` (map + `@gorhom/bottom-sheet` list, reading from `nearbyFacilities`/`listFacilities`) or `DoctorsView` (plain list, reading from `listDoctors`). All data comes from the **already-existing** offline SQLite mirror (`src/data/repositories.ts` - do not modify the schema or sync layer). The native map is defensively guarded (`src/lib/maplibre.ts`) so the app runs before a dev build exists; it degrades to a list until `expo prebuild` links the native module.
 
 **Tech Stack:** Expo SDK 56, `@maplibre/maplibre-react-native` 11.x, `expo-location`, `@react-native-community/netinfo`, `@gorhom/bottom-sheet` 5.x (on top of the already-installed `react-native-reanimated` 4 / `react-native-gesture-handler` 2), `expo-sqlite` (existing), `expo-router`.
 
 ---
 
-## Before you start — read this
+## Before you start - read this
 
-**This project has no test runner** (no jest/vitest, no `test` script beyond two Node smoke scripts). Verification is `npx tsc --noEmit`, `npx expo lint`, and `npx expo export --platform ios` (bundles cleanly), exactly as `docs/DIRECTORY_SCREEN.md` §9 prescribes. Each task below ends with those checks instead of a TDD red/green cycle — that's this codebase's actual convention, not a shortcut.
+**This project has no test runner** (no jest/vitest, no `test` script beyond two Node smoke scripts). Verification is `npx tsc --noEmit`, `npx expo lint`, and `npx expo export --platform ios` (bundles cleanly), exactly as `docs/DIRECTORY_SCREEN.md` §9 prescribes. Each task below ends with those checks instead of a TDD red/green cycle - that's this codebase's actual convention, not a shortcut.
 
 **Two deliberate deviations from `docs/DIRECTORY_SCREEN.md`, both forced by the current repo state (verified by reading the code, not assumed):**
 
-1. **No `facility_type` / `booking_url` fields.** `src/api/types.ts:28-29` already has a comment: *"booking_url / facility_type exist in the DB but are not yet exposed by the /sync schema — add them server-side when needed."* The backend repo isn't part of this checkout, so we can't add them. We use the existing `type` field (e.g. `"dermatology_clinic"`) run through a new `humanizeTag()` helper (→ "Dermatology Clinic") everywhere the doc says "practice type" or "specialization fallback" — this satisfies the doc's "never the raw facility_type" rule without a new column. Clinic detail's action row is **Call / Website** plus a tappable address row for directions — no "Book online" button, since there's no `booking_url` to open.
-2. **No live device/simulator verification in this session.** `@maplibre/maplibre-react-native` and `expo-location` are native modules — they only work after `npx expo prebuild && npx expo run:ios` (or `run:android`/EAS), which needs Xcode/Android SDK and a device or simulator. That's not available here. Every task's automated verification is `tsc`/`lint`/`export`. Task 17 ends with the manual on-device checklist from `docs/DIRECTORY_SCREEN.md` §9 for **you** to run after a dev build — do not claim those items are verified without actually running them.
+1. **No `facility_type` / `booking_url` fields.** `src/api/types.ts:28-29` already has a comment: *"booking_url / facility_type exist in the DB but are not yet exposed by the /sync schema - add them server-side when needed."* The backend repo isn't part of this checkout, so we can't add them. We use the existing `type` field (e.g. `"dermatology_clinic"`) run through a new `humanizeTag()` helper (→ "Dermatology Clinic") everywhere the doc says "practice type" or "specialization fallback" - this satisfies the doc's "never the raw facility_type" rule without a new column. Clinic detail's action row is **Call / Website** plus a tappable address row for directions - no "Book online" button, since there's no `booking_url` to open.
+2. **No live device/simulator verification in this session.** `@maplibre/maplibre-react-native` and `expo-location` are native modules - they only work after `npx expo prebuild && npx expo run:ios` (or `run:android`/EAS), which needs Xcode/Android SDK and a device or simulator. That's not available here. Every task's automated verification is `tsc`/`lint`/`export`. Task 17 ends with the manual on-device checklist from `docs/DIRECTORY_SCREEN.md` §9 for **you** to run after a dev build - do not claim those items are verified without actually running them.
 
-**MapLibre React Native API note:** the doc's prose (`MapView`, `GeoJSONSource`, `Marker`, `Camera`) is close but the installed package (`@maplibre/maplibre-react-native@11.3.6`, confirmed against its published source) actually exports the map container as **`Map`** (aliased `MapLibreMap` in our code — `Map` is a JS global), plus `Camera`, `UserLocation`, `GeoJSONSource`, `Layer` (`type="circle"`, kebab-case `paint` keys like `circle-radius`), `Marker` (prop `lngLat`, not `coordinate`), and `OfflineManager`. All code below uses the real, confirmed API — don't "correct" it back to the doc's looser prose.
+**MapLibre React Native API note:** the doc's prose (`MapView`, `GeoJSONSource`, `Marker`, `Camera`) is close but the installed package (`@maplibre/maplibre-react-native@11.3.6`, confirmed against its published source) actually exports the map container as **`Map`** (aliased `MapLibreMap` in our code - `Map` is a JS global), plus `Camera`, `UserLocation`, `GeoJSONSource`, `Layer` (`type="circle"`, kebab-case `paint` keys like `circle-radius`), `Marker` (prop `lngLat`, not `coordinate`), and `OfflineManager`. All code below uses the real, confirmed API - don't "correct" it back to the doc's looser prose.
 
 ---
 
 ## File structure
 
 **New:**
-- `src/lib/format.ts` — `formatFee`, `formatFeeRange`, `formatDistance`, `humanizeTag`
-- `src/lib/hours.ts` — `formatHours`, `isOpenNow`
-- `src/lib/links.ts` — `callNumber`, `openWebsite`, `openDirections`
-- `src/lib/maplibre.ts` — guarded re-exports + `MAP_AVAILABLE`
-- `src/lib/map-offline.ts` — `downloadAreaPack`
+- `src/lib/format.ts` - `formatFee`, `formatFeeRange`, `formatDistance`, `humanizeTag`
+- `src/lib/hours.ts` - `formatHours`, `isOpenNow`
+- `src/lib/links.ts` - `callNumber`, `openWebsite`, `openDirections`
+- `src/lib/maplibre.ts` - guarded re-exports + `MAP_AVAILABLE`
+- `src/lib/map-offline.ts` - `downloadAreaPack`
 - `src/hooks/use-debounced-value.ts`
 - `src/hooks/use-connectivity.ts`
 - `src/hooks/use-location.ts`
@@ -77,11 +77,11 @@ Run:
 ```bash
 npx expo install @maplibre/maplibre-react-native @types/geojson expo-location @react-native-community/netinfo @gorhom/bottom-sheet
 ```
-Expected: installs cleanly (all four packages' peer deps — `expo>=54`, `react>=19.1`, `react-native>=0.80`, `react-native-reanimated>=3.16||>=4.0`, `react-native-gesture-handler>=2.16.1` — are already satisfied by this project's versions). No `--legacy-peer-deps` needed.
+Expected: installs cleanly (all four packages' peer deps - `expo>=54`, `react>=19.1`, `react-native>=0.80`, `react-native-reanimated>=3.16||>=4.0`, `react-native-gesture-handler>=2.16.1` - are already satisfied by this project's versions). No `--legacy-peer-deps` needed.
 
 - [ ] **Step 2: Register config plugins in `app.json`**
 
-Add to the `"plugins"` array (after the existing `"expo-image-picker"` entry, before `"react-native-vision-camera"` — order doesn't matter functionally, keep it readable):
+Add to the `"plugins"` array (after the existing `"expo-image-picker"` entry, before `"react-native-vision-camera"` - order doesn't matter functionally, keep it readable):
 
 ```json
       [
@@ -100,7 +100,7 @@ Append to the end of the file:
 ```ts
 /**
  * MapTiler key for the MapLibre style URL. Client-safe (restrict by bundle id in
- * MapTiler's dashboard) — set in `.env`, gitignored. Empty string when unset, which
+ * MapTiler's dashboard) - set in `.env`, gitignored. Empty string when unset, which
  * `MAP_AVAILABLE` (src/lib/maplibre.ts) treats as "map not ready".
  */
 export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
@@ -109,7 +109,7 @@ export const MAP_STYLE_URL = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
   : "";
 
-/** Fallback map center/zoom when location is denied or unavailable — Metro Manila. */
+/** Fallback map center/zoom when location is denied or unavailable - Metro Manila. */
 export const MAP_DEFAULT = {
   latitude: 14.5995,
   longitude: 120.9842,
@@ -253,7 +253,7 @@ git commit -m "feat(directory): add format, hours, and links helpers"
 
 ---
 
-### Task 3: Hooks — debounce, connectivity, location
+### Task 3: Hooks - debounce, connectivity, location
 
 **Files:**
 - Create: `src/hooks/use-debounced-value.ts`
@@ -311,7 +311,7 @@ import { useEffect, useState } from 'react';
 export type Coords = { latitude: number; longitude: number };
 export type LocationStatus = 'idle' | 'granted' | 'denied';
 
-/** Foreground GPS fix. Works fully offline — only map tiles need connectivity. */
+/** Foreground GPS fix. Works fully offline - only map tiles need connectivity. */
 export function useLocation(): { coords: Coords | null; status: LocationStatus } {
   const [coords, setCoords] = useState<Coords | null>(null);
   const [status, setStatus] = useState<LocationStatus>('idle');
@@ -333,7 +333,7 @@ export function useLocation(): { coords: Coords | null; status: LocationStatus }
           setCoords({ latitude: position.coords.latitude, longitude: position.coords.longitude });
         }
       } catch {
-        // GPS fix unavailable — leave coords null, callers fall back to a name-sorted list.
+        // GPS fix unavailable - leave coords null, callers fall back to a name-sorted list.
       }
     })();
 
@@ -367,7 +367,7 @@ git commit -m "feat(directory): add debounce, connectivity, and location hooks"
 
 - [ ] **Step 1: Add new SF Symbol → vector-icon mappings**
 
-In `src/components/ui/icon.tsx`, insert these entries into `VECTOR_MAP` (anywhere in the object — grouped here for readability, e.g. right after the `pencil` entry at the end):
+In `src/components/ui/icon.tsx`, insert these entries into `VECTOR_MAP` (anywhere in the object - grouped here for readability, e.g. right after the `pencil` entry at the end):
 
 ```ts
   'magnifyingglass': { set: 'ionicons', name: 'search' },
@@ -398,7 +398,7 @@ git commit -m "feat(directory): add SF Symbol mappings needed by the directory s
 
 ---
 
-### Task 5: UI primitives — badge, chip, star-rating, list-state
+### Task 5: UI primitives - badge, chip, star-rating, list-state
 
 **Files:**
 - Create: `src/components/ui/badge.tsx`
@@ -694,7 +694,7 @@ export type SearchBarProps = {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  /** Adds a soft warm shadow — used when the bar floats over the map/list instead of sitting on a card. */
+  /** Adds a soft warm shadow - used when the bar floats over the map/list instead of sitting on a card. */
   floating?: boolean;
 };
 
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-Note: `src/app/directory/clinic.tsx` doesn't exist yet (Task 15) — `_layout.tsx`'s `<Stack.Screen name="clinic" />` referencing a not-yet-created route is fine for expo-router (it just means nothing renders there until Task 15 adds the file); it will not break typecheck/lint since it's a string name, not an import.
+Note: `src/app/directory/clinic.tsx` doesn't exist yet (Task 15) - `_layout.tsx`'s `<Stack.Screen name="clinic" />` referencing a not-yet-created route is fine for expo-router (it just means nothing renders there until Task 15 adds the file); it will not break typecheck/lint since it's a string name, not an import.
 
 - [ ] **Step 3: Register the `directory` detail stack in the root layout**
 
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
 - [ ] **Step 2: Verify**
 
 Run: `npx tsc --noEmit`
-Expected: no errors. (`'distance_m' in facility` correctly narrows `FacilitySync | FacilityWithDistance` — confirm no narrowing error.)
+Expected: no errors. (`'distance_m' in facility` correctly narrows `FacilitySync | FacilityWithDistance` - confirm no narrowing error.)
 
 - [ ] **Step 3: Commit**
 
@@ -1272,7 +1272,7 @@ git commit -m "feat(directory): add ClinicCard"
  * Guarded MapLibre re-exports. The native module isn't linked until a dev build
  * runs `expo prebuild`; importing it before then throws (it calls
  * `requireNativeComponent` at module-eval time). Every map render checks
- * `MAP_AVAILABLE` and falls back to a list instead of crashing the JS bundle —
+ * `MAP_AVAILABLE` and falls back to a list instead of crashing the JS bundle -
  * add the MapTiler key and run one dev build and the map lights up with no code
  * change (see docs/DIRECTORY_SCREEN.md §7).
  */
@@ -1289,7 +1289,7 @@ try {
 
 export const MAP_AVAILABLE = Boolean(mod) && MAP_STYLE_URL.length > 0;
 
-/** Aliased — `Map` is a JS global. */
+/** Aliased - `Map` is a JS global. */
 export const MapLibreMap = mod?.Map;
 export const Camera = mod?.Camera;
 export const UserLocation = mod?.UserLocation;
@@ -1304,7 +1304,7 @@ export type { CameraRef, LngLat, LngLatBounds } from '@maplibre/maplibre-react-n
 - [ ] **Step 2: Verify**
 
 Run: `npx tsc --noEmit`
-Expected: no errors. The `import type` line only needs the package's `.d.ts` to resolve (present from Task 1's `npx expo install`, regardless of native linking) — it does not execute at runtime, so it can't throw even without a dev build.
+Expected: no errors. The `import type` line only needs the package's `.d.ts` to resolve (present from Task 1's `npx expo install`, regardless of native linking) - it does not execute at runtime, so it can't throw even without a dev build.
 
 - [ ] **Step 3: Commit**
 
@@ -1353,7 +1353,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
 
   const shown = facility.services.slice(0, MAX_SERVICES_SHOWN);
   const extra = facility.services.length - shown.length;
-  // Never show the raw taxonomy tag — humanize the service list, or the practice type if there are no services.
+  // Never show the raw taxonomy tag - humanize the service list, or the practice type if there are no services.
   const specialization = shown.length ? shown.map(humanizeTag).join('; ') : humanizeTag(facility.type);
 
   return (
@@ -1430,7 +1430,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-**Note on `Button`:** `src/components/ui/button.tsx`'s `ButtonProps` types `style?: any` but never destructures it — it's spread via `...rest` onto the underlying `AnimatedPressable` *after* the component's own computed `style` array, so a caller-supplied `style` silently replaces (not merges with) the button's own sizing/color styles. Don't pass `style` to `<Button>` anywhere in this feature — wrap it in a `View` for spacing instead (as above with `buttonWrap`). This is a pre-existing quirk in shared code; fixing it is out of scope for this feature.
+**Note on `Button`:** `src/components/ui/button.tsx`'s `ButtonProps` types `style?: any` but never destructures it - it's spread via `...rest` onto the underlying `AnimatedPressable` *after* the component's own computed `style` array, so a caller-supplied `style` silently replaces (not merges with) the button's own sizing/color styles. Don't pass `style` to `<Button>` anywhere in this feature - wrap it in a `View` for spacing instead (as above with `buttonWrap`). This is a pre-existing quirk in shared code; fixing it is out of scope for this feature.
 
 - [ ] **Step 2: Verify**
 
@@ -1490,7 +1490,7 @@ const SCREEN_W = Dimensions.get('window').width;
 const MIN_ZOOM = 3;
 const MAX_ZOOM = 18;
 // A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
-// stopPropagation() (native bubbling quirk) — this window suppresses the bubbled
+// stopPropagation() (native bubbling quirk) - this window suppresses the bubbled
 // "clear selection" call. See docs/DIRECTORY_SCREEN.md §5 "Pin -> preview card".
 const SOURCE_PRESS_GUARD_MS = 250;
 
@@ -1533,7 +1533,7 @@ export function ClinicMap({ facilities, coords, selectedId, onSelectFacility, bo
       <View style={[styles.fallback, { backgroundColor: theme.elementBg }]}>
         <Icon name="building.2.fill" size={32} tintColor={theme.muted} />
         <ThemedText type="footnote" themeColor="muted" style={styles.fallbackText}>
-          The map needs a dev build to render — clinics still list below.
+          The map needs a dev build to render - clinics still list below.
         </ThemedText>
       </View>
     );
@@ -1655,7 +1655,7 @@ const styles = StyleSheet.create({
 - [ ] **Step 2: Verify**
 
 Run: `npx tsc --noEmit`
-Expected: no errors. (The guarded components from `@/lib/maplibre` are typed `any`, so JSX prop-checking on `MapLibreMap`/`Camera`/etc. is intentionally loose here — that's the guarded-module tradeoff documented in Task 10.)
+Expected: no errors. (The guarded components from `@/lib/maplibre` are typed `any`, so JSX prop-checking on `MapLibreMap`/`Camera`/etc. is intentionally loose here - that's the guarded-module tradeoff documented in Task 10.)
 
 - [ ] **Step 3: Commit**
 
@@ -1707,7 +1707,7 @@ export async function downloadAreaPack(coords: { latitude: number; longitude: nu
     );
     await setMeta(DOWNLOADED_KEY, '1');
   } catch {
-    // Best-effort — offline caching is a nice-to-have, never block the UI on it.
+    // Best-effort - offline caching is a nice-to-have, never block the UI on it.
   }
 }
 ```
@@ -1782,14 +1782,14 @@ export function ClinicsView({ query, topInset }: ClinicsViewProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [serviceFacets, setServiceFacets] = useState<string[]>([]);
 
-  // Facet chips — one-time broad fetch.
+  // Facet chips - one-time broad fetch.
   useEffect(() => {
     listFacilities({ limit: 1000 })
       .then((all) => setServiceFacets(Array.from(new Set(all.flatMap((f) => f.services))).sort()))
       .catch(() => {});
   }, []);
 
-  // Main data fetch — stale-while-loading (no spinner flash on refilter).
+  // Main data fetch - stale-while-loading (no spinner flash on refilter).
   useEffect(() => {
     let cancelled = false;
     const params = { q: query || undefined, service: service ?? undefined, limit: 200 };
@@ -2201,7 +2201,7 @@ export default function DirectoryScreen() {
           <View style={[styles.offlineChip, { backgroundColor: theme.brandTint }]}>
             <Icon name="wifi.slash" size={12} tintColor={theme.brand} />
             <ThemedText type="caption" themeColor="brand" style={styles.offlineLabel}>
-              Offline — showing cached results
+              Offline - showing cached results
             </ThemedText>
           </View>
         ) : null}
@@ -2238,7 +2238,7 @@ const styles = StyleSheet.create({
 
 Run: `npx tsc --noEmit`
 Run: `npx expo lint`
-Expected: both clean. `src/components/ui/screen-placeholder.tsx` is now unused by this screen but is still a generic primitive used elsewhere (`learn.tsx`, etc. — check before assuming it's dead) — leave it in place.
+Expected: both clean. `src/components/ui/screen-placeholder.tsx` is now unused by this screen but is still a generic primitive used elsewhere (`learn.tsx`, etc. - check before assuming it's dead) - leave it in place.
 
 - [ ] **Step 3: Commit**
 
@@ -2266,9 +2266,9 @@ Expected: clean (fix any new warnings introduced by this feature; don't touch un
 - [ ] **Step 3: Bundle export (JS-level proof the guarded map, routes, and imports resolve without a native build)**
 
 Run: `npx expo export --platform ios`
-Expected: succeeds. This is the strongest automated signal available in this environment — it proves `src/lib/maplibre.ts`'s guarded `require`, every new route, and every new import resolve correctly even though the native module isn't linked.
+Expected: succeeds. This is the strongest automated signal available in this environment - it proves `src/lib/maplibre.ts`'s guarded `require`, every new route, and every new import resolve correctly even though the native module isn't linked.
 
-- [ ] **Step 4: Manual on-device checklist (you run this after a dev build — do not mark done without actually doing it)**
+- [ ] **Step 4: Manual on-device checklist (you run this after a dev build - do not mark done without actually doing it)**
 
 ```bash
 npx expo prebuild --clean
@@ -2290,4 +2290,4 @@ git add -A
 git commit -m "fix(directory): address final verification findings"
 ```
 
-If nothing needed fixing, skip this step — there's nothing to commit.
+If nothing needed fixing, skip this step - there's nothing to commit.

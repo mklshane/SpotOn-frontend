@@ -46,8 +46,8 @@ function fmtDate(iso: string) {
  * A tracked lesion over time.
  *
  * The photo strip is the point of this screen: a clinician reads *change*, and side-by-side photos
- * across months are the change. Everything else — the TPS sparkline, the since-first summary, the
- * answer-flip table — is a different projection of the same question, "is this getting worse?".
+ * across months are the change. Everything else - the TPS sparkline, the since-first summary, the
+ * answer-flip table - is a different projection of the same question, "is this getting worse?".
  */
 export default function LesionDetailScreen() {
   const theme = useTheme();
@@ -78,8 +78,8 @@ export default function LesionDetailScreen() {
   const tier = latest?.triage.tier ?? "low";
   const { fg, bg } = tierColor(theme, tier);
   // Typing in the rename field re-renders this whole screen on every keystroke (`draft`
-  // lives here). Without this memo, the hero's gradient got a new `colors` array — same
-  // values, new identity — on every keystroke, and LinearGradient repainted its bitmap
+  // lives here). Without this memo, the hero's gradient got a new `colors` array - same
+  // values, new identity - on every keystroke, and LinearGradient repainted its bitmap
   // each time, stealing frames from the text input and making typed characters lag behind.
   // `fg` only changes when the tier does, never while editing, so this stays stable.
   const heroColors = useMemo(
@@ -180,7 +180,7 @@ export default function LesionDetailScreen() {
         <ThemedText type="headline" themeColor="textSecondary">
           Tracked spot
         </ThemedText>
-        {/* The action itself, not a generic overflow glyph — there's only ever one thing to do
+        {/* The action itself, not a generic overflow glyph - there's only ever one thing to do
             here, and "ellipsis" has no Android/web mapping so it rendered as a bare outline
             circle. An icon that names the action also means the button doesn't need a menu to
             explain itself. */}
@@ -213,7 +213,7 @@ export default function LesionDetailScreen() {
             being monitored does not slide around while it is being read. */}
         <EntranceProvider screen={`lesion-${lesion.id}`} replay>
           <Entrance index={0}>
-            {/* Tier-tinted gradient, matching the result screen's hero — this is the same "how
+            {/* Tier-tinted gradient, matching the result screen's hero - this is the same "how
               urgent is this" signal, so the two screens should read as one visual language
               rather than the plain white block this used to be. */}
             <LinearGradient
@@ -286,7 +286,7 @@ export default function LesionDetailScreen() {
               </View>
 
               {/* `textSecondary`/`muted` are calibrated for the plain cream screen background,
-                not this tier-tinted gradient — measured against it, `muted` drops as low as
+                not this tier-tinted gradient - measured against it, `muted` drops as low as
                 1.3:1 for the high/critical tiers (illegible; WCAG AA needs 4.5:1). `theme.text`
                 and this fixed dark warm gray hold 5:1+ across every tier. */}
               <View style={styles.heroMeta}>
@@ -306,7 +306,7 @@ export default function LesionDetailScreen() {
             </LinearGradient>
           </Entrance>
 
-          {/* Photo timeline — the highest-value element on this screen */}
+          {/* Photo timeline - the highest-value element on this screen */}
           {screenings.length > 0 ? (
             <Entrance index={1} style={styles.section}>
               <SectionHeader title="Over time" variant="label" />
@@ -322,11 +322,11 @@ export default function LesionDetailScreen() {
             </Entrance>
           ) : null}
 
-          {/* Trend sparkline — hidden below 3 points, where a line chart is just noise */}
+          {/* Trend sparkline - hidden below 3 points, where a line chart is just noise */}
           {trend.tpsSeries.length >= 3 ? (
             <Entrance index={2} style={styles.section}>
               <SectionHeader title="Priority score" variant="label" />
-              {/* Tinted with the *current* tier rather than left flat white — the card echoes the
+              {/* Tinted with the *current* tier rather than left flat white - the card echoes the
                 hero above instead of reading as an unrelated chart bolted onto the screen. */}
               <Card style={[styles.sparkCard, { backgroundColor: bg }]}>
                 <TpsSparkline series={trend.tpsSeries} />
@@ -343,7 +343,7 @@ export default function LesionDetailScreen() {
               <SectionHeader title="What changed" variant="label" />
               <Card style={styles.changeCard}>
                 {/* The verdict leads, at headline weight, in the tier's own colour. The old paragraph
-                  buried it mid-sentence and — because most spots hold steady — routinely rendered
+                  buried it mid-sentence and - because most spots hold steady - routinely rendered
                   "went from Low to Low", which reads as a bug rather than as reassurance. */}
                 <View style={styles.verdict}>
                   <ThemedText
@@ -379,7 +379,7 @@ export default function LesionDetailScreen() {
                       themeColor="textSecondary"
                       style={styles.noteText}
                     >
-                      The most likely pattern has changed across scans — it now
+                      The most likely pattern has changed across scans - it now
                       reads as{" "}
                       {CLASS_DISPLAY[latest.classification.topClass].name}.
                     </ThemedText>
@@ -403,7 +403,7 @@ export default function LesionDetailScreen() {
                         : theme.riskLowBg;
                       return (
                         <View key={f.id} style={styles.flipRow}>
-                          {/* Tinted chip instead of a loose glyph — it holds the row's left edge, so
+                          {/* Tinted chip instead of a loose glyph - it holds the row's left edge, so
                             the findings line up as a column instead of ragging off each icon. */}
                           <View
                             style={[styles.flipChip, { backgroundColor: cBg }]}
@@ -470,7 +470,7 @@ export default function LesionDetailScreen() {
 
           {/* recommendations.ts calls this "mandatory on every results surface", and until now it
               rendered on exactly one (the result screen). This screen carries a tier badge, a
-              priority score and a "it now reads as …" verdict — it is a results surface. */}
+              priority score and a "it now reads as …" verdict - it is a results surface. */}
           <Entrance index={9}>
             <ThemedText
               type="footnote"
@@ -486,7 +486,7 @@ export default function LesionDetailScreen() {
   );
 }
 
-/** TPS over time on tier-coloured bands. Plain SVG — same approach as result.tsx's ConfidenceRing. */
+/** TPS over time on tier-coloured bands. Plain SVG - same approach as result.tsx's ConfidenceRing. */
 function TpsSparkline({
   series,
 }: {
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     gap: Space.xxl,
   },
-  // Hero — gradient set inline from the tier color, matching result.tsx's treatment.
+  // Hero - gradient set inline from the tier color, matching result.tsx's treatment.
   hero: {
     borderRadius: Radius.xl,
     padding: Space.xl,

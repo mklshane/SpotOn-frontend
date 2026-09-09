@@ -1,5 +1,5 @@
 /**
- * API smoke test — verifies the frontend can reach the SpotOn backend and that
+ * API smoke test - verifies the frontend can reach the SpotOn backend and that
  * the directory endpoints return the shapes declared in src/api/types.ts.
  *
  * Uses the SAME base URL the app uses (EXPO_PUBLIC_API_BASE_URL). Resolution
@@ -42,7 +42,7 @@ function check(name, cond, detail = "") {
     console.log(`  ✓ ${name}`);
   } else {
     failed++;
-    console.log(`  ✗ ${name}${detail ? `  — ${detail}` : ""}`);
+    console.log(`  ✗ ${name}${detail ? `  - ${detail}` : ""}`);
   }
 }
 
@@ -110,7 +110,7 @@ async function main() {
   check("item matches FacilitySync shape", items.length > 0 && validateFacility(items[0]),
     items[0] ? JSON.stringify(items[0]).slice(0, 120) : "no item");
 
-  // 4. Geo search — distance_m computed + nearest-first ordering
+  // 4. Geo search - distance_m computed + nearest-first ordering
   console.log("\nGeo search (Makati CBD, 3km radius)");
   const geo = await get("/directory/facilities?lat=14.5547&lng=121.0244&radius_m=3000&limit=5");
   check("GET geo → 200", geo.status === 200, `got ${geo.status}`);
@@ -128,12 +128,12 @@ async function main() {
   check("returns doctors", Array.isArray(d) && d.length > 0, `len ${d.length}`);
   check("doctor has specialties[]", d.length > 0 && Array.isArray(d[0]?.specialties));
 
-  console.log(`\n${failed === 0 ? "✅ PASS" : "❌ FAIL"} — ${passed} passed, ${failed} failed\n`);
+  console.log(`\n${failed === 0 ? "✅ PASS" : "❌ FAIL"} - ${passed} passed, ${failed} failed\n`);
   process.exit(failed === 0 ? 0 : 1);
 }
 
 main().catch((err) => {
   console.error(`\n❌ Smoke test errored: ${err?.message || err}`);
-  console.error(`   (target ${BASE} — is the backend reachable?)`);
+  console.error(`   (target ${BASE} - is the backend reachable?)`);
   process.exit(1);
 });

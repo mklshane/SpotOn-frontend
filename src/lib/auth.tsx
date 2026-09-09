@@ -68,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await authApi.cacheProfile(me);
       } catch {
         // If the refresh failed the session is gone (tokens cleared) → log out. Otherwise it's
-        // just offline — keep the cached profile so the user stays signed in.
+        // just offline - keep the cached profile so the user stays signed in.
         if (!authApi.hasTokens() && mounted) setUserState(null);
       } finally {
         if (mounted) setLoading(false);

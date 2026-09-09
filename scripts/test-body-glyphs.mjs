@@ -2,7 +2,7 @@
  * Coverage test for the body region → glyph mapping (src/lib/body-glyphs.ts).
  *
  * The failure this guards is silent: `regionGlyph()` falls back to the generic 'body' silhouette
- * for anything it doesn't recognise, so adding a part to BODY_PARTS — or renaming one — would
+ * for anything it doesn't recognise, so adding a part to BODY_PARTS - or renaming one - would
  * quietly render every spot on it as "location unknown" with nothing throwing. This asserts that
  * EVERY region the mannequin can produce has a real glyph, by reading the real BODY_PARTS rather
  * than a retyped list.
@@ -43,8 +43,8 @@ function check(name, cond, detail = '') {
   if (cond) {
     passed++;
   } else {
-    failures.push(`${name}${detail ? ` — ${detail}` : ''}`);
-    console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`);
+    failures.push(`${name}${detail ? ` - ${detail}` : ''}`);
+    console.log(`  FAIL ${name}${detail ? ` - ${detail}` : ''}`);
   }
 }
 
@@ -115,7 +115,7 @@ check(
 
 // The whole reason for the second source: these four collided on Health Icons' one `joints` icon,
 // and these three collided on its `head`. If a future edit points them back at a shared icon, the
-// cards silently become indistinguishable — so assert they stay distinct.
+// cards silently become indistinguishable - so assert they stay distinct.
 const distinct = (ks) => new Set(ks.map((k) => glyphIcon(k) ?? `ours:${k}`)).size === ks.length;
 check('shoulder / elbow / hip / knee stay visually distinct', distinct(['shoulder', 'elbow', 'hip', 'knee']));
 check('face / head-back / neck stay visually distinct', distinct(['face', 'head-back', 'neck']));

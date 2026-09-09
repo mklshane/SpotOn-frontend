@@ -2,7 +2,7 @@ import { api, ApiError } from '@/api/client';
 
 /**
  * Best-guess endpoints for account/security and data actions. The backend may
- * not have these deployed yet — callers should use `isNotDeployed()` to show a
+ * not have these deployed yet - callers should use `isNotDeployed()` to show a
  * friendly "not available yet" message instead of a generic error on a 404.
  */
 

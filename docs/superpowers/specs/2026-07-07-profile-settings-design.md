@@ -1,4 +1,4 @@
-# Profile & Settings — Design
+# Profile & Settings - Design
 
 ## Goal
 
@@ -20,7 +20,7 @@ Out of scope (explicitly deferred): actually scheduling local notifications
 (no `expo-notifications` install/native rebuild in this pass), real Terms of
 Service / Privacy Policy content (stubbed placeholder screens/links for now),
 and building the backend endpoints this UI calls (see "Backend-dependent
-actions" below — the frontend calls best-guess routes and degrades gracefully
+actions" below - the frontend calls best-guess routes and degrades gracefully
 if they 404).
 
 ## 1. New reusable UI components
@@ -38,11 +38,11 @@ the new rows on Profile), so all sections look consistent:
 - `accessory: 'switch'` is handled internally (renders `Switch` wired to
   `switchValue`/`onSwitchChange`, and the row's own `onPress` is ignored so
   there's no nested-touchable conflict). A raw `ReactNode` accessory is the
-  caller's responsibility — the row still forwards `onPress`, so an
+  caller's responsibility - the row still forwards `onPress`, so an
   interactive `ReactNode` accessory must not itself be a `Pressable`.
 - Renders inside a `Card`-like row (reuse existing `Card` + `IconCircle` +
   `ThemedText` + `Icon` pattern already used in `profile.tsx`'s
-  "see body lesions" row) — no new visual language, just extracted into a
+  "see body lesions" row) - no new visual language, just extracted into a
   reusable component since the same row shape repeats ~10+ times across
   Settings.
 
@@ -58,7 +58,7 @@ A simple on/off toggle matching the app's rounded, warm-sunset aesthetic
   system instead of the OS-native switch look).
 - Only the thumb's `translateX` is animated (native driver eligible). The
   track's background color is toggled directly via state/style, not
-  animated — animating `backgroundColor` can't use the native driver and
+  animated - animating `backgroundColor` can't use the native driver and
   would run the transition on the JS thread.
 
 ### `StubScreen` (`src/components/ui/stub-screen.tsx`)
@@ -71,16 +71,16 @@ navigating into a stub never traps the user without a way back.
 
 ## 2. Profile tab (`(tabs)/profile.tsx`)
 
-Kept: identity card, "See body lesions" row, sign-out button — unchanged.
+Kept: identity card, "See body lesions" row, sign-out button - unchanged.
 
 Added, top to bottom after the identity card:
 
-1. **Stats card** — a `Card` with three compact fields: age (computed from
+1. **Stats card** - a `Card` with three compact fields: age (computed from
    `user.date_of_birth`), sex (`user.sex`), skin type
    (`user.fitzpatrick_skin_type`, labeled "Type I"–"Type VI"). Any missing
-   field shows "—" and the card footer shows "Add details" (only when at
+   field shows "-" and the card footer shows "Add details" (only when at
    least one field is missing) linking to `/profile/edit`.
-2. **Screening summary card** — a `Card` showing scan count and last-scan
+2. **Screening summary card** - a `Card` showing scan count and last-scan
    date, sourced from `useScanHistory().entries` (count = `entries.length`,
    last date = `entries[0]?.createdAt` formatted, since entries are
    newest-first per `scan-history.tsx`). If `entries.length === 0`, shows
@@ -92,7 +92,7 @@ Added, top to bottom after the identity card:
 
 Mirrors the existing `scan/` stack pattern. (There is no `+not-found` route
 in this app today, so registration order in the root `Stack` isn't a
-concern — but the new `<Stack.Screen name="profile" />` entry should still
+concern - but the new `<Stack.Screen name="profile" />` entry should still
 be added alongside the other named screens, not appended after anything
 that might act as a catch-all in the future.)
 
@@ -114,11 +114,11 @@ Same shape as `(auth)/complete-profile.tsx` (reuses `DateField`, `Select`,
 `TextField`, `Screen variant="gradient" gradient="dawnSoft"`), pre-filled
 from `user`:
 
-- Full name (`TextField`, maps to `user.full_name`) — new field, not
+- Full name (`TextField`, maps to `user.full_name`) - new field, not
   currently editable anywhere.
 - Date of birth (`DateField`, pre-filled).
 - Sex (`Select`, pre-filled).
-- Phone (`TextField`) — editable here even if it was set at signup (unlike
+- Phone (`TextField`) - editable here even if it was set at signup (unlike
   `complete-profile.tsx`, which only shows it when absent).
 - Skin type (new `Select`, options "Type I" through "Type VI" mapped to
   `fitzpatrick_skin_type` 1–6, with a short one-line explainer per type
@@ -126,7 +126,7 @@ from `user`:
 
 On submit: calls the extended `saveProfile()`. `saveProfile()` returns the
 authoritative post-save profile (re-fetched from `GET /me`, not assembled
-from the local form values — the backend is the source of truth for what
+from the local form values - the backend is the source of truth for what
 actually persisted). `edit.tsx` calls `setUser()` with that server response,
 then `router.back()`. If one or more of the isolated field PATCHes failed
 (see §4), `router.back()` is still called, but an alert/toast is shown
@@ -141,16 +141,16 @@ Four `ThemedText type="headline"` section headers, each with a stack of
 **Account & security**
 - "Change password" → navigates to a small inline form (same screen, a
   `Select`-free simple two-field password form shown via local state
-  toggle — avoids a 5th new route for one form) calling
+  toggle - avoids a 5th new route for one form) calling
   `changePassword(currentPassword, newPassword)`. This inline section is
   wrapped in `KeyboardAvoidingView` with
   `behavior={Platform.OS === 'ios' ? 'padding' : 'height'}` (not
-  `undefined` on Android like `complete-profile.tsx` — `'padding'` causes
+  `undefined` on Android like `complete-profile.tsx` - `'padding'` causes
   layout jumps on Android, `'height'` is the correct behavior there) so the
   keyboard doesn't obscure the inputs when the settings list is scrolled.
 - "Delete account" (`destructive`) → confirmation `ActionSheet` (existing
   `action-sheet.tsx` component), then calls `deleteAccount()`, then
-  `clearAllLocalData()` (new — see §4), then `signOut()` +
+  `clearAllLocalData()` (new - see §4), then `signOut()` +
   `router.replace('/(auth)/login')`. Both "Delete account" and "Request
   data export" (below) track their own in-flight state and disable
   themselves (and show a spinner, matching the existing `Button loading`
@@ -161,7 +161,7 @@ Four `ThemedText type="headline"` section headers, each with a stack of
 - "Re-screening reminders" `SettingsRow` with a `Switch` accessory, backed
   by `getNotificationPref()`/`setNotificationPref()` in the new
   `lib/notifications.ts` (same `getMeta`/`setMeta` mechanism as
-  `lib/onboarding.ts`). No native scheduling — purely a stored preference
+  `lib/onboarding.ts`). No native scheduling - purely a stored preference
   for now.
 
 **Privacy & data**
@@ -171,18 +171,18 @@ Four `ThemedText type="headline"` section headers, each with a stack of
 - "Request data export" → calls `requestDataExport()`, shows a success
   toast/alert ("We'll email your data export within a few days.") on
   success. On failure, a 404 specifically (endpoint not deployed yet) is
-  caught and shown as "Data export isn't available yet — check back soon,"
+  caught and shown as "Data export isn't available yet - check back soon,"
   distinct from other errors (network/5xx), which show the generic
   "Something went wrong, please try again."
 
 **About & support**
 - App version row (read-only), from `Constants.expoConfig?.version ?? 'Unknown'`
-  (`expo-constants`) — falls back since this can be `undefined` at runtime
+  (`expo-constants`) - falls back since this can be `undefined` at runtime
   in some build configurations.
 - "Help & support" → opens `mailto:help.spoton@gmail.com` via
   `Linking.openURL`.
 - "Terms of Service" / "Privacy Policy" → each pushes a stub screen
-  (`profile/terms.tsx`, `profile/privacy.tsx`) — kept as real routes so the
+  (`profile/terms.tsx`, `profile/privacy.tsx`) - kept as real routes so the
   nav wiring doesn't need to change later, just the content. Both render a
   shared `StubScreen` component (`src/components/ui/stub-screen.tsx`),
   parametrized by `title: string` (and default body copy "This document is
@@ -190,7 +190,7 @@ Four `ThemedText type="headline"` section headers, each with a stack of
   `StubScreen` includes the same back-chevron header used elsewhere
   (`scan/history.tsx`'s pattern: `Pressable` + `chevron.left` calling
   `router.back()`, centered `ThemedText` title) so these screens are never
-  a dead end — each file is then just:
+  a dead end - each file is then just:
   `<StubScreen title="Terms of Service" />` /
   `<StubScreen title="Privacy Policy" />`.
 
@@ -212,7 +212,7 @@ export type ProfileInput = {
 
 `saveProfile()` sends `date_of_birth` + `sex` in the primary PATCH (as
 today), then isolates `full_name`, `phone`, and `fitzpatrick_skin_type` each
-in their own try/catch-guarded PATCH — following the existing comment/pattern
+in their own try/catch-guarded PATCH - following the existing comment/pattern
 for `phone` ("requires the UserUpdate change to be redeployed; isolate so a
 422 before redeploy doesn't fail the whole step"), so a partially-deployed
 backend degrades field-by-field instead of failing the whole save.
@@ -236,7 +236,7 @@ export function requestDataExport(): Promise<void>
 
 Calling, respectively, best-guess routes `POST /auth/change-password`,
 `DELETE /me`, `POST /me/export` through the existing `api` client. Each
-throws a normal `ApiError`/network error on failure — the UI is responsible
+throws a normal `ApiError`/network error on failure - the UI is responsible
 for showing a friendly message (not silently swallowed, unlike the
 `saveProfile` phone case, since these are explicit user-initiated actions
 that need visible success/failure feedback).
@@ -244,14 +244,14 @@ that need visible success/failure feedback).
 `settings.tsx` calls `clearAllLocalData()` right after a successful
 `deleteAccount()` and before `signOut()`. This function lives in
 `lib/auth-api.ts` (alongside the existing `clearTokens()` and
-`clearCachedProfile()`), not in `settings-api.ts` — `settings-api.ts` is
+`clearCachedProfile()`), not in `settings-api.ts` - `settings-api.ts` is
 network calls only; local-storage cleanup is `auth-api.ts`'s existing
-responsibility. This app has no AsyncStorage usage — local state lives in
+responsibility. This app has no AsyncStorage usage - local state lives in
 `expo-secure-store` (auth tokens + cached profile) and the SQLite
 `meta`/`facilities`/`doctors` tables (via `lib/data/db.ts`).
 `clearAllLocalData()` calls `clearTokens()` + `clearCachedProfile()`
 directly and clears the `meta` table's app-scoped keys (onboarding-seen,
-notification preference — see `lib/storage-keys.ts` below), so a fresh
+notification preference - see `lib/storage-keys.ts` below), so a fresh
 install/login on the same device never inherits a deleted account's stray
 local flags.
 

@@ -44,7 +44,7 @@ export type ClinicMapProps = {
    * sheet's actual current position rather than a fixed collapsed-height guess.
    */
   sheetPosition: SharedValue<number>;
-  /** The active search query — a change here (once `facilities` catches up) re-centers the camera on the results. */
+  /** The active search query - a change here (once `facilities` catches up) re-centers the camera on the results. */
   query: string;
 };
 
@@ -58,7 +58,7 @@ const DEVICE_LOCATION_ZOOM = 13;
  * Clearance between the sheet's top edge and the floating controls above it.
  *
  * Was -30, i.e. the controls were pushed 30pt DOWN into the sheet. That was compensating for a
- * coordinate-space bug rather than expressing a design intent — see `floatingControlsStyle`. With
+ * coordinate-space bug rather than expressing a design intent - see `floatingControlsStyle`. With
  * the measurement fixed the gap is a real gap again, and positive.
  */
 const FLOATING_CONTROLS_GAP = Space.base;
@@ -74,13 +74,13 @@ export function ClinicMap({
   const theme = useTheme();
   const cameraRef = useRef<CameraRef>(null);
   // Re-center on search results: fit the camera once per distinct non-empty query,
-  // as soon as that query's results have arrived — tracked by the query string
+  // as soon as that query's results have arrived - tracked by the query string
   // itself so it converges correctly regardless of how many renders land in
   // between. Filter/sort-only changes reuse the same query and are skipped
   // since it's already marked fit.
   //
   // `facilities` (ClinicsView's async fetch result) and `query` (synchronous
-  // debounced state) land on DIFFERENT renders — on the render where `query`
+  // debounced state) land on DIFFERENT renders - on the render where `query`
   // first changes, `facilities` is still the PREVIOUS query's stale results.
   // Fitting to those under the new query's name would both show the wrong
   // place and mark the new query as "already fit", permanently blocking the
@@ -91,13 +91,13 @@ export function ClinicMap({
   const prevQueryRef = useRef(query);
   // Tracks whether we've already recentered on the device's GPS fix once it
   // resolves. `coords` starts null and arrives asynchronously (permission
-  // prompt + GPS fix) — well after the map has already mounted with the
+  // prompt + GPS fix) - well after the map has already mounted with the
   // `MAP_DEFAULT` (Manila) fallback baked into `initialViewState`, which is a
   // one-time seed, not a reactive prop. Without this effect, a resolved
   // `coords` never has any path back into the camera.
   const hasCenteredOnDeviceRef = useRef(false);
   // A same-tap on a pin bubbles from GeoJSONSource.onPress up to Map.onPress despite
-  // stopPropagation() (native bubbling quirk) — GeoJSONSource fires first (it's the
+  // stopPropagation() (native bubbling quirk) - GeoJSONSource fires first (it's the
   // child), so it flags the bubble here for Map.onPress to consume and ignore, exactly
   // once, regardless of how long the bubble takes to arrive. See
   // docs/DIRECTORY_SCREEN.md §5 "Pin -> preview card".
@@ -112,15 +112,15 @@ export function ClinicMap({
     prevQueryRef.current = query;
 
     if (!trimmed) {
-      lastFitQueryRef.current = null; // cleared search — the next search should fit again
+      lastFitQueryRef.current = null; // cleared search - the next search should fit again
       return;
     }
     if (lastFitQueryRef.current === trimmed) return;
-    if (queryJustChanged) return; // facilities is still the previous query's — wait for it to catch up
+    if (queryJustChanged) return; // facilities is still the previous query's - wait for it to catch up
     lastFitQueryRef.current = trimmed;
 
     if (facilities.length === 0) {
-      // A confirmed-empty result for this exact query — reset to a wide view
+      // A confirmed-empty result for this exact query - reset to a wide view
       // instead of leaving the camera parked wherever an earlier keystroke's
       // (different, non-empty) search last left it, which reads as "recentered
       // to the wrong place" rather than "no clinics found here".
@@ -157,7 +157,7 @@ export function ClinicMap({
   }, [query, facilities]);
 
   // Recenter on the device's real GPS fix as soon as it resolves. Runs at
-  // most once — after that, the user (or a search) owns the camera and this
+  // most once - after that, the user (or a search) owns the camera and this
   // shouldn't fight them for it. Skipped if a search is already active/fit,
   // so a location fix that resolves late doesn't yank the map away from
   // search results the user is already looking at.
@@ -183,7 +183,7 @@ export function ClinicMap({
    *
    * Not `Dimensions.get('window').height`. The controls are absolutely positioned inside the map,
    * so their `bottom` is measured from the map's bottom edge, while `sheetPosition` is the sheet's
-   * top edge in that same container's space — the window is a third, larger space that neither of
+   * top edge in that same container's space - the window is a third, larger space that neither of
    * them is in. Subtracting a container-relative position from the window height overshoots by
    * however much chrome sits below this view (tab bar, home indicator, Android navigation bar), and
    * that amount is different on every platform and device. It was being cancelled out by a -30pt
@@ -195,7 +195,7 @@ export function ClinicMap({
    */
   const containerH = useSharedValue(SCREEN_H);
 
-  // Distance from the container's bottom up to the sheet's current top edge, plus the gap —
+  // Distance from the container's bottom up to the sheet's current top edge, plus the gap -
   // recomputed on the UI thread every time `sheetPosition` changes, so the controls track the sheet
   // through drags, not just settled snap points.
   const floatingControlsStyle = useAnimatedStyle(() => ({
@@ -237,7 +237,7 @@ export function ClinicMap({
           themeColor="muted"
           style={styles.fallbackText}
         >
-          The map needs a dev build to render — clinics still list below.
+          The map needs a dev build to render - clinics still list below.
         </ThemedText>
       </View>
     );

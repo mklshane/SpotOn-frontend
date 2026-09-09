@@ -23,7 +23,7 @@ export type EducationCardProps = {
 const THUMB = 64;
 
 /**
- * The workhorse browse card — thumbnail left, three tight lines of text right.
+ * The workhorse browse card - thumbnail left, three tight lines of text right.
  * Used for both the daily tip and the topic list so a scan down the page reads
  * as one rhythm instead of a stack of differently-shaped boxes.
  */
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     gap: Space.base,
     padding: Space.base,
     borderRadius: Radius.lg,
-    // Warm hairline, matching the rest of the app — iOS shadows alone are too
+    // Warm hairline, matching the rest of the app - iOS shadows alone are too
     // faint to separate a white card from the warm off-white page behind it.
     borderWidth: StyleSheet.hairlineWidth,
   },

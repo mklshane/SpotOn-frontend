@@ -81,7 +81,7 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
   check('slow drift never releases an accumulated jump', maxStep <= eps * 0.4 + 1e-12);
   check('slow drift does eventually follow the target', v > 0.5);
 
-  // Size is damped harder than position — the constant that stops the box breathing.
+  // Size is damped harder than position - the constant that stops the box breathing.
   check('size deadband is wider than position', CFG.sizeDeadbandScale > 1);
   check('size is smoothed harder than centre', CFG.size.minCutoff < CFG.position.minCutoff);
   check('size chases motion less eagerly than centre', CFG.size.beta < CFG.position.beta);
@@ -118,7 +118,7 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
   check('handover takes exactly handoverFrames frames', steps === CFG.handoverFrames);
   check('handover resets the streak', st.farStreak === 0);
 
-  // Distance is measured to the CENTRE, in screen fractions — a box cannot cross a quarter of the
+  // Distance is measured to the CENTRE, in screen fractions - a box cannot cross a quarter of the
   // frame between two detections 83 ms apart, but two separate moles easily sit that far apart.
   check('the gate is looser than any plausible single-frame move', CFG.maxTrackingDistance > 0.15);
   check('the gate is tighter than the frame', CFG.maxTrackingDistance < 0.5);

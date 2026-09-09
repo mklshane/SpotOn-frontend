@@ -2,7 +2,7 @@
  * Renders every body glyph to an HTML contact sheet, from the REAL mapping and artwork
  * (src/lib/body-glyphs.ts + src/lib/body-icons.ts, compiled with the project's own tsc).
  *
- * Kept because it is the only fast way to see what the cards will actually look like — shipping a
+ * Kept because it is the only fast way to see what the cards will actually look like - shipping a
  * build to a phone to find out took ten minutes a round.
  *
  * Run:  npm run preview:glyphs [outfile.html]
@@ -36,7 +36,7 @@ const CARD = '#FFFFFF';
 const KINDS = ['face', 'head-back', 'neck', 'torso-front', 'torso-back', 'shoulder', 'arm',
   'elbow', 'hand', 'hip', 'leg', 'knee', 'foot', 'body'];
 
-/** Mirrors BodyGlyph exactly — same source choice, same fills, same flip. */
+/** Mirrors BodyGlyph exactly - same source choice, same fills, same flip. */
 function glyph(kind, side = 'left', size = 112) {
   const flip = side === 'right' ? ' transform="translate(48,0) scale(-1,1)"' : '';
   const icon = G.glyphIcon(kind);
@@ -67,11 +67,11 @@ const card = (k) =>
 
 const sided = (k) =>
   `<figure class="cell"><div class="art pair">${glyph(k, 'left', 84)}${glyph(k, 'right', 84)}</div>
-   <figcaption>${k} — left / right</figcaption></figure>`;
+   <figcaption>${k} - left / right</figcaption></figure>`;
 
 writeFileSync(
   OUT,
-  `<!doctype html><meta charset="utf-8"><title>SpotOn body glyphs — Health Icons</title>
+  `<!doctype html><meta charset="utf-8"><title>SpotOn body glyphs - Health Icons</title>
 <style>
   body { margin:0; padding:32px; background:#FFF9F4; color:#211A15;
          font:15px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }

@@ -25,7 +25,7 @@ const ANSWER_LABEL: Record<Answer, string> = { yes: 'Yes', no: 'No', unsure: 'No
  * change: silently reusing a months-old symptom profile would make the app assert an observation
  * the user never made, on their behalf, in a cancer-triage context.
  *
- * So the split is explicit — morphology answers (border, texture, size, ugly-duckling) are carried
+ * So the split is explicit - morphology answers (border, texture, size, ugly-duckling) are carried
  * and shown here for one-tap confirmation; the time-window items (has it changed, is it bleeding,
  * how long has it been there) are re-asked. See tps-core `carryForwardAnswers` for the reasoning
  * behind which item lands in which bucket.
@@ -104,7 +104,7 @@ export default function FollowUpConfirmScreen() {
           </ThemedText>
         </Animated.View>
 
-        {/* The previous photo — the reference the new one will be compared against. */}
+        {/* The previous photo - the reference the new one will be compared against. */}
         <Card padded={false} style={styles.priorCard}>
           <Image source={{ uri: prior.imageUri }} style={styles.priorPhoto} contentFit="cover" />
           <View style={styles.priorText}>
@@ -157,7 +157,7 @@ export default function FollowUpConfirmScreen() {
               })}
             </Card>
             <ThemedText type="footnote" themeColor="muted">
-              {reask.length} {reask.length === 1 ? 'question' : 'questions'} — these depend on time,
+              {reask.length} {reask.length === 1 ? 'question' : 'questions'} - these depend on time,
               so an old answer wouldn’t be accurate today.
             </ThemedText>
           </View>

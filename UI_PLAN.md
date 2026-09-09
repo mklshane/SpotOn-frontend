@@ -1,4 +1,4 @@
-# SpotOn UI Plan — Splash · Onboarding · Auth (UI pass)
+# SpotOn UI Plan - Splash · Onboarding · Auth (UI pass)
 
 Self-contained build plan for a fresh session. Follows the SpotOn design system (sunset palette,
 type ramp, tokens, component recipes) and the refs
@@ -11,7 +11,7 @@ type ramp, tokens, component recipes) and the refs
   is demonstrable.
 - **Illustrations = PLACEHOLDER element for now.** Build an `OnboardingHero` that renders a
   styled placeholder (soft gradient `IconCircle` + SF Symbol + subtle "illustration" frame).
-  Later, drop real art into `assets/images/onboarding/<page>.png` and the hero swaps to it —
+  Later, drop real art into `assets/images/onboarding/<page>.png` and the hero swaps to it -
   no layout change. (User will replace placeholders themselves.)
 - **Routing = real gating** via existing `sync_meta` store, **plus a `__DEV__`-only dev-tools
   overlay** (lower-right floating button) to jump between screens and reset the flag.
@@ -22,19 +22,19 @@ type ramp, tokens, component recipes) and the refs
 **Deps:** `npx expo install expo-linear-gradient @expo-google-fonts/hanken-grotesk`
 (expo-font, reanimated, safe-area-context, expo-symbols already installed).
 
-**Tokens — `src/constants/theme.ts`:** paste SpotOn tokens from `REFERENCE.md §1`
+**Tokens - `src/constants/theme.ts`:** paste SpotOn tokens from `REFERENCE.md §1`
 (`Gradients`, `Radius`, `Space`, `Type`, `Elevation`); merge the sunset palette into
 `Colors.light`/`.dark`. **Keep existing keys** (`text`, `background`, `backgroundElement`,
-`backgroundSelected`, `textSecondary`) — `themed-text/view.tsx` & `app-tabs.tsx` use them.
+`backgroundSelected`, `textSecondary`) - `themed-text/view.tsx` & `app-tabs.tsx` use them.
 Add: `brand #FF8A4C`, `brandPressed #F26A2E`, `brandBright #FFA468`, `brandTint #FFE9DA`,
 `surface #FFFFFF`, `elementBg #FBF0E8`, `hairline #F1E5DB`, `onBrand #FFFFFF`, `muted #A99C92`,
 risk tiers. Keep existing `Spacing`; add `Space` (4·8·12·16·20·24·32·40·48·64).
 
-**Fonts — `src/app/_layout.tsx`:** `useFonts({ "Display-SemiBold": HankenGrotesk_600SemiBold,
+**Fonts - `src/app/_layout.tsx`:** `useFonts({ "Display-SemiBold": HankenGrotesk_600SemiBold,
 "Display-Bold": HankenGrotesk_700Bold })`; gate render until loaded. Extend
 `src/components/themed-text.tsx` with the `Type` ramp variants.
 
-**Primitives — `src/components/ui/`** (StyleSheet + `useTheme()`, reanimated press scale 0.97,
+**Primitives - `src/components/ui/`** (StyleSheet + `useTheme()`, reanimated press scale 0.97,
 tap ≥44px; recipes in `REFERENCE.md §3`):
 `Button` (pill: `brand`/`vivid`-gradient/`outline`/`ghost`, icon+loading+disabled) ·
 `Screen` (safe-area; `plain`|`gradient` sunsetSoft) · `GradientBackground` ·
@@ -61,7 +61,7 @@ src/app/
   (tabs)/explore.tsx         MOVED from src/app/explore.tsx
 ```
 - Move current `index.tsx`/`explore.tsx` into `(tabs)/`; route names stay `index`/`explore`,
-  so `app-tabs.tsx` `NativeTabs.Trigger name=...` works unchanged — just render it from
+  so `app-tabs.tsx` `NativeTabs.Trigger name=...` works unchanged - just render it from
   `(tabs)/_layout.tsx`.
 - Add `SafeAreaProvider` (react-native-safe-area-context) in root layout (Screen needs insets).
 
@@ -73,33 +73,33 @@ src/app/
 ---
 
 ## 3. Screens
-**3a. Splash `src/app/index.tsx`** — full-bleed `sunsetVivid` gradient, `Logo` in `IconCircle`,
+**3a. Splash `src/app/index.tsx`** - full-bleed `sunsetVivid` gradient, `Logo` in `IconCircle`,
 gentle scale+fade-in (reanimated). Holds while fonts+gating resolve, then redirects.
 
-**3b. Onboarding `src/app/(onboarding)/index.tsx`** — one screen, horizontally paged
+**3b. Onboarding `src/app/(onboarding)/index.tsx`** - one screen, horizontally paged
 (`FlatList pagingEnabled`), `Dots`, **grey "Skip" top-right** every page, bottom `Button vivid`.
 Pages (warm, non-alarmist copy):
-1. **Welcome to SpotOn** — "Your pocket guide to checking skin changes early — calm, private,
+1. **Welcome to SpotOn** - "Your pocket guide to checking skin changes early - calm, private,
    and made for the Philippines."
-2. **Classify Skin Lesions** — "Snap a photo and get an instant, on-device triage of how
+2. **Classify Skin Lesions** - "Snap a photo and get an instant, on-device triage of how
    concerning a spot looks."
-3. **Access Local Dermatologists** — "Find verified dermatology clinics and doctors near you,
+3. **Access Local Dermatologists** - "Find verified dermatology clinics and doctors near you,
    even offline."
-4. **Your Data is Safe** — "Your photos and results stay on your phone. Nothing is shared
+4. **Your Data is Safe** - "Your photos and results stay on your phone. Nothing is shared
    without your say-so." → CTA becomes **"Get Started"** → registration.
 Last page swaps "Continue"→"Get Started"; Skip jumps to finish.
 
-**3c. Registration `src/app/(auth)/register.tsx`** — `Logo` + warm one-liner; `TextField`s
+**3c. Registration `src/app/(auth)/register.tsx`** - `Logo` + warm one-liner; `TextField`s
 full name / email / password(show-hide); `Button brand` "Create account"; footnote
 **"Already have an account? Sign in"** → `router.push("/(auth)/login")`. Local validation only;
 valid → `router.replace("/(tabs)")`.
 
-**3d. Sign in `src/app/(auth)/login.tsx`** — email + password; `Button brand` "Sign in";
+**3d. Sign in `src/app/(auth)/login.tsx`** - email + password; `Button brand` "Sign in";
 footnote **"New here? Create an account"** → register. Valid → `router.replace("/(tabs)")`.
 
 ---
 
-## 4. Dev-tools overlay — `src/components/ui/DevTools.tsx`
+## 4. Dev-tools overlay - `src/components/ui/DevTools.tsx`
 `__DEV__`-only floating button, lower-right (safe-area aware), mounted in root layout above the
 Stack. Panel: jump to **Splash · Onboarding · Register · Login · App(Tabs)** (`router.replace`);
 **Reset onboarding flag** (`setMeta("has_seen_onboarding","")` → Splash); placeholder

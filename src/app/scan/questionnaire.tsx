@@ -25,11 +25,11 @@ import type { Answer, QuestionId } from '@/lib/triage/types';
 /**
  * The 8-item symptom questionnaire. One question per page (progressive disclosure);
  * swiping is disabled so every question gets an explicit answer. Classification runs
- * in the background the whole time — by the last answer the result is usually ready.
+ * in the background the whole time - by the last answer the result is usually ready.
  *
  * Tapping a choice NEVER advances the page on its own. Only "Next" moves forward. The screen used
  * to auto-advance ~260ms after a tap, which meant a mistap was already on the next question before
- * the user could see what they had picked — and on the answers that matter (this feeds the symptom
+ * the user could see what they had picked - and on the answers that matter (this feeds the symptom
  * score) the correction cost is a back-tap plus a re-read. The button is disabled until the current
  * question is answered, so the explicit step costs nothing on a deliberate pass.
  */
@@ -50,20 +50,20 @@ export default function QuestionnaireScreen() {
   } = useScreeningSession();
 
   /**
-   * A complete questionnaire is not enough to analyse — there has to be a PHOTO.
+   * A complete questionnaire is not enough to analyse - there has to be a PHOTO.
    *
    * The follow-up screen's "Update these answers" enters this screen directly, with no capture
    * step before it. `carryForwardAnswers` guarantees the carried answers plus the re-asked ones
    * cover all 8 questions, so `questionnaireComplete` turns true here on a session that has never
    * held an image. Sending that to /scan/analysis produced an unrecoverable dead end: the
    * classifier throws 'classification never started', "Try again" is a permanent no-op because
-   * `retryClassification` bails on an empty URI list, and back is blocked on that screen — the only
+   * `retryClassification` bails on an empty URI list, and back is blocked on that screen - the only
    * exit discarded the whole follow-up.
    */
   const hasPhoto = images.length > 0 || imageUri != null;
 
   // A follow-up only asks what the carry-forward policy could not safely reuse (tps-core
-  // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers — the carried ones
+  // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers - the carried ones
   // are already in `answers`, so computeSymptomScore keeps scoring a complete questionnaire and the
   // TPS engine is untouched. Only the asked subset changes.
   const questions = useMemo(
@@ -80,7 +80,7 @@ export default function QuestionnaireScreen() {
   const currentAnswered = answers[current.id] !== undefined;
 
   // Counted over all 8 items, not just the asked subset: a follow-up carries answers forward, and
-  // those are already answered — only what is genuinely blank becomes "I’m not sure".
+  // those are already answered - only what is genuinely blank becomes "I’m not sure".
   const unanswered = useMemo(
     () => QUESTIONS.filter((q) => answers[q.id] === undefined).length,
     [answers],
@@ -91,14 +91,14 @@ export default function QuestionnaireScreen() {
     setIndex(i);
   }, []);
 
-  /** Record the answer and stay put — the user moves on with "Next". */
+  /** Record the answer and stay put - the user moves on with "Next". */
   function select(q: QuestionDef, value: Answer) {
     setAnswer(q.id, value);
   }
 
   /**
    * Where a finished questionnaire goes. With a photo, on to analysis; without one, back to the
-   * screen that offers the camera — answers intact, so the user resumes rather than restarts.
+   * screen that offers the camera - answers intact, so the user resumes rather than restarts.
    */
   function finish() {
     if (hasPhoto) {
@@ -142,7 +142,7 @@ export default function QuestionnaireScreen() {
 
   // Android's back button mirrors the header: step back through the questions, and on the first one
   // ask before discarding the run. Without this it would pop to the capture screen mid-questionnaire
-  // — which is exactly what `gestureEnabled: false` already forbids on iOS.
+  // - which is exactly what `gestureEnabled: false` already forbids on iOS.
   useAndroidBack(() => (index > 0 ? goTo(index - 1) : confirmExit()));
 
   return (
@@ -178,7 +178,7 @@ export default function QuestionnaireScreen() {
         getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
         renderItem={({ item }) => (
           <Animated.View entering={FadeIn} style={[styles.page, { width }]}>
-            {/* Header block — natural height */}
+            {/* Header block - natural height */}
             <View style={styles.questionBlock}>
               <ThemedText type="title2">{item.question}</ThemedText>
               {item.helper ? (
@@ -187,9 +187,9 @@ export default function QuestionnaireScreen() {
                 </ThemedText>
               ) : null}
             </View>
-            {/* Reference photo — flexes to fill the space between question and choices */}
+            {/* Reference photo - flexes to fill the space between question and choices */}
             <ReferenceImage id={item.id} />
-            {/* Choices — natural height, pinned above the footer */}
+            {/* Choices - natural height, pinned above the footer */}
             <View style={styles.options}>
               {ANSWER_OPTIONS.map((opt, i) => (
                 <Animated.View key={opt.value} entering={FadeInDown.delay(60 * i)}>
@@ -210,7 +210,7 @@ export default function QuestionnaireScreen() {
         {index === 0 ? (
           <Animated.View entering={FadeIn}>
             <ThemedText type="footnote" themeColor="muted" style={styles.reassure}>
-              There are no wrong answers — answer as best you can.
+              There are no wrong answers - answer as best you can.
             </ThemedText>
           </Animated.View>
         ) : null}
@@ -245,7 +245,7 @@ export default function QuestionnaireScreen() {
         title="Skip the questions?"
         message={`We’ll record your ${unanswered} remaining ${
           unanswered === 1 ? 'answer' : 'answers'
-        } as “I’m not sure.” That’s okay — but the more you can answer, the more accurate your result.`}
+        } as “I’m not sure.” That’s okay - but the more you can answer, the more accurate your result.`}
         confirmLabel="Skip anyway"
         cancelLabel="Keep answering"
         onConfirm={confirmSkip}

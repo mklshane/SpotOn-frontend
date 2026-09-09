@@ -9,14 +9,14 @@ import { analyzeRgba, SIZE, type IqaChecks } from './image-quality-core';
 /**
  * Still-image quality gate. Decodes a SIZE×SIZE JPEG and runs the pure checks in
  * image-quality-core (kept separate so the pixel logic is unit-testable without native modules).
- * No TFLite here — the lesion verdict is carried from the live detector, or re-derived on the
+ * No TFLite here - the lesion verdict is carried from the live detector, or re-derived on the
  * still via detectOnImage (see scan/quality). See image-quality-core for the calibration notes.
  */
 export type { IqaChecks };
 
-const DEBUG = false; // logs [iqa] metrics for calibration — set true when re-tuning against the harness
+const DEBUG = false; // logs [iqa] metrics for calibration - set true when re-tuning against the harness
 
-/** Pixel dimensions from the JPEG header — no decode. */
+/** Pixel dimensions from the JPEG header - no decode. */
 function imageSize(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) =>
     RNImage.getSize(uri, (width, height) => resolve({ width, height }), reject),
@@ -26,7 +26,7 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
 /**
  * Get SIZE×SIZE RGBA for the gate, re-encoding only when the source isn't already that size.
  *
- * Every photo reaching this gate has been through crop.tsx, which emits exactly OUTPUT=1024² — the
+ * Every photo reaching this gate has been through crop.tsx, which emits exactly OUTPUT=1024² - the
  * same value as SIZE. So the resize was a no-op for real traffic while still paying a full JPEG
  * re-encode at `compress: 1` (the most expensive setting) plus a second base64 round-trip, on a
  * screen that now also starts inference on mount.
@@ -35,7 +35,7 @@ function imageSize(uri: string): Promise<{ width: number; height: number }> {
  * calibrated against (synth/validation/iqa.py) decodes and resizes without ever re-encoding, so the
  * direct path is closer to the numbers in image-quality-core than the round-trip was.
  *
- * The manipulate path stays as the fallback for any source that isn't SIZE² — and note it forces a
+ * The manipulate path stays as the fallback for any source that isn't SIZE² - and note it forces a
  * square, so a non-square input would be stretched. That never happens today (crop.tsx guarantees
  * square) but it is why the fallback must not silently become the normal path.
  */
@@ -47,7 +47,7 @@ async function loadRgba(uri: string) {
       return jpeg.decode(Buffer.from(b64, 'base64'), { useTArray: true, formatAsRGBA: true });
     }
   } catch {
-    // Header read or direct decode failed — fall through to the resize path rather than failing
+    // Header read or direct decode failed - fall through to the resize path rather than failing
     // the gate. A quality verdict is worth more than the saved encode.
   }
   const manip = await manipulateAsync(uri, [{ resize: { width: SIZE, height: SIZE } }], {

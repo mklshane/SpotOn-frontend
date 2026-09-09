@@ -6,9 +6,9 @@
 
 **Architecture:** New `profile/` stack route group (mirrors the existing `scan/` pattern) holding `edit.tsx`, `settings.tsx`, `terms.tsx`, `privacy.tsx`. Three new shared UI primitives (`Switch`, `SettingsRow`, `StubScreen`) and small additions to existing lib modules (`profile.ts`, `auth-api.ts`, `onboarding.ts`) plus two new lib modules (`settings-api.ts`, `notifications.ts`) and a shared `storage-keys.ts`.
 
-**Tech Stack:** React Native (Expo Router), TypeScript, react-native-reanimated, expo-secure-store, expo-sqlite (via existing `data/db.ts`), no test framework present — verification is `npx tsc --noEmit` + manual app checks.
+**Tech Stack:** React Native (Expo Router), TypeScript, react-native-reanimated, expo-secure-store, expo-sqlite (via existing `data/db.ts`), no test framework present - verification is `npx tsc --noEmit` + manual app checks.
 
-**Note on verification:** This repo has no Jest/Vitest setup (`package.json` has no `test` script for it, no test deps). Every task's "verify" step is `npx tsc --noEmit` (must pass with zero errors touching changed files) plus a manual behavior check. Do not add a test framework as part of this plan — out of scope.
+**Note on verification:** This repo has no Jest/Vitest setup (`package.json` has no `test` script for it, no test deps). Every task's "verify" step is `npx tsc --noEmit` (must pass with zero errors touching changed files) plus a manual behavior check. Do not add a test framework as part of this plan - out of scope.
 
 ---
 
@@ -145,7 +145,7 @@ import { getMeta, setMeta } from '@/data/db';
 
 import { STORAGE_KEYS } from './storage-keys';
 
-/** Whether the user has opted into re-screening reminders. No native scheduling yet — this is purely a stored preference. */
+/** Whether the user has opted into re-screening reminders. No native scheduling yet - this is purely a stored preference. */
 export async function getRemindersEnabled(): Promise<boolean> {
   return (await getMeta(STORAGE_KEYS.reengagementRemindersEnabled)) === '1';
 }
@@ -215,7 +215,7 @@ Add immediately after it:
  * and app-scoped local preferences (onboarding-seen, notification prefs).
  * Called before `signOut()` when an account is deleted, so a fresh install/login
  * on the same device never inherits a deleted account's stray local flags.
- * Does NOT touch the directory sync cache (facilities/doctors) — that data isn't
+ * Does NOT touch the directory sync cache (facilities/doctors) - that data isn't
  * user-specific.
  */
 export async function clearAllLocalData(): Promise<void> {
@@ -278,7 +278,7 @@ export async function saveProfile({ dateOfBirth, sex, phone }: ProfileInput): Pr
     try {
       await api.patch('/me', { phone: trimmed });
     } catch {
-      // Backend not yet redeployed with the phone field — skip silently.
+      // Backend not yet redeployed with the phone field - skip silently.
     }
   }
 }
@@ -321,7 +321,7 @@ export type ProfileInput = {
 };
 
 export type SaveProfileResult = {
-  /** Server-authoritative profile, re-fetched after all PATCH attempts — never assembled from local input. */
+  /** Server-authoritative profile, re-fetched after all PATCH attempts - never assembled from local input. */
   user: UserProfile;
   /** Field names (matching the API's snake_case) that failed to save, if any. */
   failedFields: string[];
@@ -385,7 +385,7 @@ export async function routeAfterAuth(): Promise<'/(auth)/complete-profile' | '/h
 }
 ```
 
-- [ ] **Step 2: Update the only existing call site — `src/app/(auth)/complete-profile.tsx`**
+- [ ] **Step 2: Update the only existing call site - `src/app/(auth)/complete-profile.tsx`**
 
 Find:
 
@@ -401,7 +401,7 @@ Replace with:
       router.replace('/home');
 ```
 
-(No change needed here — `saveProfile`'s new return value is simply unused at this call site, which is valid TypeScript. Confirm this by reading `src/app/(auth)/complete-profile.tsx:43-55` and leaving it as-is.)
+(No change needed here - `saveProfile`'s new return value is simply unused at this call site, which is valid TypeScript. Confirm this by reading `src/app/(auth)/complete-profile.tsx:43-55` and leaving it as-is.)
 
 - [ ] **Step 3: Verify**
 
@@ -417,7 +417,7 @@ git commit -m "feat: extend saveProfile with name/skin-type and partial-failure 
 
 ---
 
-## Task 6: `settings-api.ts` — best-guess backend calls
+## Task 6: `settings-api.ts` - best-guess backend calls
 
 **Files:**
 - Create: `src/lib/settings-api.ts`
@@ -429,7 +429,7 @@ import { api, ApiError } from '@/api/client';
 
 /**
  * Best-guess endpoints for account/security and data actions. The backend may
- * not have these deployed yet — callers should use `isNotDeployed()` to show a
+ * not have these deployed yet - callers should use `isNotDeployed()` to show a
  * friendly "not available yet" message instead of a generic error on a 404.
  */
 
@@ -505,7 +505,7 @@ Replace with:
 - [ ] **Step 2: Verify**
 
 Run: `npx tsc --noEmit`
-Expected: no new errors. (If any of the SF Symbol name literals above aren't in `expo-symbols`'s `SymbolViewProps['name']` union, `tsc` will report it on the line using that name in a later task — if so, check `node_modules/expo-symbols`'s type definitions for the nearest valid name and swap it in both this map and the call site.)
+Expected: no new errors. (If any of the SF Symbol name literals above aren't in `expo-symbols`'s `SymbolViewProps['name']` union, `tsc` will report it on the line using that name in a later task - if so, check `node_modules/expo-symbols`'s type definitions for the nearest valid name and swap it in both this map and the call site.)
 
 - [ ] **Step 3: Commit**
 
@@ -544,7 +544,7 @@ const THUMB_TRAVEL = TRACK_WIDTH - THUMB_SIZE - 4; // 2px inset each side
 
 /**
  * On/off toggle matching the app's warm-sunset design language (not the OS-native
- * Switch look). Only the thumb's `translateX` is animated — that's native-driver
+ * Switch look). Only the thumb's `translateX` is animated - that's native-driver
  * eligible. The track's background color is set directly from `value`, not
  * animated, since animating `backgroundColor` can't use the native driver.
  */
@@ -625,12 +625,12 @@ git commit -m "feat: add Switch component"
 
 ---
 
-## Task 9: `DateField` — support a pre-filled `value`
+## Task 9: `DateField` - support a pre-filled `value`
 
 **Files:**
 - Modify: `src/components/ui/date-field.tsx`
 
-The current `DateField` has no way to pre-populate an existing date, which `profile/edit.tsx` (Task 15) needs in order to show the user's already-saved date of birth. This is a small, backward-compatible addition — existing call sites (`complete-profile.tsx`) don't pass `value` and keep working identically.
+The current `DateField` has no way to pre-populate an existing date, which `profile/edit.tsx` (Task 15) needs in order to show the user's already-saved date of birth. This is a small, backward-compatible addition - existing call sites (`complete-profile.tsx`) don't pass `value` and keep working identically.
 
 - [ ] **Step 1: Add a `value` prop and an ISO-parsing helper**
 
@@ -738,7 +738,7 @@ export type SettingsRowProps = {
    * `'chevron'` (default) shows a nav arrow. `'switch'` renders a `Switch` wired
    * to `switchValue`/`onSwitchChange` and the row's own `onPress` is ignored (no
    * nested-touchable conflict). Any other `ReactNode` (including `null` for a
-   * plain informational row) is rendered as-is — an interactive `ReactNode`
+   * plain informational row) is rendered as-is - an interactive `ReactNode`
    * accessory is the caller's responsibility to keep out of the row's own
    * touch target.
    */
@@ -933,7 +933,7 @@ export { StubScreen } from './stub-screen';
 export { Switch } from './switch';
 ```
 
-Note: `Screen` is already exported earlier in the file (`export { Screen } from './screen';`) — this step is only adding the `StubScreen` line; do not create a duplicate `Screen` export. Add `export { StubScreen } from './stub-screen';` alphabetically after `Segmented`/`Select`/`SettingsRow` and before `Switch`.
+Note: `Screen` is already exported earlier in the file (`export { Screen } from './screen';`) - this step is only adding the `StubScreen` line; do not create a duplicate `Screen` export. Add `export { StubScreen } from './stub-screen';` alphabetically after `Segmented`/`Select`/`SettingsRow` and before `Switch`.
 
 - [ ] **Step 3: Verify**
 
@@ -1026,7 +1026,7 @@ Replace with:
 - [ ] **Step 5: Verify**
 
 Run: `npx tsc --noEmit`
-Expected: no new errors. (`edit.tsx` and `settings.tsx` don't exist yet — that's fine, `Stack.Screen name="edit"`/`"settings"` in `profile/_layout.tsx` don't require the files to exist at type-check time, only at runtime navigation, which Tasks 15/16 add next.)
+Expected: no new errors. (`edit.tsx` and `settings.tsx` don't exist yet - that's fine, `Stack.Screen name="edit"`/`"settings"` in `profile/_layout.tsx` don't require the files to exist at type-check time, only at runtime navigation, which Tasks 15/16 add next.)
 
 - [ ] **Step 6: Commit**
 
@@ -1079,12 +1079,12 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
 ];
 
 const SKIN_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: '1', label: 'Type I — always burns, never tans' },
-  { value: '2', label: 'Type II — usually burns, tans minimally' },
-  { value: '3', label: 'Type III — sometimes burns, tans uniformly' },
-  { value: '4', label: 'Type IV — rarely burns, tans easily' },
-  { value: '5', label: 'Type V — very rarely burns, tans easily' },
-  { value: '6', label: 'Type VI — never burns' },
+  { value: '1', label: 'Type I - always burns, never tans' },
+  { value: '2', label: 'Type II - usually burns, tans minimally' },
+  { value: '3', label: 'Type III - sometimes burns, tans uniformly' },
+  { value: '4', label: 'Type IV - rarely burns, tans easily' },
+  { value: '5', label: 'Type V - very rarely burns, tans easily' },
+  { value: '6', label: 'Type VI - never burns' },
 ];
 
 export default function EditProfileScreen() {
@@ -1209,7 +1209,7 @@ const styles = StyleSheet.create({
 Run: `npx tsc --noEmit`
 Expected: no new errors.
 
-Manual check: navigate Profile → Edit profile (this route isn't wired up from the UI until Task 17 — for now, verify by temporarily running `npx expo start`, then in the running app's URL bar / deep link, or just proceed to Task 17 first if you'd rather verify end-to-end at once). Confirm existing values (name, DOB, sex, phone, skin type) are pre-filled if the signed-in test account has them.
+Manual check: navigate Profile → Edit profile (this route isn't wired up from the UI until Task 17 - for now, verify by temporarily running `npx expo start`, then in the running app's URL bar / deep link, or just proceed to Task 17 first if you'd rather verify end-to-end at once). Confirm existing values (name, DOB, sex, phone, skin type) are pre-filled if the signed-in test account has them.
 
 - [ ] **Step 3: Commit**
 
@@ -1310,7 +1310,7 @@ export default function SettingsScreen() {
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? "This isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : "Couldn't change your password. Check your connection and try again.",
@@ -1335,7 +1335,7 @@ export default function SettingsScreen() {
       Alert.alert(
         'Could not delete account',
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? "This isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : 'Something went wrong. Please try again.',
@@ -1356,7 +1356,7 @@ export default function SettingsScreen() {
       Alert.alert(
         'Could not request export',
         isNotDeployed(e)
-          ? "Data export isn't available yet — check back soon."
+          ? "Data export isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : 'Something went wrong. Please try again.',
@@ -1575,7 +1575,7 @@ const SKIN_TYPE_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 function computeAge(dob: string | null): number | null {
   if (!dob) return null;
   // Parse "YYYY-MM-DD" as a local date, not `new Date(dob)`'s UTC-midnight
-  // parsing — the latter can roll the birth date back a day in timezones
+  // parsing - the latter can roll the birth date back a day in timezones
   // behind UTC once read back via local getMonth()/getDate().
   const [y, m, d] = dob.split('-').map(Number);
   if (!y || !m || !d) return null;
@@ -1591,7 +1591,7 @@ function computeAge(dob: string | null): number | null {
 }
 
 function skinTypeLabel(type: number | null): string {
-  if (type == null || type < 1 || type > 6) return '—';
+  if (type == null || type < 1 || type > 6) return '-';
   return `Type ${SKIN_TYPE_ROMAN[type - 1]}`;
 }
 
@@ -1649,14 +1649,14 @@ export default function ProfileScreen() {
               <ThemedText type="footnote" themeColor="textSecondary">
                 Age
               </ThemedText>
-              <ThemedText type="headline">{age != null ? age : '—'}</ThemedText>
+              <ThemedText type="headline">{age != null ? age : '-'}</ThemedText>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
             <View style={styles.statItem}>
               <ThemedText type="footnote" themeColor="textSecondary">
                 Sex
               </ThemedText>
-              <ThemedText type="headline">{sexLabel ?? '—'}</ThemedText>
+              <ThemedText type="headline">{sexLabel ?? '-'}</ThemedText>
             </View>
             <View style={[styles.statDivider, { backgroundColor: theme.hairline }]} />
             <View style={styles.statItem}>
@@ -1749,7 +1749,7 @@ const styles = StyleSheet.create({
 });
 ```
 
-**Post-implementation correction:** manual verification on Android found that a `ScrollView(flex:1)` sharing flex space with a fixed sibling below it (the Sign Out button, originally placed outside the `ScrollView`) corrupted the layout of the last row inside the ScrollView's content — the second `SettingsRow` ("Settings") measured with inverted/negative bounds and was invisible despite existing correctly in the render tree (confirmed via `uiautomator dump`). The code above reflects the fix: Sign Out moved to be the last item *inside* the ScrollView's own content, matching the working pattern in `settings.tsx` (which has no such sibling).
+**Post-implementation correction:** manual verification on Android found that a `ScrollView(flex:1)` sharing flex space with a fixed sibling below it (the Sign Out button, originally placed outside the `ScrollView`) corrupted the layout of the last row inside the ScrollView's content - the second `SettingsRow` ("Settings") measured with inverted/negative bounds and was invisible despite existing correctly in the render tree (confirmed via `uiautomator dump`). The code above reflects the fix: Sign Out moved to be the last item *inside* the ScrollView's own content, matching the working pattern in `settings.tsx` (which has no such sibling).
 
 - [ ] **Step 2: Verify**
 
@@ -1783,9 +1783,9 @@ Expected: zero errors (warnings pre-existing elsewhere in the repo are fine; don
 
 Use the project's `run` skill (or `npm run android` / `npx expo start` per your existing dev workflow) and manually check:
 
-1. **Profile tab** — identity card unchanged; stats card shows age/sex/skin type or "—" placeholders with an "Add details" link if any are missing; screening summary shows the seeded scan-history count/date; "See body lesions" still navigates to `/scan/history` as before; "Edit profile" and "Settings" rows navigate correctly.
-2. **Edit profile** (`/profile/edit`) — fields pre-fill from the signed-in user; Save writes through, returns to Profile, and the identity/stats cards reflect the change immediately (no need to restart the app).
-3. **Settings** (`/profile/settings`) — each section renders; "Re-screening reminders" toggle animates and persists (toggle it, background/reopen the app, confirm it stayed on); "Change password" expands the inline form without the keyboard covering the inputs on Android; "Delete account" shows the confirm sheet (do not actually delete during this check unless you have a disposable test account); "Request data export" and "Change password" show the expected "not available yet" message if the backend 404s; "Help & support" opens the device's mail client to `help.spoton@gmail.com`; Terms/Privacy rows push `StubScreen` and the back chevron returns to Settings.
+1. **Profile tab** - identity card unchanged; stats card shows age/sex/skin type or "-" placeholders with an "Add details" link if any are missing; screening summary shows the seeded scan-history count/date; "See body lesions" still navigates to `/scan/history` as before; "Edit profile" and "Settings" rows navigate correctly.
+2. **Edit profile** (`/profile/edit`) - fields pre-fill from the signed-in user; Save writes through, returns to Profile, and the identity/stats cards reflect the change immediately (no need to restart the app).
+3. **Settings** (`/profile/settings`) - each section renders; "Re-screening reminders" toggle animates and persists (toggle it, background/reopen the app, confirm it stayed on); "Change password" expands the inline form without the keyboard covering the inputs on Android; "Delete account" shows the confirm sheet (do not actually delete during this check unless you have a disposable test account); "Request data export" and "Change password" show the expected "not available yet" message if the backend 404s; "Help & support" opens the device's mail client to `help.spoton@gmail.com`; Terms/Privacy rows push `StubScreen` and the back chevron returns to Settings.
 
 - [ ] **Step 4: Final commit (only if the manual pass above required fixes)**
 

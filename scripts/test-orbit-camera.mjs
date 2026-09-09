@@ -4,7 +4,7 @@
  *
  * The load-bearing assertion is the round trip: it projects the world point under the pinch back to
  * the screen after the zoom and demands it land where the fingers are. A sign error in the basis or
- * in the (1 - r'/r) term produces a camera that zooms away from the touch — obvious on a phone,
+ * in the (1 - r'/r) term produces a camera that zooms away from the touch - obvious on a phone,
  * invisible in review, and exactly the kind of thing that used to be checked by pointing a device
  * at it.
  *

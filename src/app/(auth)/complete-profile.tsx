@@ -24,7 +24,7 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = [
 
 export default function CompleteProfileScreen() {
   const { user } = useAuth();
-  // Already captured at sign-up if they registered by phone — don't ask again.
+  // Already captured at sign-up if they registered by phone - don't ask again.
   const hasPhone = Boolean(user?.phone);
   const [dob, setDob] = useState<string | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);

@@ -10,7 +10,7 @@ import { useTheme } from '@/hooks/use-theme';
  *
  * A photo can go missing independently of the row pointing at it: a copy that failed at capture
  * time (persistImage falls back to the original cache URI, which the OS may evict), a database
- * restored without its images, or a path that stopped resolving — the container-UUID bug that
+ * restored without its images, or a path that stopped resolving - the container-UUID bug that
  * data/image-paths.ts now prevents. A bare <Image> renders those as a silent blank rectangle that
  * reads as a layout bug rather than missing data, and gives no signal that anything is wrong.
  *
@@ -29,7 +29,7 @@ export function ScreeningThumbnail({
   // The failure is keyed to the URI that produced it rather than held as a bare boolean: list rows
   // are recycled onto new records, and a flag would let one missing photo poison every row that
   // later reused the same component instance. Deriving it during render also keeps the React
-  // Compiler happy — resetting via an effect is a cascading render.
+  // Compiler happy - resetting via an effect is a cascading render.
   const [failedUri, setFailedUri] = useState<string | null>(null);
   const failed = !!uri && failedUri === uri;
 

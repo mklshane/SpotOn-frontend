@@ -57,7 +57,7 @@ export function Button({
       : variant === 'ink'
         ? { backgroundColor: theme.text }
         : variant === 'outline'
-          ? // Solid surface, not transparent — outline buttons mostly sit on the warm dawn
+          ? // Solid surface, not transparent - outline buttons mostly sit on the warm dawn
             // gradient, where a see-through pill reads as a hole rather than a control.
             { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.hairline }
           : { backgroundColor: 'transparent' }; // ghost

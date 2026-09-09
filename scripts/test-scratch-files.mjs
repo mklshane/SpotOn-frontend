@@ -1,17 +1,17 @@
 /**
  * Regression test for scratch photo cleanup (src/lib/scratch-files.ts).
  *
- * This module deletes files, so the property that matters is not "does it reclaim space" — it is
+ * This module deletes files, so the property that matters is not "does it reclaim space" - it is
  * **what it refuses to touch**. Screening photos live under documentDirectory/screenings/, and a
  * deletion there is unrecoverable user data: the whole scan history for a lesion, gone. Every
  * containment case below exists because some plausible edit would breach it, most sharply the
- * Android one — documentDirectory there has no `Documents/` segment, so a tmp derivation by naive
+ * Android one - documentDirectory there has no `Documents/` segment, so a tmp derivation by naive
  * string replace returns documentDirectory itself and the sweep eats the user's history.
  *
  * Also pinned: the /private/var spelling. iOS symlinks /var to /private/var, and VisionCamera
  * reports the resolved path while expo-file-system reports the symlinked one. Miss that and every
  * raw sensor still (the single biggest file we produce) silently fails its containment check and
- * leaks forever — the exact bug this module was written to fix.
+ * leaks forever - the exact bug this module was written to fix.
  *
  * Compiles the real module with the project's own tsc (never a retyped copy), swapping only the
  * expo-file-system import for a stub with a scriptable in-memory filesystem.
@@ -76,7 +76,7 @@ export async function getInfoAsync(uri) {
 const js = join(out, 'scratch-files.js');
 const compiled = readFileSync(js, 'utf8');
 if (!compiled.includes('expo-file-system/legacy')) {
-  console.error('FATAL: compiled scratch-files.js no longer imports expo-file-system/legacy — the');
+  console.error('FATAL: compiled scratch-files.js no longer imports expo-file-system/legacy - the');
   console.error('stub swap below is stale and the test would silently exercise nothing.');
   process.exit(1);
 }
@@ -179,7 +179,7 @@ const staleTree = () => ({
     'crop-stale.jpg': { size: 800_000, mtime: NOW - 48 * HOUR },
     'crop-fresh.jpg': { size: 800_000, mtime: NOW - 1 * HOUR },
   },
-  // ImagePicker/ deliberately absent — a fresh install has never created it.
+  // ImagePicker/ deliberately absent - a fresh install has never created it.
 });
 
 stub.reset(DOCS, CACHE, staleTree());
@@ -210,7 +210,7 @@ await sweepScratchFiles({ maxAgeMs: 72 * HOUR * 1000 });
 eq('a longer max age spares everything', stub.deleted, []);
 
 // A directory that has never been created makes readDirectoryAsync throw. That must skip the one
-// directory, not abandon the sweep — pinned with the FIRST root missing, so an uncaught throw
+// directory, not abandon the sweep - pinned with the FIRST root missing, so an uncaught throw
 // would cost every later directory too.
 stub.reset(DOCS, CACHE, {
   [TMP]: { 'still.jpeg': { size: 4_000_000, mtime: NOW - 48 * HOUR } },

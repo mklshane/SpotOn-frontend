@@ -12,7 +12,7 @@ import { ICONS, ICON_VIEW_BOX } from '@/lib/body-icons';
  *
  * Two sources, chosen per region by glyphIcon(): published Health Icons artwork where the set has
  * a real match (head, arm, leg, foot, hand, spine, body), and our own drawings for the seven kinds
- * it doesn't cover — otherwise its single generic `joints` icon would render shoulder, elbow, hip
+ * it doesn't cover - otherwise its single generic `joints` icon would render shoulder, elbow, hip
  * and knee identically. Both are drawn on the same 48×48 grid, so they sit at the same weight.
  *
  * A located spot is brand orange; a spot with no body mark falls back to the whole-body icon in

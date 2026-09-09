@@ -105,7 +105,7 @@ export default function EditProfileScreen() {
         // upload the local file URI and store the resulting remote URL).
         // Keep `null` distinct from `undefined` here: `null` means "the user
         // removed their photo, clear it," while `undefined` would typically
-        // mean "field not touched" on a partial-update API — collapsing the
+        // mean "field not touched" on a partial-update API - collapsing the
         // two would make photo removal silently fail to persist.
         avatarUri,
       });

@@ -1,5 +1,5 @@
 /**
- * App colors. The app is light-only — there is no dark palette or system
+ * App colors. The app is light-only - there is no dark palette or system
  * light/dark auto-detection. All screens render from `Colors.light`.
  */
 
@@ -9,13 +9,13 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    // existing template keys (kept — used by themed-text/view + app-tabs)
+    // existing template keys (kept - used by themed-text/view + app-tabs)
     text: '#211A15', // warm near-black (never pure #000)
     background: '#FFF9F4', // warm off-white
     backgroundElement: '#FBF0E8',
     backgroundSelected: '#FFE1CE',
     textSecondary: '#7C6E64',
-    // brand — sunset
+    // brand - sunset
     brand: '#FF8A4C',
     brandPressed: '#F26A2E',
     brandBright: '#FFA468',
@@ -43,12 +43,12 @@ export type ThemeColor = keyof typeof Colors.light;
 // Gradients (use with expo-linear-gradient). Tuples of color stops.
 // Gradients (use with expo-linear-gradient). `colors` + optional `locations`.
 export const Gradients = {
-  // Warm pastel screen background — pale yellow → cream → soft peach (matches the mock).
+  // Warm pastel screen background - pale yellow → cream → soft peach (matches the mock).
   dawn: {
     colors: ['#FCF4D6', '#FEF8EC', '#FBE5D2', '#F7D5BE'] as const,
     locations: [0, 0.35, 0.72, 1] as const,
   },
-  // Lighter dawn — softer cream → faint peach, for form-heavy screens (auth, profile).
+  // Lighter dawn - softer cream → faint peach, for form-heavy screens (auth, profile).
   dawnSoft: {
     colors: ['#FFFAEF', '#FFFCF6', '#FEF3E9', '#FCE8DB'] as const,
     locations: [0, 0.35, 0.72, 1] as const,
@@ -60,7 +60,7 @@ export const Gradients = {
 
 export const Radius = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 } as const;
 
-// Spacing — clean 4px scale (supersedes the template's half/one/two names).
+// Spacing - clean 4px scale (supersedes the template's half/one/two names).
 export const Space = {
   xs: 4,
   sm: 8,
@@ -80,7 +80,7 @@ export const Type = {
   title1: { fontSize: 28, lineHeight: 34, fontFamily: 'Display-Bold' },
   title2: { fontSize: 22, lineHeight: 28, fontFamily: 'Display-SemiBold' },
   headline: { fontSize: 17, lineHeight: 22, fontFamily: 'Display-SemiBold' },
-  body: { fontSize: 17, lineHeight: 24 }, // SF Pro (system) — omit fontFamily
+  body: { fontSize: 17, lineHeight: 24 }, // SF Pro (system) - omit fontFamily
   callout: { fontSize: 15, lineHeight: 20 },
   subhead: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const },
   footnote: { fontSize: 13, lineHeight: 18 },

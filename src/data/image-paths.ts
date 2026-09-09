@@ -5,11 +5,11 @@
  * migrated, but `FileSystem.documentDirectory` changes, so an absolute
  * `file:///var/mobile/Containers/Data/Application/<UUID>/Documents/screenings/scan-1.jpg`
  * written before a reinstall points at nothing afterwards. SQLite is immune (it opens by name and
- * resolves the container at runtime) — which is exactly why history rows survived a reinstall with
+ * resolves the container at runtime) - which is exactly why history rows survived a reinstall with
  * every metric intact while all their thumbnails went blank: the paths baked into those rows had
  * gone stale, though the JPEGs were still on disk under the new container.
  *
- * Conversion happens ONLY at the SQLite boundary — toRecord() on read, insertScreening() on write.
+ * Conversion happens ONLY at the SQLite boundary - toRecord() on read, insertScreening() on write.
  * Every in-memory ScreeningRecord therefore still carries a directly-renderable absolute URI, and
  * no UI, report, or PDF code needs to know this module exists.
  */
@@ -28,7 +28,7 @@ function docDir(): string {
  *
  * Accepts all three forms a URI can arrive in: already-relative (the stored form), absolute under
  * the current container (a fresh capture), and absolute under a *stale* container (a row written
- * before the last reinstall) — the last is what makes reads self-healing.
+ * before the last reinstall) - the last is what makes reads self-healing.
  *
  * Anything else is not ours: a cache URI kept because the copy in persistImage() failed, or the
  * bundled asset dev-tools seeds. Rebasing one of those would invent a path that holds no file.
@@ -46,7 +46,7 @@ function ownedRelative(uri: string): string | null {
     rel = i === -1 ? null : uri.slice(i + 1);
   }
   if (rel === null || !rel.startsWith(OWNED_DIR)) return null;
-  // Exactly one segment below screenings/. This is a shape test, not a provenance test — a foreign
+  // Exactly one segment below screenings/. This is a shape test, not a provenance test - a foreign
   // file at <anything>/screenings/x.jpg would be claimed. Nothing produces one today: persistImage()
   // is the only writer under screenings/ and its failure fallback yields tmp/ImagePicker paths. A
   // caller that starts storing third-party paths needs a tighter test than this.

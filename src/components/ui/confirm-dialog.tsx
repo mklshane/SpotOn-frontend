@@ -24,7 +24,7 @@ export type ConfirmDialogProps = {
 };
 
 /**
- * Centered confirmation dialog — the themed counterpart to `Alert.alert` for decisions that
+ * Centered confirmation dialog - the themed counterpart to `Alert.alert` for decisions that
  * deserve real estate and warm copy (e.g. skipping the questionnaire). Same Modal + backdrop
  * pattern as `ActionSheet`; tapping the backdrop cancels.
  */

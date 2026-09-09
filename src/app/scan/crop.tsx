@@ -20,7 +20,7 @@ const OUTPUT = 1024;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
 const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the image's short side
 // The guide circle's diameter as a fraction of the crop frame, and the fill the upload auto-frame
-// zooms to — one constant so the ring and the auto-frame can never disagree. Sits inside (not at
+// zooms to - one constant so the ring and the auto-frame can never disagree. Sits inside (not at
 // the middle of) the classifier's stable band: this is a viewfinder a person reads, so it is
 // framed wider than the inference-only REFINE_TARGET_FILL. See model-config for why they differ.
 const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
@@ -42,7 +42,7 @@ export default function CropScreen() {
   const frame = width - Space.xl * 2;
   const [img, setImg] = useState<{ w: number; h: number } | null>(null);
   const [busy, setBusy] = useState(false);
-  // Auto-framing is a one-shot on open — never re-run and yank the view out from under the user.
+  // Auto-framing is a one-shot on open - never re-run and yank the view out from under the user.
   const preframed = useRef(false);
 
   const tx = useSharedValue(0);
@@ -81,7 +81,7 @@ export default function CropScreen() {
     const s0local = frame / shortSide;
     const scv = Math.min(4, shortSide / cropSide); // pinch caps zoom at 4x
     const eff = s0local * scv;
-    // What confirm() will actually crop (mirrors its cropSize math) — keep centers consistent.
+    // What confirm() will actually crop (mirrors its cropSize math) - keep centers consistent.
     const actualCrop = Math.min(shortSide, frame / eff);
     const half = actualCrop / 2;
     const cxPx = Math.min(IW - half, Math.max(half, cx * IW));
@@ -93,7 +93,7 @@ export default function CropScreen() {
 
   // Auto-frame for uploads: there's no live detector box, so find the lesion in the photo itself
   // (same dark-blob localizer the classifier's zoom refinement uses) and open the crop already
-  // zoomed to the target fill — the spot lands inside the guide ring instead of the user having to
+  // zoomed to the target fill - the spot lands inside the guide ring instead of the user having to
   // pinch it there. Best-effort: if no confident blob is found we leave the centered default.
   // Skipped entirely when the camera handed us a box, which the effect above already used.
   useEffect(() => {
@@ -104,7 +104,7 @@ export default function CropScreen() {
     if (hasDetectorBox) return;
 
     // NB: the ref is set only once the transform is actually applied, never up-front. `frame`
-    // comes from useWindowDimensions, which commonly updates just after mount on iOS — marking
+    // comes from useWindowDimensions, which commonly updates just after mount on iOS - marking
     // early meant that re-render cancelled the in-flight localization and the retry then bailed on
     // the ref, so the preframe silently never happened. Letting the re-run retry is the fix.
     let alive = true;
@@ -197,7 +197,7 @@ export default function CropScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Dark glyphs are unreadable over this near-black backdrop — see the note in capture.tsx. */}
+      {/* Dark glyphs are unreadable over this near-black backdrop - see the note in capture.tsx. */}
       <StatusBar style="light" />
       <View style={styles.header}>
         <Pressable

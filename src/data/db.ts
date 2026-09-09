@@ -1,5 +1,5 @@
 /**
- * Local SQLite database — the offline mirror of the directory.
+ * Local SQLite database - the offline mirror of the directory.
  *
  * Arrays (services, specialties) and JSON (opening hours) are stored as TEXT;
  * booleans as INTEGER 0/1/NULL. The repositories parse these back on read.
@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS sync_meta (
 -- and indexOf takes the FIRST match, so an earlier occurrence (even inside a comment) makes v4
 -- replay a truncated statement. A table added *below* the block would instead be silently absorbed
 -- into v4. Both are harmless in effect (IF NOT EXISTS, and execAsync(SCHEMA) runs unconditionally
--- before migrate) but confusing to inherit — see scripts/test-migration.mjs, which catches both.
+-- before migrate) but confusing to inherit - see scripts/test-migration.mjs, which catches both.
 CREATE TABLE IF NOT EXISTS lesions (
   id                TEXT PRIMARY KEY NOT NULL,
   created_at        TEXT NOT NULL,
@@ -185,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 `;
 // NOTE: idx_screenings_lesion is created by MIGRATION_V10, NOT here. On an upgrading database the
 // CREATE TABLE above is a no-op (the table already exists without lesion_id), so indexing that
-// column here would run before the ALTER that adds it and throw "no such column" — which migrate()
+// column here would run before the ALTER that adds it and throw "no such column" - which migrate()
 // does not tolerate. Any future index over a migration-added column belongs in its migration.
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
@@ -205,59 +205,59 @@ const MIGRATION_V2 = [
   "ALTER TABLE booking_links ADD COLUMN next_available TEXT",
 ];
 
-// v3 — hospital derm-department findings, rendered as "Name (Department)".
+// v3 - hospital derm-department findings, rendered as "Name (Department)".
 const MIGRATION_V3 = ["ALTER TABLE facilities ADD COLUMN department_info TEXT"];
 
-// v4 — on-device screening records (questionnaire + classification + triage audit
+// v4 - on-device screening records (questionnaire + classification + triage audit
 // trail). The table lives in the base SCHEMA (CREATE IF NOT EXISTS is idempotent),
 // so upgrading databases just need the statements replayed.
 const MIGRATION_V4 = [
   SCHEMA.slice(SCHEMA.indexOf("CREATE TABLE IF NOT EXISTS screenings")),
 ];
 
-// v5 — record the confidence-calibration temperature per screening, so records made
+// v5 - record the confidence-calibration temperature per screening, so records made
 // under different T values stay auditable (T scales the confidence that drives CS/TPS).
 const MIGRATION_V5 = [
   "ALTER TABLE screenings ADD COLUMN temperature REAL NOT NULL DEFAULT 1.0",
 ];
 
-// v6 — Malignant Gate: the summed MEL+SCC+BCC softmax mass and whether it floored the tier.
+// v6 - Malignant Gate: the summed MEL+SCC+BCC softmax mass and whether it floored the tier.
 // Pre-v6 rows default to 0/0, which reads correctly as "gate did not run" (it shipped with D4).
 const MIGRATION_V6 = [
   "ALTER TABLE screenings ADD COLUMN malignant_score REAL NOT NULL DEFAULT 0",
   "ALTER TABLE screenings ADD COLUMN malignant_gate_applied INTEGER NOT NULL DEFAULT 0",
 ];
 
-// v7 — scale-consistency check: whether the predicted class survived re-cropping. Drives the
+// v7 - scale-consistency check: whether the predicted class survived re-cropping. Drives the
 // rescan/floor path, so it belongs in the audit trail. Pre-v7 rows default to 0 ("not checked").
 const MIGRATION_V7 = [
   "ALTER TABLE screenings ADD COLUMN scale_unstable INTEGER NOT NULL DEFAULT 0",
 ];
 
-// v8 — confidence-gated zoom refinement: whether the result was re-classified on a lesion-centered
+// v8 - confidence-gated zoom refinement: whether the result was re-classified on a lesion-centered
 // crop. Belongs in the audit trail (it changes which pixels produced the answer). Pre-v8 rows
 // default to 0 ("not refined").
 const MIGRATION_V8 = [
   "ALTER TABLE screenings ADD COLUMN classifier_refined INTEGER NOT NULL DEFAULT 0",
 ];
 
-// v9 — detector-canonical crop: whether the YOLO detector localized the lesion and the classifier
+// v9 - detector-canonical crop: whether the YOLO detector localized the lesion and the classifier
 // ran on its crop (vs the full-frame fallback). Part of the audit trail; pre-v9 rows default to 0.
 const MIGRATION_V9 = [
   "ALTER TABLE screenings ADD COLUMN detector_used INTEGER NOT NULL DEFAULT 0",
 ];
 
-// v10 — lesion tracking. The `lesions` table itself is in the base SCHEMA above (execAsync(SCHEMA)
+// v10 - lesion tracking. The `lesions` table itself is in the base SCHEMA above (execAsync(SCHEMA)
 // runs unconditionally before migrate, so existing databases get it too); this adds the linkage
 // columns and backfills one lesion per pre-existing screening.
 //
 // NOT backfilled by mark proximity, deliberately: the mark is where the user tapped a stylized
 // mannequin, not a measurement, so clustering would merge two genuinely different moles on the same
-// forearm — the exact error lesion tracking exists to prevent. One-lesion-per-screening reproduces
+// forearm - the exact error lesion tracking exists to prevent. One-lesion-per-screening reproduces
 // today's semantics (history.tsx already renders one marker per screening), so it is not a regression.
 //
 // The backfill is REPLAYABLE: the lesion id is derived from the screening id and both statements are
-// guarded on `lesion_id IS NULL`, so a database killed mid-upgrade recovers on the next open — the
+// guarded on `lesion_id IS NULL`, so a database killed mid-upgrade recovers on the next open - the
 // same property the duplicate-column tolerance gives the ALTERs (the loop is not transactional).
 const MIGRATION_V10 = [
   "ALTER TABLE screenings ADD COLUMN lesion_id TEXT",
@@ -276,13 +276,13 @@ const MIGRATION_V10 = [
   "UPDATE screenings SET lesion_id = 'lesion-' || id WHERE lesion_id IS NULL",
 ];
 
-// v11 — multi-image screenings (1–3 photos of one lesion). `image_uri` stays NOT NULL and always
+// v11 - multi-image screenings (1–3 photos of one lesion). `image_uri` stays NOT NULL and always
 // holds images[0].uri, so every existing consumer (history rows, result hero, report/PDF) keeps
-// working untouched and pre-v11 rows need no backfill — screening-repo synthesizes `images` from
+// working untouched and pre-v11 rows need no backfill - screening-repo synthesizes `images` from
 // `image_uri` when `images_json` is null.
 //
 // `per_image_json` records each photo's own classification even when pooling is disabled
-// (MULTI_IMAGE_AGGREGATION_ENABLED, default false — see synth/eval/MULTIVIEW_EVAL.md). That is
+// (MULTI_IMAGE_AGGREGATION_ENABLED, default false - see synth/eval/MULTIVIEW_EVAL.md). That is
 // deliberate: it accumulates exactly the field data a future held-out refit of MALIGNANT_THRESHOLD
 // would need, at no behavioural cost today.
 const MIGRATION_V11 = [
@@ -293,12 +293,12 @@ const MIGRATION_V11 = [
   "ALTER TABLE screenings ADD COLUMN aggregate_method TEXT NOT NULL DEFAULT 'single'",
 ];
 
-// v12 — doctor practice locations (server migration 013), plus the booking_links.updated_at
+// v12 - doctor practice locations (server migration 013), plus the booking_links.updated_at
 // column that has been in the /sync payload and in api/types.ts since 011 but was never in
 // this schema, so repositories.ts always read it back as undefined.
 //
 // The `doctor_facility` table itself lives in the base SCHEMA above (execAsync(SCHEMA) runs
-// unconditionally before migrate), so upgrading databases only need the index statements —
+// unconditionally before migrate), so upgrading databases only need the index statements -
 // but they are listed here too because CREATE INDEX on a table that an old database is
 // getting for the first time must not run before that CREATE TABLE. Both are IF NOT EXISTS,
 // so replaying them is free.
@@ -308,19 +308,19 @@ const MIGRATION_V12 = [
   "CREATE INDEX IF NOT EXISTS idx_doctor_facility_facility ON doctor_facility(facility_id)",
 ];
 
-// v13 — doctors.status (server migration 013). The collector wrote 258 clinic records into
+// v13 - doctors.status (server migration 013). The collector wrote 258 clinic records into
 // the doctors table; they are soft-excluded server-side and hidden here by the same predicate
 // facilities already use, so a doctor row is never deleted and an exclusion stays reversible.
 const MIGRATION_V13 = ["ALTER TABLE doctors ADD COLUMN status TEXT"];
 
-// v14 — screening photo paths become relative to the document directory.
+// v14 - screening photo paths become relative to the document directory.
 //
 // iOS re-maps the data container to a new UUID on every install, so the absolute
 // `file:///var/.../<UUID>/Documents/screenings/scan-1.jpg` these rows held stopped resolving the
 // first time the app was reinstalled: history survived (SQLite opens by name and resolves the
 // container at runtime) while every thumbnail, result hero, and report photo went blank against
 // files that were still sitting on disk. Storing `screenings/scan-1.jpg` and joining with the
-// live documentDirectory on read makes that structurally impossible — see data/image-paths.ts.
+// live documentDirectory on read makes that structurally impossible - see data/image-paths.ts.
 //
 // Idempotent by construction: the rewritten value has no leading slash, so instr() finds nothing
 // on a replay and the UPDATE matches no rows. Written against '/screenings/' rather than any

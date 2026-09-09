@@ -3,13 +3,13 @@
  *
  * The viewer is a spherical orbit camera: the camera sits at `target + dir(azimuth, polar) * radius`
  * and looks at `target`. Zoom is a change of radius, which means it converges on whatever the target
- * is — and with a target pinned to the model's centre, every pinch zooms at the centre no matter
+ * is - and with a target pinned to the model's centre, every pinch zooms at the centre no matter
  * where the fingers are. Zooming toward the pinch instead means MOVING THE TARGET, which is what
  * `focalZoomTarget` computes.
  *
  * Every export is marked 'worklet' so the pinch handler can call it on the UI thread, and the file
  * has zero imports so it also compiles standalone under scripts/test-orbit-camera.mjs
- * (npm run test:orbit) — the sign of a term in here is not something code review catches, but the
+ * (npm run test:orbit) - the sign of a term in here is not something code review catches, but the
  * round-trip property test does.
  */
 
@@ -21,7 +21,7 @@ export type Vec3 = readonly [number, number, number];
  * Derived rather than read back off the three.js camera because the pinch handler runs on the UI
  * thread, where the scene graph is not reachable. It reproduces what `camera.lookAt` does with the
  * default world up (0,1,0): z = normalize(eye - target) = dir, x = normalize(cross(worldUp, z)),
- * y = cross(z, x). Both simplify to closed forms — the cross with (0,1,0) drops the polar term out
+ * y = cross(z, x). Both simplify to closed forms - the cross with (0,1,0) drops the polar term out
  * of `right` entirely, which is why panning sideways feels level at any pitch.
  */
 export function cameraBasis(azimuth: number, polar: number): { dir: Vec3; right: Vec3; up: Vec3 } {
@@ -42,7 +42,7 @@ export function cameraBasis(azimuth: number, polar: number): { dir: Vec3; right:
  * their fingers while the radius changes.
  *
  * `nx`/`ny` are the focal point in NDC (-1..1, y up). The derivation, on the plane through the
- * target perpendicular to the view direction — the plane the model roughly sits on:
+ * target perpendicular to the view direction - the plane the model roughly sits on:
  *
  *   a screen offset (nx, ny) is a world offset  O(r) = right * nx * halfW(r) + up * ny * halfH(r)
  *   with halfH(r) = r * tan(fov/2) and halfW(r) = halfH(r) * aspect, both LINEAR in r.

@@ -20,7 +20,7 @@ import { ScanHistoryProvider } from '@/lib/scan-history';
 import { sweepScratchFiles } from '@/lib/scratch-files';
 import { ScreeningSessionProvider } from '@/lib/screening-session';
 
-// The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop — an
+// The 3D body viewers read gesture-driven shared values inside r3f's `useFrame` loop - an
 // intentional, correct pattern that Reanimated v4 strict mode over-flags. Disable strict mode
 // (keep real warnings/errors), and silence three.js's benign "multiple instances" bundler notice.
 configureReanimatedLogger({ level: ReanimatedLogLevel.warn, strict: false });
@@ -56,7 +56,7 @@ export default function RootLayout() {
     }
   }, [ready, fontError]);
 
-  // Reclaim scratch photos left behind by scans that never reached a hand-off — backed out of the
+  // Reclaim scratch photos left behind by scans that never reached a hand-off - backed out of the
   // crop screen, killed mid-flow, crashed. capture/crop unlink eagerly on the happy path, so this
   // is the backstop, not the main mechanism. Fire-and-forget: it touches only the cache and tmp
   // roots, so nothing the app needs can be waiting on it.

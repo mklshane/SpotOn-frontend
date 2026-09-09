@@ -17,7 +17,7 @@ const THUMB_TRAVEL = TRACK_WIDTH - THUMB_SIZE - 4; // 2px inset each side
 
 /**
  * On/off toggle matching the app's warm-sunset design language (not the OS-native
- * Switch look). Only the thumb's `translateX` is animated — that's native-driver
+ * Switch look). Only the thumb's `translateX` is animated - that's native-driver
  * eligible. The track's background color is set directly from `value`, not
  * animated, since animating `backgroundColor` can't use the native driver.
  */

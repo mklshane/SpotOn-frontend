@@ -37,7 +37,7 @@ type ScreeningSessionValue = {
   /**
    * The questionnaire skip: record every still-unanswered question as 'unsure'. Answers the user
    * already gave (and any carried forward by a follow-up) are kept as-is. This leaves the
-   * questionnaire complete, so scoring stays a full 8-item TPS — 'unsure' is a real, weighted
+   * questionnaire complete, so scoring stays a full 8-item TPS - 'unsure' is a real, weighted
    * answer in tps-core (major 0.5, minor 0), not a missing one.
    */
   skipRemaining: () => void;
@@ -85,7 +85,7 @@ type ScreeningSessionValue = {
   addImage: (img: Omit<ScreeningImage, 'index'>) => number;
   removeImage: (uri: string) => void;
   /**
-   * Start inference for one accepted photo. Runs chained (never concurrent — one interpreter), so
+   * Start inference for one accepted photo. Runs chained (never concurrent - one interpreter), so
    * by the time the user finishes capturing and answering, earlier photos are already done.
    */
   enqueueImage: (uri: string, index: number) => void;
@@ -179,7 +179,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       promise
         .then((part) => setClassificationState(part.result ? 'done' : 'error'))
         .catch((e) => {
-          // Log at the failure site — the analysis screen may join much later.
+          // Log at the failure site - the analysis screen may join much later.
           console.warn('[screening] classification failed', e);
           setClassificationState('error');
         });
@@ -233,14 +233,14 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     // Drop ONLY this photo's run.
     //
     // This used to reset the whole map, which silently destroyed every other photo's completed
-    // inference — and nothing re-enqueues them. Retaking a second angle therefore threw away the
+    // inference - and nothing re-enqueues them. Retaking a second angle therefore threw away the
     // first photo's classification, and the screening was persisted claiming two images while the
     // result and the per-image audit trail covered one. (Tell-tale: swiping back from the quality
     // screen did NOT wipe them, so the explicit Retake button was the destructive path.)
     //
     // Surviving runs keep their original keys rather than being re-packed. The key is the index the
     // photo was enqueued under, `composeSetResult` only uses it to order and to label the audit
-    // trail, and a gap orders identically — whereas re-packing would relabel a kept photo with an
+    // trail, and a gap orders identically - whereas re-packing would relabel a kept photo with an
     // index its own recorded PerImageResult does not agree with.
     const store = partsRef.current;
     const runs = new Map([...store.runs.entries()].filter(([, r]) => r.uri !== uri));

@@ -49,14 +49,14 @@ const softmax = softmaxT;
 /**
  * One prediction at one crop: the TTA-averaged model output plus everything derived from it.
  *
- * `logits` is the mean of the per-view logits — the space MALIGNANT_THRESHOLD and
+ * `logits` is the mean of the per-view logits - the space MALIGNANT_THRESHOLD and
  * CONFIDENCE_TEMPERATURE were calibrated in (see model-config.ts). It is carried here so that
  * pooling *across images* can happen in that same space; averaging softmaxes instead would
  * silently invalidate the calibrated operating point. Nothing on the single-image path reads it.
  *
  * For a softmax-baked export (MODEL_OUTPUTS_PROBABILITIES, i.e. D8) these are log-probabilities,
  * which are the true logits up to a per-view additive constant. Softmax, temperature and pooling
- * are all invariant to a class-independent shift, so every consumer behaves identically — but the
+ * are all invariant to a class-independent shift, so every consumer behaves identically - but the
  * absolute values are not comparable against records written by a raw-logit export like D7.
  */
 export type Prediction = {
@@ -92,7 +92,7 @@ export async function prepareModel(): Promise<LoadedModel> {
       `model reports ${numClasses} classes, expected ${CLASS_ORDER.length}`,
     );
   }
-  // A layout mismatch cannot fail at the interpreter — both layouts are the same byte count — so
+  // A layout mismatch cannot fail at the interpreter - both layouts are the same byte count - so
   // it is checked here, at load, rather than surfacing as quietly scrambled input at inference.
   if (layout !== MODEL_INPUT_LAYOUT) {
     throw new ClassifierError(
@@ -105,7 +105,7 @@ export async function prepareModel(): Promise<LoadedModel> {
 
 /**
  * Run the full per-image pipeline on one still: detector-canonical crop, or the full frame plus a
- * confidence-gated zoom refinement. Crop selection compares softmax confidence exactly as before —
+ * confidence-gated zoom refinement. Crop selection compares softmax confidence exactly as before -
  * the added `logits` on each Prediction is inert here.
  *
  * Callers own the timeout race and the ClassificationOutput shaping.
@@ -134,7 +134,7 @@ export async function classifyOne(
         // interleaved RGB). prepareModel has already checked MODEL_INPUT_LAYOUT against the loaded
         // graph, so this is the model's real layout, not an assumption.
         const packed = MODEL_INPUT_LAYOUT === 'nchw' ? nhwcToNchw(view, inputSize) : view;
-        // fast-tflite wants the raw ArrayBuffer, not the TypedArray view — same slice the
+        // fast-tflite wants the raw ArrayBuffer, not the TypedArray view - same slice the
         // proven detector path uses (capture.tsx runSync).
         const buffer = packed.buffer.slice(
           packed.byteOffset,
@@ -146,7 +146,7 @@ export async function classifyOne(
           throw new ClassifierError('invalid-output', `bad output tensor (${out.length} values)`);
         }
         // Fail loudly when the bundled graph disagrees with MODEL_OUTPUTS_PROBABILITIES. Getting
-        // this wrong is silent — top-1 survives either way — so it has to be checked, not assumed.
+        // this wrong is silent - top-1 survives either way - so it has to be checked, not assumed.
         const raw = Array.from(out);
         if (looksLikeProbabilities(raw) !== MODEL_OUTPUTS_PROBABILITIES) {
           throw new ClassifierError(
@@ -156,7 +156,7 @@ export async function classifyOne(
           );
         }
         // Convert BEFORE accumulating. A softmax-baked export (D8) must be pulled back into log
-        // space here, or this loop would average probabilities — a different estimator that
+        // space here, or this loop would average probabilities - a different estimator that
         // compresses confidence and rescales the malignant score against a threshold fitted on
         // logit-mean output. See aggregate-core `toLogitSpace` for why the log makes it exact.
         const viewLogits = MODEL_OUTPUTS_PROBABILITIES ? toLogitSpace(raw) : raw;
@@ -167,12 +167,12 @@ export async function classifyOne(
       throw asClassifierError(e, 'inference');
     }
 
-    // Averaging in logit space is what the threshold was calibrated on — never average softmaxes.
+    // Averaging in logit space is what the threshold was calibrated on - never average softmaxes.
     const values = Array.from(logitSum ?? []).map((v) => v / views.length);
     if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
       throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
     }
-    // `values` is logit space for every export, so the calibrated softmax always applies — which is
+    // `values` is logit space for every export, so the calibrated softmax always applies - which is
     // what keeps CONFIDENCE_TEMPERATURE live on a probability-emitting graph.
     const p = softmax(values, CONFIDENCE_TEMPERATURE);
     const byClass = {} as Record<LesionClass, number>;
@@ -192,7 +192,7 @@ export async function classifyOne(
 
   // 1) Detector-canonical crop (primary). Run the YOLO detector, re-crop to the training geometry,
   // and classify that. This removes the user's framing from the input, so the answer depends on
-  // the lesion, not the zoom — and reproduces the crop the model was trained on. See model-config.
+  // the lesion, not the zoom - and reproduces the crop the model was trained on. See model-config.
   let result: Prediction | null = null;
   let detectorUsed = false;
   if (DETECTOR_CROP_ENABLED) {
@@ -229,7 +229,7 @@ export async function classifyOne(
     }
   }
 
-  // Optional scale-consistency backstop (default off — superseded by the refinement above).
+  // Optional scale-consistency backstop (default off - superseded by the refinement above).
   // A class that changes across center-crops is driven by framing, not the lesion; when enabled
   // this routes such cases to the rescan path (analysis.tsx), never treating them as risk.
   let scaleUnstable = false;
@@ -271,7 +271,7 @@ function logImageResult(r: SingleImageResult, inputSize: number, prefix: string)
  * Run the 5-class lesion classifier on a captured still image.
  *
  * Runs on the JS thread via the async `model.run()` (execution happens off-thread in
- * the native interpreter — never use runSync here). Throws ClassifierError; never
+ * the native interpreter - never use runSync here). Throws ClassifierError; never
  * returns a fabricated result.
  */
 export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<ClassificationOutput> {
@@ -323,14 +323,14 @@ export function detectDisagreement(results: readonly PerImageResult[]): boolean 
 /**
  * Classify 1–3 photos of the SAME lesion into one ClassificationOutput.
  *
- * POOLING IS A UNIFORM MEAN OF THE PER-IMAGE LOGIT VECTORS, then a single softmax — arithmetically
+ * POOLING IS A UNIFORM MEAN OF THE PER-IMAGE LOGIT VECTORS, then a single softmax - arithmetically
  * the same operation the 4-view dihedral TTA above already performs, so an N-image run is a
  * 4N-view logit average. Averaging softmaxes instead would compress confidence toward 1/K and
  * rescale the malignant score against a threshold fitted on logit-mean output.
  *
  * Whether pooling happens at all is MULTI_IMAGE_AGGREGATION_ENABLED, which ships FALSE on measured
  * evidence (see model-config and synth/eval/MULTIVIEW_EVAL.md). With it off, every image is still
- * classified and recorded in `perImage`, but the reported result is the primary image's — bit-identical
+ * classified and recorded in `perImage`, but the reported result is the primary image's - bit-identical
  * to the single-photo path, so the shipped operating point is untouched.
  *
  * Images run SEQUENTIALLY, never in parallel: there is one native interpreter, so concurrent runs
@@ -410,7 +410,7 @@ export async function classifyImageAt(
  * Fold per-image results into one ClassificationOutput.
  *
  * With MULTI_IMAGE_AGGREGATION_ENABLED off (the shipped default) the reported result is the primary
- * image's, bit-identical to the single-photo path — the other images are still classified and kept
+ * image's, bit-identical to the single-photo path - the other images are still classified and kept
  * in `perImage` for the audit trail and for a future refit. Throws only when EVERY image failed, so
  * analysis.tsx's error state behaves exactly as before.
  */

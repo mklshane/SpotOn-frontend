@@ -3,12 +3,12 @@
  *
  * This is a *local* notification: the due date is computed on the device and handed to
  * iOS/Android, which fires it whether or not the app is ever reopened. Nothing here talks to a
- * server — a push-based reminder would mean shipping screening dates off-device for no clinical
+ * server - a push-based reminder would mean shipping screening dates off-device for no clinical
  * gain, and it would stop working the moment the user is offline.
  *
  * The stored state is the source of truth for the *intent* (enabled, due date, which lesion); the
- * OS holds the actual alarm. Those two can drift — a reinstall, "clear app data", or a permission
- * revoked and re-granted all leave the intent without an alarm — so `syncSelfCheckReminder()`
+ * OS holds the actual alarm. Those two can drift - a reinstall, "clear app data", or a permission
+ * revoked and re-granted all leave the intent without an alarm - so `syncSelfCheckReminder()`
  * reconciles them on every launch.
  */
 import * as Notifications from 'expo-notifications';
@@ -34,7 +34,7 @@ const REMINDER_KIND = 'self-check-reminder';
 export type ReminderOutcome =
   /** Handed to the OS; it will fire on the due date. */
   | 'scheduled'
-  /** The user declined notification permission — nothing was stored. */
+  /** The user declined notification permission - nothing was stored. */
   | 'denied'
   /** No OS notification support (web). */
   | 'unsupported';
@@ -97,7 +97,7 @@ export async function ensureNotificationPermission(): Promise<boolean> {
 
   const current = await Notifications.getPermissionsAsync();
   if (granted(current)) return true;
-  if (!current.canAskAgain) return false; // previously denied — only the system settings can undo it
+  if (!current.canAskAgain) return false; // previously denied - only the system settings can undo it
   return granted(
     await Notifications.requestPermissionsAsync({
       ios: { allowAlert: true, allowSound: true, allowBadge: false },
@@ -140,7 +140,7 @@ async function disarm(): Promise<void> {
 /**
  * Opt into the re-screening reminder after a Low-tier result: asks for notification permission,
  * schedules the OS notification, and records the due date. Only one reminder is pending at a time
- * — scheduling a new one replaces the old.
+ * - scheduling a new one replaces the old.
  */
 export async function scheduleSelfCheckReminder(
   days = REMINDER_DAYS,
@@ -171,7 +171,7 @@ export async function cancelSelfCheckReminder(): Promise<void> {
 /**
  * Settings toggle. Turning it off cancels the OS notification but keeps the due date, so turning
  * it back on restores the *same* date rather than restarting the 30 days. Returns the state the
- * toggle actually ended in — turning it on can fail if the user denies the permission prompt.
+ * toggle actually ended in - turning it on can fail if the user denies the permission prompt.
  */
 export async function setRemindersEnabled(enabled: boolean): Promise<boolean> {
   if (!enabled) {
@@ -221,7 +221,7 @@ export async function syncSelfCheckReminder(): Promise<void> {
 
   const status = await Notifications.getPermissionsAsync();
   if (!status.granted && status.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
-    return; // permission was revoked — leave the intent stored, re-arm if it's granted again
+    return; // permission was revoked - leave the intent stored, re-arm if it's granted again
   }
   const lesionId = (await getMeta(STORAGE_KEYS.selfCheckReminderLesionId)) || null;
   await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, await arm(new Date(due), lesionId));
@@ -239,7 +239,7 @@ function tapTarget(response: Notifications.NotificationResponse | null): Reminde
 let coldStart: Promise<ReminderTap | null> | undefined;
 
 /**
- * The reminder tap that launched this process, if any — resolved once and memoized.
+ * The reminder tap that launched this process, if any - resolved once and memoized.
  *
  * The splash route awaits this because it owns the first navigation: pushing a lesion screen
  * before the splash has finished its `replace` would just be thrown away.
@@ -260,7 +260,7 @@ let initialized = false;
 
 /**
  * Install the foreground presentation handler, the Android channel, and the tap listener, then
- * reconcile the pending reminder. Called once from the root layout — guarded because a second
+ * reconcile the pending reminder. Called once from the root layout - guarded because a second
  * tap listener would navigate twice for one tap (Fast Refresh re-runs the effect in dev).
  */
 export async function initNotifications(): Promise<void> {

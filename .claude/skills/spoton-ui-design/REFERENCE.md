@@ -1,11 +1,11 @@
-# SpotOn Design System — Reference
+# SpotOn Design System - Reference
 
 Paste-ready tokens, component recipes, and screen archetypes. Read `SKILL.md` first for the
 principles. All code follows the scaffold pattern: `StyleSheet` + `useTheme()`, no NativeWind.
 
 ---
 
-## 1. Tokens — extend `src/constants/theme.ts`
+## 1. Tokens - extend `src/constants/theme.ts`
 
 Keep the existing `Colors` / `Fonts` / `Spacing` shape and `useTheme()`; add the SpotOn tokens.
 
@@ -14,7 +14,7 @@ Keep the existing `Colors` / `Fonts` / `Spacing` shape and `useTheme()`; add the
 
 export const Colors = {
   light: {
-    // brand — sunset
+    // brand - sunset
     brand: "#FF8A4C",
     brandPressed: "#F26A2E",
     brandBright: "#FFA468",
@@ -37,7 +37,7 @@ export const Colors = {
     riskCritical: "#E04347",  riskCriticalBg: "#FCE7E7",
   },
   dark: {
-    // STUB — warm-dark, not built out yet. Mirror keys; refine later.
+    // STUB - warm-dark, not built out yet. Mirror keys; refine later.
     brand: "#FF8A4C", brandPressed: "#F26A2E", brandBright: "#FFA468", brandTint: "#3A2A20",
     text: "#FBF1EA", textSecondary: "#C9BBB0", muted: "#8C7E73", onBrand: "#1A130E",
     background: "#171210", surface: "#211A15", elementBg: "#2A211B",
@@ -56,7 +56,7 @@ export const Gradients = {
 
 export const Radius = { sm: 10, md: 16, lg: 22, xl: 28, pill: 999 } as const;
 
-// Spacing — clean 4px scale (supersedes the scaffold's half/one/two names).
+// Spacing - clean 4px scale (supersedes the scaffold's half/one/two names).
 export const Space = {
   xs: 4, sm: 8, md: 12, base: 16, lg: 20, xl: 24, xxl: 32, xxxl: 40, huge: 48, giant: 64,
 } as const;
@@ -67,7 +67,7 @@ export const Type = {
   title1:     { fontSize: 28, lineHeight: 34, fontFamily: "Display-Bold" },
   title2:     { fontSize: 22, lineHeight: 28, fontFamily: "Display-SemiBold" },
   headline:   { fontSize: 17, lineHeight: 22, fontFamily: "Display-SemiBold" },
-  body:       { fontSize: 17, lineHeight: 24 }, // SF Pro (system) — omit fontFamily
+  body:       { fontSize: 17, lineHeight: 24 }, // SF Pro (system) - omit fontFamily
   callout:    { fontSize: 15, lineHeight: 20 },
   subhead:    { fontSize: 14, lineHeight: 20, fontWeight: "500" as const },
   footnote:   { fontSize: 13, lineHeight: 18 },
@@ -84,7 +84,7 @@ export const Elevation = {
 
 ---
 
-## 2. Fonts — Hanken Grotesk (display) + SF Pro (body)
+## 2. Fonts - Hanken Grotesk (display) + SF Pro (body)
 
 ```bash
 npx expo install expo-linear-gradient @expo-google-fonts/hanken-grotesk expo-font
@@ -99,7 +99,7 @@ const [loaded] = useFonts({ "Display-SemiBold": HankenGrotesk_600SemiBold, "Disp
 if (!loaded) return null; // or keep the splash visible
 ```
 
-Body/UI text uses the system font (SF Pro on iOS) — omit `fontFamily`. Extend
+Body/UI text uses the system font (SF Pro on iOS) - omit `fontFamily`. Extend
 `src/components/themed-text.tsx` with the `Type` variants so all text flows through it.
 
 ---
@@ -109,59 +109,59 @@ Body/UI text uses the system font (SF Pro on iOS) — omit `fontFamily`. Extend
 All accept `style` overrides, use `useTheme()`, and animate press with reanimated
 (`useAnimatedStyle` + `withSpring`, scale 0.97 + opacity 0.9). Tap targets ≥44px.
 
-- **`Button`** — pill (`Radius.pill`), height 54, `Type.headline`, centered. Variants:
+- **`Button`** - pill (`Radius.pill`), height 54, `Type.headline`, centered. Variants:
   `brand` (filled `brand`, text `onBrand`) · `vivid` (LinearGradient `sunsetVivid`) · `ink`
   (filled `text`, text `surface`) · `outline` (1px `hairline`, text `text`) · `ghost`
   (transparent, text `brand`). Optional leading icon, loading spinner, `disabled` (0.5).
-- **`Screen`** — safe-area page wrapper. `variant="plain"` (bg `background`) or
+- **`Screen`** - safe-area page wrapper. `variant="plain"` (bg `background`) or
   `variant="gradient"` (full-bleed `LinearGradient` `sunsetSoft`, top→bottom). Standard
   horizontal padding `Space.xl`.
-- **`Card`** — `surface`, `Radius.xl`, padding `Space.xl`, `Elevation.sm`. `Card.Gradient`
+- **`Card`** - `surface`, `Radius.xl`, padding `Space.xl`, `Elevation.sm`. `Card.Gradient`
   variant uses `sunsetWarm` for hero cards.
-- **`TextField`** — label (`Type.subhead`, `textSecondary`), input height 54, `elementBg`,
+- **`TextField`** - label (`Type.subhead`, `textSecondary`), input height 54, `elementBg`,
   `Radius.md`, `Space.base` padding, `brand` focus ring (1.5px). Error = `riskCritical`.
-- **`SelectCard`** — tappable row/card (from inspiration2): title + optional subtitle, trailing
+- **`SelectCard`** - tappable row/card (from inspiration2): title + optional subtitle, trailing
   check circle (filled `brand` when selected, else `hairline` ring). Selected bg `brandTint`.
-- **`Chip` / `Badge`** — pill, `Space.md`×`Space.sm`, `Type.caption`. Filter chips toggle
+- **`Chip` / `Badge`** - pill, `Space.md`×`Space.sm`, `Type.caption`. Filter chips toggle
   `elementBg`↔`brandTint`+`brand` text. Service tags = static `elementBg`.
-- **`RiskBadge`** — maps tier → `risk*` color + `risk*Bg`, label in caps (LOW/MODERATE/HIGH/CRITICAL).
-- **`Gauge`** — semicircular triage meter; needle/arc color from the tier; big tier label +
+- **`RiskBadge`** - maps tier → `risk*` color + `risk*Bg`, label in caps (LOW/MODERATE/HIGH/CRITICAL).
+- **`Gauge`** - semicircular triage meter; needle/arc color from the tier; big tier label +
   TPS underneath. (`react-native-svg` if needed.)
-- **`IconCircle`** — soft circular container (`brandTint` or gradient) holding an icon/3D glyph;
+- **`IconCircle`** - soft circular container (`brandTint` or gradient) holding an icon/3D glyph;
   onboarding hero element.
-- **`SectionHeader`** — `Type.title2` + optional trailing action (`ghost` button).
-- **`ListRow`** — left icon/avatar, title + subtitle, trailing chevron/meta; `Space.base` vertical,
+- **`SectionHeader`** - `Type.title2` + optional trailing action (`ghost` button).
+- **`ListRow`** - left icon/avatar, title + subtitle, trailing chevron/meta; `Space.base` vertical,
   `hairline` separator. Used by the directory.
-- **`Dots`** — onboarding page indicator; active = wide `brand` pill, inactive = `hairline` dot.
+- **`Dots`** - onboarding page indicator; active = wide `brand` pill, inactive = `hairline` dot.
 
 ---
 
 ## 4. Screen archetypes
 
-- **Splash** — full `sunsetWarm`/`sunsetVivid` gradient, centered SpotOn logomark in an
+- **Splash** - full `sunsetWarm`/`sunsetVivid` gradient, centered SpotOn logomark in an
   `IconCircle`, subtle scale/fade-in. Holds while fonts/initial sync load.
-- **Onboarding** (3–4 pages) — `Screen variant="gradient"` (`sunsetSoft`); soft 3D `IconCircle`
+- **Onboarding** (3–4 pages) - `Screen variant="gradient"` (`sunsetSoft`); soft 3D `IconCircle`
   hero, `Type.largeTitle` title, `Type.body` `textSecondary` subhead, `Dots`, bottom `Button vivid`
   "Continue" + `ghost` "Skip". One idea per page. Mirror inspiration2's calm spacing.
-- **Auth** — branded header (logomark + warm one-liner), `Button outline` social ("Continue with
+- **Auth** - branded header (logomark + warm one-liner), `Button outline` social ("Continue with
   Apple/Google"), divider, `TextField` email/password, `Button brand` submit, footnote toggle
   sign-in/up. Gentle gradient or plain `background`.
-- **Scan/Capture** — clean near-white, large rounded camera viewport, orange framing guide,
+- **Scan/Capture** - clean near-white, large rounded camera viewport, orange framing guide,
   coaching text, capture control in the lower third (inspiration.png).
-- **Result/Triage** — `Gauge` with tier color, big tier label + plain-language recommendation,
+- **Result/Triage** - `Gauge` with tier color, big tier label + plain-language recommendation,
   `Card` disclaimer ("triage, not a diagnosis"), `Button brand` "Find a clinic" + `outline`
   "Save report".
-- **Directory** — search `TextField`, horizontal filter `Chip`s (services from `/directory/meta`),
+- **Directory** - search `TextField`, horizontal filter `Chip`s (services from `/directory/meta`),
   facility `Card`/`ListRow` (name, type, distance, service `Badge`s, PhilHealth), map with
   online→list fallback (see `NEXT_STEPS.md` offline boundaries).
-- **Screening Summary Report** — match `screeningsummary.png`: header, profile, lesion image +
+- **Screening Summary Report** - match `screeningsummary.png`: header, profile, lesion image +
   classification, symptom table, urgency + recommendation, disclaimer. Rendered offline to PDF
   via `expo-print` (HTML template mirroring these tokens).
 
 ---
 
 ## 5. Quick checklist before shipping a screen
-- [ ] Only scale spacing / named radii / token colors — no arbitrary values.
+- [ ] Only scale spacing / named radii / token colors - no arbitrary values.
 - [ ] Clear single focal point; generous whitespace.
 - [ ] Brand orange used purposefully (action or risk), not decoratively everywhere.
 - [ ] Type hierarchy via Hanken display titles + SF Pro body; not mono-gray.

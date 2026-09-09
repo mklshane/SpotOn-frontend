@@ -49,7 +49,7 @@ function queryString(params?: QueryParams): string {
 }
 
 // Render's free tier can take 30s+ to wake from sleep, and RN's fetch has no
-// built-in timeout — an unreachable/slow server would otherwise hang forever,
+// built-in timeout - an unreachable/slow server would otherwise hang forever,
 // which on cold start blocks the splash screen from ever routing anywhere.
 const REQUEST_TIMEOUT_MS = 15000;
 
@@ -83,7 +83,7 @@ async function request<T>(
 ): Promise<T> {
   // A FormData body (file uploads) must be left untouched: it can't be
   // JSON-stringified (that silently drops the file, serializing to "{}"),
-  // and its Content-Type — including the multipart boundary — has to be set
+  // and its Content-Type - including the multipart boundary - has to be set
   // by `fetch` itself, not by us.
   const isFormData =
     typeof FormData !== "undefined" && opts.body instanceof FormData;

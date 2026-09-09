@@ -8,7 +8,7 @@ export type SearchBarProps = {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  /** Corner radius from the shared scale. `lg` reads softer — used on browse screens. */
+  /** Corner radius from the shared scale. `lg` reads softer - used on browse screens. */
   shape?: 'md' | 'lg';
   /** Soft warm shadow. `md` is for a bar floating over the map/list; `sm` lifts it off a page background. */
   elevation?: 'none' | 'sm' | 'md';

@@ -142,7 +142,7 @@ export function Icon({ name, size = 20, tintColor, weight, type, style }: IconPr
   const key = resolveSymbolName(name);
   const spec = VECTOR_MAP[key] ?? FALLBACK;
   if (__DEV__ && !VECTOR_MAP[key]) {
-    console.warn(`[Icon] No Android mapping for SF Symbol "${key}" — using fallback glyph.`);
+    console.warn(`[Icon] No Android mapping for SF Symbol "${key}" - using fallback glyph.`);
   }
 
   const Glyph = spec.set === 'mci' ? MaterialCommunityIcons : Ionicons;

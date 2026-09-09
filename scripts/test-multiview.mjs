@@ -1,13 +1,13 @@
 /**
  * Dependency-free regression test for multi-image aggregation
  * (src/lib/classifier/aggregate-core.ts). Compiles the pure core with the project's own tsc, the
- * same way test-tps.mjs does — classify.ts itself require()s the bundled .tflite and cannot be
+ * same way test-tps.mjs does - classify.ts itself require()s the bundled .tflite and cannot be
  * compiled standalone, which is exactly why the arithmetic lives in a separate import-free module.
  *
  * The load-bearing property here is that pooling happens in LOGIT space. MALIGNANT_THRESHOLD (0.50)
  * was calibrated on logit-mean output; averaging softmaxes is a different estimator that compresses
  * confidence toward 1/K and would silently invalidate it. That difference is invisible on identical
- * inputs — both rules are idempotent — so the tests below use genuinely DIFFERENT vectors, which is
+ * inputs - both rules are idempotent - so the tests below use genuinely DIFFERENT vectors, which is
  * the only way to tell them apart.
  *
  * Run:  npm run test:multiview
@@ -34,7 +34,7 @@ const check = (name, cond) => (cond ? pass++ : fails.push(name));
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 const vecNear = (a, b, eps = 1e-9) => a.length === b.length && a.every((v, i) => near(v, b[i], eps));
 
-// CLASS_ORDER is ['BCC','BENIGN','MEL','OTHER','SCC'] — index 2 is MEL, 1 is BENIGN.
+// CLASS_ORDER is ['BCC','BENIGN','MEL','OTHER','SCC'] - index 2 is MEL, 1 is BENIGN.
 const MEL = 2;
 const BENIGN = 1;
 
@@ -44,7 +44,7 @@ check('softmax sums to 1', near(p.reduce((a, b) => a + b, 0), 1));
 check('softmax is monotone in the logits', p[4] > p[3] && p[3] > p[2]);
 check('softmax argmax is the max logit', p.indexOf(Math.max(...p)) === 4);
 
-// Temperature must not move the argmax — that is the whole premise of post-hoc calibration.
+// Temperature must not move the argmax - that is the whole premise of post-hoc calibration.
 const hot = softmaxT([3, 1, 4, 1, 5], 1);
 const cold = softmaxT([3, 1, 4, 1, 5], 2.5);
 check('temperature preserves argmax', hot.indexOf(Math.max(...hot)) === cold.indexOf(Math.max(...cold)));
@@ -55,7 +55,7 @@ check('T=1 is the identity', vecNear(softmaxT([1, 2, 3, 4, 5], 1), softmaxT([1, 
 check('softmax is stable on large logits', softmaxT([1000, 999, 998, 997, 996]).every(Number.isFinite));
 check('softmax is stable on negative logits', softmaxT([-1000, -999, -998, -997, -996]).every(Number.isFinite));
 
-// Never mutate the caller's array — classify.ts reuses the logit vector for the audit trail.
+// Never mutate the caller's array - classify.ts reuses the logit vector for the audit trail.
 const original = [1, 2, 3, 4, 5];
 softmaxT(original, 2);
 check('softmax does not mutate its input', vecNear(original, [1, 2, 3, 4, 5]));
@@ -67,12 +67,12 @@ check('rejects negatives that happen to sum to 1', !looksLikeProbabilities([-0.5
 
 /* ------------------------------------------------------------------ toLogitSpace
  * D8 bakes softmax into its graph, so classify.ts converts each view back to log space before
- * averaging. The property that has to hold is that this is EQUIVALENT to a raw-logit export —
+ * averaging. The property that has to hold is that this is EQUIVALENT to a raw-logit export -
  * otherwise swapping the model silently moves the operating point MALIGNANT_THRESHOLD sits on. */
 const z1 = [2.0, -1.0, 3.5, 0.25, -0.75];
 const z2 = [-0.5, 1.5, 0.0, 2.25, 1.0];
 
-// softmax(log p) === p — the conversion loses nothing softmax can see.
+// softmax(log p) === p - the conversion loses nothing softmax can see.
 check('log space round-trips through softmax', vecNear(softmaxT(toLogitSpace(softmaxT(z1))), softmaxT(z1), 1e-12));
 
 // THE load-bearing one: averaging log-probs === averaging logits, because log softmax(z) differs
@@ -97,7 +97,7 @@ check(
   ),
 );
 
-// And it must NOT equal the wrong estimator — averaging the probabilities directly. If these ever
+// And it must NOT equal the wrong estimator - averaging the probabilities directly. If these ever
 // coincide the test above is vacuous.
 const probMeanD8 = [softmaxT(z1), softmaxT(z2)]
   .reduce((a, v) => a.map((x, i) => x + v[i] / 2), [0, 0, 0, 0, 0]);
@@ -134,7 +134,7 @@ check('ragged input throws', threw);
 /* ------------------------------------------------- THE property: logit space ≠ softmax space */
 // Two images that disagree sharply. Logit-mean is a geometric mean in probability space, so it
 // discounts a confidently-wrong view; arithmetic prob-mean does not. On these vectors the two rules
-// produce materially different MEL mass — which is what makes the choice load-bearing.
+// produce materially different MEL mass - which is what makes the choice load-bearing.
 const confidentMel = [0, 0, 6, 0, 0];
 const mildBenign = [0, 1.2, 0, 0, 0];
 
@@ -160,7 +160,7 @@ check('logit-mean still sums to 1', near(logitMean.reduce((a, b) => a + b, 0), 1
 
 // The consequence that matters clinically: the geometric mean suppresses any class that even ONE
 // view confidently rejects, while the arithmetic mean lets a single confident view carry it. Here
-// BENIGN is rated 0.45 by one image and ~0.002 by the other — prob-mean keeps it a live option,
+// BENIGN is rated 0.45 by one image and ~0.002 by the other - prob-mean keeps it a live option,
 // logit-mean does not. Which rule is right is a calibration question, and MALIGNANT_THRESHOLD was
 // fitted under logit-mean, so that is the one that ships.
 check('prob-mean keeps a class one view rejects', probMean[BENIGN] > 2 * logitMean[BENIGN]);
@@ -174,7 +174,7 @@ check('the rules disagree on malignant confidence by >0.2', logitMean[MEL] - pro
 const single = [0.4, 1.1, 2.2, 0.3, 0.9];
 check('N=1 pooling is identity', vecNear(softmaxT(meanLogits([single])), softmaxT(single), 0));
 
-// Repeating one image must not move the answer — catches double-counting and denominator bugs.
+// Repeating one image must not move the answer - catches double-counting and denominator bugs.
 check(
   'the same image three times changes nothing',
   vecNear(softmaxT(meanLogits([single, single, single])), softmaxT(single), 1e-12),
@@ -186,7 +186,7 @@ check(
   vecNear(meanLogits([confidentMel, mildBenign]), meanLogits([mildBenign, confidentMel])),
 );
 
-// Pooling must stay inside the convex hull of its inputs — it reduces variance, never extrapolates.
+// Pooling must stay inside the convex hull of its inputs - it reduces variance, never extrapolates.
 const poolMel = softmaxT(meanLogits([confidentMel, mildBenign]))[MEL];
 const loMel = Math.min(softmaxT(confidentMel)[MEL], softmaxT(mildBenign)[MEL]);
 const hiMel = Math.max(softmaxT(confidentMel)[MEL], softmaxT(mildBenign)[MEL]);

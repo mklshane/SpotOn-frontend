@@ -75,12 +75,12 @@ export function ttaViews(t: Float32Array, size: number): Float32Array[] {
 }
 
 /**
- * NHWC → NCHW (channel-planar) repack, applied last — after the flips above — because everything
+ * NHWC → NCHW (channel-planar) repack, applied last - after the flips above - because everything
  * else in this file, and the resize/crop it inherits, is interleaved RGB.
  *
  * Needed because the D10 export is NCHW [1,3,H,W] while every export before it was NHWC [1,H,W,3]
  * (litert-torch traces the PyTorch graph as-is; the earlier exporters inserted a transpose). Both
- * layouts are the same byte count, so a mismatch does NOT fail at the interpreter — it silently
+ * layouts are the same byte count, so a mismatch does NOT fail at the interpreter - it silently
  * feeds the model a scrambled image. classify.ts picks the layout from the model's own input shape
  * rather than assuming either one.
  */
@@ -107,7 +107,7 @@ export type CropBox = { cx: number; cy: number; half: number };
 
 /**
  * Decode a small copy of the image and locate the lesion in it. Small on purpose: the blob math is
- * scale-invariant, and 64px is where the DoG radii were tuned — it also thins body hair to
+ * scale-invariant, and 64px is where the DoG radii were tuned - it also thins body hair to
  * sub-pixel, which is half the reason the response is robust. Far cheaper than a full pass.
  * Returns a normalized CropBox, or null when nothing lesion-like is found.
  */
@@ -119,7 +119,7 @@ export async function locateLesionInImage(
   try {
     // Resize the SHORTER side to `size`, preserving aspect. Squashing to a square would skew the
     // centroid and radius on non-square uploads (gallery photos are rarely 1:1), and the returned
-    // CropBox is normalized to the short edge — which only round-trips if aspect is preserved.
+    // CropBox is normalized to the short edge - which only round-trips if aspect is preserved.
     const { width: srcW, height: srcH } = await imageSize(uri);
     const resize = srcW <= srcH ? { width: size } : { height: size };
     const manip = await manipulateAsync(uri, [{ resize }], {
@@ -132,7 +132,7 @@ export async function locateLesionInImage(
       formatAsRGBA: true,
     });
     const { data, width, height } = raw as { data: Uint8Array; width: number; height: number };
-    // RGBA straight through — locateLesion needs colour for its skin-surround check, not just luma.
+    // RGBA straight through - locateLesion needs colour for its skin-surround check, not just luma.
     return locateLesion(data, width, height, blobOpts);
   } catch {
     return null; // localization is best-effort; a failure just means "don't refine"
@@ -140,14 +140,14 @@ export async function locateLesionInImage(
 }
 
 /**
- * Locate the lesion as a compact, locally-dark blob sitting on skin — pure, so it can be
+ * Locate the lesion as a compact, locally-dark blob sitting on skin - pure, so it can be
  * unit-tested without native modules. Returns a square `CropBox` sized so the blob fills
  * `targetFill` of it, or null when nothing lesion-like is found (leave the framing alone).
  *
  * Uses a difference-of-Gaussians response (large-radius blur minus small-radius blur) rather than a
  * brightness threshold. That choice is load-bearing, from failures on real phone photos
  * (2026-07-24): a global `median - k*MAD` threshold keys on whole-image spread, so body hair and
- * dark backgrounds inflate MAD until the threshold drops below the lesion — on one device photo it
+ * dark backgrounds inflate MAD until the threshold drops below the lesion - on one device photo it
  * went negative and matched nothing at all. DoG instead asks "is this spot darker than its
  * immediate surroundings", which thin hair fails (the small blur erases it) and broad shading fails
  * (the large blur cancels it).
@@ -189,15 +189,15 @@ export function locateLesion(
     // none of them while discarding sensor specks, which peak around 5.
     minPeak = 6,
     // How strongly to prefer a central candidate over a merely stronger one. Taking the strongest
-    // peak outright located the lesion in only 5 of 7 real uploads — a figure caption and a pair
+    // peak outright located the lesion in only 5 of 7 real uploads - a figure caption and a pair
     // of spectacle frames won on raw contrast; weighting by centrality gets all 7.
     centralityWeight = 3,
     // Absolute floor on the WINNING candidate's score (not just its rank against other
     // candidates). Without this, a photo where nothing is really a lesion still returns whatever
-    // incidental dark region scored highest — background clutter, a shadow edge — and the caller
+    // incidental dark region scored highest - background clutter, a shadow edge - and the caller
     // zooms in on it. A centered, well-contrasted real lesion scores comfortably above this; an
     // off-center or marginal-contrast false positive does not. Tuned against scripts/test-localizer.mjs
-    // plus real up-close and hard-to-detect sample photos, not guessed — see that script for the
+    // plus real up-close and hard-to-detect sample photos, not guessed - see that script for the
     // cases this must and must not reject.
     minScore = 3,
   } = opts;
@@ -206,7 +206,7 @@ export function locateLesion(
 
   const gray = new Float32Array(n);
   for (let i = 0, p = 0; i < n; i++, p += 4) {
-    // Rec. 601 luma — matches the PIL "L" conversion the recipe was validated against.
+    // Rec. 601 luma - matches the PIL "L" conversion the recipe was validated against.
     gray[i] = (rgba[p] * 299 + rgba[p + 1] * 587 + rgba[p + 2] * 114) / 1000;
   }
 
@@ -297,7 +297,7 @@ export function locateLesion(
     }
 
     // Does the blob touch the edge of the search window? A real, well-framed lesion sits with
-    // margin well inside it — even a large one (measured on real close-up photos: 6-15px of
+    // margin well inside it - even a large one (measured on real close-up photos: 6-15px of
     // margin at this scale). A component that reaches the boundary is being clipped by something
     // bigger spilling out of the searchable region (a hair mass reaching off toward the frame
     // edge, a background object) rather than a self-contained lesion, however dark it reads. This
@@ -325,7 +325,7 @@ export function locateLesion(
     }
     const cx = sx / comp.length;
     const cy = sy / comp.length;
-    // 90th-percentile Chebyshev offset — robust to a few stragglers in the flood fill.
+    // 90th-percentile Chebyshev offset - robust to a few stragglers in the flood fill.
     const offs = comp
       .map((i) => Math.max(Math.abs((i % width) - cx), Math.abs(((i / width) | 0) - cy)))
       .sort((a, b) => a - b);
@@ -333,7 +333,7 @@ export function locateLesion(
 
     // Does this blob sit on skin? Sample a thin ring that hugs the blob's ACTUAL shape (a small
     // dilation minus the blob), not a square annulus around its centroid. For a large or irregular
-    // blob an annulus reaches into unrelated regions — around a dark jacket behind a face it
+    // blob an annulus reaches into unrelated regions - around a dark jacket behind a face it
     // catches real skin and averages to "skin", the exact false accept this guard exists to stop.
     // Blob pixels and any other dark structure are excluded so the lesion's own colour can't leak in.
     const ringWidth = 3;
@@ -368,14 +368,14 @@ export function locateLesion(
     // Skin is warm and not dark: red leads blue, some saturation, reasonable brightness.
     const skin =
       cnt > 4 && ar > 70 && ar > ab + 8 && ar >= ag && Math.max(ar, ag, ab) - Math.min(ar, ag, ab) > 6;
-    // Reject only a blob that is essentially the whole frame — that's whole-image shading/vignette,
+    // Reject only a blob that is essentially the whole frame - that's whole-image shading/vignette,
     // not a photographed lesion, which always shows a skin margin. 0.95 matches FULL_FRAME in
     // lesion-detector.ts, the ML detector's identical guard, for the same reason.
     //
     // This used to reject anything over 0.7, which also threw out a real close-up photo where the
     // lesion legitimately fills most of the frame: the loop then kept searching and locked onto a
     // smaller, wrong sub-feature (a hair strand, a highlight) inside the very lesion just discarded,
-    // and framed THAT at the viewfinder's target fill — the reported "already-zoomed photo zooms in
+    // and framed THAT at the viewfinder's target fill - the reported "already-zoomed photo zooms in
     // even further, onto the wrong spot" bug. A large-but-real blob is now accepted; the caller's own
     // crop-size clamp (crop.tsx's `Math.min(shortSide, ...)`) already keeps an oversized box from
     // forcing a tighter crop than the image allows, so it naturally ends up with little/no extra zoom.
@@ -394,7 +394,7 @@ export function locateLesion(
         };
       }
     }
-    for (const i of comp) excluded[i] = 1; // consumed — move on to the next strongest peak
+    for (const i of comp) excluded[i] = 1; // consumed - move on to the next strongest peak
   }
   // The winner still has to clear an absolute confidence floor, not just be the best of what
   // turned up: on a photo where nothing present is really a lesion, the "best" candidate is still
@@ -407,7 +407,7 @@ export function locateLesion(
 /**
  * Full preprocessing chain for a still image: resize to the model's input size
  * *before* decoding (so jpeg-js only ever touches an inputSize² buffer, never the
- * 1024² crop — same recipe as image-quality.ts), then decode, run any configured
+ * 1024² crop - same recipe as image-quality.ts), then decode, run any configured
  * pixel steps, and pack to a normalized tensor.
  *
  * `cropFraction` < 1 takes a centered square crop of that fraction of the shorter side first,

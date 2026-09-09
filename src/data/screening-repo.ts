@@ -1,7 +1,7 @@
 /**
  * SQLite repository for completed screenings. Every TPS component is stored in its
  * own column (audit requirement: individual scoring decisions must be reviewable);
- * structured blobs (answers, softmax distribution) are JSON TEXT, parsed on read —
+ * structured blobs (answers, softmax distribution) are JSON TEXT, parsed on read -
  * same conventions as repositories.ts.
  */
 import type {
@@ -65,7 +65,7 @@ type Row = {
 };
 
 /**
- * listScreenings() skips rows whose parse throws — which for a NEW column would silently delete
+ * listScreenings() skips rows whose parse throws - which for a NEW column would silently delete
  * history from the user's view. Every optional blob therefore parses through this, never bare.
  */
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -134,7 +134,7 @@ function toRecord(row: Row): ScreeningRecord {
             view: row.mark_view as "front" | "back",
           }
         : null,
-    // Both photo paths resolve against the CURRENT container here — see image-paths.ts. v14
+    // Both photo paths resolve against the CURRENT container here - see image-paths.ts. v14
     // rewrote image_uri to the relative form, but images_json is left as written and normalized
     // on every read instead, so rows from any prior install render without a blob rewrite.
     imageUri: toDisplayUri(row.image_uri),
@@ -216,7 +216,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
   );
 }
 
-/** A lesion's screenings oldest-first — the order the timeline and trend summary read them in. */
+/** A lesion's screenings oldest-first - the order the timeline and trend summary read them in. */
 export async function listScreeningsForLesion(lesionId: string): Promise<ScreeningRecord[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
@@ -272,7 +272,7 @@ export type LesionSeed = {
  *
  * The two writes must not be separable: a screening whose lesion row is missing is unreachable from
  * every browse surface, and a lesion whose rollup lags shows a wrong "last checked" date. An
- * existing lesion keeps its label and mark — a follow-up records a new observation, it does not
+ * existing lesion keeps its label and mark - a follow-up records a new observation, it does not
  * redefine the spot.
  */
 export async function insertScreeningLinked(
@@ -331,7 +331,7 @@ export async function listScreenings(): Promise<ScreeningRecord[]> {
  *
  * The file cleanup matters more than it used to: a screening can now hold up to three ~200-400 KB
  * images, and without this they stay in documentDirectory forever with no row pointing at them.
- * Only files under the app's own screenings/ directory are removed — a record whose image copy
+ * Only files under the app's own screenings/ directory are removed - a record whose image copy
  * failed still points at the original cache URI, which is not ours to delete.
  */
 export async function deleteScreening(id: string): Promise<void> {
@@ -343,7 +343,7 @@ export async function deleteScreening(id: string): Promise<void> {
   await db.runAsync("DELETE FROM screenings WHERE id = ?", id);
   if (!row) return;
   const images = safeParse<{ uri: string }[]>(row.images_json, [{ uri: row.image_uri }]);
-  // Raw columns, so these are whatever the writing install stored — relative (v14+), or absolute
+  // Raw columns, so these are whatever the writing install stored - relative (v14+), or absolute
   // under a container that may no longer exist. Resolve before the ownership test below.
   await deleteImageFiles(images.map((i) => toDisplayUri(i.uri)));
   if (row.lesion_id) await refreshLesionRollup(row.lesion_id);

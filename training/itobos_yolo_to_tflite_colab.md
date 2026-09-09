@@ -1,7 +1,7 @@
 # Train a Skinive-style lesion detector (iToBoS → YOLOv8 → tflite)
 
 Goal: a YOLOv8 detector trained on **clinical skin-patch images** (lesions as small objects), so the
-live green box is **stable and tight** like Skinive's — unlike dermoscopy models, which box the whole
+live green box is **stable and tight** like Skinive's - unlike dermoscopy models, which box the whole
 frame. Run this on **Google Colab with a GPU** (Runtime → Change runtime type → **T4 GPU**). Total
 time ~1–2 hours. At the end you download one `.tflite` and hand it back; the app pipeline is already
 built for it (single-class `[1,5,8400]` output, dynamic input size).
@@ -12,26 +12,26 @@ built for it (single-class `[1,5,8400]` output, dynamic input size).
 
 ---
 
-### Cell 1 — install
+### Cell 1 - install
 ```python
 !pip -q install ultralytics kaggle
 ```
 
-### Cell 2 — Kaggle auth (upload your kaggle.json when prompted)
+### Cell 2 - Kaggle auth (upload your kaggle.json when prompted)
 ```python
 from google.colab import files
 files.upload()  # pick kaggle.json
 !mkdir -p ~/.kaggle && cp kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
 ```
 
-### Cell 3 — download + unzip the dataset
+### Cell 3 - download + unzip the dataset
 ```python
 !kaggle competitions download -c itobos-2024-detection
 !unzip -q -o itobos-2024-detection.zip -d itobos
 import subprocess; print(subprocess.run(['find','itobos','-maxdepth','3','-type','d'],capture_output=True,text=True).stdout)
 ```
 
-### Cell 4 — locate images/labels and build a YOLO data.yaml (auto-detect + 90/10 split)
+### Cell 4 - locate images/labels and build a YOLO data.yaml (auto-detect + 90/10 split)
 ```python
 import os, glob, random, shutil, yaml
 random.seed(0)
@@ -42,7 +42,7 @@ label_dirs=set(os.path.dirname(p) for p in glob.glob(f'{ROOT}/**/*.txt', recursi
 print('label dirs:', label_dirs)
 # pick the label dir with the most txt files (the training labels)
 lbl_dir=max(label_dirs, key=lambda d: len(glob.glob(f'{d}/*.txt'))) if label_dirs else None
-assert lbl_dir, 'No YOLO label dir found — inspect the printed tree in Cell 3'
+assert lbl_dir, 'No YOLO label dir found - inspect the printed tree in Cell 3'
 # find the matching images dir (sibling 'images', or same basenames as the labels)
 cand=[d for d in glob.glob(f'{ROOT}/**/', recursive=True) if glob.glob(f'{d}/*.jpg')+glob.glob(f'{d}/*.png')]
 img_dir=max(cand, key=lambda d: len(glob.glob(f'{d}/*.jpg')+glob.glob(f'{d}/*.png')))
@@ -65,7 +65,7 @@ yaml.safe_dump({'path':os.path.abspath('ds'),'train':'images/train','val':'image
 print(open('data.yaml').read())
 ```
 
-### Cell 4b — zoom-crop augmentation (so it ALSO detects LARGE / frame-filling lesions)
+### Cell 4b - zoom-crop augmentation (so it ALSO detects LARGE / frame-filling lesions)
 ```python
 # iToBoS lesions are small objects; this adds crops where a lesion fills the frame,
 # so the detector works at all scales (small moles AND large melanoma/BCC/SCC).
@@ -105,7 +105,7 @@ for ip in glob.glob('ds/images/train/*'):
 print('added zoom-crops:', added)
 ```
 
-### Cell 5 — train (YOLOv8n; ~1–1.5 hr on a T4)
+### Cell 5 - train (YOLOv8n; ~1–1.5 hr on a T4)
 ```python
 from ultralytics import YOLO
 m = YOLO('yolov8n.pt')   # 'yolov8s.pt' = a bit more accurate, ~2x slower
@@ -113,13 +113,13 @@ m.train(data='data.yaml', imgsz=640, epochs=60, batch=16, patience=15,
         mosaic=1.0, scale=0.9, name='itobos_lesion')  # scale=0.9 = strong zoom jitter
 ```
 
-### Cell 6 — export to tflite (float16)
+### Cell 6 - export to tflite (float16)
 ```python
 best = YOLO('runs/detect/itobos_lesion/weights/best.pt')
 best.export(format='tflite', imgsz=640, half=True)
 ```
 
-### Cell 7 — download the model
+### Cell 7 - download the model
 ```python
 from google.colab import files
 files.download('runs/detect/itobos_lesion/weights/best_saved_model/best_float16.tflite')
@@ -130,17 +130,17 @@ files.download('runs/detect/itobos_lesion/weights/best_saved_model/best_float16.
 ## Then hand it to me
 Drop `best_float16.tflite` into `SpotOn-frontend/assets/models/` (e.g. rename it
 `itobos_lesion_float16.tflite`) or send me the path/URL. I will:
-1. **Restore the detection camera** (revert the guided-framing screen back to the live detector — the
+1. **Restore the detection camera** (revert the guided-framing screen back to the live detector - the
    box/unbox frame processor + YOLO decode is preserved and ready).
 2. Point the `require(...)` at the new model (input size is already read dynamically).
 3. Re-tune the score threshold with the on-device log sweep.
-4. Verify on your phone — the box should now lock tightly onto moles like Skinive.
+4. Verify on your phone - the box should now lock tightly onto moles like Skinive.
 
 ## Notes / knobs
-- It's **single-class** ("lesion") — detects any lesion/mole (benign + malignant); your separate
+- It's **single-class** ("lesion") - detects any lesion/mole (benign + malignant); your separate
   classifier handles the diagnosis on the crop.
 - If small moles are still missed, bump `epochs` or use `yolov8s.pt`; if boxes feel loose, that's
   expected from the patch domain and improves with `imgsz=768`.
-- iToBoS tiles show a wider skin area than a phone close-up, so there's a mild domain gap — still
+- iToBoS tiles show a wider skin area than a phone close-up, so there's a mild domain gap - still
   vastly better than dermoscopy. If you want to close it further, add a small set of your own phone
   photos (annotated in Roboflow) and fine-tune on top.

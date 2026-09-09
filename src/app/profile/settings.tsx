@@ -81,7 +81,7 @@ export default function SettingsScreen() {
 
   const reminderSublabel = (() => {
     if (!remindersEnabled) return "Reminders to re-check a spot after 30 days";
-    if (!reminderDueAt) return "On — set after your next low-risk result";
+    if (!reminderDueAt) return "On - set after your next low-risk result";
     const due = new Date(reminderDueAt);
     return `Next reminder on ${due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
   })();
@@ -109,7 +109,7 @@ export default function SettingsScreen() {
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? "This isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : "Couldn't change your password. Check your connection and try again.",
@@ -134,7 +134,7 @@ export default function SettingsScreen() {
       Alert.alert(
         "Could not delete account",
         isNotDeployed(e)
-          ? "This isn't available yet — check back soon."
+          ? "This isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : "Something went wrong. Please try again.",
@@ -158,7 +158,7 @@ export default function SettingsScreen() {
       Alert.alert(
         "Could not request export",
         isNotDeployed(e)
-          ? "Data export isn't available yet — check back soon."
+          ? "Data export isn't available yet - check back soon."
           : e instanceof ApiError
             ? e.detail
             : "Something went wrong. Please try again.",

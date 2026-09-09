@@ -15,7 +15,7 @@ import {
 import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/triage/types';
 
 /**
- * Screening + lesion history — SQLite-backed with a write-through in-memory cache.
+ * Screening + lesion history - SQLite-backed with a write-through in-memory cache.
  * Records load once on mount; addEntry persists (copying the photo out of the
  * evictable cache directory first) and prepends. The hook surface is a superset of
  * the earlier version, so existing consumers keep working.
@@ -40,14 +40,14 @@ type ScanHistoryContextValue = {
   loading: boolean;
   /**
    * The initial read failed. Distinct from `loading: false` with an empty list, which means "you
-   * genuinely have no screenings" — the two used to be indistinguishable, so a failed SQLite read
+   * genuinely have no screenings" - the two used to be indistinguishable, so a failed SQLite read
    * told a user their entire history was empty. In a longitudinal tracking app that reads as data
    * loss, which is the one impression this screen must never give by accident.
    */
   loadError: boolean;
   getById: (id: string) => ScreeningRecord | undefined;
   getLesionById: (id: string) => Lesion | undefined;
-  /** A lesion's screenings, oldest first — the order the timeline reads them in. */
+  /** A lesion's screenings, oldest first - the order the timeline reads them in. */
   screeningsForLesion: (lesionId: string) => ScreeningRecord[];
   addEntry: (record: NewScreening) => Promise<ScreeningRecord>;
   renameLesion: (id: string, label: string | null) => Promise<void>;

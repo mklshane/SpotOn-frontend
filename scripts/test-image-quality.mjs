@@ -1,7 +1,7 @@
 /**
  * Dependency-free regression test for the still-image quality gate's pure core
  * (src/lib/image-quality-core.ts). Compiles the core with the project's own tsc, then asserts
- * the gate's verdicts on hand-built RGBA buffers — no jest, no native modules, no fixtures.
+ * the gate's verdicts on hand-built RGBA buffers - no jest, no native modules, no fixtures.
  *
  * Run:  npm run test:iqa
  *
@@ -97,7 +97,7 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
       }
     return d;
   };
-  // Every image here carries `noise` — the deterministic fine texture that stands in for sensor
+  // Every image here carries `noise` - the deterministic fine texture that stands in for sensor
   // grain, i.e. the thing that used to make a blurred photo measure SHARPER than a sharp one.
   const skin = (x, y, t) => {
     const n = noise(x, y);
@@ -109,7 +109,7 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
   check('hard-edged lesion: focus ok', e.sharpness.ok);
   check('hard-edged lesion: edge width small', e.sharpness.edgeWidth < 6);
 
-  // The same lesion with its edge ramped out over a quarter of the frame — defocus, nothing else.
+  // The same lesion with its edge ramped out over a quarter of the frame - defocus, nothing else.
   const ramped = ebuf((x, y) => {
     const d = Math.hypot(x - E / 2, y - E / 2) / E;
     return skin(x, y, Math.min(1, Math.max(0, (d - 0.05) / 0.28)));
@@ -118,7 +118,7 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
   check('defocused lesion: edge width large', e.sharpness.edgeWidth > LESION_EDGE_WIDTH);
   check('defocused lesion: focus NOT ok', !e.sharpness.ok);
   // The regression this term exists for: with grain present, the two older terms call the
-  // defocused image sharp — the Laplacian is reading the noise, not the lesion.
+  // defocused image sharp - the Laplacian is reading the noise, not the lesion.
   check(
     'defocused lesion: the OLD terms alone still pass it (this is the bug)',
     e.sharpness.value >= BLUR && e.sharpness.directional >= DIRECTIONAL_BLUR,
@@ -126,7 +126,7 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
 
   // A limb edge against a background is not a lesion, however strong the contrast across it. This
   // is the reported bug: the ring test averages the surround, so an edge whose ring is bright skin
-  // on one side and dark room on the other still scores high — sidedness is what says no.
+  // on one side and dark room on the other still scores high - sidedness is what says no.
   e = analyzeRgba(ebuf((x, y) => {
     const n = noise(x, y);
     const limb = x < E * 0.72 + E * 0.06 * Math.sin((Math.PI * y) / E);
@@ -175,7 +175,7 @@ const blob = (rr, gg, bb) => buf((x, y) => {
 r = analyzeRgba(blob(90, 60, 50), S, S);
 check('dark blob: lesion ok', r.lesion.ok);
 
-// Redder-than-skin blob at the SAME luminance — the g−r channel is what catches inflamed lesions.
+// Redder-than-skin blob at the SAME luminance - the g−r channel is what catches inflamed lesions.
 r = analyzeRgba(blob(215, 118, 108), S, S);
 check('red blob: lesion ok', r.lesion.ok);
 
@@ -205,7 +205,7 @@ check('off-frame blob: lesion not ok', !r.lesion.ok);
   // A navy t-shirt filling the lower half, pale neck above. A clean half-plane like this does not
   // fool sidedness (round 2 handles edges), but the REAL photo did: it scored presence 63.7 and
   // sidedness 53.8, against bars of 16 and 11, because a neckline is bounded on every side. What
-  // holds in both cases — and what this pins — is that the frame is not mostly skin.
+  // holds in both cases - and what this pins - is that the frame is not mostly skin.
   const shirt = analyzeRgba(wbuf((x, y) => {
     const n = noise(x, y);
     const disc = Math.hypot(x - W * 0.5, y - W * 0.62) < W * 0.22;
@@ -232,7 +232,7 @@ check('off-frame blob: lesion not ok', !r.lesion.ok);
   check('lesion close-up: gate says yes', closeup.skin.ok && closeup.lesion.ok);
 }
 
-// A one-sided luminance ramp (shadow) must NOT block the pass — shadow is advisory.
+// A one-sided luminance ramp (shadow) must NOT block the pass - shadow is advisory.
 r = analyzeRgba(buf((x, y) => { const n = noise(x, y); const f = 1 - (x / S) * 0.5; return [(190 + n) * f, (140 + n) * f, (120 + n) * f]; }), S, S);
 check('shadow advisory: still passes exposure+focus+skin', r.brightness.ok && r.sharpness.ok && r.skin.ok);
 
@@ -293,7 +293,7 @@ check('shadow advisory: still passes exposure+focus+skin', r.brightness.ok && r.
 /* ---------------------------------------------------------- cross-file coupling ---------- */
 // image-quality.ts skips the manipulateAsync re-encode when the source is already SIZE x SIZE,
 // which is true for real traffic only because crop.tsx emits exactly OUTPUT = SIZE. If either
-// value moves independently the gate silently falls back to the slow path — still CORRECT, but the
+// value moves independently the gate silently falls back to the slow path - still CORRECT, but the
 // saved JPEG encode quietly disappears and nothing else would notice. Pin the relationship.
 {
   const cropSrc = readFileSync(join(ROOT, 'src/app/scan/crop.tsx'), 'utf8');
@@ -301,7 +301,7 @@ check('shadow advisory: still passes exposure+focus+skin', r.brightness.ok && r.
   check('crop.tsx declares OUTPUT', m != null);
   if (m) {
     check(
-      `crop OUTPUT (${m[1]}) === image-quality SIZE (${SIZE}) — keeps the no-re-encode fast path live`,
+      `crop OUTPUT (${m[1]}) === image-quality SIZE (${SIZE}) - keeps the no-re-encode fast path live`,
       Number(m[1]) === SIZE,
     );
   }

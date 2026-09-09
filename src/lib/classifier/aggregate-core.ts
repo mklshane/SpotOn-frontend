@@ -3,7 +3,7 @@
  *
  * Zero imports on purpose: like tps-core.ts and image-quality-core.ts, this file is compiled
  * standalone by scripts/test-multiview.mjs (npm run test:multiview). classify.ts cannot be compiled
- * that way — it `require()`s the bundled .tflite asset — so the arithmetic that decides a triage
+ * that way - it `require()`s the bundled .tflite asset - so the arithmetic that decides a triage
  * outcome lives here, where it can be pinned without a device.
  *
  * The one property worth stating plainly: pooling happens in LOGIT space, never softmax space.
@@ -30,7 +30,7 @@ export function looksLikeProbabilities(values: readonly number[]): boolean {
 
 /**
  * Floor applied before taking a log, so a class that underflowed to exactly 0 in a softmax-baked
- * export becomes a large negative number rather than -Infinity — which would poison the mean and
+ * export becomes a large negative number rather than -Infinity - which would poison the mean and
  * turn every class into NaN. Measured across 5280 real views of the D8 export (1320 images × 4 TTA
  * views, 2026-08-11) the floor never binds, so it is a guard, not a correction.
  */
@@ -40,7 +40,7 @@ export const PROB_LOG_FLOOR = 1e-12;
  * Recover a logit-space vector from a model whose graph already ends in a softmax (the D8 export
  * sets `SOFTMAX = True` in its `ExportWrap`; D3–D7 emitted raw logits).
  *
- * Every average in this pipeline must happen in logit space — the 4-view dihedral TTA and the
+ * Every average in this pipeline must happen in logit space - the 4-view dihedral TTA and the
  * multi-image pool are both means, and MALIGNANT_THRESHOLD is calibrated on logit-mean output.
  * Taking the log first makes that EXACT rather than approximate, because
  *
@@ -57,7 +57,7 @@ export const PROB_LOG_FLOOR = 1e-12;
  * genuinely different estimator: it compresses confidence toward 1/K and rescales the malignant
  * score, which is what silently breaks the threshold.
  *
- * The returned vector is a logit vector only up to that additive constant — all softmax needs, but
+ * The returned vector is a logit vector only up to that additive constant - all softmax needs, but
  * it means the absolute values are not comparable against those from a raw-logit export.
  */
 export function toLogitSpace(values: readonly number[]): number[] {
@@ -65,7 +65,7 @@ export function toLogitSpace(values: readonly number[]): number[] {
 }
 
 /**
- * Uniform mean of per-image logit vectors. Uniform on purpose — confidence- or quality-weighted
+ * Uniform mean of per-image logit vectors. Uniform on purpose - confidence- or quality-weighted
  * pooling is a different estimator that would need refitting on held-out data before it could ship.
  * Throws on a ragged or empty input rather than silently averaging over a wrong denominator.
  */

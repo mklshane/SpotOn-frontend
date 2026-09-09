@@ -76,7 +76,7 @@ const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
 Reanimated.addWhitelistedNativeProps({ zoom: true });
 
 // One-Euro filter params, the deadbands, the association gate and the box spring all live in
-// lib/detection-smoothing.ts (DETECTION_SMOOTHING_CONFIG) so they can be tuned in one place — and
+// lib/detection-smoothing.ts (DETECTION_SMOOTHING_CONFIG) so they can be tuned in one place - and
 // so the CENTRE and the SIZE can be filtered differently, which is what stops the box breathing.
 // Worklet-only: anchors this confident (and near the best) are fused into the box. Stays here
 // because it is consumed inside the frame processor, not by any decision capture-core owns.
@@ -85,7 +85,7 @@ const FUSE_SCORE = 0.25;
  * Live exposure coaching, DERIVED from the still gate rather than hand-typed.
  *
  * The invariant: the viewfinder must never be more permissive than the gate one screen later. A
- * frame the coach calls fine must not then be rejected by image-quality-core — that is the worst
+ * frame the coach calls fine must not then be rejected by image-quality-core - that is the worst
  * kind of feedback, because the user has already committed to the shot.
  *
  * Only the dark side is coached. The still gate no longer rejects on high mean luminance (see
@@ -93,7 +93,7 @@ const FUSE_SCORE = 0.25;
  * something nothing downstream cares about; glare on the lesion is judged on the still, where the
  * ROI is actually resolved, rather than guessed at from a strided preview sample.
  *
- * Both metrics are mean luminance in 0..1, so they are directly comparable — the worklet samples a
+ * Both metrics are mean luminance in 0..1, so they are directly comparable - the worklet samples a
  * strided subset of the model input and the gate averages the whole resized still, but neither is
  * a different *quantity*.
  */
@@ -108,7 +108,7 @@ const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
  *
  * Raised 0.0004 -> 0.0006 (2026-08-04), measured by synth/eval/live_gate_eval.py on 120 held-out
  * clinical photos at six blur levels. The old value let a THIRD of frames the still gate rejects
- * pass the viewfinder without comment — the user then commits to the shot and is told on the next
+ * pass the viewfinder without comment - the user then commits to the shot and is told on the next
  * screen. The metric itself is fine (AUROC 0.909 against the still gate's verdict); only its
  * threshold was too permissive.
  *
@@ -129,7 +129,7 @@ const BLUR_THRESHOLD = 0.0006;
 const BLUR_SHOW = 5; // consecutive blurry frames before coaching (avoids flicker on plain/brief frames)
 // Per-frame diagnostics. MUST ship false: the log below runs inside the frame processor, so a true
 // value costs a worklet->JS hop plus a console.log at the detector's full cadence (12/s on a
-// high-tier device) on the hottest path in the app — and it distorts the very frame-rate numbers
+// high-tier device) on the hottest path in the app - and it distorts the very frame-rate numbers
 // anyone flipping it would be trying to measure. Deliberately NOT __DEV__ for that reason.
 const DEBUG = false; // flip to true only while actively tuning best/sharp/lume
 
@@ -139,14 +139,14 @@ const TARGET_FPS_HIGH = 12;
 const TARGET_FPS_LOW = 6;
 
 // The camera is deliberately UNCONSTRAINED: no `format`, no device preference, no quality or
-// stabilisation props — exactly as it shipped before 6240da8 (2026-07-24), which capped the format
+// stabilisation props - exactly as it shipped before 6240da8 (2026-07-24), which capped the format
 // to 1280x720 and is the "camera looks blurred" regression. Every phone picks its own best format,
 // which is why low-end Androids looked right too: they got *their* best, not a hard-coded 720p.
 //
 // That commit's stated reason ("a 720² crop still downsamples into the model's input") was true of
 // the 640-input detector it was written against; the detector had moved to a 768 input three weeks
 // earlier, so it had been UPSCALING into the model ever since. If the frame budget ever needs
-// bounding, bound the analysis path inside the frame processor — never the preview.
+// bounding, bound the analysis path inside the frame processor - never the preview.
 //
 // The still is therefore full-sensor. PHOTO_LONG_EDGE below caps it when the EXIF orientation is
 // baked in, which is where the downstream decode cost is actually contained.
@@ -156,11 +156,11 @@ const TARGET_FPS_LOW = 6;
  * sees, which is why it was wrong in two directions at once at 1280x720:
  *
  *  1. THE PREVIEW LOOKED SOFT. A 720p stream stretched onto a ~1179x2556 display is roughly a 3x
- *     upscale, and pinch-zoom crops into that already-thin frame — so zooming looked grainy. This
+ *     upscale, and pinch-zoom crops into that already-thin frame - so zooming looked grainy. This
  *     is the "camera looks blurred" report, and it is a display problem, not a lens or focus one.
  *  2. IT UPSCALED INTO THE DETECTOR, which is the exact failure the comment below warns against.
  *     The detector input is 768. A 720-short-edge frame yields a 720x720 centre crop, and the
- *     resize plugin then scales that UP to 768x768 — inventing pixels and costing recall.
+ *     resize plugin then scales that UP to 768x768 - inventing pixels and costing recall.
  *
  * 1080p fixes both: the preview is far closer to native, and 1080 > 768 so the detector finally
  * gets a genuine downsample. Low-tier devices stay at 720p, because the frame processor's cost
@@ -173,7 +173,7 @@ const TARGET_FPS_LOW = 6;
  *
  * `instructions` sits at 196 and runs to ~230. `zoomWrap` sits above it, and the framing hint
  * rides just inside the bracket frame above that. Those three used to be independent hand-tuned
- * numbers, each derived against `instructions` and blind to the others — so on a 667pt screen
+ * numbers, each derived against `instructions` and blind to the others - so on a 667pt screen
  * (iPhone SE 2/3) the hint's 36% landed at exactly 240, on top of the zoom slider, and the two
  * comments explaining them disagreed about where the brackets end. Same failure mode as the map
  * controls: two constants measuring from different origins with nothing forcing them to agree.
@@ -183,7 +183,7 @@ const TARGET_FPS_LOW = 6;
 const ZOOM_TRACK_H = 4;
 const ZOOM_KNOB = 16;
 const ZOOM_PAD_V = 20;
-/** Bottom edge of the zoom slider, and its total height — the hint must clear their sum. */
+/** Bottom edge of the zoom slider, and its total height - the hint must clear their sum. */
 const ZOOM_BOTTOM = 240;
 const ZOOM_HEIGHT = ZOOM_PAD_V * 2 + ZOOM_TRACK_H;
 /** Breathing room between the top of the zoom slider and the framing hint above it. */
@@ -221,8 +221,8 @@ export default function CaptureScreen() {
   }, []);
 
   // Cap both streams instead of taking the device default, which is typically the largest format
-  // it offers. `videoResolution` is what the resize plugin downsamples every frame — the biggest
-  // native cost in the frame processor — and the photo is what the whole diagnosis rests on, so
+  // it offers. `videoResolution` is what the resize plugin downsamples every frame - the biggest
+  // native cost in the frame processor - and the photo is what the whole diagnosis rests on, so
   // photoResolution is ranked first: capping the analysis stream must never cost capture quality.
   //
   const [model, setModel] = useState<LesionModel | null>(null);
@@ -245,7 +245,7 @@ export default function CaptureScreen() {
 
   // The ONLY per-frame-derived React state. Everything else the detector produces (the box pose,
   // the raw metrics) is written to shared values or refs, so a new detection re-renders this
-  // screen exactly when the on-screen coaching copy has to change — not 12 times a second.
+  // screen exactly when the on-screen coaching copy has to change - not 12 times a second.
   const [coach, setCoach] = useState<Coach | null>('search');
   const coachRef = useRef<Coach | null>('search');
   const gateRef = useRef<number>(GATE_OK);
@@ -283,7 +283,7 @@ export default function CaptureScreen() {
   // The detected box in full-frame (= saved photo) normalized coords, carried to the crop
   // screen so it can auto-frame the lesion without re-running the model (see shoot()).
   const lastImgBox = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
-  // One-Euro filters — one per tracked scalar. Preview box (what's drawn) + img box (forwarded
+  // One-Euro filters - one per tracked scalar. Preview box (what's drawn) + img box (forwarded
   // to crop). These keep the box steady under small camera shifts but responsive to real motion.
   const euro = useRef({
     px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
@@ -295,7 +295,7 @@ export default function CaptureScreen() {
     iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
     ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
   }).current;
-  // Which lesion the track is following, so the box can't be stolen by a competing detection —
+  // Which lesion the track is following, so the box can't be stolen by a competing detection -
   // see stepAssociation. Reset with the filters.
   const assocRef = useRef(initialAssociationState);
   // True until the next detection is drawn, so re-acquisition places the box instead of gliding to
@@ -354,7 +354,7 @@ export default function CaptureScreen() {
         // Is this the lesion we are already following? The worklet argmaxes ~12k anchors with no
         // memory of the previous frame, so with two lesions in view the winner can alternate and
         // the box teleports between them. Reject a detection that lands implausibly far from the
-        // tracked box — unless it keeps insisting, which means the user really has moved to a
+        // tracked box - unless it keeps insisting, which means the user really has moved to a
         // different lesion, and then the track is handed over cleanly rather than gliding across.
         const assoc = stepAssociation(
           assocRef.current,
@@ -375,7 +375,7 @@ export default function CaptureScreen() {
 
         // Filter the preview box. Centre and size use different constants (SMOOTH.position vs
         // SMOOTH.size): the detector's extents are noisier than its centre, so filtering both the
-        // same way is what made the box breathe. Then a SOFT deadband — it damps sub-threshold
+        // same way is what made the box breathe. Then a SOFT deadband - it damps sub-threshold
         // movement without freezing the value, so nothing accumulates to be released as a step.
         let fx = euro.px.filter(b.x + b.w / 2, t);
         let fy = euro.py.filter(b.y + b.h / 2, t);
@@ -428,7 +428,7 @@ export default function CaptureScreen() {
     [SW, SH],
   );
   // Quality gates arrive as a single code, already debounced in the worklet, and only when the
-  // verdict actually changes — instead of three unconditional JS hops per frame.
+  // verdict actually changes - instead of three unconditional JS hops per frame.
   const onGate = useRunOnJS((code: number) => {
     gateRef.current = code;
     applyCoach();
@@ -463,7 +463,7 @@ export default function CaptureScreen() {
     if (!guide || !isFocused) {
       metricsRef.current = null;
       // Teardown, not detection loss: the guide was switched off or the screen left, so there
-      // is nothing to fade for — reset the pose immediately rather than animating a box the user
+      // is nothing to fade for - reset the pose immediately rather than animating a box the user
       // is no longer looking at (and which would otherwise fade in again on return).
       resetDetectionBox(boxValues, { immediate: true });
       snapNext.current = true;
@@ -525,7 +525,7 @@ export default function CaptureScreen() {
         }
 
         // `resize` hands back a Float32Array over its own freshly allocated buffer, so the whole
-        // buffer IS the tensor — copying it would burn ~5 MB per frame for nothing. The guard
+        // buffer IS the tensor - copying it would burn ~5 MB per frame for nothing. The guard
         // keeps the copy as a fallback in case the plugin ever returns a view into a pool.
         // (fast-tflite takes a raw ArrayBuffer, never a TypedArray.)
         const inputBuffer =
@@ -539,7 +539,7 @@ export default function CaptureScreen() {
         const anchors = layout.anchors;
         const numClasses = layout.numClasses;
 
-        // Single pass — argmax + candidate collection. Find the highest-scoring anchor and its box
+        // Single pass - argmax + candidate collection. Find the highest-scoring anchor and its box
         // (center in channels 0,1; w/h in channels 2,3, all normalized to the model input), and at
         // the same time remember every anchor confident enough to be fused below. The fusion used
         // to re-walk all ~8400 anchors and recompute the same per-anchor class max; collecting the
@@ -621,7 +621,7 @@ export default function CaptureScreen() {
           // The model→screen mapping lives in capture-core (pinned by npm run test:capture) and
           // runs on the JS side. A worklet can only call functions marked 'worklet', and keeping
           // this arithmetic somewhere it can be imported and unit-tested normally is worth
-          // forwarding four extra numbers across the bridge — it is the piece whose failure mode
+          // forwarding four extra numbers across the bridge - it is the piece whose failure mode
           // is a silently off-target crop rather than a visible error.
           onDetection({
             mcx: cx,
@@ -699,8 +699,8 @@ export default function CaptureScreen() {
   /**
    * One-finger zoom: drag (or tap) anywhere along the zoom bar.
    *
-   * Pinch needs two hands here — one is usually holding the skin taut, or the phone steady at macro
-   * distance — so the existing zoom indicator is made interactive rather than adding a hidden
+   * Pinch needs two hands here - one is usually holding the skin taut, or the phone steady at macro
+   * distance - so the existing zoom indicator is made interactive rather than adding a hidden
    * gesture. It was already on screen and already showed the current zoom, so this costs no new UI
    * and is discoverable, which a double-tap-and-drag would not be.
    *
@@ -742,8 +742,8 @@ export default function CaptureScreen() {
     setBusy(true);
     try {
       // Never fire a flash burst: it flickers (VisionCamera toggles the torch off→burst→on) and
-      // captures at the wrong exposure. The torch toggle is the light control — WYSIWYG with the
-      // preview — so we shoot under the steady light already shown.
+      // captures at the wrong exposure. The torch toggle is the light control - WYSIWYG with the
+      // preview - so we shoot under the steady light already shown.
       const photo = await camera.current.takePhoto({ flash: 'off' });
       const raw = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
@@ -758,10 +758,10 @@ export default function CaptureScreen() {
       }
       const upright = await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
       // The sensor still is the single biggest scratch file we produce (2-8 MB, full resolution)
-      // and `upright` has now superseded it — nothing downstream ever reads photo.path again.
+      // and `upright` has now superseded it - nothing downstream ever reads photo.path again.
       await discardScratch(raw);
       // Carry the live detector's verdict + box forward. We can't re-run the model on the still
-      // here — its interpreter is busy on the camera thread, and hitting it from JS crashes — so
+      // here - its interpreter is busy on the camera thread, and hitting it from JS crashes - so
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
       const box = lastImgBox.current;
       const hadDetection = metricsRef.current != null;
@@ -803,7 +803,7 @@ export default function CaptureScreen() {
 
   return (
     <View style={styles.root}>
-      {/* The root layout pins `style="dark"` app-wide — correct on every light screen, invisible
+      {/* The root layout pins `style="dark"` app-wide - correct on every light screen, invisible
           on this one: dark glyphs on a near-black field hide the clock, battery and signal.
           Screen-local override; expo-status-bar restores the root value on unmount. */}
       <StatusBar style="light" />
@@ -836,7 +836,7 @@ export default function CaptureScreen() {
       {guide ? <DetectionBox values={boxValues} /> : null}
 
       {/* Standing framing hint, tied to the bracket frame it refers to.
-          The coach pill above is REACTIVE — it only says "Center the spot" once the detector has
+          The coach pill above is REACTIVE - it only says "Center the spot" once the detector has
           found a lesion and it has already drifted off. This states the goal up front, which is
           what a first-time user needs while the detector is still searching. It disappears once
           the frame is good ('ready') or once the coach is saying the same thing ('offcenter'),
@@ -851,7 +851,7 @@ export default function CaptureScreen() {
         </View>
       ) : null}
 
-      {/* Hide the live coaches during capture — frames glitch dark/blurry as the shutter fires.
+      {/* Hide the live coaches during capture - frames glitch dark/blurry as the shutter fires.
           Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
           preview stays visible and the user can watch it sharpen. */}
       {busy || coach == null ? null : coach === 'dark' ? (
@@ -936,7 +936,7 @@ export default function CaptureScreen() {
 
       <PerfHud
         counters={perf}
-        // No explicit format any more — the OS picks per device, so there is nothing to print here
+        // No explicit format any more - the OS picks per device, so there is nothing to print here
         // beyond the fact that we are not constraining it.
         formatLabel="device default (unconstrained)"
       />
@@ -986,7 +986,7 @@ function FocusBanner({ top, steady }: { top: number; steady: boolean }) {
   );
 }
 
-/** The positional half of the coaching vocabulary — one message at a time. */
+/** The positional half of the coaching vocabulary - one message at a time. */
 
 const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
   search: { text: 'Point at the spot', icon: 'camera.viewfinder' },
@@ -994,7 +994,7 @@ const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
   close: { text: 'Move back a little', icon: 'camera.viewfinder' },
   offcenter: { text: 'Center the spot', icon: 'camera.viewfinder' },
   steady: { text: 'Hold steady…', icon: 'camera.viewfinder' },
-  ready: { text: 'Looks good — tap to capture', icon: 'checkmark.circle.fill' },
+  ready: { text: 'Looks good - tap to capture', icon: 'checkmark.circle.fill' },
 };
 
 /**
@@ -1065,7 +1065,7 @@ const styles = StyleSheet.create({
   // Rides just inside the bracket frame's bottom edge (brackets end at bottom: '34%'), so it reads
   // as a label for the box rather than as another floating message.
   //
-  // `bottom` is NOT set here — it comes from `frameHintBottom(SH)` at the usage site, which takes
+  // `bottom` is NOT set here - it comes from `frameHintBottom(SH)` at the usage site, which takes
   // the larger of the frame fraction and a floor derived from the zoom slider. Do not reintroduce a
   // literal here: a fixed percentage is what put this pill on top of the slider at 667pt.
   frameHint: {
@@ -1092,7 +1092,7 @@ const styles = StyleSheet.create({
    * Above the Instructions pill (which stays at bottom 196 and runs to ~232), not below it.
    *
    * The band between the shutter row and that pill is only ~32pt once the multi-photo "N of 3"
-   * counter is accounted for, and a slider needs a 44pt touch target — so sharing that strip is
+   * counter is accounted for, and a slider needs a 44pt touch target - so sharing that strip is
    * what made the two fight in the first place. The framing hint above is now derived from
    * ZOOM_BOTTOM + ZOOM_HEIGHT rather than guessing at where the brackets fall, so moving this
    * moves the hint with it.

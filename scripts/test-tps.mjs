@@ -230,7 +230,7 @@ check(
 // ---- Malignant Gate ----
 // The threshold itself lives in classifier/model-config.ts (a model property, not a clinical
 // constant), so these vectors pin the *mechanism* against an explicit threshold argument.
-// THR below is an arbitrary fixed value for testing — deliberately NOT the shipping constant, so
+// THR below is an arbitrary fixed value for testing - deliberately NOT the shipping constant, so
 // re-tuning the model can never silently change what these assertions mean.
 const THR = 0.3454;
 const spread = { BENIGN: 0.45, BCC: 0.25, MEL: 0.15, SCC: 0.05, OTHER: 0.1 };
@@ -273,14 +273,14 @@ check('gate + safety floor: both flagged', r.malignantGateApplied === true && r.
 
 /* ------------------------------------------------------------------ cross-image agreement */
 // Mirrors evaluateScaleConsistency exactly: an unreadable-because-of-the-photograph verdict must
-// prompt a retake first and only floor on the second strike — never manufacture risk.
+// prompt a retake first and only floor on the second strike - never manufacture risk.
 check('agreement: agreeing images are ok', evaluateImageAgreement(false, 1) === 'ok');
 check('agreement: agreeing images ok on attempt 2', evaluateImageAgreement(false, 2) === 'ok');
 check('agreement: disagreement prompts rescan first', evaluateImageAgreement(true, 1) === 'prompt-rescan');
 check('agreement: disagreement floors on second strike', evaluateImageAgreement(true, 2) === 'apply-floor');
 
 /* ------------------------------------------------------------------ follow-up answer policy */
-// The three buckets must partition the questionnaire — an item in none of them would be silently
+// The three buckets must partition the questionnaire - an item in none of them would be silently
 // dropped from a follow-up, and an item in two would be both carried and re-asked.
 const allQ = [...MAJOR_QUESTIONS, ...MINOR_QUESTIONS];
 const buckets = [...FOLLOWUP_ALWAYS_REASK, ...FOLLOWUP_RATCHET, ...FOLLOWUP_CARRY];

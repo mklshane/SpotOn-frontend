@@ -54,7 +54,7 @@ export type ScanTimelineProps = {
  * Two shapes, because one photo and six photos are different problems. A single
  * scan gets a full-width hero card: a lone thumbnail on an otherwise empty screen
  * reads as an uploaded picture rather than as the first entry in a record. Two or
- * more become a vertical timeline, newest at top, under a continuous rail — the
+ * more become a vertical timeline, newest at top, under a continuous rail - the
  * same reading order as opening the record itself.
  */
 export function ScanTimeline({ screenings, onOpen }: ScanTimelineProps) {
@@ -135,7 +135,7 @@ function SoloScan({
 
         <View style={[styles.soloFooter, { borderTopColor: theme.hairline }]}>
           {/* Date and AI read stacked as one column, so the "Latest Scan" pill can sit
-              beside both of them at once — centered on their combined height — rather
+              beside both of them at once - centered on their combined height - rather
               than pinned to just the top row. */}
           <View style={styles.soloFooterLeft}>
             <View style={styles.soloFooterItem}>
@@ -144,7 +144,7 @@ function SoloScan({
                 {fmtDate(screening.createdAt)}
               </ThemedText>
             </View>
-            {/* What the AI actually read, not just how urgent it scored — the tier pill
+            {/* What the AI actually read, not just how urgent it scored - the tier pill
                 on the photo already covers urgency. `doc.text.fill` ties it to the same
                 "report/result" icon the app already uses for the screening summary. */}
             <View style={styles.soloFooterItem}>
@@ -158,7 +158,7 @@ function SoloScan({
               </ThemedText>
             </View>
           </View>
-          {/* A contained pill, not bare text floating at the row's edge — it reads as
+          {/* A contained pill, not bare text floating at the row's edge - it reads as
               the status badge it is, the same way the tier pill on the photo does,
               instead of looking like a stray label that wandered next to the date. */}
           <View
@@ -177,8 +177,8 @@ function SoloScan({
 /**
  * Two or more scans, newest at top, under a continuous vertical rail.
  *
- * Rendered newest-first for display — most relevant entry surfaces without
- * scrolling — but `i`/`isLatest`/`isFirst` are still computed against the
+ * Rendered newest-first for display - most relevant entry surfaces without
+ * scrolling - but `i`/`isLatest`/`isFirst` are still computed against the
  * original oldest-first order, so the prop's documented contract doesn't change.
  */
 function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
@@ -199,8 +199,8 @@ function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
         return (
           <View key={s.id} style={styles.row}>
             {/* The rail column stretches to match the card's height (row's default
-                cross-axis stretch), so the line-below-the-dot — a flex:1 fill, not a
-                fixed pixel line — stays continuous through the gap under every card
+                cross-axis stretch), so the line-below-the-dot - a flex:1 fill, not a
+                fixed pixel line - stays continuous through the gap under every card
                 regardless of how many lines its text wraps to. */}
             <View style={styles.railCol}>
               <View style={styles.railDate}>
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
 
   // Vertical timeline (2+ scans). No gap between rows: the rail's line-below-the-dot
   // spans each row's *full* height, so it has to butt against the next row's to read as
-  // continuous — the visual space between cards comes from rowCardWrap's own margin.
+  // continuous - the visual space between cards comes from rowCardWrap's own margin.
   row: { flexDirection: "row" },
   railCol: { width: 44, alignItems: "center" },
   railDate: { alignItems: "center", marginBottom: Space.sm },

@@ -35,7 +35,7 @@ const SLIDES: Slide[] = [
     key: 'welcome',
     title: 'Welcome to SpotOn',
     description:
-      'Your pocket guide to checking skin changes early — calm, private, and made for the Philippines.',
+      'Your pocket guide to checking skin changes early - calm, private, and made for the Philippines.',
     icon: 'sparkles',
     image: require('@/assets/images/onboarding/welcome.svg'),
   },

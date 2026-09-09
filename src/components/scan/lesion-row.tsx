@@ -11,11 +11,11 @@ import { useTheme } from '@/hooks/use-theme';
 import type { Lesion, ScreeningRecord } from '@/lib/triage/types';
 
 /**
- * A lesion with no nickname reads as its body region — never store this, derive it at display.
+ * A lesion with no nickname reads as its body region - never store this, derive it at display.
  *
  * The last fallback is "Unnamed", not "Untracked": every lesion on these surfaces IS tracked
  * (untracked ones are archived and filtered out), and `archived` renders its own "not tracked"
- * meta. Naming them "Untracked spot" contradicted both — on the detail screen it sat directly
+ * meta. Naming them "Untracked spot" contradicted both - on the detail screen it sat directly
  * under a "Tracked spot" header, and in the list it read as a whole column of untracked spots.
  */
 export function lesionTitle(lesion: Lesion): string {
@@ -40,7 +40,7 @@ export function relativeDate(iso: string | null): string {
  * One tracked lesion as a tappable card: latest photo (badged with the scan count), nickname,
  * when it was last checked, and its latest tier.
  *
- * The trend chevron is the point of the row — a lesion that went Moderate → High is a different
+ * The trend chevron is the point of the row - a lesion that went Moderate → High is a different
  * situation from one that has been Moderate all along, and that difference is what tracking buys.
  */
 export function LesionRow({ lesion, screenings }: { lesion: Lesion; screenings: ScreeningRecord[] }) {

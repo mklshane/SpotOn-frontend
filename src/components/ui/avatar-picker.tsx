@@ -55,7 +55,7 @@ async function pickFromLibrary(): Promise<string | null> {
 /**
  * Tappable avatar that opens an action sheet to take a new photo, pick one
  * from the library, or remove the existing photo. Purely local state in/out
- * via `uri`/`onChange` — persisting the chosen photo (upload, save to the
+ * via `uri`/`onChange` - persisting the chosen photo (upload, save to the
  * user's profile, etc.) is left to the caller.
  */
 export function AvatarPicker({

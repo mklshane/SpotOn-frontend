@@ -18,14 +18,14 @@ const RESPONSE_WINDOW = "15 working days";
 const PROJECT_END = "October 2026";
 
 /**
- * Where the account database lives — read off the Supabase session-pooler host in
+ * Where the account database lives - read off the Supabase session-pooler host in
  * SpotOn-backend/api/.env (`aws-1-ap-southeast-1.pooler.supabase.com`).
  */
 const DB_REGION = "Singapore (AWS ap-southeast-1)";
 
 /**
  * Where the API service itself runs. render.yaml pins no `region:`, so the deploy took
- * Render's default — confirmed by the service's origin CNAME, which encodes the region:
+ * Render's default - confirmed by the service's origin CNAME, which encodes the region:
  *   spoton-api.onrender.com -> gcp-us-west1-1.origin.onrender.com
  * Re-check that CNAME if the service is ever moved to another region.
  */
@@ -170,7 +170,7 @@ export default function PrivacyPolicyScreen() {
             connection with the academic research project at De La Salle Lipa.
           </Paragraph>
           <Bullet label="Project">
-            SpotOn — Smartphone-Based Early Skin Cancer Risk Detection
+            SpotOn - Smartphone-Based Early Skin Cancer Risk Detection
           </Bullet>
           <View style={styles.contactRow}>
             <ThemedText type="subhead" style={styles.contactLabel}>

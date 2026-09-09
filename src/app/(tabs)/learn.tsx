@@ -61,7 +61,7 @@ const CANCER_TYPES = [
   },
 ] as const;
 
-/** A single browsable row — either a topic, or an article nested inside one. */
+/** A single browsable row - either a topic, or an article nested inside one. */
 type Entry = {
   key: string;
   title: string;
@@ -120,8 +120,8 @@ function topicEntry(topic: Topic): Entry {
 
 /**
  * Every topic, plus the articles nested under a `subtopics` topic. The nested
- * articles are only ever surfaced by search — in the browsed list they would
- * duplicate their parent — so someone typing "melanoma" lands on the article
+ * articles are only ever surfaced by search - in the browsed list they would
+ * duplicate their parent - so someone typing "melanoma" lands on the article
  * instead of an empty result.
  */
 function buildEntries(): { topics: Entry[]; nested: Entry[] } {
@@ -196,7 +196,7 @@ export default function LearnScreen() {
 
   return (
     <Screen padded={false}>
-      {/* overScrollMode="never" — Android's default overscroll edge-glow uses the
+      {/* overScrollMode="never" - Android's default overscroll edge-glow uses the
           app's accent color, showing as an orange flash over content near the
           bottom tab bar when scrolling past the end. */}
       <ScrollView

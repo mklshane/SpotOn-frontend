@@ -1,13 +1,13 @@
-# Accordion Field (Sex / Skin Type) — Design
+# Accordion Field (Sex / Skin Type) - Design
 
 ## Goal
 
 The "Sex" field (`profile/edit.tsx`, `(auth)/complete-profile.tsx`) and "Skin type" field
-(`profile/edit.tsx`) both use `src/components/ui/select.tsx` — a collapsed trigger that expands
+(`profile/edit.tsx`) both use `src/components/ui/select.tsx` - a collapsed trigger that expands
 into an absolutely-positioned overlay menu. It's functional but generic (plain white menu, thin
 border, basic checkmark) and doesn't behave like an accordion: the overlay floats on top of
 whatever's below it instead of pushing it down, and skin type's long descriptive labels
-("Type I — always burns, never tans") are cramped into a single line.
+("Type I - always burns, never tans") are cramped into a single line.
 
 This replaces it with a true expand-in-place accordion, reusing the existing `SelectCard`
 primitive (already used elsewhere, already on-theme: brand-tint fill + checkmark when selected,
@@ -17,7 +17,7 @@ soft shadow, spring press animation, optional title+subtitle) for the expanded r
 
 - Add `src/components/ui/accordion.tsx` (new `Accordion` component) and export it from
   `src/components/ui/index.ts`.
-- Remove `src/components/ui/select.tsx` and its `index.ts` export — nothing else uses it (only
+- Remove `src/components/ui/select.tsx` and its `index.ts` export - nothing else uses it (only
   the two Sex usages and the one Skin type usage, confirmed by grepping the codebase).
 - Update `src/app/profile/edit.tsx` (Sex + Skin type) and `src/app/(auth)/complete-profile.tsx`
   (Sex) to import `Accordion` instead of `Select`. Skin type's option list gains a `description`
@@ -56,9 +56,9 @@ export type AccordionProps<T extends string> = {
 Unchanged in appearance from today's `Select` trigger: a `Pressable` field (`elementBg` fill,
 `Radius.md`, height 54), showing the selected option's `label` or the `placeholder` in muted
 text, with a `chevron.down`/`chevron.up` `Icon` that swaps based on open state (same convention
-used elsewhere in the codebase, e.g. `directory/ClinicPreviewCard.tsx` — no new rotation-animation
+used elsewhere in the codebase, e.g. `directory/ClinicPreviewCard.tsx` - no new rotation-animation
 mechanism needed). Border is `theme.brand` while open, `theme.riskCritical` when `error` is set,
-`transparent` otherwise — same logic as today.
+`transparent` otherwise - same logic as today.
 
 ### Expanded body
 
@@ -89,10 +89,10 @@ options wrapper is `overflow: 'hidden'` with an animated style interpolating:
 - `maxHeight`: `0` → a generous cap computed as `options.length * 80 + Space.base` (each
   `SelectCard` is `minHeight: 64` + `Space.sm` gap ≈ 72, rounded up to 80 per row for safety,
   plus top padding before the first card). This scales automatically with however many options a
-  caller passes — no hardcoded constant tied to a specific field's option count.
+  caller passes - no hardcoded constant tied to a specific field's option count.
 - `opacity`: `0` → `1`, so the reveal cross-fades rather than just clipping.
 
-No `onLayout`/measured-height logic needed — the `maxHeight` cap only has to exceed the actual
+No `onLayout`/measured-height logic needed - the `maxHeight` cap only has to exceed the actual
 content height (verified generous for both Sex's 5 options and Skin type's 6), and
 `overflow: hidden` clips it correctly while collapsed.
 
@@ -100,7 +100,7 @@ content height (verified generous for both Sex's 5 options and Skin type's 6), a
 
 Both `src/app/profile/edit.tsx` and `src/app/(auth)/complete-profile.tsx` swap their
 `import { Select } from '@/components/ui/select'` for
-`import { Accordion } from '@/components/ui/accordion'` and rename the JSX tag — props passed
+`import { Accordion } from '@/components/ui/accordion'` and rename the JSX tag - props passed
 are unchanged except:
 
 - `profile/edit.tsx`'s `SKIN_TYPE_OPTIONS` gains a `description` per entry (splitting today's
@@ -117,7 +117,7 @@ const SKIN_TYPE_OPTIONS: { value: string; label: string; description: string }[]
 ];
 ```
 
-- `SEX_OPTIONS` (in both files) is unchanged — no `description`, so those render as simple
+- `SEX_OPTIONS` (in both files) is unchanged - no `description`, so those render as simple
   single-line `SelectCard`s (no subtitle).
 
 ## 3. Cleanup

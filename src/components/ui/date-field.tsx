@@ -92,7 +92,7 @@ export function DateField({ label, error, value, onChange, containerStyle }: Dat
             <View style={[styles.grabber, { backgroundColor: theme.hairline }]} />
 
             {/* Remounted (via key) each time the sheet opens, so its internal cursor/view state
-                resets — but it stays mounted while closing so the sheet fades out as one unit
+                resets - but it stays mounted while closing so the sheet fades out as one unit
                 instead of collapsing mid-animation. */}
             <CalendarPicker key={sheetKey} value={temp} minDate={MIN_DATE} maxDate={TODAY} onChange={setTemp} />
 

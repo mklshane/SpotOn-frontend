@@ -1,5 +1,5 @@
 /**
- * Health Icons artwork, extracted verbatim — the real assets, not an imitation.
+ * Health Icons artwork, extracted verbatim - the real assets, not an imitation.
  *
  * Source: Health Icons by Resolve to Save Lives (https://healthicons.org), MIT licensed.
  * Taken from the `@iconify-json/healthicons` package, v1.2.13, 48×48 grid, filled style.

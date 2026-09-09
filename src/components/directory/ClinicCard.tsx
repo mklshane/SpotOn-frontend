@@ -29,7 +29,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
       <Card style={styles.card} elevation="sm">
         <View style={styles.row}>
           {distance != null ? (
-            // Open/closed is already shown as a badge below — this rail only earns its
+            // Open/closed is already shown as a badge below - this rail only earns its
             // space when there's a distance to anchor it; otherwise it's just orphaned dots.
             <View style={styles.rail}>
               <View style={[styles.dot, { backgroundColor: theme.brand }]} />

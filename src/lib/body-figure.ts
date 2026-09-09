@@ -1,5 +1,5 @@
 /**
- * Fallback artwork for the body regions Health Icons does not cover — pure geometry, no React.
+ * Fallback artwork for the body regions Health Icons does not cover - pure geometry, no React.
  *
  * Health Icons (lib/body-icons.ts) supplies head, arm, leg, foot, hand, spine and body, and those
  * are used as published. It has no neck, no torso-front, and a single generic `joints` icon, so
@@ -7,7 +7,7 @@
  * identical. These seven drawings exist only to break those collisions.
  *
  * Each part is drawn in its own 48×48 box (the Health Icons grid) at a deliberately characterful
- * angle — limbs bend, joints sit between the two segments they join. Drawn flat and front-on they
+ * angle - limbs bend, joints sit between the two segments they join. Drawn flat and front-on they
  * read as abstract capsules; angle, not detail, is what makes a body part legible at 130pt.
  *
  * Kept free of React so scripts/preview-body-glyphs.mjs can rasterise the real geometry to a
@@ -58,7 +58,7 @@ function bent(
 
 /**
  * `main` is the part itself, painted brand orange. `context` is the neighbouring anatomy it hangs
- * off, ghosted — a shoulder with no torso beside it is just an oval, which is exactly how the
+ * off, ghosted - a shoulder with no torso beside it is just an oval, which is exactly how the
  * generic `joints` icon fails. `cut` is negative space in the field colour.
  */
 export type GlyphArt = { context?: string[]; main: string[]; cut?: string[] };
@@ -74,13 +74,13 @@ const TRUNK =
 
 export const ART: Record<string, GlyphArt> = {
   // Head turned away. No cut-outs at all: the absence of a face IS the back of the head. A
-  // hairline shape here read as a bald cap and a crown line read as a helmet — twice the
+  // hairline shape here read as a bald cap and a crown line read as a helmet - twice the
   // decoration was the problem, never the silhouette.
   'head-back': {
     context: [BUST, taper(24, 30, 5, 24, 38, 6)],
     main: [ellipse(24, 20, 13.5, 15.5)],
   },
-  // Neck between a cropped jaw and the shoulders — the gap between them is the subject.
+  // Neck between a cropped jaw and the shoulders - the gap between them is the subject.
   neck: {
     context: ['M6 48C6 39 14 33 24 33C34 33 42 33 42 48Z', 'M11 0C11 8 16 12 24 12C32 12 37 8 37 0Z'],
     main: [taper(24, 9, 7.5, 24, 33, 9.5)],
@@ -92,7 +92,7 @@ export const ART: Record<string, GlyphArt> = {
     cut: [taper(17.5, 9.5, 1.1, 23, 12, 1.1), taper(30.5, 9.5, 1.1, 25, 12, 1.1), circle(24, 31, 1.3)],
   },
   // The same trunk from behind, marked with a spine and shoulder blades. Health Icons' `spine`
-  // was tried here and read as three floating vertebrae — an anatomy-diagram fragment rather than
+  // was tried here and read as three floating vertebrae - an anatomy-diagram fragment rather than
   // a back, and it broke the pair with torso-front, which is the comparison that matters.
   'torso-back': {
     context: [taper(10, 10, 5.5, 5, 30, 4.5), taper(38, 10, 5.5, 43, 30, 4.5)],
@@ -104,7 +104,7 @@ export const ART: Record<string, GlyphArt> = {
     ],
   },
   // Deltoid draping over the arm where it meets the trunk, as two chained tapers so it rounds off
-  // the joint and runs down the arm — a single taper was a rounded rectangle.
+  // the joint and runs down the arm - a single taper was a rounded rectangle.
   shoulder: {
     context: ['M2 12C2 7 6 4 12 4L20 4L20 48L2 48Z', bent([26, 14, 8], [31, 30, 6.5], [34, 44, 5.5])],
     main: [bent([15, 9, 10.5], [27, 18, 9], [32, 31, 6.5])],

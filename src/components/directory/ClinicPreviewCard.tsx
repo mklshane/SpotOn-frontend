@@ -24,7 +24,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   // The parent re-renders this component in place (no key) when a different pin
-  // is selected — reset the disclosure during render so a new clinic never opens
+  // is selected - reset the disclosure during render so a new clinic never opens
   // pre-expanded (React's documented "adjust state on prop change" pattern).
   const [shownFacilityId, setShownFacilityId] = useState(facility.id);
   if (facility.id !== shownFacilityId) {
@@ -37,7 +37,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
 
   const shown = facility.services.slice(0, MAX_SERVICES_SHOWN);
   const extra = facility.services.length - shown.length;
-  // Never show the raw taxonomy tag — humanize the service list, or the practice type if there are no services.
+  // Never show the raw taxonomy tag - humanize the service list, or the practice type if there are no services.
   const specialization = shown.length ? shown.map(humanizeTag).join('; ') : humanizeTag(facility.type);
 
   return (

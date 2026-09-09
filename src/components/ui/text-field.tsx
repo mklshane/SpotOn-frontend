@@ -24,7 +24,7 @@ export type TextFieldProps = TextInputProps & {
   containerStyle?: ViewStyle | ViewStyle[];
   /** Overrides the field's fill color. Defaults to `theme.elementBg`. */
   fieldBackgroundColor?: string;
-  /** Pins the border to a fixed color regardless of focus/error state — for callers that need
+  /** Pins the border to a fixed color regardless of focus/error state - for callers that need
    *  the field to carry its own status color (e.g. a tier-colored rename field). */
   fieldBorderColor?: string;
 };

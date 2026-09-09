@@ -10,7 +10,7 @@ import { EXTRA_PHOTO_PX, PHOTO_PX } from './report-tokens';
  *
  * Everything the print template references must be inlined: the WebView renders a page
  * containing patient PII and a lesion photograph, so it must never make a network request.
- * Both loaders fail soft — a missing wordmark or photo degrades the page, it does not block
+ * Both loaders fail soft - a missing wordmark or photo degrades the page, it does not block
  * a report the patient may be about to hand to a clinician.
  */
 
@@ -22,12 +22,12 @@ const WORDMARK_PX = 480;
 const JPEG_DATA_URI = /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/;
 const PNG_DATA_URI = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
-/** Resolved once per app session — the bundled asset never changes. */
+/** Resolved once per app session - the bundled asset never changes. */
 let wordmarkPromise: Promise<string | null> | null = null;
 
 /**
  * `imageUris` is the screening's photos, primary first. Extra views load at a smaller size and
- * are dropped individually on failure — a missing third angle must never cost the patient a report.
+ * are dropped individually on failure - a missing third angle must never cost the patient a report.
  */
 export async function loadReportAssets(imageUris: string | string[]): Promise<ReportAssets> {
   const uris = Array.isArray(imageUris) ? imageUris : [imageUris];
@@ -71,7 +71,7 @@ async function loadPhoto(uri: string, widthPx: number = PHOTO_PX): Promise<strin
   try {
     const info = await FileSystem.getInfoAsync(uri);
     if (!info.exists) return null;
-    // Downscale before base64: the print box is 200pt, so 640px is ~230 dpi — visually
+    // Downscale before base64: the print box is 200pt, so 640px is ~230 dpi - visually
     // identical at print size, and it keeps the PDF a few hundred KB rather than several MB.
     const out = await manipulateAsync(uri, [{ resize: { width: widthPx } }], {
       compress: 0.85,
@@ -82,7 +82,7 @@ async function loadPhoto(uri: string, widthPx: number = PHOTO_PX): Promise<strin
     const dataUri = `data:image/jpeg;base64,${out.base64}`;
     return JPEG_DATA_URI.test(dataUri) ? dataUri : null;
   } catch (e) {
-    // Never log the uri or the model — this path handles PII.
+    // Never log the uri or the model - this path handles PII.
     console.warn('[report] lesion photo embed failed', e);
     return null;
   }

@@ -6,7 +6,7 @@ import type { Answer, QuestionId } from './types';
  * The 8-item Comprehensive Symptom Questionnaire (adapted from the Glasgow Weighted
  * 7-Point Checklist; physician-validated wording, spec 2026-06-06).
  *
- * Copy lives here — not in components — and is keyed by stable QuestionId so a
+ * Copy lives here - not in components - and is keyed by stable QuestionId so a
  * Filipino/Tagalog translation can drop in later without touching scoring or UI.
  * The ids are the contract with tps-core.ts; the order below is the display order.
  */
@@ -79,7 +79,7 @@ export const QUESTIONS: readonly QuestionDef[] = [
     label: 'Wider than 7mm',
     finding: 'Wider than 7 mm (about a pencil eraser)',
     question:
-      'Is this spot wider than a pencil eraser — roughly 7 millimeters, or about the size of a small pea?',
+      'Is this spot wider than a pencil eraser - roughly 7 millimeters, or about the size of a small pea?',
     icon: 'ruler.fill',
   },
   {

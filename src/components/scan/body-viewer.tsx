@@ -24,11 +24,11 @@ const POLAR_MAX = Math.PI - 0.3;
  * The visible world height at radius r is 2*r*tan(fov/2) = 0.768*r, against a body normalised to
  * 3.7 units tall (body-model.tsx TARGET_HEIGHT), so:
  *     r 9.5  -> 7.3 units visible : the whole body with margin
- *     r 3.6  -> 2.8 units visible : about three quarters of the body — the old floor
+ *     r 3.6  -> 2.8 units visible : about three quarters of the body - the old floor
  *     r 1.0  -> 0.8 units visible : roughly a forearm, enough to put a dot on one spot
  * The zoom range goes from 2.6x to 9.5x. 1.0 rather than lower because the orbit target can sit
  * inside the mesh when someone zooms at the body's centre line, and the camera has to stay outside
- * it — a torso is roughly 0.25 units in half-depth at this scale, so 1.0 keeps clear with room to
+ * it - a torso is roughly 0.25 units in half-depth at this scale, so 1.0 keeps clear with room to
  * spare. Off-centre zoom moves the target toward the surface, which only adds margin.
  */
 const RADIUS_MIN = 1.0;
@@ -108,7 +108,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
    * The pinch anchor, in NDC, captured on the gesture's first update rather than read fresh each
    * frame. The focal point wanders as fingers move, and chasing it makes the model swim under the
    * hand; pinning it at the start means the gesture zooms toward the spot the user actually reached
-   * for, and stays reversible — pinching back out returns to where it began.
+   * for, and stays reversible - pinching back out returns to where it began.
    */
   const anchor = useSharedValue({ nx: 0, ny: 0, set: false });
   /** Viewport size, needed on the UI thread to turn a touch into NDC. */
@@ -199,7 +199,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       const a = anchor.value;
       const b = bounds.value;
       // Both the radius and the target are computed from the values at gesture START, never
-      // accumulated frame to frame — so clamping at either end can't drift, and releasing and
+      // accumulated frame to frame - so clamping at either end can't drift, and releasing and
       // re-pinching always resumes from a clean state.
       const moved = focalZoomTarget(
         [st.x, st.y, st.z],
@@ -265,7 +265,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       {status !== 'ready' ? (
         <View style={styles.status} pointerEvents="none">
           <ThemedText type="footnote" themeColor={status === 'error' ? 'riskCritical' : 'muted'}>
-            {status === 'error' ? `Model failed — ${errMsg ?? 'unknown'}` : 'Loading 3D model…'}
+            {status === 'error' ? `Model failed - ${errMsg ?? 'unknown'}` : 'Loading 3D model…'}
           </ThemedText>
         </View>
       ) : null}
