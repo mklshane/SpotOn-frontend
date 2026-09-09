@@ -20,7 +20,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), 'scan-flow-'));
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis } = await import(

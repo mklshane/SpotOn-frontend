@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
@@ -36,13 +37,14 @@ const ROW_HEIGHT = 90;
 
 export function Accordion<T extends string>({
   label,
-  placeholder = 'Select',
+  placeholder = t("Select"),
   value,
   options,
   onChange,
   error,
   containerStyle,
 }: AccordionProps<T>) {
+  useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
@@ -76,6 +78,7 @@ export function Accordion<T extends string>({
       <Pressable
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         onHoverIn={() => setTriggerHovered(true)}
         onHoverOut={() => setTriggerHovered(false)}
         onPress={() => setOpenAnimated(!open)}
@@ -111,7 +114,8 @@ export function Accordion<T extends string>({
 
       {error ? (
         <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-          {error}
+          {/* Source-keyed error string - translate on read, as TextField does. */}
+          {t(error)}
         </ThemedText>
       ) : null}
     </View>
@@ -128,6 +132,7 @@ type OptionRowProps<T extends string> = {
  *  (Reanimated shared values must come from a hook, so this can't live inline
  *  inside the parent's `.map()`). */
 function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRowProps<T>) {
+  useLocale();
   const theme = useTheme();
   const hovered = useSharedValue(false);
   const highlight = useSharedValue(0);
@@ -142,7 +147,11 @@ function OptionRow<T extends string>({ option, isSelected, onSelect }: OptionRow
   return (
     <Pressable
       accessibilityRole="radio"
+      // role="radio" is described by aria-checked, and react-native-web does not derive it from
+      // accessibilityState - same gap as checkbox.tsx / select-card.tsx. Without it a screen
+      // reader cannot tell which option is selected.
       accessibilityState={{ selected: isSelected }}
+      aria-checked={isSelected}
       onHoverIn={() => {
         hovered.value = true;
         setHighlighted(true);

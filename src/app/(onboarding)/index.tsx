@@ -1,3 +1,5 @@
+import { LanguagePicker } from '@/components/ui/language-picker';
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -7,7 +9,6 @@ import {
   type ListRenderItemInfo,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
   type ViewToken,
 } from 'react-native';
@@ -18,6 +19,7 @@ import { Dots } from '@/components/ui/dots';
 import { OnboardingHero } from '@/components/ui/onboarding-hero';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { markOnboardingSeen } from '@/lib/onboarding';
 
@@ -30,7 +32,7 @@ type Slide = {
   image?: ImageSourcePropType;
 };
 
-const SLIDES: Slide[] = [
+const SLIDES: Slide[] = localizedCopy([
   {
     key: 'welcome',
     title: 'Welcome to SpotOn',
@@ -62,11 +64,12 @@ const SLIDES: Slide[] = [
     icon: 'lock.shield.fill',
     image: require('@/assets/images/onboarding/privacy.svg'),
   },
-];
+]);
 
 export default function OnboardingScreen() {
+  const locale = useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const listRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
   const isLast = index === SLIDES.length - 1;
@@ -113,14 +116,15 @@ export default function OnboardingScreen() {
   );
 
   return (
-    <Screen variant="gradient" padded={false}>
+    <Screen key={locale} variant="gradient" padded={false}>
+      <LanguagePicker compact />
       <View style={styles.header}>
         {index > 0 ? (
           <Pressable
             hitSlop={12}
             onPress={handleBack}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("Back")}
             style={styles.backRow}>
             <Icon name="chevron.left" tintColor={theme.muted} size={16} />
           </Pressable>
@@ -129,8 +133,7 @@ export default function OnboardingScreen() {
         )}
         <Pressable hitSlop={12} onPress={finish} accessibilityRole="button">
           <ThemedText type="subhead" themeColor="muted">
-            Skip
-          </ThemedText>
+            {t("Skip")}</ThemedText>
         </Pressable>
       </View>
 
@@ -151,7 +154,7 @@ export default function OnboardingScreen() {
       <View style={styles.footer}>
         <Dots count={SLIDES.length} activeIndex={index} />
         <Button
-          label={isLast ? 'Get Started' : 'Continue'}
+          label={isLast ? t("Get Started") : t("Continue")}
           variant="ink"
           onPress={handleNext}
           style={styles.cta}

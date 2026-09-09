@@ -14,7 +14,7 @@
  * Run:  npm run test:image-paths
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -24,27 +24,31 @@ const out = mkdtempSync(join(tmpdir(), 'image-paths-'));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/data/image-paths.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/data/image-paths.ts', 'src/lib/fs.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 
-// The one dependency is expo-file-system/legacy, which cannot load outside a native runtime.
-// Point the compiled import at a stub exporting a live, settable documentDirectory binding.
+// image-paths imports ../lib/fs, which re-exports expo-file-system/legacy - unloadable outside a
+// native runtime. fs.ts is compiled alongside (tsc needs it to typecheck) and mirrors the source
+// dirs, so the output is out/data/image-paths.js + out/lib/fs.js. Point image-paths at a stub
+// exporting a live, settable documentDirectory binding.
+mkdirSync(join(out, 'lib'), { recursive: true });
 writeFileSync(
-  join(out, 'fs-stub.js'),
+  join(out, 'lib', 'fs-stub.js'),
   `export let documentDirectory = '';\nexport function setDocDir(d) { documentDirectory = d; }\n`,
 );
-const js = join(out, 'image-paths.js');
+const js = join(out, 'data', 'image-paths.js');
 const compiled = readFileSync(js, 'utf8');
-if (!compiled.includes('expo-file-system/legacy')) {
-  console.error('FATAL: compiled image-paths.js no longer imports expo-file-system/legacy - the');
-  console.error('stub swap below is stale and the test would silently exercise nothing.');
+if (!compiled.includes('../lib/fs')) {
+  console.error('FATAL: compiled image-paths.js no longer imports ../lib/fs - the stub swap below');
+  console.error('is stale and the test would silently exercise nothing.');
   process.exit(1);
 }
-writeFileSync(js, compiled.replace(/["']expo-file-system\/legacy["']/, "'./fs-stub.js'"));
+// Node ESM needs the extension on a relative specifier, so name the stub explicitly.
+writeFileSync(js, compiled.replace(/["']\.\.\/lib\/fs["']/, "'../lib/fs-stub.js'"));
 
 const { toStoredUri, toDisplayUri } = await import(pathToFileURL(js).href);
-const { setDocDir } = await import(pathToFileURL(join(out, 'fs-stub.js')).href);
+const { setDocDir } = await import(pathToFileURL(join(out, 'lib', 'fs-stub.js')).href);
 
 let passed = 0;
 const failures = [];

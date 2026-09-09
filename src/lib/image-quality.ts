@@ -1,8 +1,9 @@
-import { Buffer } from 'buffer';
-import * as FileSystem from 'expo-file-system/legacy';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import * as jpeg from 'jpeg-js';
-import { Image as RNImage } from 'react-native';
+import * as FileSystem from '@/lib/fs';
+import { Image as RNImage, Platform } from 'react-native';
+
+import { decodeRgbaFromBase64, transformToRgba } from '@/lib/image-ops';
+
+import { isDebug } from '@/lib/debug-flag';
 
 import { analyzeRgba, SIZE, type IqaChecks } from './image-quality-core';
 
@@ -14,7 +15,10 @@ import { analyzeRgba, SIZE, type IqaChecks } from './image-quality-core';
  */
 export type { IqaChecks };
 
-const DEBUG = false; // logs [iqa] metrics for calibration - set true when re-tuning against the harness
+// Wired to the shared diagnostics flag so the metrics can be read off a DEPLOYED build with
+// ?debug=1. The gate is scale- and resample-sensitive, so being able to compare the numbers a
+// real device produces against the calibration is worth more than a constant you have to edit.
+const DEBUG = isDebug();
 
 /** Pixel dimensions from the JPEG header - no decode. */
 function imageSize(uri: string): Promise<{ width: number; height: number }> {
@@ -43,35 +47,42 @@ async function loadRgba(uri: string) {
   try {
     const { width, height } = await imageSize(uri);
     if (width === SIZE && height === SIZE) {
+      if (Platform.OS === 'web') {
+        // Already the right size, so this is a decode with no resample - same pixels, one decoder.
+        return transformToRgba(uri, []);
+      }
       const b64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
-      return jpeg.decode(Buffer.from(b64, 'base64'), { useTArray: true, formatAsRGBA: true });
+      return decodeRgbaFromBase64(b64);
     }
   } catch {
     // Header read or direct decode failed - fall through to the resize path rather than failing
     // the gate. A quality verdict is worth more than the saved encode.
   }
-  const manip = await manipulateAsync(uri, [{ resize: { width: SIZE, height: SIZE } }], {
-    compress: 1,
-    format: SaveFormat.JPEG,
-    base64: true,
-  });
-  return jpeg.decode(Buffer.from(manip.base64 ?? '', 'base64'), {
-    useTArray: true,
-    formatAsRGBA: true,
-  });
+  // image-ops so web resamples with the browser's downscaler; expo-image-manipulator's JS
+  // Hermite filter measures ~4.6x wider edges and fails this very gate on sharp photos.
+  return transformToRgba(uri, [{ resize: { width: SIZE, height: SIZE } }]);
 }
 
-export async function assessImage(uri: string): Promise<IqaChecks> {
+/**
+ * @param sourceUpscale How much crop.tsx enlarged the capture to reach OUTPUT (1 = never
+ *   enlarged). Only used to undo the pixel inflation in edgeWidth - see image-quality-core.
+ */
+export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaChecks> {
   const raw = await loadRgba(uri);
-  const checks = analyzeRgba(raw.data, raw.width, raw.height);
+  const checks = analyzeRgba(raw.data, raw.width, raw.height, sourceUpscale);
 
   if (DEBUG) {
     console.log(
       '[iqa]',
       'bright=' + checks.brightness.value.toFixed(2),
       'issue=' + checks.brightness.issue,
+      'decoded=' + raw.width + 'x' + raw.height,
       'sharpROI=' + checks.sharpness.value.toFixed(6),
       'directional=' + checks.sharpness.directional.toFixed(8),
+      'edgeWidth=' + checks.sharpness.edgeWidth.toFixed(2),
+      'upscale=' + sourceUpscale.toFixed(2),
+      'effEdge=' + (checks.sharpness.edgeWidth / Math.max(1, sourceUpscale)).toFixed(2),
+      'sharpOk=' + checks.sharpness.ok,
       'shadow=' + checks.shadow.value.toFixed(3),
       'skin=' + checks.skin.coverage.toFixed(2),
     );

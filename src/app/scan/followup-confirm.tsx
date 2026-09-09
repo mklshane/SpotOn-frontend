@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -18,7 +19,7 @@ import { QUESTIONS } from '@/lib/triage/questions';
 import type { Answer, QuestionId } from '@/lib/triage/types';
 import { useState } from 'react';
 
-const ANSWER_LABEL: Record<Answer, string> = { yes: 'Yes', no: 'No', unsure: 'Not sure' };
+const ANSWER_LABEL: Record<Answer, string> = localizedCopy({ yes: 'Yes', no: 'No', unsure: 'Not sure' });
 
 /**
  * The one screen a follow-up adds. It exists because the questionnaire measures symptoms that
@@ -31,6 +32,7 @@ const ANSWER_LABEL: Record<Answer, string> = { yes: 'Yes', no: 'No', unsure: 'No
  * behind which item lands in which bucket.
  */
 export default function FollowUpConfirmScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const session = useScreeningSession();
@@ -43,9 +45,8 @@ export default function FollowUpConfirmScreen() {
       <Screen>
         <View style={styles.centerFill}>
           <ThemedText type="body" themeColor="muted">
-            Nothing to re-check.
-          </ThemedText>
-          <Button label="Back" variant="outline" onPress={() => router.back()} />
+            {t("Nothing to re-check.")}</ThemedText>
+          <Button label={t("Back")} variant="outline" onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -79,10 +80,10 @@ export default function FollowUpConfirmScreen() {
   }
 
   const sourceOptions: ActionSheetOption[] = [
-    { key: 'camera', label: 'Camera', icon: 'camera.fill', onPress: () => goToCapture('camera') },
+    { key: 'camera', label: t("Camera"), icon: 'camera.fill', onPress: () => goToCapture('camera') },
     {
       key: 'gallery',
-      label: 'Photo gallery',
+      label: t("Photo gallery"),
       icon: 'photo.on.rectangle',
       onPress: () => goToCapture('gallery'),
     },
@@ -91,17 +92,16 @@ export default function FollowUpConfirmScreen() {
   return (
     <Screen padded={false} edges={['top']}>
       <View style={styles.header}>
-        <Button label="Cancel" variant="ghost" onPress={() => router.back()} />
+        <Button label={t("Cancel")} variant="ghost" onPress={() => router.back()} />
       </View>
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Space.giant }]}
         showsVerticalScrollIndicator={false}>
         <Animated.View entering={FadeInDown} style={styles.intro}>
-          <ThemedText type="title1">Re-checking {title}</ThemedText>
+          <ThemedText type="title1">{t("Re-checking")} {title}</ThemedText>
           <ThemedText type="body" themeColor="textSecondary">
-            Last checked {priorDate} · {days} {days === 1 ? 'day' : 'days'} ago
-          </ThemedText>
+            {t("Last checked")} {priorDate} · {days} {days === 1 ? 'day' : 'days'} {t("ago")}</ThemedText>
         </Animated.View>
 
         {/* The previous photo - the reference the new one will be compared against. */}
@@ -110,7 +110,7 @@ export default function FollowUpConfirmScreen() {
           <View style={styles.priorText}>
             <View style={[styles.tierPill, { backgroundColor: bg }]}>
               <ThemedText type="caption" style={{ color: fg }}>
-                {prior.triage.tier === 'critical' ? 'Priority' : prior.triage.tier}
+                {prior.triage.tier === 'critical' ? t("Priority") : prior.triage.tier}
               </ThemedText>
             </View>
             <ThemedText type="footnote" themeColor="textSecondary">
@@ -121,7 +121,7 @@ export default function FollowUpConfirmScreen() {
 
         {carried.length ? (
           <View style={styles.section}>
-            <ThemedText type="headline">Carried over from last time</ThemedText>
+            <ThemedText type="headline">{t("Carried over from last time")}</ThemedText>
             <Card style={styles.answers}>
               {carried.map((q) => (
                 <View key={q.id} style={styles.answerRow}>
@@ -133,15 +133,13 @@ export default function FollowUpConfirmScreen() {
               ))}
             </Card>
             <ThemedText type="footnote" themeColor="muted">
-              These describe how the spot looks, which changes slowly. Tap “Update these answers” if
-              any are no longer right.
-            </ThemedText>
+              {t("These describe how the spot looks, which changes slowly. Tap “Update these answers” if any are no longer right.")}</ThemedText>
           </View>
         ) : null}
 
         {reask.length ? (
           <View style={styles.section}>
-            <ThemedText type="headline">We’ll ask about what’s changed</ThemedText>
+            <ThemedText type="headline">{t("We’ll ask about what’s changed")}</ThemedText>
             <Card style={styles.answers}>
               {reask.map((id: QuestionId) => {
                 const q = QUESTIONS.find((x) => x.id === id);
@@ -157,17 +155,15 @@ export default function FollowUpConfirmScreen() {
               })}
             </Card>
             <ThemedText type="footnote" themeColor="muted">
-              {reask.length} {reask.length === 1 ? 'question' : 'questions'} - these depend on time,
-              so an old answer wouldn’t be accurate today.
-            </ThemedText>
+              {reask.length} {reask.length === 1 ? 'question' : 'questions'} {t("- these depend on time, so an old answer wouldn’t be accurate today.")}</ThemedText>
           </View>
         ) : null}
       </ScrollView>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-        <Button label="Take a new photo" variant="brand" onPress={() => setSheetOpen(true)} style={styles.cta} />
+        <Button label={t("Take a new photo")} variant="brand" onPress={() => setSheetOpen(true)} style={styles.cta} />
         <Button
-          label="Update these answers"
+          label={t("Update these answers")}
           variant="ghost"
           onPress={() => router.push('/scan/questionnaire')}
         />
@@ -176,7 +172,7 @@ export default function FollowUpConfirmScreen() {
       <ActionSheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
-        title="Photo of this spot"
+        title={t("Photo of this spot")}
         options={sourceOptions}
       />
     </Screen>

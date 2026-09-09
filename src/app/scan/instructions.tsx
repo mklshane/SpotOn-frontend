@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import {
@@ -6,7 +7,6 @@ import {
   type ListRenderItemInfo,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
   type ViewToken,
 } from 'react-native';
@@ -18,6 +18,7 @@ import { Icon } from '@/components/ui/icon';
 import { OnboardingHero } from '@/components/ui/onboarding-hero';
 import { Screen } from '@/components/ui/screen';
 import { Space } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 
 type Slide = {
@@ -29,7 +30,7 @@ type Slide = {
 
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
-const SLIDES: Slide[] = [
+const SLIDES: Slide[] = localizedCopy([
   {
     key: 'locate',
     title: 'Locate your lesion',
@@ -62,11 +63,12 @@ const SLIDES: Slide[] = [
     description: 'Check monthly and use SpotOn to track any changes over time.',
     image: require('@/assets/images/instructions/schedule.svg'),
   },
-];
+]);
 
 export default function InstructionsScreen() {
+  useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const listRef = useRef<FlatList<Slide>>(null);
   const [index, setIndex] = useState(0);
   const isLast = index === SLIDES.length - 1;
@@ -105,12 +107,11 @@ export default function InstructionsScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Close instructions">
+          accessibilityLabel={t("Close instructions")}>
           <Icon name="xmark" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Instructions
-        </ThemedText>
+          {t("Instructions")}</ThemedText>
         <View style={styles.headerSpacer} />
       </View>
 

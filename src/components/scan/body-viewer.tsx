@@ -1,4 +1,4 @@
-/* eslint-disable react/no-unknown-property -- react-three-fiber three.js props */
+import { t, useLocale } from '@/lib/i18n';
 import { Canvas, useFrame, useThree } from '@react-three/fiber/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -94,6 +94,7 @@ function Rig({
 }
 
 export function BodyViewer({ mark, onPick }: BodyViewerProps) {
+  useLocale();
   const azimuth = useSharedValue(0);
   const polar = useSharedValue(Math.PI / 2);
   const radius = useSharedValue(6.4);
@@ -253,6 +254,13 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       </Canvas>
       <GestureDetector gesture={gesture}>
         <View
+          // The interaction surface is a bare <canvas> to assistive tech - no target, no name.
+          // It cannot be made operable by label alone (see the region-picker follow-up), but it
+          // should at least announce what it is and how it is driven rather than nothing at all.
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={t("3D body model")}
+          accessibilityHint={t("Drag to rotate · pinch to zoom · tap to place the marker")}
           style={StyleSheet.absoluteFill}
           onLayout={(e) => {
             // The pinch handler needs the viewport on the UI thread to turn a touch into NDC.
@@ -265,7 +273,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       {status !== 'ready' ? (
         <View style={styles.status} pointerEvents="none">
           <ThemedText type="footnote" themeColor={status === 'error' ? 'riskCritical' : 'muted'}>
-            {status === 'error' ? `Model failed - ${errMsg ?? 'unknown'}` : 'Loading 3D model…'}
+            {status === 'error' ? `Model failed - ${errMsg ?? 'unknown'}` : t("Loading 3D model…")}
           </ThemedText>
         </View>
       ) : null}

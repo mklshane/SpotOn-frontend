@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -46,6 +47,7 @@ const PATTERN_WORD: Record<LesionClass, string> = {
 };
 
 export default function ResultScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
@@ -145,11 +147,11 @@ export default function ResultScreen() {
             <View style={styles.heroBottom}>
               <ConfidenceRing pct={pct} color={colors.fg} />
               <View style={styles.heroConfText}>
-                <ThemedText type="headline">AI confidence</ThemedText>
+                <ThemedText type="headline">{t("AI confidence")}</ThemedText>
                 {/* `topClass` is the raw model enum - this printed "78% probability for MEL
                     pattern" in the most important sentence on the screen. */}
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}% match to {cls.lay}.
+                  {pct}{t("% match to")} {cls.lay}.
                 </ThemedText>
               </View>
             </View>
@@ -164,7 +166,7 @@ export default function ResultScreen() {
               <Pressable
                 onPress={() => setViewerUri(record.imageUri)}
                 accessibilityRole="button"
-                accessibilityLabel="View photo full screen"
+                accessibilityLabel={t("View photo full screen")}
                 style={({ pressed }) => pressed && styles.pressed}>
                 <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
                 <View style={styles.photoExpand}>
@@ -205,7 +207,7 @@ export default function ResultScreen() {
               <View style={styles.photoCaptionText}>
                 <ThemedText type="headline">{mark?.region ?? 'Location not marked'}</ThemedText>
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  Checked on {date}
+                  {t("Checked on")} {date}
                   {record.images.length > 1 ? ` · ${record.images.length} photos` : ''}
                 </ThemedText>
               </View>
@@ -213,12 +215,12 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 3 · The one action to take, with the safety warning beneath it. */}
+        {/* 3 · The one action to take, with the safety warning immediately underneath. */}
         <Animated.View entering={FadeInDown.delay(110)} style={styles.priorityBlock}>
           <View style={[styles.priority, { backgroundColor: colors.bg }]}>
             <View style={[styles.priorityDot, { backgroundColor: colors.fg }]} />
             <ThemedText type="subhead" style={[styles.priorityText, { color: colors.fg }]}>
-              Priority action: {tier.priorityAction}
+              {t("Priority action:")} {tier.priorityAction}
             </ThemedText>
           </View>
           <WarningBanner />
@@ -227,7 +229,7 @@ export default function ResultScreen() {
         {/* 4 · What this means */}
         <Animated.View entering={FadeInDown.delay(160)}>
           <Card style={styles.section}>
-            <ThemedText type="headline">What this means</ThemedText>
+            <ThemedText type="headline">{t("What this means")}</ThemedText>
             {qualifier ? (
               <ThemedText type="body" themeColor="textSecondary">
                 {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
@@ -238,12 +240,12 @@ export default function ResultScreen() {
               </ThemedText>
             ) : (
               <ThemedText type="body" themeColor="textSecondary">
-                This result suggests a{' '}
+                {t("This result suggests a")}{' '}
                 <ThemedText type="body" style={{ color: colors.fg }}>
-                  {PATTERN_WORD[classification.topClass]} pattern ({classification.topClass})
+                  {PATTERN_WORD[classification.topClass]} {t("pattern (")}{classification.topClass})
                 </ThemedText>{' '}
-                based on your photo.{' '}
-                <ThemedText type="body">It is not a confirmed diagnosis.</ThemedText>{' '}
+                {t("based on your photo.")}{' '}
+                <ThemedText type="body">{t("It is not a confirmed diagnosis.")}</ThemedText>{' '}
                 {tier.recommendation}
               </ThemedText>
             )}
@@ -259,11 +261,11 @@ export default function ResultScreen() {
         <Animated.View entering={FadeInDown.delay(260)}>
           <Card style={styles.section}>
             <View style={styles.sectionHead}>
-              <ThemedText type="headline">Symptoms you reported</ThemedText>
+              <ThemedText type="headline">{t("Symptoms you reported")}</ThemedText>
               {reported.length > 0 ? (
                 <View style={[styles.countPill, { backgroundColor: colors.bg }]}>
                   <ThemedText type="caption" style={{ color: colors.fg }}>
-                    {reported.length} of {QUESTIONS.length}
+                    {reported.length} {t("of")} {QUESTIONS.length}
                   </ThemedText>
                 </View>
               ) : null}
@@ -273,13 +275,12 @@ export default function ResultScreen() {
               <View style={[styles.noneRow, { backgroundColor: theme.riskLowBg }]}>
                 <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={20} />
                 <ThemedText type="subhead" themeColor="textSecondary" style={styles.noneText}>
-                  You didn’t report any warning signs for this spot.
-                </ThemedText>
+                  {t("You didn’t report any warning signs for this spot.")}</ThemedText>
               </View>
             ) : (
               <View style={styles.findingGroups}>
-                <FindingGroup title="Major warning signs" items={majorFindings} accent={colors} />
-                <FindingGroup title="Additional signs" items={minorFindings} accent={colors} muted />
+                <FindingGroup title={t("Major warning signs")} items={majorFindings} accent={colors} />
+                <FindingGroup title={t("Additional signs")} items={minorFindings} accent={colors} muted />
               </View>
             )}
           </Card>
@@ -287,10 +288,10 @@ export default function ResultScreen() {
 
         {/* 7 · Next steps */}
         <Animated.View entering={FadeInDown.delay(310)} style={styles.actions}>
-          <ThemedText type="title2">Next steps</ThemedText>
+          <ThemedText type="title2">{t("Next steps")}</ThemedText>
           {tier.showReport ? (
             <Button
-              label="View screening summary"
+              label={t("View screening summary")}
               variant="brand"
               icon="doc.text.fill"
               onPress={() => router.push({ pathname: '/scan/report', params: { id: record.id } })}
@@ -298,7 +299,7 @@ export default function ResultScreen() {
           ) : null}
           {tier.showDirectory ? (
             <Button
-              label="Find a clinic near you"
+              label={t("Find a clinic near you")}
               variant={tier.showReport ? 'outline' : 'brand'}
               icon="mappin.circle.fill"
               onPress={() => router.push('/(tabs)/directory')}
@@ -306,14 +307,14 @@ export default function ResultScreen() {
           ) : null}
           {tier.showEducation ? (
             <Button
-              label="Learn more about skin cancer"
+              label={t("Learn more about skin cancer")}
               variant="brand"
               icon="book.fill"
               onPress={() => router.push('/(tabs)/learn')}
             />
           ) : null}
           <Button
-            label="See this spot over time"
+            label={t("See this spot over time")}
             variant={tier.showReport || tier.showEducation ? 'outline' : 'brand'}
             icon="clock.arrow.circlepath"
             onPress={() => router.push({ pathname: '/scan/lesion', params: { id: record.lesionId! } })}
@@ -361,6 +362,7 @@ function exitFlow(lesionId: string | null | undefined, isFollowUp: boolean): voi
 }
 
 function Header({ onBack }: { onBack?: () => void }) {
+  useLocale();
   const theme = useTheme();
   return (
     <View style={styles.header}>
@@ -368,28 +370,32 @@ function Header({ onBack }: { onBack?: () => void }) {
         hitSlop={12}
         onPress={() => (onBack ? onBack() : router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
         accessibilityRole="button"
-        accessibilityLabel="Back">
+        accessibilityLabel={t("Back")}>
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </Pressable>
       <ThemedText type="headline" themeColor="textSecondary">
-        Result
-      </ThemedText>
+        {t("Result")}</ThemedText>
       <View style={styles.headerSpacer} />
     </View>
   );
 }
 
 function WarningBanner() {
+  useLocale();
   const theme = useTheme();
   return (
-    <View style={[styles.warningBanner, { backgroundColor: theme.riskModerateBg, borderColor: theme.riskModerate }]}>
+    <View
+      style={[
+        styles.warningBanner,
+        { backgroundColor: theme.riskModerateBg, borderColor: theme.riskModerate },
+      ]}>
       <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={18} />
       <View style={styles.warningCopy}>
         <ThemedText type="subhead" style={{ color: theme.riskModerate }}>
-          Avoid self-medication
+          {t('Avoid self-medication')}
         </ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          {AVOID_SELF_MEDICATION_WARNING.replace('Avoid self-medication. ', '')}
+          {t(AVOID_SELF_MEDICATION_WARNING).replace('Avoid self-medication. ', '')}
         </ThemedText>
       </View>
     </View>
@@ -398,6 +404,7 @@ function WarningBanner() {
 
 /** Circular AI-confidence ring: tier-colored arc over a tint of that color, percentage centered. */
 function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
+  useLocale();
   const size = 78;
   const stroke = 7;
   const r = (size - stroke) / 2;
@@ -428,6 +435,7 @@ function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
 
 /** Factual, non-alarming description of the classified type + expandable per-class probabilities. */
 function AboutType({ record }: { record: ScreeningRecord }) {
+  useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const { classification } = record;
@@ -435,7 +443,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">About {cls.full.toLowerCase()}</ThemedText>
+      <ThemedText type="headline">{t("About")} {cls.full.toLowerCase()}</ThemedText>
       <ThemedText type="body" themeColor="textSecondary">
         {cls.about}
       </ThemedText>
@@ -478,8 +486,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
               );
             })}
             <ThemedText type="caption" themeColor="muted">
-              These are pattern similarities seen by the on-device model - not a diagnosis.
-            </ThemedText>
+              {t("These are pattern similarities seen by the on-device model - not a diagnosis.")}</ThemedText>
           </Animated.View>
         ) : null}
       </LayoutAnimationConfig>
@@ -502,6 +509,7 @@ function FindingGroup({
   accent: { fg: string; bg: string };
   muted?: boolean;
 }) {
+  useLocale();
   const theme = useTheme();
   if (items.length === 0) return null;
   const dot = muted ? theme.muted : accent.fg;
@@ -535,6 +543,7 @@ function formatDue(iso: string): string {
  * reopened - which is the case this whole row exists for.
  */
 function ReminderRow({ lesionId }: { lesionId?: string | null }) {
+  useLocale();
   const theme = useTheme();
   const [state, setState] = useState<'idle' | 'working' | 'done' | 'denied' | 'unsupported'>('idle');
   const [dueLabel, setDueLabel] = useState<string | null>(null);
@@ -592,11 +601,10 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
         <View style={[styles.reminderDone, { backgroundColor: theme.riskModerateBg }]}>
           <Icon name="bell.fill" tintColor={theme.riskModerate} size={18} />
           <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
-            Notifications are turned off for SpotOn, so we can’t remind you.
-          </ThemedText>
+            {t("Notifications are turned off for SpotOn, so we can’t remind you.")}</ThemedText>
         </View>
         <Button
-          label="Open notification settings"
+          label={t("Open notification settings")}
           variant="outline"
           icon="gearshape.fill"
           onPress={() => Linking.openSettings()}
@@ -608,8 +616,7 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
   if (state === 'unsupported') {
     return (
       <ThemedText type="footnote" themeColor="muted">
-        Reminders aren’t available on this device.
-      </ThemedText>
+        {t("Reminders aren’t available on this device.")}</ThemedText>
     );
   }
 

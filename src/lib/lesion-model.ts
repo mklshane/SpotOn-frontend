@@ -1,6 +1,6 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import { Image } from 'react-native';
-import { loadTensorflowModel } from 'react-native-fast-tflite';
+import * as FileSystem from '@/lib/fs';
+import { assetUri } from '@/lib/asset-uri';
+import { loadTensorflowModel } from '@/lib/tflite';
 
 /** The loaded TFLite model handle (single-class YOLO lesion detector). */
 export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
@@ -52,6 +52,9 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // Swapped in 2026-06-30/07-01 from `yolo_best_float16` (21.4 MB, 640) with no recorded rationale,
 // which is why detector_ab.py exists at all. It remains in assets/models as the fallback to revert
 // to; do not delete it.
+// Metro resolves non-JS assets through require() and registers them for bundling; an ESM
+// import would not produce an asset module here.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const MODEL_ASSET = require('../../assets/models/lesion_det_y11n_v1_float16.tflite');
 
 let modelPromise: Promise<LesionModel> | null = null;
@@ -68,8 +71,7 @@ let modelPromise: Promise<LesionModel> | null = null;
 export function getLesionModel(): Promise<LesionModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      const src = Image.resolveAssetSource(MODEL_ASSET);
-      let uri = src.uri;
+      let uri = assetUri(MODEL_ASSET);
       if (uri.startsWith('http')) {
         const dest = `${FileSystem.cacheDirectory}lesion_det_y11n_v1_float16.tflite`;
         await FileSystem.downloadAsync(uri, dest);

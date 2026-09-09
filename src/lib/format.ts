@@ -1,5 +1,7 @@
+import { getIntlLocale, t } from './i18n/core';
+
 export function formatFee(pesos: number): string {
-  return `₱${pesos.toLocaleString('en-PH')}`;
+  return `₱${pesos.toLocaleString(getIntlLocale())}`;
 }
 
 export function formatFeeRange(min: number | null, max: number | null): string | null {
@@ -20,7 +22,7 @@ export function formatDistance(meters: number): string {
 export function formatShortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(getIntlLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 /** Whole days elapsed since an ISO date/timestamp (0 for today, NaN if unparsable). */
@@ -68,8 +70,8 @@ export function facilityDisplayName(f: FacilityNameSource): string {
 /** "dermatology_clinic" -> "Dermatology Clinic". Used everywhere a raw taxonomy tag
  * (facility type or service) would otherwise leak into the UI. */
 export function humanizeTag(tag: string): string {
-  return tag
+  return t(tag
     .split('_')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(' '));
 }

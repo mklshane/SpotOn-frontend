@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { NitroModules } from 'react-native-nitro-modules';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useIsFocused } from 'expo-router';
@@ -201,6 +202,7 @@ const PHOTO_LONG_EDGE = 2048; // cap applied when baking in the EXIF orientation
 
 
 export default function CaptureScreen() {
+  useLocale();
   const session = useScreeningSession();
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -784,16 +786,13 @@ export default function CaptureScreen() {
     return (
       <View style={[styles.black, styles.permission, { paddingTop: insets.top + Space.huge }]}>
         <ThemedText type="title2" style={styles.permTitle}>
-          Camera access needed
-        </ThemedText>
+          {t("Camera access needed")}</ThemedText>
         <ThemedText type="body" style={styles.permBody}>
-          SpotOn uses your camera to detect and capture the skin spot for triage.
-        </ThemedText>
-        <Button label="Allow camera" variant="brand" onPress={requestPermission} style={styles.permBtn} />
+          {t("SpotOn uses your camera to detect and capture the skin spot for triage.")}</ThemedText>
+        <Button label={t("Allow camera")} variant="brand" onPress={requestPermission} style={styles.permBtn} />
         <Pressable hitSlop={10} onPress={() => router.back()}>
           <ThemedText type="headline" style={styles.permCancel}>
-            Not now
-          </ThemedText>
+            {t("Not now")}</ThemedText>
         </Pressable>
       </View>
     );
@@ -846,8 +845,7 @@ export default function CaptureScreen() {
       {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' ? (
         <View style={[styles.frameHint, { bottom: frameHintBottom(SH) }]} pointerEvents="none">
           <ThemedText type="caption" style={styles.frameHintText}>
-            Keep the spot centered in the box
-          </ThemedText>
+            {t("Keep the spot centered in the box")}</ThemedText>
         </View>
       ) : null}
 
@@ -855,7 +853,7 @@ export default function CaptureScreen() {
           Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
           preview stays visible and the user can watch it sharpen. */}
       {busy || coach == null ? null : coach === 'dark' ? (
-        <CaptureCoach title="It's too dark" subtitle="Turn on the light or move somewhere brighter" icon="sun.max" />
+        <CaptureCoach title={t("It's too dark")} subtitle={t("Turn on the light or move somewhere brighter")} icon="sun.max" />
       ) : coach === 'blurry' ? (
         <FocusBanner top={insets.top + Space.xxl} steady={tier !== 'low'} />
       ) : (
@@ -868,15 +866,14 @@ export default function CaptureScreen() {
         onPress={() => router.back()}
         style={[styles.close, { top: insets.top + Space.sm }]}
         accessibilityRole="button"
-        accessibilityLabel="Close camera">
+        accessibilityLabel={t("Close camera")}>
         <Icon name="xmark" tintColor="#FFFFFF" size={22} />
       </Pressable>
 
       {/* Instructions */}
       <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
         <ThemedText type="subhead" style={styles.instructionsLabel}>
-          Instructions
-        </ThemedText>
+          {t("Instructions")}</ThemedText>
       </Pressable>
 
       {/* Zoom indicator */}
@@ -903,18 +900,18 @@ export default function CaptureScreen() {
           onPress={() => setTorch((t) => !t)}
           style={styles.sideBtn}
           accessibilityRole="button"
-          accessibilityLabel="Toggle flash">
+          accessibilityLabel={t("Toggle flash")}>
           <Icon name={torch ? 'bolt.fill' : 'bolt.slash.fill'} tintColor="#FFFFFF" size={26} />
         </Pressable>
 
         {session.images.length > 0 ? (
           <View style={styles.shotCount} pointerEvents="none">
             <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} of {MAX_IMAGES_PER_SCREENING}
+              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
             </ThemedText>
           </View>
         ) : null}
-        <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel="Capture">
+        <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")}>
           <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
           <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />
         </Pressable>
@@ -924,13 +921,12 @@ export default function CaptureScreen() {
           onPress={() => setGuide((v) => !v)}
           style={styles.sideBtn}
           accessibilityRole="button"
-          accessibilityLabel="Toggle guide">
+          accessibilityLabel={t("Toggle guide")}>
           <View style={[styles.toggle, guide && styles.toggleOn]}>
             <View style={[styles.knob, guide && styles.knobOn]} />
           </View>
           <ThemedText type="caption" style={styles.guideLabel}>
-            Guide
-          </ThemedText>
+            {t("Guide")}</ThemedText>
         </Pressable>
       </View>
 
@@ -947,6 +943,7 @@ export default function CaptureScreen() {
 const RETICLE = 76;
 
 function FocusReticle({ x, y }: { x: number; y: number }) {
+  useLocale();
   const scale = useSharedValue(1.35);
   const opacity = useSharedValue(0);
   useEffect(() => {
@@ -967,6 +964,7 @@ function FocusReticle({ x, y }: { x: number; y: number }) {
  * the preview visible so the user can watch the shot come into focus.
  */
 function FocusBanner({ top, steady }: { top: number; steady: boolean }) {
+  useLocale();
   const pulse = useSharedValue(1);
   useEffect(() => {
     // The pulse is decoration; on a device already missing its frame budget it is one more
@@ -979,8 +977,7 @@ function FocusBanner({ top, steady }: { top: number; steady: boolean }) {
       <Reanimated.View style={[focusStyles.banner, style]}>
         <Icon name="camera.viewfinder" tintColor="#FFFFFF" size={18} />
         <ThemedText type="subhead" style={focusStyles.bannerText}>
-          Hold steady to focus
-        </ThemedText>
+          {t("Hold steady to focus")}</ThemedText>
       </Reanimated.View>
     </View>
   );
@@ -988,20 +985,21 @@ function FocusBanner({ top, steady }: { top: number; steady: boolean }) {
 
 /** The positional half of the coaching vocabulary - one message at a time. */
 
-const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = {
+const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = localizedCopy({
   search: { text: 'Point at the spot', icon: 'camera.viewfinder' },
   far: { text: 'Move closer', icon: 'camera.viewfinder' },
   close: { text: 'Move back a little', icon: 'camera.viewfinder' },
   offcenter: { text: 'Center the spot', icon: 'camera.viewfinder' },
   steady: { text: 'Hold steady…', icon: 'camera.viewfinder' },
   ready: { text: 'Looks good - tap to capture', icon: 'checkmark.circle.fill' },
-};
+});
 
 /**
  * Compact positional coach. Neutral guidance (point/move/center) shows in a dark pill; the
  * "ready" state turns green to match the locked DetectionBox, signalling a good frame.
  */
 function CoachPill({ kind, top }: { kind: CoachKind; top: number }) {
+  useLocale();
   const { text, icon } = COACH_COPY[kind];
   const ready = kind === 'ready';
   return (

@@ -1,3 +1,4 @@
+import { t } from "./i18n/core";
 /**
  * The 30-day re-screening reminder, delivered by the operating system.
  *
@@ -79,7 +80,7 @@ async function ensureChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
     name: 'Re-screening reminders',
-    description: 'Reminders to photograph a spot again after 30 days.',
+    description: t("Reminders to photograph a spot again after 30 days."),
     importance: Notifications.AndroidImportance.DEFAULT,
     lightColor: '#FF8A4C',
   });
@@ -116,8 +117,8 @@ async function arm(due: Date, lesionId: string | null): Promise<string> {
   await ensureChannel();
   return await Notifications.scheduleNotificationAsync({
     content: {
-      title: 'Time to re-check your spot',
-      body: 'Take a new photo so SpotOn can compare it against your last screening.',
+      title: t("Time to re-check your spot"),
+      body: t("Take a new photo so SpotOn can compare it against your last screening."),
       data: { kind: REMINDER_KIND, lesionId },
       sound: 'default',
     },
@@ -288,5 +289,18 @@ export async function initNotifications(): Promise<void> {
     }
   });
 
+  await syncSelfCheckReminder();
+}
+
+/** Re-arm in the new language without changing the original due date or deep link. */
+export async function refreshReminderLanguage(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await ensureChannel();
+  const pending = await getPendingSelfCheckReminder();
+  if (!pending) return;
+  // Do not clear the stored ID until cancellation succeeds; a retry must not duplicate alarms.
+  const id = await getMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
+  if (id) await Notifications.cancelScheduledNotificationAsync(id);
+  await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, '');
   await syncSelfCheckReminder();
 }

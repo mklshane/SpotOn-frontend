@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -17,6 +18,7 @@ import {
   IdentifierField,
   type IdentifierMode,
 } from '@/components/ui/identifier-field';
+import { LanguagePicker } from '@/components/ui/language-picker';
 import { Logo } from '@/components/ui/logo';
 import { Screen } from '@/components/ui/screen';
 import { TextField } from '@/components/ui/text-field';
@@ -32,6 +34,7 @@ import {
 } from '@/lib/form-validation';
 
 export default function RegisterScreen() {
+  const locale = useLocale();
   const { signUp } = useAuth();
   const theme = useTheme();
   const [mode, setMode] = useState<IdentifierMode>('phone');
@@ -109,7 +112,8 @@ export default function RegisterScreen() {
   }
 
   return (
-    <Screen variant="gradient" gradient="dawnSoft">
+    <Screen key={locale} variant="gradient" gradient="dawnSoft">
+      <LanguagePicker compact />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={styles.content}
@@ -118,17 +122,15 @@ export default function RegisterScreen() {
           <View style={styles.header}>
             <Logo variant="wordmark" width={140} />
             <ThemedText type="title1" style={styles.title}>
-              Create your account
-            </ThemedText>
+              {t("Create your account")}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary">
-              A few details and you’re ready to start screening.
-            </ThemedText>
+              {t("A few details and you’re ready to start screening.")}</ThemedText>
           </View>
 
           <View style={styles.form}>
             <TextField
-              label="Full name"
-              placeholder="Juan dela Cruz"
+              label={t("Full name")}
+              placeholder={t("Juan dela Cruz")}
               autoCapitalize="words"
               autoComplete="name"
               inputMode="text"
@@ -171,8 +173,8 @@ export default function RegisterScreen() {
             />
 
             <TextField
-              label="Password"
-              placeholder="At least 8 characters"
+              label={t("Password")}
+              placeholder={t("At least 8 characters")}
               secure
               autoCapitalize="none"
               autoComplete="new-password"
@@ -207,33 +209,25 @@ export default function RegisterScreen() {
                   { backgroundColor: theme.backgroundElement, borderColor: theme.hairline },
                 ]}>
                 <ThemedText type="footnote" style={styles.noticeTitle}>
-                  Before you continue
-                </ThemedText>
+                  {t("Before you continue")}</ThemedText>
                 <ThemedText type="footnote" themeColor="textSecondary" style={styles.noticeBody}>
-                  SpotOn is an academic research prototype and is not a medical device or
-                  diagnostic tool. Its results may be inaccurate and should not replace
-                  consultation with a healthcare professional.
-                </ThemedText>
+                  {t("SpotOn is an academic research prototype and is not a medical device or diagnostic tool. Its results may be inaccurate and should not replace consultation with a healthcare professional.")}</ThemedText>
                 <ThemedText type="footnote" themeColor="textSecondary" style={styles.noticeBody}>
-                  By creating an account, you acknowledge the{' '}
+                  {t("By creating an account, you acknowledge the")}{' '}
                   <ThemedText
                     type="footnote"
                     themeColor="brand"
                     style={styles.inlineLink}
                     onPress={() => router.push('/profile/terms')}>
-                    Terms and Conditions
-                  </ThemedText>{' '}
-                  and{' '}
+                    {t("Terms and Conditions")}</ThemedText>{' '}
+                  {t("and")}{' '}
                   <ThemedText
                     type="footnote"
                     themeColor="brand"
                     style={styles.inlineLink}
                     onPress={() => router.push('/profile/privacy')}>
-                    Privacy Policy
-                  </ThemedText>{' '}
-                  and consent to the collection and processing of your information as described
-                  in the Privacy Policy.
-                </ThemedText>
+                    {t("Privacy Policy")}</ThemedText>{' '}
+                  {t("and consent to the collection and processing of your information as described in the Privacy Policy.")}</ThemedText>
               </View>
 
               <Checkbox
@@ -245,12 +239,11 @@ export default function RegisterScreen() {
                   }
                 }}>
                 <ThemedText type="footnote" themeColor="textSecondary">
-                  I confirm that I am 18 years old or older.
-                </ThemedText>
+                  {t("I confirm that I am 18 years old or older.")}</ThemedText>
               </Checkbox>
               {errors.isAdult ? (
                 <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
-                  {errors.isAdult}
+                  {t(errors.isAdult)}
                 </ThemedText>
               ) : null}
 
@@ -263,28 +256,25 @@ export default function RegisterScreen() {
                   }
                 }}>
                 <ThemedText type="footnote" themeColor="textSecondary">
-                  I have read and agree to the{' '}
+                  {t("I have read and agree to the")}{' '}
                   <ThemedText
                     type="footnote"
                     themeColor="brand"
                     style={styles.inlineLink}
                     onPress={() => router.push('/profile/terms')}>
-                    Terms and Conditions
-                  </ThemedText>{' '}
-                  and{' '}
+                    {t("Terms and Conditions")}</ThemedText>{' '}
+                  {t("and")}{' '}
                   <ThemedText
                     type="footnote"
                     themeColor="brand"
                     style={styles.inlineLink}
                     onPress={() => router.push('/profile/privacy')}>
-                    Privacy Policy
-                  </ThemedText>
-                  , and consent to the processing of my health data for screening.
-                </ThemedText>
+                    {t("Privacy Policy")}</ThemedText>
+                  {t(", and consent to the processing of my health data for screening.")}</ThemedText>
               </Checkbox>
               {errors.acceptedTerms ? (
                 <ThemedText type="footnote" themeColor="riskCritical" style={styles.consentError}>
-                  {errors.acceptedTerms}
+                  {t(errors.acceptedTerms)}
                 </ThemedText>
               ) : null}
             </View>
@@ -293,16 +283,15 @@ export default function RegisterScreen() {
                 {formError}
               </ThemedText>
             ) : null}
-            <Button label="Create account" variant="brand" loading={submitting} onPress={handleSubmit} />
+            <Button label={t("Create account")} variant="brand" loading={submitting} onPress={handleSubmit} />
             <View style={styles.footnoteRow}>
               <ThemedText type="footnote" themeColor="textSecondary">
-                Already have an account?{' '}
+                {t("Already have an account?")}{' '}
               </ThemedText>
               <Link href="/(auth)/login" asChild>
                 <Pressable hitSlop={8}>
                   <ThemedText type="footnote" themeColor="brand" style={styles.footnoteLink}>
-                    Sign in
-                  </ThemedText>
+                    {t("Sign in")}</ThemedText>
                 </Pressable>
               </Link>
             </View>

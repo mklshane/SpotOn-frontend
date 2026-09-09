@@ -1,5 +1,5 @@
 import { Image } from 'expo-image';
-import { StyleSheet, useWindowDimensions, View, type ImageSourcePropType } from 'react-native';
+import { StyleSheet, View, type ImageSourcePropType } from 'react-native';
 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import { ThemedText } from '@/components/themed-text';
@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Entrance } from '@/components/ui/entrance';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 
 type PhotoVisual = {
@@ -64,7 +65,7 @@ const CANCER_TYPE_VISUALS: Partial<Record<string, CancerTypeKind>> = {
 /** Topic-specific visual header shared by all Learn article detail pages. */
 export function LearnArticleHero({ articleId, icon, eyebrow, title, meta }: LearnArticleHeroProps) {
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const compact = width < 360;
   const photo = ARTICLE_PHOTOS[articleId];
   const cancerType = CANCER_TYPE_VISUALS[articleId];

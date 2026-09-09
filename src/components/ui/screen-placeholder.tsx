@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { type IconName } from '@/components/ui/icon';
 import { StyleSheet, View } from 'react-native';
 
@@ -16,6 +17,7 @@ export type ScreenPlaceholderProps = {
 
 /** Centered placeholder for tabs whose full screens aren't built yet. */
 export function ScreenPlaceholder({ icon, title, subtitle }: ScreenPlaceholderProps) {
+  useLocale();
   const theme = useTheme();
   return (
     <Screen>
@@ -29,8 +31,7 @@ export function ScreenPlaceholder({ icon, title, subtitle }: ScreenPlaceholderPr
         </ThemedText>
         <View style={[styles.badge, { backgroundColor: theme.brandTint }]}>
           <ThemedText type="caption" themeColor="brand" style={styles.badgeText}>
-            COMING SOON
-          </ThemedText>
+            {t("COMING SOON")}</ThemedText>
         </View>
       </View>
     </Screen>

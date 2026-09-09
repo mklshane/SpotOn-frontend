@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,13 +20,14 @@ export type ImageViewerProps = {
  * Mirrors the Modal + backdrop pattern used by `ActionSheet`.
  */
 export function ImageViewer({ visible, uri, onClose }: ImageViewerProps) {
+  useLocale();
   const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       {/* Dark glyphs are unreadable over this near-black backdrop - see the note in capture.tsx. */}
       <StatusBar style="light" />
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close photo">
+      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel={t("Close photo")}>
         {uri ? (
           <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="contain" />
         ) : null}
@@ -34,7 +36,7 @@ export function ImageViewer({ visible, uri, onClose }: ImageViewerProps) {
             onPress={onClose}
             hitSlop={12}
             accessibilityRole="button"
-            accessibilityLabel="Close photo"
+            accessibilityLabel={t("Close photo")}
             style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}>
             <Icon name="xmark" tintColor="#FFFFFF" size={20} weight="semibold" />
           </Pressable>

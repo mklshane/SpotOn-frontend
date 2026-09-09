@@ -1,3 +1,5 @@
+import { localizedCopy } from './i18n/core';
+
 /**
  * The body is a stylized clay mannequin assembled from three.js primitives.
  * This is the single source of truth: `Mannequin` renders one mesh per part and
@@ -23,7 +25,7 @@ export type BodyPart = {
   scale?: [number, number, number];
 };
 
-export const BODY_PARTS: BodyPart[] = [
+export const BODY_PARTS: BodyPart[] = localizedCopy([
   { id: 'head', region: 'Head / Face', regionBack: 'Back of head', kind: 'sphere', args: [0.27], position: [0, 1.6, 0], scale: [0.92, 1.06, 0.96] },
   { id: 'neck', region: 'Neck', regionBack: 'Nape', kind: 'capsule', args: [0.1, 0.12], position: [0, 1.28, 0] },
 
@@ -59,7 +61,7 @@ export const BODY_PARTS: BodyPart[] = [
   { id: 'r-knee', region: 'Right knee', kind: 'sphere', args: [0.125], position: [-0.18, -0.98, 0] },
   { id: 'r-shin', region: 'Right lower leg', kind: 'capsule', args: [0.115, 0.56], position: [-0.18, -1.4, 0] },
   { id: 'r-foot', region: 'Right foot', kind: 'box', args: [0.2, 0.14, 0.44], position: [-0.18, -1.82, 0.1] },
-];
+]);
 
 /** Resolve a region label from the hit part and the hit point's depth (front/back). */
 export function resolveRegion(part: BodyPart, worldZ: number): string {

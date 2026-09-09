@@ -1,11 +1,16 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image as RNImage, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Image as RNImage, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
+import { releaseBlobUri } from '@/lib/blob-uri';
+import { isDebug } from '@/lib/debug-flag';
+import { transformToUri } from '@/lib/image-ops';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -26,6 +31,7 @@ const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the imag
 const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {
+  useLocale();
   const { uri, detected, source, lx, ly, lw, lh } = useLocalSearchParams<{
     uri: string;
     detected?: string;
@@ -36,7 +42,7 @@ export default function CropScreen() {
     lh?: string;
   }>();
   const fromGallery = source === 'gallery';
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const insets = useSafeAreaInsets();
 
   const frame = width - Space.xl * 2;
@@ -104,7 +110,7 @@ export default function CropScreen() {
     if (hasDetectorBox) return;
 
     // NB: the ref is set only once the transform is actually applied, never up-front. `frame`
-    // comes from useWindowDimensions, which commonly updates just after mount on iOS - marking
+    // comes from which commonly updates just after mount on iOS - marking
     // early meant that re-render cancelled the in-flight localization and the retry then bailed on
     // the ref, so the preframe silently never happened. Letting the re-run retry is the fix.
     let alive = true;
@@ -172,24 +178,48 @@ export default function CropScreen() {
       const originX = Math.min(Math.max(0, srcCenterX - cropSize / 2), img.w - cropSize);
       const originY = Math.min(Math.max(0, srcCenterY - cropSize / 2), img.h - cropSize);
 
-      const result = await manipulateAsync(
-        uri,
-        [
-          { crop: { originX, originY, width: cropSize, height: cropSize } },
-          { resize: { width: OUTPUT, height: OUTPUT } },
-        ],
-        // compress 1.0, not 0.9: the sensor JPEG is already lossy at 0.92, so re-encoding at 0.9
-        // here put the classifier's input through a SECOND lossy pass. Two rounds of JPEG smear
-        // exactly the fine texture the model reads, and at 1024² the file-size saving is trivial.
-        { compress: 1, format: SaveFormat.JPEG },
-      );
+      // Via image-ops so the web build uses the browser's downscaler rather than
+      // expo-image-manipulator's JS Hermite filter, which softened this crop enough to fail the
+      // blur gate (edgeWidth 19.6 against a limit of 14) on photos a phone accepts. This is the
+      // image everything downstream measures - the gate reads it directly, and the classifier and
+      // detector resample from it - so it is the one that has to be right. Quality is 1.0, not
+      // 0.9: the sensor JPEG is already lossy at 0.92, and a second lossy pass smears exactly the
+      // fine texture the model reads.
+      if (isDebug()) {
+        // Is this a downscale or an upscale? An auto-zoom that crops tight and enlarges to
+        // OUTPUT cannot invent detail, and the blur gate will (correctly) call it soft.
+        console.log(
+          '[crop]', 'src=' + img.w + 'x' + img.h,
+          'cropSize=' + Math.round(cropSize),
+          'output=' + OUTPUT,
+          'scale=' + (OUTPUT / cropSize).toFixed(2) + 'x',
+        );
+      }
+      const result = await transformToUri(uri, [
+        { crop: { originX, originY, width: cropSize, height: cropSize } },
+        { resize: { width: OUTPUT, height: OUTPUT } },
+      ]);
       // The source is dead once the crop exists: every route in here arrives by push/replace and
       // leaves by the replace below, so this screen is off the stack and no back-nav can want it
       // again. Camera sources are the upright temp from capture; gallery sources are ImagePicker's
       // own cache copy, not the library original. discardScratch ignores anything that is neither.
       await discardScratch(uri);
+      // On web the source is a blob: URL (ImagePicker, or the canvas capture) that discardScratch
+      // cannot touch. The crop supersedes it, so release it rather than holding the decoded frame
+      // for the life of the page.
+      releaseBlobUri(uri);
       // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
-      router.replace({ pathname: '/scan/quality', params: { uri: result.uri, detected } });
+      router.replace({
+        pathname: '/scan/quality',
+        params: {
+          uri: result.uri,
+          detected,
+          // >1 when the auto-zoom had to enlarge to reach OUTPUT. The blur gate divides the
+          // measured edge width by this, so a tight crop of a small lesion is not mistaken for
+          // a soft photo.
+          upscale: String(Math.max(1, OUTPUT / cropSize)),
+        },
+      });
     } finally {
       setBusy(false);
     }
@@ -204,12 +234,11 @@ export default function CropScreen() {
           hitSlop={12}
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel={fromGallery ? 'Choose another photo' : 'Retake'}>
+          accessibilityLabel={fromGallery ? t("Choose another photo") : 'Retake'}>
           <Icon name={fromGallery ? 'photo.on.rectangle' : 'arrow.counterclockwise'} tintColor="#FFFFFF" size={22} />
         </Pressable>
         <ThemedText type="headline" style={styles.title}>
-          Position the spot
-        </ThemedText>
+          {t("Position the spot")}</ThemedText>
         <View style={{ width: 22 }} />
       </View>
 
@@ -236,12 +265,11 @@ export default function CropScreen() {
           </View>
         </View>
         <ThemedText type="footnote" style={styles.hint}>
-          Zoom so the spot fills the circle
-        </ThemedText>
+          {t("Zoom so the spot fills the circle")}</ThemedText>
       </View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + Space.lg }]}>
-        <Button label="Use photo" variant="brand" loading={busy} onPress={confirm} />
+        <Button label={t("Use photo")} variant="brand" loading={busy} onPress={confirm} />
         <Pressable hitSlop={10} onPress={() => router.back()} style={styles.retake}>
           <ThemedText type="headline" style={styles.retakeText}>
             {fromGallery ? 'Choose another' : 'Retake'}

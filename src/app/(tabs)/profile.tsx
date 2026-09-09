@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -17,8 +18,10 @@ import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
 import { computeAge, SEX_LABELS, skinTypeLabel } from "@/lib/profile-format";
 import { useScanHistory } from "@/lib/scan-history";
+import { TabContentInset } from '@/components/ui/tab-bar';
 
 export default function ProfileScreen() {
+  useLocale();
   const { user, signOut } = useAuth();
   const { entries } = useScanHistory();
   const theme = useTheme();
@@ -76,12 +79,12 @@ export default function ProfileScreen() {
             themeColor="onBrand"
             style={styles.heroTitle}
           >
-            Profile
-          </ThemedText>
+            {t("Profile")}</ThemedText>
 
           <Pressable
             onPress={() => router.push("/profile/edit")}
             accessibilityRole="button"
+            accessibilityLabel={t("Edit profile")}
             style={styles.avatarWrap}
           >
             <View style={styles.avatarFrost}>
@@ -125,8 +128,7 @@ export default function ProfileScreen() {
           <View style={styles.statsRow}>
             <View style={styles.statItem}>
               <ThemedText type="caption" style={styles.statLabel}>
-                AGE
-              </ThemedText>
+                {t("AGE")}</ThemedText>
               <ThemedText type="headline" themeColor="onBrand">
                 {age != null ? age : "-"}
               </ThemedText>
@@ -134,8 +136,7 @@ export default function ProfileScreen() {
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <ThemedText type="caption" style={styles.statLabel}>
-                SEX
-              </ThemedText>
+                {t("SEX")}</ThemedText>
               <ThemedText type="headline" themeColor="onBrand">
                 {sexLabel ?? "-"}
               </ThemedText>
@@ -143,8 +144,7 @@ export default function ProfileScreen() {
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <ThemedText type="caption" style={styles.statLabel}>
-                SKIN TYPE
-              </ThemedText>
+                {t("SKIN TYPE")}</ThemedText>
               <ThemedText type="headline" themeColor="onBrand">
                 {skinLabel}
               </ThemedText>
@@ -165,8 +165,7 @@ export default function ProfileScreen() {
             themeColor="brand"
             style={styles.sectionLabel}
           >
-            ACTIVITY
-          </ThemedText>
+            {t("ACTIVITY")}</ThemedText>
           <Card style={styles.row}>
             <IconCircle icon="sparkles" variant="tint" size={48} />
             <View style={styles.rowText}>
@@ -177,7 +176,7 @@ export default function ProfileScreen() {
               </ThemedText>
               {lastScanLabel ? (
                 <ThemedText type="footnote" themeColor="textSecondary">
-                  Last screening {lastScanLabel}
+                  {t("Last screening")} {lastScanLabel}
                 </ThemedText>
               ) : null}
             </View>
@@ -186,8 +185,8 @@ export default function ProfileScreen() {
           <Card style={styles.menu}>
             <SettingsRow
               icon="figure.stand"
-              label="See body lesions"
-              sublabel="View your screening history on the 3D body"
+              label={t("See body lesions")}
+              sublabel={t("View your screening history on the 3D body")}
               onPress={() => router.push("/scan/history")}
             />
           </Card>
@@ -195,14 +194,14 @@ export default function ProfileScreen() {
           <Card style={styles.menu}>
             <SettingsRow
               icon="gearshape.fill"
-              label="Settings"
+              label={t("Settings")}
               onPress={() => router.push("/profile/settings")}
             />
           </Card>
 
           <View style={styles.actions}>
             <Button
-              label="Sign out"
+              label={t("Sign out")}
               variant="outline"
               loading={signingOut}
               onPress={handleSignOut}
@@ -270,7 +269,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Space.xl,
     paddingTop: Space.xl,
-    paddingBottom: 20,
+    paddingBottom: TabContentInset,
   },
   sectionLabel: {
     fontWeight: "700",

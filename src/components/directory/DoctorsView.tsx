@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -33,6 +34,7 @@ type BookingMode = "doctors" | "clinics";
  * link and clinics with their own online-booking page (facilities.booking_url).
  */
 export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
+  useLocale();
   const [mode, setMode] = useState<BookingMode>("doctors");
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
   const [clinics, setClinics] = useState<FacilitySync[] | null>(null);
@@ -62,12 +64,12 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
   const modeToggle = (
     <View style={styles.modeRow}>
       <Chip
-        label="Doctors"
+        label={t("Doctors")}
         active={mode === "doctors"}
         onPress={() => setMode("doctors")}
       />
       <Chip
-        label="Clinics"
+        label={t("Clinics")}
         active={mode === "clinics"}
         onPress={() => setMode("clinics")}
       />
@@ -78,24 +80,22 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
     error ? (
       <ListState
         kind="error"
-        title="Couldn't load"
-        subtitle="Check your connection and try again."
+        title={t("Couldn't load")}
+        subtitle={t("Check your connection and try again.")}
       />
     ) : (
-      <ListState kind="loading" title="Loading…" />
+      <ListState kind="loading" title={t("Loading…")} />
     )
   ) : (
     <ListState
       kind="empty"
-      title="No online booking found"
-      subtitle="Try a different search."
+      title={t("No online booking found")}
+      subtitle={t("Try a different search.")}
     />
   );
 
   return (
     <View style={styles.fill}>
-      {header}
-
       <View style={[styles.list, { paddingTop: topInset }]}>
         {mode === "doctors" ? (
           <FlatList
@@ -137,6 +137,9 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
           />
         )}
       </View>
+
+      {/* Keep the shared segment/search header above the list in web hit-testing order. */}
+      {header}
     </View>
   );
 }

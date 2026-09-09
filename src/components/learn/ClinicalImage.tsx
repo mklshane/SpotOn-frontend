@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -47,6 +48,7 @@ export function ClinicalImage({
   emphasis = false,
   measurement,
 }: ClinicalImageProps) {
+  useLocale();
   const theme = useTheme();
   const spec = getClinicalImage(id);
 
@@ -68,21 +70,21 @@ export function ClinicalImage({
             contentFit={spec.fit ?? 'cover'}
             transition={180}
             accessible
-            accessibilityLabel={spec.alt}
+            accessibilityLabel={t(spec.alt)}
             style={styles.photo}
           />
         ) : mayIllustrate ? (
-          <View accessible accessibilityLabel={spec.alt} style={styles.fallback}>
+          <View accessible accessibilityLabel={t(spec.alt)} style={styles.fallback}>
             {illustration}
           </View>
         ) : (
-          <PhotoNeeded needs={spec.needs} />
+          <PhotoNeeded needs={spec.alt} />
         )}
 
         {spec.asset || mayIllustrate ? (
           <View style={[styles.kind, { backgroundColor: theme.surface }]}>
             <ThemedText type="caption" themeColor="muted" style={styles.kindLabel}>
-              {!spec.asset ? 'ILLUSTRATION' : spec.modality === 'dermoscopic' ? 'DERMOSCOPIC' : 'PHOTO'}
+              {!spec.asset ? t('ILLUSTRATION') : spec.modality === 'dermoscopic' ? t('DERMOSCOPIC') : t('PHOTO')}
             </ThemedText>
           </View>
         ) : null}
@@ -112,17 +114,17 @@ export function ClinicalImage({
  * the slot needs, so whoever sources the image does not have to go hunting.
  */
 function PhotoNeeded({ needs }: { needs: string }) {
+  useLocale();
   const theme = useTheme();
 
   return (
-    <View style={styles.needed} accessible accessibilityLabel="Clinical photograph not yet available">
+    <View style={styles.needed} accessible accessibilityLabel={t("Clinical photograph not yet available")}>
       <Icon name="photo.on.rectangle" size={22} tintColor={theme.muted} />
       <ThemedText type="caption" themeColor="textSecondary" style={styles.neededLabel}>
-        Clinical photo needed
-      </ThemedText>
+        {t("Clinical photo needed")}</ThemedText>
       {__DEV__ ? (
         <ThemedText type="caption" themeColor="muted" numberOfLines={4} style={styles.neededHint}>
-          {needs}
+          {t(needs)}
         </ThemedText>
       ) : null}
     </View>

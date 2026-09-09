@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useEffect, useState } from 'react';
@@ -15,6 +16,7 @@ import { prewarmLesionModel } from '@/lib/lesion-model';
 import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
+  useLocale();
   const theme = useTheme();
   const session = useScreeningSession();
   const { bodyMark, setBodyMark, setSource, reset } = session;
@@ -51,12 +53,11 @@ export default function BodyAreaScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.header}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t("Back")}>
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Body area
-        </ThemedText>
+          {t("Body area")}</ThemedText>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -71,12 +72,10 @@ export default function BodyAreaScreen() {
           </ThemedText>
         ) : (
           <ThemedText type="headline" themeColor="textSecondary" style={styles.center}>
-            Mark the spot on the 3D model
-          </ThemedText>
+            {t("Mark the spot on the 3D model")}</ThemedText>
         )}
         <ThemedText type="footnote" themeColor="muted" style={styles.center}>
-          Drag to rotate · pinch to zoom · tap to place the marker
-        </ThemedText>
+          {t("Drag to rotate · pinch to zoom · tap to place the marker")}</ThemedText>
       </View>
 
       <View style={styles.footer}>
@@ -88,26 +87,25 @@ export default function BodyAreaScreen() {
         />
         <Pressable hitSlop={10} onPress={() => setSheetOpen(true)} style={styles.skip} accessibilityRole="button">
           <ThemedText type="headline" themeColor="brand">
-            Skip
-          </ThemedText>
+            {t("Skip")}</ThemedText>
         </Pressable>
       </View>
 
       <ActionSheet
         visible={sheetOpen}
-        title="Choose image source"
+        title={t("Choose image source")}
         onClose={() => setSheetOpen(false)}
         options={[
           {
             key: 'camera',
-            label: 'Camera',
+            label: t("Camera"),
             icon: 'camera.fill',
             onPress: () => {
               setSource('camera');
               router.push('/scan/capture');
             },
           },
-          { key: 'gallery', label: 'Photo gallery', icon: 'photo.on.rectangle', onPress: pickFromGallery },
+          { key: 'gallery', label: t("Photo gallery"), icon: 'photo.on.rectangle', onPress: pickFromGallery },
         ]}
       />
     </Screen>

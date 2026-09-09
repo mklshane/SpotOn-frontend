@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -88,6 +89,7 @@ function renderBlock(block: ArticleBlock, key: number) {
 }
 
 export default function LearnArticleScreen() {
+  useLocale();
   const theme = useTheme();
   const { topicId, articleId } = useLocalSearchParams<{ topicId: string; articleId?: string }>();
   const article = topicId ? getArticle(topicId, articleId) : undefined;
@@ -125,10 +127,10 @@ export default function LearnArticleScreen() {
 
   return (
     <Screen padded={false}>
-      <LearnDetailHeader title="Education" />
+      <LearnDetailHeader title={t("Education")} />
 
       {!article ? (
-        <ListState kind="error" title="Article not found" />
+        <ListState kind="error" title={t("Article not found")} />
       ) : (
         <ScrollRevealProvider value={reveal}>
           <Animated.ScrollView
@@ -162,8 +164,7 @@ export default function LearnArticleScreen() {
                 <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
                   <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
                   <ThemedText type="footnote" themeColor="textSecondary" style={styles.educationNoteText}>
-                    This guide supports skin-health awareness and does not replace advice from a dermatologist.
-                  </ThemedText>
+                    {t("This guide supports skin-health awareness and does not replace advice from a dermatologist.")}</ThemedText>
                 </View>
               ) : null}
             </View>

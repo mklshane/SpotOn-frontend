@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from '@/lib/fs';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import {

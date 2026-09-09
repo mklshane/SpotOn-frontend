@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 
@@ -34,16 +35,17 @@ export function ConfirmDialog({
   title,
   message,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel = t("Cancel"),
   destructive = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useLocale();
   const theme = useTheme();
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel="Dismiss">
+      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel={t("Dismiss")}>
         {/* Stop propagation so taps inside the card don't dismiss it. */}
         <Animated.View entering={FadeIn.duration(160)} style={styles.cardWrap}>
           <Pressable style={[styles.card, { backgroundColor: theme.surface }, Elevation.lg]}>

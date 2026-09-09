@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
@@ -29,11 +30,12 @@ export function tierColor(theme: ReturnType<typeof useTheme>, tier: TriageTier) 
  * tier dot + pill, chevron. Used on Home (recent) and the full "All screenings" list.
  */
 export function ScreeningRow({ item }: { item: ScreeningRecord }) {
+  useLocale();
   const theme = useTheme();
   const { fg, bg } = tierColor(theme, item.triage.tier);
   const cls = CLASS_DISPLAY[item.classification.topClass];
-  const pct = Math.round(item.classification.topConfidence * 100);
   const urgency = TIER_CONTENT[item.triage.tier].name;
+  const pct = Math.round(item.classification.topConfidence * 100);
   const date = new Date(item.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -44,7 +46,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
     <Pressable
       onPress={() => router.push({ pathname: '/scan/result', params: { id: item.id } })}
       accessibilityRole="button"
-      accessibilityLabel={`${cls.name} screening from ${date}, ${urgency} urgency`}
+      accessibilityLabel={`${cls.name}, ${urgency} urgency screening from ${date}`}
       style={({ pressed }) => pressed && styles.pressed}>
       <Card padded={false} style={styles.row}>
         <ScreeningThumbnail uri={item.imageUri} style={styles.thumb} />
@@ -58,7 +60,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
             </ThemedText>
           </View>
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-            {pct}% model confidence · {date}
+            {pct}{t("% confidence ·")} {date}
           </ThemedText>
         </View>
         <View style={[styles.tierPill, { backgroundColor: bg }]}>

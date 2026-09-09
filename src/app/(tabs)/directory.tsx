@@ -1,6 +1,7 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, View, type LayoutChangeEvent } from "react-native";
+import { Platform, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ClinicsView } from "@/components/directory/ClinicsView";
@@ -19,6 +20,7 @@ import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function DirectoryScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { isOnline } = useConnectivity();
@@ -68,7 +70,7 @@ export default function DirectoryScreen() {
   const header = (
     <View
       pointerEvents="box-none"
-      style={[styles.overlay, { paddingTop: insets.top }]}
+      style={[styles.overlay, { paddingTop: insets.top + (Platform.OS === "web" ? Space.xl : 0) }]}
       onLayout={onOverlayLayout}
     >
       <DirectorySegments
@@ -82,7 +84,7 @@ export default function DirectoryScreen() {
         value={query}
         onChangeText={setQuery}
         placeholder={
-          segment === "clinics" ? "Search clinics or area…" : "Search doctors…"
+          segment === "clinics" ? t("Search clinics or area…") : t("Search doctors…")
         }
         elevation="md"
       />
@@ -96,8 +98,7 @@ export default function DirectoryScreen() {
             themeColor="brand"
             style={styles.offlineLabel}
           >
-            Offline - showing cached results
-          </ThemedText>
+            {t("Offline - showing cached results")}</ThemedText>
         </View>
       ) : null}
     </View>

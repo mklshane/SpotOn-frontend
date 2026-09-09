@@ -1,7 +1,8 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { InteractionManager, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,13 +41,19 @@ type PdfState =
   | { status: 'error'; message: string };
 
 export default function ReportScreen() {
+  const locale = useLocale();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getById, loading } = useScanHistory();
   const { user } = useAuth();
   const record = id ? getById(id) : undefined;
 
-  const model = useMemo(() => (record ? buildReportModel(record, user) : null), [record, user]);
+  const model = useMemo(() => {
+    if (!record) return null;
+    // The locale is intentionally read here so a language change rebuilds the report model.
+    void locale;
+    return buildReportModel(record, user);
+  }, [record, user, locale]);
   const [pdf, setPdf] = useState<PdfState>({ status: 'idle' });
   const [viewerOpen, setViewerOpen] = useState(false);
 
@@ -54,17 +61,31 @@ export default function ReportScreen() {
   const inFlight = useRef<Promise<GeneratedReport> | null>(null);
   const generated = useRef<GeneratedReport | null>(null);
 
+  // A locale change must regenerate the preview/PDF so its copy matches the app.
+  useEffect(() => {
+    const previous = generated.current;
+    generated.current = null;
+    inFlight.current = null;
+    if (previous) void discardReportPdf(previous);
+  }, [model]);
+
   const ensurePdf = useCallback(async (): Promise<GeneratedReport | null> => {
     if (!model) return null;
     if (generated.current) return generated.current;
     if (!inFlight.current) inFlight.current = generateReportPdf(model);
+    const pending = inFlight.current;
     setPdf({ status: 'working' });
     try {
-      const report = await inFlight.current;
+      const report = await pending;
+      if (inFlight.current !== pending) {
+        await discardReportPdf(report);
+        return null;
+      }
       generated.current = report;
       setPdf({ status: 'ready', report });
       return report;
     } catch (e) {
+      if (inFlight.current !== pending) return null;
       inFlight.current = null;
       const message =
         e instanceof ReportError ? e.message : 'The summary could not be prepared. Please try again.';
@@ -85,6 +106,7 @@ export default function ReportScreen() {
   // The PDF holds PII and lives in the cache directory - drop it when the screen goes away.
   useEffect(
     () => () => {
+      inFlight.current = null;
       const report = generated.current;
       if (report) void discardReportPdf(report);
     },
@@ -170,7 +192,7 @@ export default function ReportScreen() {
           <DisclaimerCard model={model} />
         </Animated.View>
 
-        {pdf.status === 'error' ? <ErrorCard message={pdf.message} onRetry={() => void ensurePdf()} /> : null}
+        {pdf.status === 'error' ? <ErrorCard message={t(pdf.message)} onRetry={() => void ensurePdf()} /> : null}
       </ScrollView>
 
       <ActionBar busy={pdf.status === 'working'} onShare={onShare} onPrint={onPrint} />
@@ -186,11 +208,12 @@ export default function ReportScreen() {
 
 /** Title block: what this document is and when it was made. */
 function ReportHead({ model }: { model: ReportModel }) {
+  useLocale();
   return (
     <Card style={styles.head}>
       <Logo variant="wordmark" width={72} />
       <View style={styles.headText}>
-        <ThemedText type="title2">Screening Summary Report</ThemedText>
+        <ThemedText type="title2">{t("Screening Summary Report")}</ThemedText>
         <ThemedText type="subhead" themeColor="textSecondary">
           {model.dateLabel} · {model.timeLabel}
         </ThemedText>
@@ -199,7 +222,7 @@ function ReportHead({ model }: { model: ReportModel }) {
         <Icon name="exclamationmark.triangle.fill" tintColor="#B25E09" size={17} />
         <View style={styles.disclaimerText}>
           <ThemedText type="subhead" style={{ color: '#9A6510' }}>
-            Avoid self-medication
+            {t('Avoid self-medication')}
           </ThemedText>
           <ThemedText type="footnote" themeColor="textSecondary">
             {model.avoidSelfMedicationWarning.replace('Avoid self-medication. ', '')}
@@ -211,31 +234,33 @@ function ReportHead({ model }: { model: ReportModel }) {
 }
 
 function PatientCard({ model }: { model: ReportModel }) {
+  useLocale();
   const { patient } = model;
   return (
     <Card style={styles.card}>
-      <SectionHeader variant="label" title="Patient" />
+      <SectionHeader variant="label" title={t("Patient")} />
       <View style={styles.grid}>
-        <Field label="Name" value={patient.name} />
-        <Field label="Date of birth" value={patient.dobLine} />
-        <Field label="Sex" value={patient.sex} />
-        <Field label="Contact" value={patient.contact} />
+        <Field label={t("Name")} value={patient.name} />
+        <Field label={t("Date of birth")} value={patient.dobLine} />
+        <Field label={t("Sex")} value={patient.sex} />
+        <Field label={t("Contact")} value={patient.contact} />
       </View>
     </Card>
   );
 }
 
 function LesionCard({ model, onPressPhoto }: { model: ReportModel; onPressPhoto: () => void }) {
+  useLocale();
   const theme = useTheme();
   return (
     <Card style={styles.card}>
-      <SectionHeader variant="label" title="Lesion image and result" />
+      <SectionHeader variant="label" title={t("Lesion image and result")} />
       <View style={styles.lesion}>
         {model.imageUri ? (
           <Pressable
             onPress={onPressPhoto}
             accessibilityRole="button"
-            accessibilityLabel="View photo full screen"
+            accessibilityLabel={t("View photo full screen")}
             style={({ pressed }) => [styles.photoPress, pressed && styles.photoPressed]}>
             <Image source={{ uri: model.imageUri }} style={styles.photo} contentFit="cover" />
             <View style={styles.photoExpand}>
@@ -255,8 +280,7 @@ function LesionCard({ model, onPressPhoto }: { model: ReportModel; onPressPhoto:
         <View style={styles.lesionText}>
           <ThemedText type="title2">{model.classificationFull}</ThemedText>
           <ThemedText type="subhead" themeColor="textSecondary">
-            {model.classificationCode} · {model.confidenceLabel} model confidence
-          </ThemedText>
+            {model.classificationCode} · {model.confidenceLabel} {t("model confidence")}</ThemedText>
         </View>
       </View>
     </Card>
@@ -264,12 +288,13 @@ function LesionCard({ model, onPressPhoto }: { model: ReportModel; onPressPhoto:
 }
 
 function SymptomsCard({ model }: { model: ReportModel }) {
+  useLocale();
   const theme = useTheme();
   return (
     <Card style={styles.card}>
       <SectionHeader
         variant="label"
-        title="Reported symptoms"
+        title={t("Reported symptoms")}
         subtitle={`You answered yes to ${model.yesCount} of ${model.symptoms.length}`}
       />
       <View style={styles.rows}>
@@ -289,6 +314,7 @@ function SymptomsCard({ model }: { model: ReportModel }) {
 }
 
 function AnswerChip({ answer }: { answer: ReportSymptom['answer'] }) {
+  useLocale();
   const theme = useTheme();
   const tone =
     answer === 'Yes'
@@ -306,10 +332,11 @@ function AnswerChip({ answer }: { answer: ReportSymptom['answer'] }) {
 }
 
 function UrgencyCard({ model }: { model: ReportModel }) {
+  useLocale();
   const tone = useTierColors(model.tier);
   return (
     <Card style={styles.card}>
-      <SectionHeader variant="label" title="Urgency and recommendation" />
+      <SectionHeader variant="label" title={t("Urgency and recommendation")} />
       <View style={[styles.tierBanner, { backgroundColor: tone.bg }]}>
         <ThemedText type="title2" style={{ color: tone.fg }}>
           {model.urgencyTier}
@@ -326,6 +353,7 @@ function UrgencyCard({ model }: { model: ReportModel }) {
 }
 
 function DisclaimerCard({ model }: { model: ReportModel }) {
+  useLocale();
   const theme = useTheme();
   return (
     <Card style={[styles.card, { backgroundColor: theme.elementBg }]} elevation="sm">
@@ -333,11 +361,7 @@ function DisclaimerCard({ model }: { model: ReportModel }) {
         <Icon name="exclamationmark.triangle.fill" tintColor={theme.muted} size={18} />
         <View style={styles.disclaimerText}>
           <ThemedText type="headline" themeColor="textSecondary">
-            Important reminder
-          </ThemedText>
-          <ThemedText type="footnote" themeColor="muted">
-            {model.disclaimer}
-          </ThemedText>
+            {t("Printed on the report")}</ThemedText>
           <ThemedText type="footnote" themeColor="muted">
             {model.printDisclaimer}
           </ThemedText>
@@ -350,6 +374,7 @@ function DisclaimerCard({ model }: { model: ReportModel }) {
 /* ------------------------------------------------------------------ small parts */
 
 function Field({ label, value }: { label: string; value: string | null }) {
+  useLocale();
   return (
     <View style={styles.field}>
       <ThemedText type="caption" themeColor="muted" style={styles.fieldLabel}>
@@ -372,32 +397,32 @@ function useTierColors(tier: TriageTier) {
 }
 
 function IncompleteProfileCard() {
+  useLocale();
   const theme = useTheme();
   return (
     <Card style={styles.card}>
       <View style={styles.disclaimerRow}>
         <Icon name="person.crop.circle.badge.exclamationmark" tintColor={theme.brand} size={22} />
         <View style={styles.disclaimerText}>
-          <ThemedText type="headline">Finish your profile</ThemedText>
+          <ThemedText type="headline">{t("Finish your profile")}</ThemedText>
           <ThemedText type="subhead" themeColor="textSecondary">
-            Your name, birth date, sex and contact number sit at the top of the report. Anything
-            missing prints as a dash.
-          </ThemedText>
+            {t("Your name, birth date, sex and contact number sit at the top of the report. Anything missing prints as a dash.")}</ThemedText>
         </View>
       </View>
-      <Button label="Complete profile" variant="outline" onPress={() => router.push('/profile/edit')} />
+      <Button label={t("Complete profile")} variant="outline" onPress={() => router.push('/profile/edit')} />
     </Card>
   );
 }
 
 function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
+  useLocale();
   const theme = useTheme();
   return (
     <Card style={[styles.card, { backgroundColor: theme.riskCriticalBg }]}>
       <ThemedText type="subhead" style={{ color: theme.riskCritical }}>
         {message}
       </ThemedText>
-      <Button label="Try again" variant="ghost" onPress={onRetry} />
+      <Button label={t("Try again")} variant="ghost" onPress={onRetry} />
     </Card>
   );
 }
@@ -411,6 +436,7 @@ function ActionBar({
   onShare: () => void;
   onPrint: () => void;
 }) {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -424,8 +450,18 @@ function ActionBar({
           paddingBottom: insets.bottom + Space.md,
         },
       ]}>
+      {Platform.OS === 'web' ? (
+        // Both actions open the browser's print dialog. Without this the screen looked inert:
+        // the dialog is chrome, not DOM, so nothing on the page changes when it appears.
+        <ThemedText type="caption" themeColor="textSecondary" style={styles.barNote}>
+          {t("Opens your browser's print dialog - choose \"Save as PDF\" there to keep a copy.")}
+        </ThemedText>
+      ) : null}
       <Button
-        label="Share or save"
+        // On web there is no share sheet: report-pdf.web.ts routes both actions through the
+        // browser's own print dialog, from which the user saves a PDF. Naming it "Share or save"
+        // there promises a sheet that never appears.
+        label={Platform.OS === 'web' ? t("Save as PDF") : t("Share or save")}
         variant="brand"
         icon="square.and.arrow.up"
         loading={busy}
@@ -433,9 +469,10 @@ function ActionBar({
         style={styles.barButton}
       />
       <Button
-        label="Print"
+        label={t("Print")}
         variant="outline"
         icon="printer.fill"
+        loading={busy}
         onPress={onPrint}
         style={styles.barButton}
       />
@@ -444,6 +481,7 @@ function ActionBar({
 }
 
 function Header() {
+  useLocale();
   const theme = useTheme();
   return (
     <View style={styles.header}>
@@ -451,12 +489,11 @@ function Header() {
         hitSlop={12}
         onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
         accessibilityRole="button"
-        accessibilityLabel="Back">
+        accessibilityLabel={t("Back")}>
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </Pressable>
       <ThemedText type="headline" themeColor="textSecondary">
-        Screening summary
-      </ThemedText>
+        {t("Screening summary")}</ThemedText>
       <View style={styles.headerSpacer} />
     </View>
   );
@@ -548,10 +585,14 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     flexDirection: 'row',
+    // The web-only print note is a full-width row child; without wrapping it would compete with
+    // the buttons for horizontal space instead of sitting above them.
+    flexWrap: 'wrap',
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingTop: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
+  barNote: { width: '100%', textAlign: 'center', marginBottom: Space.xs },
   barButton: { flex: 1 },
 });

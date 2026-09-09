@@ -1,3 +1,4 @@
+import { t } from './i18n/core';
 import type { Box3, Vector3 } from 'three';
 
 /**
@@ -11,33 +12,33 @@ export function resolveRegionFromPoint(point: Vector3, box: Box3): string {
   const cx = (box.max.x + box.min.x) / 2;
   const cz = (box.max.z + box.min.z) / 2;
 
-  const t = (point.y - box.min.y) / sizeY; // 0 = feet, 1 = head
+  const ratio = (point.y - box.min.y) / sizeY; // 0 = feet, 1 = head
   const xrel = (point.x - cx) / sizeX; // -0.5 .. 0.5
   const front = point.z >= cz;
   const armSide = xrel >= 0 ? 'Left' : 'Right';
 
   // Head / neck
-  if (t > 0.9) return front ? 'Head / Face' : 'Back of head';
-  if (t > 0.85) return front ? 'Neck' : 'Nape';
+  if (ratio > 0.9) return front ? t('Head / Face') : t('Back of head');
+  if (ratio > 0.85) return front ? t('Neck') : t('Nape');
 
   // Arms (outer X, upper half)
-  if (Math.abs(xrel) > 0.2 && t > 0.45) {
-    if (t > 0.72) return `${armSide} upper arm`;
-    if (t > 0.6) return `${armSide} elbow`;
-    if (t > 0.5) return `${armSide} forearm`;
-    return `${armSide} hand`;
+  if (Math.abs(xrel) > 0.2 && ratio > 0.45) {
+    if (ratio > 0.72) return t(`${armSide} upper arm`);
+    if (ratio > 0.6) return t(`${armSide} elbow`);
+    if (ratio > 0.5) return t(`${armSide} forearm`);
+    return t(`${armSide} hand`);
   }
 
   // Legs (lower half)
-  if (t < 0.48) {
+  if (ratio < 0.48) {
     const legSide = xrel >= 0 ? 'Left' : 'Right';
-    if (t > 0.27) return `${legSide} thigh`;
-    if (t > 0.1) return `${legSide} lower leg`;
-    return `${legSide} foot`;
+    if (ratio > 0.27) return t(`${legSide} thigh`);
+    if (ratio > 0.1) return t(`${legSide} lower leg`);
+    return t(`${legSide} foot`);
   }
 
   // Torso
-  if (t > 0.72) return front ? 'Chest' : 'Upper back';
-  if (t > 0.6) return front ? 'Abdomen' : 'Mid back';
-  return front ? 'Lower abdomen' : 'Lower back';
+  if (ratio > 0.72) return front ? t('Chest') : t('Upper back');
+  if (ratio > 0.6) return front ? t('Abdomen') : t('Mid back');
+  return front ? t('Lower abdomen') : t('Lower back');
 }

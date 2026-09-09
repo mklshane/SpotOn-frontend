@@ -1,3 +1,4 @@
+import { localizedCopy } from "../lib/i18n/core";
 import type { IconName } from '@/components/ui/icon';
 import type { ClinicalImageId } from '@/data/learn-images';
 import type { PendingSourceId, SourceId } from '@/data/learn-sources';
@@ -120,14 +121,14 @@ export type Article = {
  * coarser than the topic list: a chip per topic would just duplicate the list
  * below it instead of narrowing it.
  */
-export const LEARN_CATEGORIES = [
+export const LEARN_CATEGORIES = localizedCopy([
   { id: 'basics', label: 'Basics' },
   { id: 'warning-signs', label: 'Warning Signs' },
   { id: 'self-check', label: 'Self-Check' },
   { id: 'risk', label: 'Risk Factors' },
   { id: 'sun-safety', label: 'Sun Safety' },
   { id: 'care', label: 'Getting Care' },
-] as const;
+] as const);
 
 export type LearnCategoryId = (typeof LEARN_CATEGORIES)[number]['id'];
 
@@ -202,7 +203,7 @@ export function getDailyLearnRecommendation(date = new Date()): LearnRecommendat
   return LEARN_RECOMMENDATIONS[index] ?? LEARN_RECOMMENDATIONS[0];
 }
 
-export const LEARN_TOPICS: Topic[] = [
+export const LEARN_TOPICS: Topic[] = localizedCopy([
   {
     id: 'what-is-skin-cancer',
     title: 'What is Skin Cancer',
@@ -1015,7 +1016,7 @@ export const LEARN_TOPICS: Topic[] = [
     category: 'self-check',
     kind: 'comingSoon',
   },
-];
+]);
 
 export function getTopic(id: string): Topic | undefined {
   return LEARN_TOPICS.find((t) => t.id === id);

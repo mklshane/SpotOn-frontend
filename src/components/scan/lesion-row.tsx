@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -20,20 +21,23 @@ import type { Lesion, ScreeningRecord } from '@/lib/triage/types';
  */
 export function lesionTitle(lesion: Lesion): string {
   if (lesion.label?.trim()) return lesion.label.trim();
-  return lesion.mark?.region ? `${lesion.mark.region} spot` : 'Unnamed spot';
+  // The region is a STORED identifier, so it is translated only here, at display.
+  return lesion.mark?.region
+    ? t('{{region}} spot', { region: t(lesion.mark.region) })
+    : t('Unnamed spot');
 }
 
 /** Exported so Home's spot carousel phrases "4 days ago" identically instead of drifting. */
 export function relativeDate(iso: string | null): string {
-  if (!iso) return 'Not scanned yet';
+  if (!iso) return t('Not scanned yet');
   const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
-  if (days <= 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 30) return `${days} days ago`;
+  if (days <= 0) return t('Today');
+  if (days === 1) return t('Yesterday');
+  if (days < 30) return t('{{count}} days ago', { count: days });
   const months = Math.round(days / 30);
-  if (months < 12) return `${months} ${months === 1 ? 'month' : 'months'} ago`;
+  if (months < 12) return t('{{count}} months ago', { count: months });
   const years = Math.round(days / 365);
-  return `${years} ${years === 1 ? 'year' : 'years'} ago`;
+  return t('{{count}} years ago', { count: years });
 }
 
 /**
@@ -44,6 +48,7 @@ export function relativeDate(iso: string | null): string {
  * situation from one that has been Moderate all along, and that difference is what tracking buys.
  */
 export function LesionRow({ lesion, screenings }: { lesion: Lesion; screenings: ScreeningRecord[] }) {
+  useLocale();
   const theme = useTheme();
   const title = lesionTitle(lesion);
   const latest = screenings.length ? screenings[screenings.length - 1] : undefined;
@@ -58,8 +63,8 @@ export function LesionRow({ lesion, screenings }: { lesion: Lesion; screenings: 
     !previous || delta === 0
       ? null
       : delta > 0
-        ? { icon: 'arrow.up.right' as const, color: theme.riskHigh, label: 'more urgent than last time' }
-        : { icon: 'arrow.down.right' as const, color: theme.riskLow, label: 'less urgent than last time' };
+        ? { icon: 'arrow.up.right' as const, color: theme.riskHigh, label: t("more urgent than last time") }
+        : { icon: 'arrow.down.right' as const, color: theme.riskLow, label: t("less urgent than last time") };
 
   return (
     <Pressable
@@ -100,7 +105,7 @@ export function LesionRow({ lesion, screenings }: { lesion: Lesion; screenings: 
 
         <View style={[styles.tierPill, { backgroundColor: bg }]}>
           <ThemedText type="caption" style={{ color: fg }}>
-            {tier === 'low' ? 'Low' : tier === 'moderate' ? 'Moderate' : tier === 'high' ? 'High' : 'Priority'}
+            {tier === 'low' ? t("Low") : tier === 'moderate' ? t("Moderate") : tier === 'high' ? t("High") : t("Priority")}
           </ThemedText>
         </View>
         <Icon name="chevron.right" tintColor={theme.muted} size={16} />

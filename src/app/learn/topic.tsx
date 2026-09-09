@@ -1,5 +1,6 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { CancerTypeArtwork, type CancerTypeKind } from '@/components/learn/CancerTypeCard';
 import { EducationCard } from '@/components/learn/EducationCard';
@@ -11,6 +12,7 @@ import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
 import { getArticleReadMinutes, getTopic } from '@/data/learn-content';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 
 // The three artworks, ordered least to most serious, so the intro reads as a
@@ -18,8 +20,9 @@ import { useTheme } from '@/hooks/use-theme';
 const INTRO_ARTWORK: CancerTypeKind[] = ['bcc', 'scc', 'melanoma'];
 
 export default function LearnTopicScreen() {
+  useLocale();
   const theme = useTheme();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   const compact = width < 375;
   const { topicId } = useLocalSearchParams<{ topicId: string }>();
   const topic = topicId ? getTopic(topicId) : undefined;
@@ -29,7 +32,7 @@ export default function LearnTopicScreen() {
       <LearnDetailHeader title={topic?.title ?? 'Topic'} />
 
       {!topic || topic.kind !== 'subtopics' ? (
-        <ListState kind="error" title="Topic not found" />
+        <ListState kind="error" title={t("Topic not found")} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -50,13 +53,10 @@ export default function LearnTopicScreen() {
               </View>
               <View style={styles.introText}>
                 <ThemedText type="caption" style={[styles.eyebrow, { color: theme.brandPressed }]}>
-                  BASICS
-                </ThemedText>
-                <ThemedText type="title2">Know the common types</ThemedText>
+                  {t("BASICS")}</ThemedText>
+                <ThemedText type="title2">{t("Know the common types")}</ThemedText>
                 <ThemedText type="callout" themeColor="textSecondary">
-                  Three types account for almost every skin cancer. Compare what each one looks like, how serious it
-                  is, and where it tends to appear.
-                </ThemedText>
+                  {t("Three types account for almost every skin cancer. Compare what each one looks like, how serious it is, and where it tends to appear.")}</ThemedText>
               </View>
             </Card>
 
@@ -78,9 +78,7 @@ export default function LearnTopicScreen() {
             <View style={[styles.note, { backgroundColor: theme.elementBg }]}>
               <Icon name="info.circle.fill" size={18} tintColor={theme.brandPressed} />
               <ThemedText type="footnote" themeColor="textSecondary" style={styles.noteText}>
-                Ordered from least to most serious. All three are treatable, and all three are far simpler to treat
-                when they are found early.
-              </ThemedText>
+                {t("Ordered from least to most serious. All three are treatable, and all three are far simpler to treat when they are found early.")}</ThemedText>
             </View>
           </View>
         </ScrollView>

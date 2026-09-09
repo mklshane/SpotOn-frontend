@@ -1,3 +1,4 @@
+import { localizedCopy } from "../lib/i18n/core";
 /**
  * Medical references shown at the foot of each Education article.
  *
@@ -21,7 +22,7 @@ export type PendingSource = {
   claim: string;
 };
 
-export const SOURCES = {
+export const SOURCES = localizedCopy({
   aadAbcde: {
     org: 'American Academy of Dermatology',
     title: 'What to look for: ABCDEs of melanoma',
@@ -92,7 +93,7 @@ export const SOURCES = {
     title: 'Radiation: The ultraviolet (UV) index',
     url: 'https://www.who.int/news-room/questions-and-answers/item/radiation-the-ultraviolet-(uv)-index',
   },
-} as const satisfies Record<string, SourceRef>;
+} as const satisfies Record<string, SourceRef>);
 
 export type SourceId = keyof typeof SOURCES;
 

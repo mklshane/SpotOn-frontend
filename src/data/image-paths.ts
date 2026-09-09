@@ -13,7 +13,7 @@
  * Every in-memory ScreeningRecord therefore still carries a directly-renderable absolute URI, and
  * no UI, report, or PDF code needs to know this module exists.
  */
-import * as FileSystem from "expo-file-system/legacy";
+import * as FileSystem from '../lib/fs';
 
 /** The one directory we own, under documentDirectory. Mirrors SCREENINGS_DIR in scan-history.tsx. */
 const OWNED_DIR = "screenings/";

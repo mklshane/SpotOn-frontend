@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { StyleSheet, View } from 'react-native';
 import Svg, {
   Circle,
@@ -36,6 +37,7 @@ const ART_SIZE = 84;
  * crusted patch; BCC = a smooth pearly bump with a fine surface vessel.
  */
 export function CancerTypeArtwork({ kind, size = ART_SIZE }: { kind: CancerTypeKind; size?: number }) {
+  useLocale();
   return (
     <Svg width={size} height={size} viewBox="0 0 96 96">
       <Defs>
@@ -141,6 +143,7 @@ export function CancerTypeArtwork({ kind, size = ART_SIZE }: { kind: CancerTypeK
  * and a quiet learn-more link pinned to the bottom. Scrolled left-to-right
  * the three cards read as a severity scale. */
 export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerTypeCardProps) {
+  useLocale();
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={title} style={styles.wrap}>
       <View style={[styles.card, { backgroundColor: tint }]}>
@@ -151,7 +154,7 @@ export function CancerTypeCard({ kind, title, color, tint, onPress }: CancerType
           {title}
         </ThemedText>
         <View style={styles.learnRow}>
-          <ThemedText style={[styles.learnLabel, { color }]}>Learn more</ThemedText>
+          <ThemedText style={[styles.learnLabel, { color }]}>{t("Learn more")}</ThemedText>
           <Icon name="chevron.right" size={11} tintColor={color} />
         </View>
       </View>

@@ -151,3 +151,11 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+/**
+ * Width of the app surface on web. The root layout renders the whole app inside a
+ * `maxWidth: AppMaxWidth, overflow: hidden` box so the browser shows a phone-shaped
+ * surface rather than a stretched mobile layout. Anything that sizes itself to the
+ * viewport must clamp to this instead - see `useSurfaceWidth()`.
+ */
+export const AppMaxWidth = 430;

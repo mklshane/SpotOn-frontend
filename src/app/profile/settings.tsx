@@ -1,3 +1,5 @@
+import { LanguagePicker } from '@/components/ui/language-picker';
+import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { ApiError } from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
 import { ActionSheet } from "@/components/ui/action-sheet";
@@ -42,13 +44,14 @@ const SUPPORT_EMAIL = "help.spoton@gmail.com";
 function formatConsentStatus(
   user: { consent_data_privacy: boolean; consent_at: string | null } | null,
 ): string {
-  if (!user?.consent_data_privacy) return "Not granted";
-  if (!user.consent_at) return "Granted";
+  if (!user?.consent_data_privacy) return t("Not granted");
+  if (!user.consent_at) return t("Granted");
   const d = new Date(user.consent_at);
-  return `Granted on ${d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+  return `${t("Granted on")} ${d.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
 }
 
 export default function SettingsScreen() {
+  useLocale();
   const theme = useTheme();
   const { user, signOut } = useAuth();
 
@@ -69,21 +72,29 @@ export default function SettingsScreen() {
     setReminderDueAt(await getSelfCheckReminderDueAt());
     if (next && !actual) {
       Alert.alert(
-        "Notifications are off",
-        "SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings.",
+        t("Notifications are off"),
+        t("SpotOn needs permission to send notifications before it can remind you to re-check a spot. You can turn them on in your device settings."),
         [
-          { text: "Not now", style: "cancel" },
-          { text: "Open settings", onPress: () => Linking.openSettings() },
+          { text: t("Not now"), style: "cancel" },
+          { text: t("Open settings"), onPress: () => Linking.openSettings() },
         ],
       );
     }
   }
 
+  // expo-notifications cannot schedule anything in a browser (lib/notifications.ts bails on web),
+  // so the toggle silently springs back. Say so up front instead of describing a feature the
+  // user cannot have here.
+  const remindersUnsupported = Platform.OS === "web";
+
   const reminderSublabel = (() => {
-    if (!remindersEnabled) return "Reminders to re-check a spot after 30 days";
-    if (!reminderDueAt) return "On - set after your next low-risk result";
+    if (remindersUnsupported) {
+      return t("Not available in the browser - use the SpotOn app to get re-screening reminders");
+    }
+    if (!remindersEnabled) return t("Reminders to re-check a spot after 30 days");
+    if (!reminderDueAt) return t("On - set after your next low-risk result");
     const due = new Date(reminderDueAt);
-    return `Next reminder on ${due.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}`;
+    return `${t("Next reminder on")} ${due.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
   })();
 
   // Change password (inline form)
@@ -105,7 +116,7 @@ export default function SettingsScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setShowPasswordForm(false);
-      Alert.alert("Password changed", "Your password has been updated.");
+      Alert.alert(t("Password changed"), t("Your password has been updated."));
     } catch (e) {
       setPasswordError(
         isNotDeployed(e)
@@ -132,12 +143,12 @@ export default function SettingsScreen() {
       router.replace("/(auth)/login");
     } catch (e) {
       Alert.alert(
-        "Could not delete account",
+        t("Could not delete account"),
         isNotDeployed(e)
-          ? "This isn't available yet - check back soon."
+          ? t("This isn't available yet - check back soon.")
           : e instanceof ApiError
             ? e.detail
-            : "Something went wrong. Please try again.",
+            : t("Something went wrong. Please try again."),
       );
       setDeleting(false);
     }
@@ -151,24 +162,24 @@ export default function SettingsScreen() {
     try {
       await requestDataExport();
       Alert.alert(
-        "Export requested",
-        "We'll email your data export within a few days.",
+        t("Export requested"),
+        t("We'll email your data export within a few days."),
       );
     } catch (e) {
       Alert.alert(
-        "Could not request export",
+        t("Could not request export"),
         isNotDeployed(e)
-          ? "Data export isn't available yet - check back soon."
+          ? t("Data export isn't available yet - check back soon.")
           : e instanceof ApiError
             ? e.detail
-            : "Something went wrong. Please try again.",
+            : t("Something went wrong. Please try again."),
       );
     } finally {
       setExporting(false);
     }
   }
 
-  const appVersion = Constants.expoConfig?.version ?? "Unknown";
+  const appVersion = Constants.expoConfig?.version ?? t("Unknown");
 
   return (
     <Screen padded={false}>
@@ -182,16 +193,15 @@ export default function SettingsScreen() {
             hitSlop={12}
             onPress={() => router.back()}
             accessibilityRole="button"
-            accessibilityLabel="Back"
+            accessibilityLabel={t("Back")}
             style={({ pressed }) => pressed && styles.pressed}
           >
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
         </View>
-        <ThemedText type="largeTitle">Settings</ThemedText>
+        <ThemedText type="largeTitle">{t("Settings")}</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          Manage your account and preferences
-        </ThemedText>
+          {t("Manage your account and preferences")}</ThemedText>
       </View>
 
       <KeyboardAvoidingView
@@ -202,26 +212,28 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={styles.sectionHead}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
+          <Card style={styles.section}><LanguagePicker /></Card>
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Account & Security</ThemedText>
+            <ThemedText type="title2">{t("Account & Security")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="key.fill"
-              label="Change password"
+              label={t("Change password")}
               onPress={() => setShowPasswordForm((s) => !s)}
             />
             {showPasswordForm ? (
               <View style={styles.passwordForm}>
                 <TextField
-                  label="Current password"
+                  label={t("Current password")}
                   secure
                   textContentType="password"
                   value={currentPassword}
                   onChangeText={setCurrentPassword}
                 />
                 <TextField
-                  label="New password"
+                  label={t("New password")}
                   secure
                   textContentType="newPassword"
                   value={newPassword}
@@ -229,11 +241,11 @@ export default function SettingsScreen() {
                 />
                 {passwordError ? (
                   <ThemedText type="footnote" themeColor="riskCritical">
-                    {passwordError}
+                    {t(passwordError)}
                   </ThemedText>
                 ) : null}
                 <Button
-                  label="Update password"
+                  label={t("Update password")}
                   variant="outline"
                   loading={passwordSubmitting}
                   onPress={handleChangePassword}
@@ -245,7 +257,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="trash.fill"
-              label={deleting ? "Deleting…" : "Delete account"}
+              label={deleting ? t("Deleting…") : t("Delete account")}
               destructive
               onPress={
                 deleting ? undefined : () => setConfirmDeleteVisible(true)
@@ -254,26 +266,26 @@ export default function SettingsScreen() {
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Notifications</ThemedText>
+            <ThemedText type="title2">{t("Notifications")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="bell.fill"
-              label="Re-screening reminders"
+              label={t("Re-screening reminders")}
               sublabel={reminderSublabel}
-              accessory="switch"
+              accessory={remindersUnsupported ? null : "switch"}
               switchValue={remindersEnabled}
               onSwitchChange={handleToggleReminders}
             />
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">Privacy & Data</ThemedText>
+            <ThemedText type="title2">{t("Privacy & Data")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="shield.fill"
-              label="Data privacy consent"
+              label={t("Data privacy consent")}
               sublabel={formatConsentStatus(user)}
               accessory={null}
             />
@@ -282,18 +294,18 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label={exporting ? "Requesting export…" : "Request data export"}
+              label={exporting ? t("Requesting export…") : t("Request data export")}
               onPress={exporting ? undefined : handleDataExport}
             />
           </Card>
 
           <View style={styles.sectionHead}>
-            <ThemedText type="title2">About & Support</ThemedText>
+            <ThemedText type="title2">{t("About & Support")}</ThemedText>
           </View>
           <Card style={styles.section}>
             <SettingsRow
               icon="info.circle.fill"
-              label="App version"
+              label={t("App version")}
               sublabel={appVersion}
               accessory={null}
             />
@@ -302,7 +314,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="envelope.fill"
-              label="Help & support"
+              label={t("Help & support")}
               sublabel={SUPPORT_EMAIL}
               onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
             />
@@ -311,7 +323,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="doc.text.fill"
-              label="Terms and Conditions"
+              label={t("Terms and Conditions")}
               onPress={() => router.push("/profile/terms")}
             />
           </Card>
@@ -319,7 +331,7 @@ export default function SettingsScreen() {
           <Card style={[styles.section, styles.sectionSpaced]}>
             <SettingsRow
               icon="lock.fill"
-              label="Privacy Policy"
+              label={t("Privacy Policy")}
               onPress={() => router.push("/profile/privacy")}
             />
           </Card>
@@ -328,12 +340,12 @@ export default function SettingsScreen() {
 
       <ActionSheet
         visible={confirmDeleteVisible}
-        title="Delete your account? This can't be undone."
+        title={t("Delete your account? This can't be undone.")}
         onClose={() => setConfirmDeleteVisible(false)}
         options={[
           {
             key: "delete",
-            label: "Delete account",
+            label: t("Delete account"),
             destructive: true,
             onPress: handleDeleteAccount,
           },

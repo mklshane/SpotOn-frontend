@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from '@/lib/fs';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -6,6 +6,8 @@ import { loadReportAssets } from './report-assets';
 import { phtFileStamp } from './report-datetime';
 import { buildReportHtml } from './report-html';
 import { PRINT_PAGE } from './report-tokens';
+import { ReportError } from './report-error';
+import type { GeneratedReport } from './report-error';
 import type { ReportModel } from './summary-report';
 
 /**
@@ -17,26 +19,10 @@ import type { ReportModel } from './summary-report';
  * into the template.
  */
 
-export type GeneratedReport = {
-  /** file:// path to the PDF in the cache directory. */
-  uri: string;
-  fileName: string;
-  /** The exact HTML the PDF was rendered from, reused by printing on Android. */
-  html: string;
-};
-
-export type ReportErrorCode = 'render-failed' | 'sharing-unavailable' | 'print-failed';
-
-export class ReportError extends Error {
-  constructor(
-    readonly code: ReportErrorCode,
-    message: string,
-    readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = 'ReportError';
-  }
-}
+// Declared in report-error.ts so the web path can share them; re-exported here so every existing
+// import site (scan/report.tsx) keeps working unchanged.
+export { ReportError } from './report-error';
+export type { GeneratedReport, ReportErrorCode } from './report-error';
 
 /**
  * Renders the report to a PDF in the cache directory and returns its location.
@@ -97,8 +83,9 @@ export async function shareReportPdf(report: GeneratedReport): Promise<void> {
 /**
  * Sends the report to the OS print dialog.
  *
- * Print the already-generated file on both platforms. This keeps Android from re-rendering the
- * HTML against the printer's default paper size and creating a second page in the preview.
+ * iOS prints the already-generated file, so what prints is exactly what was shared.
+ * Android's print adapter for an existing PDF is unreliable across OEM print services, so it
+ * re-renders from the identical HTML instead - same input, same output.
  */
 export async function printReportPdf(report: GeneratedReport): Promise<void> {
   try {

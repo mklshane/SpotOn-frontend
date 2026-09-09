@@ -1,6 +1,6 @@
-import * as FileSystem from 'expo-file-system/legacy';
-import { Image } from 'react-native';
-import { loadTensorflowModel } from 'react-native-fast-tflite';
+import * as FileSystem from '@/lib/fs';
+import { assetUri } from '@/lib/asset-uri';
+import { loadTensorflowModel } from '@/lib/tflite';
 
 import { ClassifierError } from './errors';
 import { FALLBACK_INPUT_SIZE, MODEL_ASSET, MODEL_VERSION } from './model-config';
@@ -19,8 +19,7 @@ let modelPromise: Promise<ClassifierModel> | null = null;
 export function getClassifierModel(): Promise<ClassifierModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      const src = Image.resolveAssetSource(MODEL_ASSET);
-      let uri = src.uri;
+      let uri = assetUri(MODEL_ASSET);
       if (uri.startsWith('http')) {
         // Name the cache file after the model version so a model swap can't be served a stale
         // download from a previous build.

@@ -1,0 +1,6 @@
+# Vercel's CLI excludes node_modules from uploads by default. Metro emits the app's web font
+# assets under dist/assets/node_modules/@expo-google-fonts/... and @expo/vector-icons/..., so
+# that default silently drops every custom font and icon font - the app deploys, but headings
+# fall back to system sans and icons render as blank boxes. Re-include them.
+!node_modules
+!assets/node_modules

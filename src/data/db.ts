@@ -366,6 +366,38 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
+/**
+ * True once any database operation has failed because another page instance holds the OPFS lock.
+ * Set by `isDatabaseLockedOut`; read by the UI to explain the situation instead of guessing.
+ */
+export let dbLockedByAnotherInstance = false;
+
+/**
+ * The web build stores SQLite in OPFS via wa-sqlite, which takes an EXCLUSIVE access handle:
+ *
+ *   NoModificationAllowedError: Failed to execute 'createSyncAccessHandle' ...
+ *   Access Handles cannot be created if there is another open Access Handle
+ *
+ * A second page instance on the origin therefore cannot use the database - a second tab does it,
+ * and on iOS Safari a bfcached previous instance can still hold the handle after the user
+ * navigates back. Note the lock bites per OPERATION, not at open: `getDb()` resolves happily and
+ * then reads and writes throw.
+ *
+ * Reported 2026-09-08 as "We couldn't analyze this photo". Classification had actually SUCCEEDED
+ * and only the save threw, but analysis.tsx rendered both failures identically. Verified by
+ * controlled experiment: two tabs fail, one tab succeeds, same photo and build.
+ *
+ * There is no in-page recovery - falling back to `:memory:` does not work either, because the
+ * failed persistent-VFS init leaves the worker in an "Invalid VFS state". So this only labels the
+ * condition; callers surface it honestly and the user closes the other tab.
+ */
+export function isDatabaseLockedOut(e: unknown): boolean {
+  const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+  const locked = /NoModificationAllowedError|createSyncAccessHandle|Access Handles/i.test(msg);
+  if (locked) dbLockedByAnotherInstance = true;
+  return locked;
+}
+
 /** Open (once) and initialize the database. Safe to call from anywhere. */
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
@@ -375,7 +407,11 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
       await db.execAsync(SCHEMA);
       await migrate(db);
       return db;
-    })();
+    })().catch((e) => {
+      isDatabaseLockedOut(e); // label it before rethrowing
+      dbPromise = null; // a later call can retry once the other instance goes away
+      throw e;
+    });
   }
   return dbPromise;
 }

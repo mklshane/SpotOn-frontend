@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -11,6 +12,7 @@ import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
 import { SearchBar } from '@/components/ui/search-bar';
 import { SectionHeader } from '@/components/ui/section-header';
+import { TabContentInset } from '@/components/ui/tab-bar';
 import { Space } from '@/constants/theme';
 import {
   getCategoryLabel,
@@ -37,7 +39,7 @@ const TIP_IMAGE = require('@/assets/images/learn/recommended-sun-protection.jpg'
 // each card deep-links straight to its article. Ordered most-serious first,
 // with the accent mapped to the risk-tier palette so the section reads as a
 // severity scale.
-const CANCER_TYPES = [
+const CANCER_TYPES = localizedCopy([
   {
     articleId: 'melanoma',
     kind: 'melanoma',
@@ -59,7 +61,7 @@ const CANCER_TYPES = [
     color: 'riskModerate',
     tint: 'riskModerateBg',
   },
-] as const;
+] as const);
 
 /** A single browsable row - either a topic, or an article nested inside one. */
 type Entry = {
@@ -164,6 +166,7 @@ function subtypeTerms(article: Article): string {
 }
 
 export default function LearnScreen() {
+  useLocale();
   const theme = useTheme();
   const [query, setQuery] = useState('');
 
@@ -206,17 +209,16 @@ export default function LearnScreen() {
         showsVerticalScrollIndicator={false}>
         <EntranceProvider screen="learn">
           <Entrance index={0} style={styles.header}>
-            <ThemedText type="largeTitle">Learn</ThemedText>
+            <ThemedText type="largeTitle">{t("Learn")}</ThemedText>
             <ThemedText type="callout" themeColor="textSecondary">
-              Short, practical guides on caring for your skin.
-            </ThemedText>
+              {t("Short, practical guides on caring for your skin.")}</ThemedText>
           </Entrance>
 
           <Entrance index={1} style={styles.search}>
             <SearchBar
               value={query}
               onChangeText={setQuery}
-              placeholder="Search guides and topics"
+              placeholder={t("Search guides and topics")}
               shape="lg"
               elevation="sm"
             />
@@ -228,8 +230,8 @@ export default function LearnScreen() {
                 image={FEATURED_IMAGE}
                 imageLabel="A woman checking the skin on her forearm"
                 category={getCategoryLabel(featured.category)}
-                title="Know the warning signs"
-                description="The ABCDE rule, and five things to look for in a mole, in one quick read."
+                title={t("Know the warning signs")}
+                description={t("The ABCDE rule, and five things to look for in a mole, in one quick read.")}
                 meta={lengthLabel(featured)}
                 onPress={() => openTopic(featured)}
               />
@@ -255,8 +257,8 @@ export default function LearnScreen() {
             <>
               <Entrance index={5} style={styles.sectionHeader}>
                 <SectionHeader
-                  title="Skin cancer types"
-                  subtitle="The three most common types. Tap one to see what to look for."
+                  title={t("Skin cancer types")}
+                  subtitle={t("The three most common types. Tap one to see what to look for.")}
                 />
               </Entrance>
               <Entrance index={6}>
@@ -292,8 +294,8 @@ export default function LearnScreen() {
           {results.length === 0 ? (
             <ListState
               kind="empty"
-              title="Nothing here yet"
-              subtitle="Try a different word, or switch back to All."
+              title={t("Nothing here yet")}
+              subtitle={t("Try a different word, or switch back to All.")}
             />
           ) : (
             <View style={styles.list}>
@@ -323,7 +325,7 @@ const styles = StyleSheet.create({
     // Clears the floating Scan button, which protrudes ~30px above the tab
     // bar's own top edge via a negative margin (a sibling view this screen's
     // layout doesn't otherwise know to leave room for).
-    paddingBottom: Space.lg,
+    paddingBottom: TabContentInset,
     gap: Space.base,
   },
   header: { gap: Space.xs, marginBottom: Space.xs },

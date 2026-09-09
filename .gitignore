@@ -47,3 +47,12 @@ example
 inspiration.png
 inspiration2.png
 screeningsummary.png
+# Staged by scripts/copy-litert-wasm.mjs (see that file)
+public/litert/
+public/maplibre/
+
+# Vercel project link (contains project/org ids - machine-local)
+.vercel/
+
+# Scratch uploads for manual testing - never commit (may contain personal photos)
+.tmp-upload/

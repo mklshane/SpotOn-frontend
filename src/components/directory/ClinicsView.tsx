@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -58,6 +59,7 @@ export function ClinicsView({
   topInset: _topInset,
   header,
 }: ClinicsViewProps) {
+  useLocale();
   const theme = useTheme();
   const { coords } = useLocation();
   const { isOnline } = useConnectivity();
@@ -234,15 +236,14 @@ export function ClinicsView({
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
               >
-                {filtered.length === 1 ? "clinic" : "clinics"} · sorted by{" "}
-                {sortLabel}
+                {t(filtered.length === 1 ? "clinic · sorted by {{sort}}" : "clinics · sorted by {{sort}}", { sort: t(sortLabel) })}
               </ThemedText>
             </View>
 
             <Pressable
               onPress={cycleSort}
               accessibilityRole="button"
-              accessibilityLabel="Change sort order"
+              accessibilityLabel={t("Change sort order")}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.sortButton,
@@ -268,7 +269,7 @@ export function ClinicsView({
                 return (
                   <Chip
                     key={item}
-                    label={item}
+                    label={t(item)}
                     active={!service && !openOnly}
                     onPress={() => {
                       setService(null);
@@ -281,7 +282,7 @@ export function ClinicsView({
                 return (
                   <Chip
                     key={item}
-                    label={item}
+                    label={t(item)}
                     active={openOnly}
                     onPress={() => setOpenOnly((v) => !v)}
                   />
@@ -318,24 +319,24 @@ export function ClinicsView({
             !isOnline && facilities === null ? (
               <ListState
                 kind="offline"
-                title="You're offline"
-                subtitle="Showing cached clinics only."
+                title={t("You're offline")}
+                subtitle={t("Showing cached clinics only.")}
               />
             ) : facilities === null ? (
               error ? (
                 <ListState
                   kind="error"
-                  title="Couldn't load clinics"
-                  subtitle="Check your connection and try again."
+                  title={t("Couldn't load clinics")}
+                  subtitle={t("Check your connection and try again.")}
                 />
               ) : (
-                <ListState kind="loading" title="Finding clinics…" />
+                <ListState kind="loading" title={t("Finding clinics…")} />
               )
             ) : (
               <ListState
                 kind="empty"
-                title="No clinics found"
-                subtitle="Try a different search or filter."
+                title={t("No clinics found")}
+                subtitle={t("Try a different search or filter.")}
               />
             )
           }

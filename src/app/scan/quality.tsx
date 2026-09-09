@@ -1,9 +1,10 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -20,6 +21,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Button, Card, Screen } from '@/components/ui';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
+import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
@@ -62,20 +64,21 @@ const READABILITY_GRACE_MS = 2000;
 const LESION_DETECT_TIMEOUT_MS = 4000;
 
 type RowStatus = 'pending' | 'ok' | 'warn';
-const ROW_META: { label: string; icon: IconName }[] = [
+const ROW_META: { label: string; icon: IconName }[] = localizedCopy([
   { label: 'Lighting', icon: 'sun.max' },
   { label: 'Focus', icon: 'camera.viewfinder' },
   { label: 'Lesion in frame', icon: 'sparkles' },
-];
+]);
 
 export default function QualityScreen() {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const width = useSurfaceWidth();
   // `detected` (the live camera's green-box verdict, forwarded by crop.tsx) is deliberately NOT
   // read here any more: it answers "did the detector fire on some preview frame", which this
   // screen now knows is true of bare skin too. The still decides, from checks.lesion below.
-  const { uri } = useLocalSearchParams<{ uri: string; detected?: string }>();
+  const { uri, upscale } = useLocalSearchParams<{ uri: string; detected?: string; upscale?: string }>();
   const session = useScreeningSession();
   const { setImageUri, questionnaireComplete } = session;
 
@@ -112,7 +115,7 @@ export default function QualityScreen() {
     if (!uri) return;
     session.enqueueImage(uri, pendingIndex);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri]);
+  }, [uri, upscale]);
 
   // Join the first pass as soon as it settles and apply the same Safety Floor rule analysis.tsx
   // uses, so the two screens can never disagree about whether a photo is readable.
@@ -185,7 +188,9 @@ export default function QualityScreen() {
       setError(true);
       return;
     }
-    assessImage(uri)
+    // How far crop.tsx had to enlarge the capture. Without it the gate reads a tight auto-zoom
+    // as a blurry photo - the enlargement, not the focus, is what widens the measured edge.
+    assessImage(uri, Number(upscale) || 1)
       .then((c) => alive && setChecks(c))
       .catch((e) => {
         console.warn('[iqa] failed', e);
@@ -194,7 +199,7 @@ export default function QualityScreen() {
     return () => {
       alive = false;
     };
-  }, [uri]);
+  }, [uri, upscale]);
 
   /**
    * NO DETECTOR RUN ON THIS SCREEN (removed 2026-09-08).
@@ -501,10 +506,10 @@ export default function QualityScreen() {
           no auto-advance - a timer that fires before the offer can be read isn't an offer. */}
       {!analyzing && pass ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Button label="Proceed" variant="brand" onPress={proceed} style={styles.useAnyway} />
+          <Button label={t("Proceed")} variant="brand" onPress={proceed} style={styles.useAnyway} />
           {canAddAngle ? (
             <Button
-              label="Add another photo"
+              label={t("Add another photo")}
               variant="outline"
               icon="plus.viewfinder"
               onPress={addAnotherAngle}
@@ -516,11 +521,10 @@ export default function QualityScreen() {
 
       {showRetakeFooter ? (
         <Animated.View entering={FadeInDown} style={[styles.footer, { paddingBottom: insets.bottom + Space.md }]}>
-          <Button label="Retake or choose another" variant="brand" onPress={retake} style={styles.useAnyway} />
+          <Button label={t("Retake or choose another")} variant="brand" onPress={retake} style={styles.useAnyway} />
           <Pressable hitSlop={10} onPress={proceed} style={styles.retake} accessibilityRole="button">
             <ThemedText type="headline" themeColor="textSecondary">
-              Use anyway
-            </ThemedText>
+              {t("Use anyway")}</ThemedText>
           </Pressable>
         </Animated.View>
       ) : null}
@@ -530,6 +534,7 @@ export default function QualityScreen() {
 
 /** Pulsing dot shown while a check is still pending. */
 function PendingDot({ color }: { color: string }) {
+  useLocale();
   const o = useSharedValue(0.4);
   useEffect(() => {
     o.value = withRepeat(withTiming(1, { duration: 650 }), -1, true);

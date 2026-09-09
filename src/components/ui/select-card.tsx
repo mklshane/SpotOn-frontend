@@ -25,7 +25,12 @@ export function SelectCard({ title, subtitle, selected, onPress, style }: Select
   return (
     <AnimatedPressable
       accessibilityRole="radio"
-      accessibilityState={{ selected }}
+      // role="radio" is described by aria-checked. `accessibilityState` alone does not produce it
+      // on react-native-web (verified: the rendered div had only role/tabindex/class/style), so the
+      // aria prop is set directly - RN has supported aria-* since 0.71, so this works on both
+      // platforms. Without it a screen reader cannot tell which answer is selected.
+      accessibilityState={{ checked: selected }}
+      aria-checked={selected}
       onPress={onPress}
       onPressIn={() => (scale.value = withSpring(0.98, { damping: 18, stiffness: 320 }))}
       onPressOut={() => (scale.value = withSpring(1, { damping: 18, stiffness: 320 }))}

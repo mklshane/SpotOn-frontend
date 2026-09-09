@@ -1,4 +1,5 @@
 import type { HoursPeriod } from '@/api/types';
+import { t } from './i18n/core';
 
 function to12h(hhmm: string): string {
   const [h, m] = hhmm.split(':').map(Number);
@@ -8,12 +9,22 @@ function to12h(hhmm: string): string {
 }
 
 export function formatHours(period: HoursPeriod | null): string {
-  if (!period) return 'Hours unavailable';
+  if (!period) return t('Hours unavailable');
   // open === close encodes always-open (hospitals Google reports as "Open 24
   // hours"). isOpenNow already reads it correctly via the overnight-wrap branch;
   // without this it would render as the nonsense "12 AM – 12 AM".
-  if (period.open === period.close) return 'Open 24 hours';
+  if (period.open === period.close) return t('Open 24 hours');
   return `${to12h(period.open)} – ${to12h(period.close)}`;
+}
+
+/**
+ * "Mon–Fri 9 AM – 5 PM", or just "Hours unavailable" when there is no period.
+ *
+ * Pairing a day label with the fallback produced "Mon–Fri Hours unavailable", which reads as a
+ * claim about weekday hours rather than an absence of data - so the label is dropped with it.
+ */
+export function formatHoursLine(label: string, period: HoursPeriod | null): string {
+  return period ? `${t(label)} ${formatHours(period)}` : formatHours(null);
 }
 
 /** true = open, false = closed, null = no hours data to judge by. Handles

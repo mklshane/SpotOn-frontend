@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
@@ -71,6 +72,7 @@ export function ClinicMap({
   sheetPosition,
   query,
 }: ClinicMapProps) {
+  useLocale();
   const theme = useTheme();
   const cameraRef = useRef<CameraRef>(null);
   // Re-center on search results: fit the camera once per distinct non-empty query,
@@ -237,8 +239,7 @@ export function ClinicMap({
           themeColor="muted"
           style={styles.fallbackText}
         >
-          The map needs a dev build to render - clinics still list below.
-        </ThemedText>
+          {t("The map needs a dev build to render - clinics still list below.")}</ThemedText>
       </View>
     );
   }
@@ -343,7 +344,7 @@ export function ClinicMap({
           onPress={() => applyZoom(1)}
           style={styles.zoomBtn}
           accessibilityRole="button"
-          accessibilityLabel="Zoom in"
+          accessibilityLabel={t("Zoom in")}
         >
           <Icon name="plus" size={18} tintColor={theme.text} />
         </Pressable>
@@ -354,7 +355,7 @@ export function ClinicMap({
           onPress={() => applyZoom(-1)}
           style={styles.zoomBtn}
           accessibilityRole="button"
-          accessibilityLabel="Zoom out"
+          accessibilityLabel={t("Zoom out")}
         >
           <Icon name="minus" size={18} tintColor={theme.text} />
         </Pressable>

@@ -1,3 +1,5 @@
+import { LanguagePicker } from '@/components/ui/language-picker';
+import { t, useLocale } from '@/lib/i18n';
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -29,6 +31,7 @@ import {
 import { routeAfterAuth } from '@/lib/profile';
 
 export default function LoginScreen() {
+  const locale = useLocale();
   const { signIn } = useAuth();
   const [mode, setMode] = useState<IdentifierMode>('phone');
   const [identifier, setIdentifier] = useState('');
@@ -87,7 +90,8 @@ export default function LoginScreen() {
   }
 
   return (
-    <Screen variant="gradient" gradient="dawnSoft">
+    <Screen key={locale} variant="gradient" gradient="dawnSoft">
+      <LanguagePicker compact />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -98,11 +102,9 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <Logo variant="wordmark" width={140} />
             <ThemedText type="title1" style={styles.title}>
-              Welcome back
-            </ThemedText>
+              {t("Welcome back")}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary">
-              Sign in to pick up where you left off.
-            </ThemedText>
+              {t("Sign in to pick up where you left off.")}</ThemedText>
           </View>
 
           <View style={styles.form}>
@@ -121,8 +123,8 @@ export default function LoginScreen() {
               containerStyle={styles.identifier}
             />
             <TextField
-              label="Password"
-              placeholder="Your password"
+              label={t("Password")}
+              placeholder={t("Your password")}
               secure
               autoCapitalize="none"
               autoComplete="current-password"
@@ -156,20 +158,19 @@ export default function LoginScreen() {
               </ThemedText>
             ) : null}
             <Button
-              label="Sign in"
+              label={t("Sign in")}
               variant="brand"
               loading={submitting}
               onPress={handleSubmit}
             />
             <View style={styles.footnoteRow}>
               <ThemedText type="footnote" themeColor="textSecondary">
-                New here?{' '}
+                {t("New here?")}{' '}
               </ThemedText>
               <Link href="/(auth)/register" asChild>
                 <Pressable hitSlop={8}>
                   <ThemedText type="footnote" themeColor="brand" style={styles.footnoteLink}>
-                    Create an account
-                  </ThemedText>
+                    {t("Create an account")}</ThemedText>
                 </Pressable>
               </Link>
             </View>

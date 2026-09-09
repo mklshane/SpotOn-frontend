@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 
@@ -18,6 +19,7 @@ export type LearnDetailHeaderProps = {
  * thing that gives away a screen as belonging to a different design.
  */
 export function LearnDetailHeader({ title }: LearnDetailHeaderProps) {
+  useLocale();
   const theme = useTheme();
 
   return (
@@ -27,7 +29,7 @@ export function LearnDetailHeader({ title }: LearnDetailHeaderProps) {
         scaleTo={0.88}
         onPress={() => router.back()}
         accessibilityRole="button"
-        accessibilityLabel="Back">
+        accessibilityLabel={t("Back")}>
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </PressableScale>
       <ThemedText type="headline" themeColor="textSecondary" numberOfLines={1} style={styles.title}>

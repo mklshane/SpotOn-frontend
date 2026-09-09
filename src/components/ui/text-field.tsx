@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Icon } from '@/components/ui/icon';
 import { useRef, useState } from 'react';
 import {
@@ -44,6 +45,7 @@ export function TextField({
   onKeyPress,
   ...rest
 }: TextFieldProps) {
+  useLocale();
   const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
   const [focused, setFocused] = useState(false);
@@ -101,14 +103,14 @@ export function TextField({
             hitSlop={10}
             onPress={() => setHidden((h) => !h)}
             style={styles.toggle}
-            accessibilityLabel={hidden ? 'Show password' : 'Hide password'}>
+            accessibilityLabel={hidden ? t('Show password') : t('Hide password')}>
             <Icon name={hidden ? 'eye' : 'eye.slash'} tintColor={theme.muted} size={18} />
           </Pressable>
         ) : null}
       </View>
       {error ? (
         <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
-          {error}
+          {t(error)}
         </ThemedText>
       ) : null}
     </View>

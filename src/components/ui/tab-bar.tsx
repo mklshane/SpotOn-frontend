@@ -1,3 +1,4 @@
+import { localizedCopy, useLocale } from '@/lib/i18n';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Icon, type IconName } from '@/components/ui/icon';
@@ -12,13 +13,25 @@ import { ThemedText } from '../themed-text';
 type SF = IconName;
 type TabConfig = { label: string; icon: SF; iconActive?: SF; center?: boolean };
 
-const TABS: Record<string, TabConfig> = {
+/** Bar height excluding the bottom safe-area inset. */
+export const TabBarHeight = 66;
+/** How far the centre Scan ring rises above the bar (see styles.centerRing.marginTop). */
+export const TabBarOverhang = 30;
+/**
+ * Bottom padding a tab screen's scroll content needs to clear the bar *and* the ring that
+ * protrudes from it. The bar is a sibling the screens don't otherwise know about, so each one
+ * used to hard-code a guess - Home 64, Learn and Profile 20 - and the two 20s did not even
+ * clear the overhang their own comments claimed to.
+ */
+export const TabContentInset = TabBarHeight + TabBarOverhang;
+
+const TABS: Record<string, TabConfig> = localizedCopy({
   home: { label: 'Home', icon: 'house', iconActive: 'house.fill' },
   directory: { label: 'Directory', icon: 'building.2', iconActive: 'building.2.fill' },
   scan: { label: 'Scan', icon: 'camera.fill', center: true },
   learn: { label: 'Learn', icon: 'book', iconActive: 'book.fill' },
   profile: { label: 'Profile', icon: 'person', iconActive: 'person.fill' },
-};
+});
 
 type TabBarProps = {
   state: { index: number; routes: { key: string; name: string }[] };
@@ -31,6 +44,7 @@ type TabBarProps = {
 };
 
 export function CustomTabBar({ state, navigation }: TabBarProps) {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -41,7 +55,7 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
         {
           backgroundColor: theme.surface,
           paddingBottom: insets.bottom,
-          height: 66 + insets.bottom,
+          height: TabBarHeight + insets.bottom,
         },
       ]}>
       {state.routes.map((route, index) => {
@@ -128,7 +142,7 @@ const styles = StyleSheet.create({
     width: RING,
     height: RING,
     borderRadius: RING / 2,
-    marginTop: -30,
+    marginTop: -TabBarOverhang,
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',

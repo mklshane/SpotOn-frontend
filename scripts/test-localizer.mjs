@@ -25,7 +25,7 @@ writeFileSync(join(out, 'loc.ts'), typeDecl + src.slice(start, end));
 
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['loc.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['loc.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: out, stdio: 'inherit' },
 );
 const { locateLesion } = await import(pathToFileURL(join(out, 'loc.js')).href);

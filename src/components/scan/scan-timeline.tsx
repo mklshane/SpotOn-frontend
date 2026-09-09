@@ -1,3 +1,4 @@
+import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { StyleSheet, View } from "react-native";
 
 import { tierColor } from "@/components/scan/screening-row";
@@ -11,12 +12,12 @@ import { useTheme } from "@/hooks/use-theme";
 import { CLASS_DISPLAY } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
 
-const TIER_LABEL: Record<TriageTier, string> = {
+const TIER_LABEL: Record<TriageTier, string> = localizedCopy({
   low: "Low",
   moderate: "Moderate",
   high: "High",
   critical: "Priority",
-};
+});
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -58,6 +59,7 @@ export type ScanTimelineProps = {
  * same reading order as opening the record itself.
  */
 export function ScanTimeline({ screenings, onOpen }: ScanTimelineProps) {
+  useLocale();
   if (screenings.length === 0) return null;
   if (screenings.length === 1)
     return <SoloScan screening={screenings[0]} onOpen={onOpen} />;
@@ -72,6 +74,7 @@ function SoloScan({
   screening: ScreeningRecord;
   onOpen: ScanTimelineProps["onOpen"];
 }) {
+  useLocale();
   const theme = useTheme();
   const c = tierColor(theme, screening.triage.tier);
   const cls = CLASS_DISPLAY[screening.classification.topClass];
@@ -165,8 +168,7 @@ function SoloScan({
             style={[styles.latestPill, { backgroundColor: theme.brandTint }]}
           >
             <ThemedText type="caption" style={{ color: theme.brand }}>
-              Latest Scan
-            </ThemedText>
+              {t("Latest Scan")}</ThemedText>
           </View>
         </View>
       </PressableScale>
@@ -182,6 +184,7 @@ function SoloScan({
  * original oldest-first order, so the prop's documented contract doesn't change.
  */
 function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
+  useLocale();
   const theme = useTheme();
   const last = screenings.length - 1;
   const ordered = screenings.map((s, i) => ({ s, i })).reverse();
@@ -277,13 +280,11 @@ function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
                           type="caption"
                           style={{ color: theme.brand }}
                         >
-                          Latest Scan
-                        </ThemedText>
+                          {t("Latest Scan")}</ThemedText>
                       </View>
                     ) : isFirst ? (
                       <ThemedText type="caption" themeColor="muted">
-                        First scan
-                      </ThemedText>
+                        {t("First scan")}</ThemedText>
                     ) : null}
                   </View>
                   <ThemedText type="headline" numberOfLines={1}>

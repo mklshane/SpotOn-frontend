@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -10,7 +11,7 @@ import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
-import { formatHours, isOpenNow } from '@/lib/hours';
+import { formatHoursLine, isOpenNow } from '@/lib/hours';
 
 export type ClinicPreviewCardProps = {
   facility: FacilitySync | FacilityWithDistance;
@@ -21,6 +22,7 @@ const MAX_SERVICES_SHOWN = 2;
 
 /** The callout attached to a tapped map pin (rendered inside a MapLibre `Marker`). */
 export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps) {
+  useLocale();
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
   // The parent re-renders this component in place (no key) when a different pin
@@ -46,7 +48,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         <ThemedText type="headline" style={styles.name} numberOfLines={1}>
           {facilityDisplayName(facility)}
         </ThemedText>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="Close">
+        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel={t("Close")}>
           <Icon name="xmark" size={16} tintColor={theme.muted} />
         </Pressable>
       </View>
@@ -58,8 +60,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         {extra > 0 ? (
           <ThemedText type="footnote" themeColor="brand" style={styles.more}>
             {' '}
-            +{extra} more
-          </ThemedText>
+            +{extra} {t("more")}</ThemedText>
         ) : null}
       </View>
 
@@ -79,10 +80,10 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
       {expanded ? (
         <View style={styles.hoursDetail}>
           <ThemedText type="caption" themeColor="muted">
-            Mon–Fri {formatHours(facility.weekday_hours)}
+            {formatHoursLine("Mon–Fri", facility.weekday_hours)}
           </ThemedText>
           <ThemedText type="caption" themeColor="muted">
-            Sat–Sun {formatHours(facility.weekend_hours)}
+            {formatHoursLine("Sat–Sun", facility.weekend_hours)}
           </ThemedText>
         </View>
       ) : null}
@@ -94,7 +95,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
 
       <View style={styles.buttonWrap}>
         <Button
-          label="Details"
+          label={t("Details")}
           variant="brand"
           onPress={() => router.push({ pathname: '/directory/clinic', params: { id: facility.id } })}
         />

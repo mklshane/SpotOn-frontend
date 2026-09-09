@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -27,6 +28,7 @@ export type ActionSheetProps = {
  * backdrop pattern used by `DateField`. Tapping an option fires its handler then closes.
  */
 export function ActionSheet({ visible, title, options, onClose }: ActionSheetProps) {
+  useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -79,8 +81,7 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
             onPress={onClose}
             style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}>
             <ThemedText type="headline" themeColor="textSecondary">
-              Cancel
-            </ThemedText>
+              {t("Cancel")}</ThemedText>
           </Pressable>
         </Pressable>
       </Pressable>

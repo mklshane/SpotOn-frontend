@@ -22,7 +22,7 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), 'aggregate-core-'));
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/classifier/aggregate-core.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2019', '--lib', 'es2019', '--moduleResolution', 'bundler'],
+  ['src/lib/classifier/aggregate-core.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
 const core = await import(pathToFileURL(join(out, 'aggregate-core.js')).href);

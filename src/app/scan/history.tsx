@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -20,6 +21,7 @@ import { useScanHistory } from '@/lib/scan-history';
  * reachable from the "All scans" list.
  */
 export default function BodyLesionsScreen() {
+  useLocale();
   const theme = useTheme();
   const { lesions, entries, loading, loadError } = useScanHistory();
 
@@ -47,17 +49,16 @@ export default function BodyLesionsScreen() {
   return (
     <Screen padded={false}>
       <View style={styles.header}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Back">
+        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t("Back")}>
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          Body lesions
-        </ThemedText>
+          {t("Body lesions")}</ThemedText>
         <Pressable
           hitSlop={12}
           onPress={() => router.push('/scan/all')}
           accessibilityRole="button"
-          accessibilityLabel="See all screenings as a list">
+          accessibilityLabel={t("See all screenings as a list")}>
           <Icon name="list.bullet" tintColor={theme.brand} size={20} />
         </Pressable>
       </View>

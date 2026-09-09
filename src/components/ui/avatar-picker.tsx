@@ -1,3 +1,4 @@
+import { t, useLocale } from '@/lib/i18n';
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
@@ -20,7 +21,7 @@ async function pickFromCamera(): Promise<string | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
   if (!permission.granted) {
     Alert.alert(
-      "Camera access needed",
+      t("Camera access needed"),
       "Enable camera access in Settings to take a photo.",
     );
     return null;
@@ -64,13 +65,14 @@ export function AvatarPicker({
   size = 96,
   onChange,
 }: AvatarPickerProps) {
+  useLocale();
   const theme = useTheme();
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const options = [
     {
       key: "camera",
-      label: "Take Photo",
+      label: t("Take Photo"),
       onPress: async () => {
         const picked = await pickFromCamera();
         if (picked) onChange(picked);
@@ -78,7 +80,7 @@ export function AvatarPicker({
     },
     {
       key: "library",
-      label: "Choose from Library",
+      label: t("Choose from Library"),
       onPress: async () => {
         const picked = await pickFromLibrary();
         if (picked) onChange(picked);
@@ -88,7 +90,7 @@ export function AvatarPicker({
       ? [
           {
             key: "remove",
-            label: "Remove Photo",
+            label: t("Remove Photo"),
             destructive: true,
             onPress: () => onChange(null),
           },
@@ -117,7 +119,7 @@ export function AvatarPicker({
 
       <ActionSheet
         visible={sheetVisible}
-        title="Profile photo"
+        title={t("Profile photo")}
         onClose={() => setSheetVisible(false)}
         options={options}
       />
