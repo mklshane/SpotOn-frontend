@@ -3,10 +3,12 @@ import { NitroModules } from 'react-native-nitro-modules';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
+import { Alert, AppState, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Reanimated, {
+  runOnJS,
   useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -28,20 +30,23 @@ import { useRunOnJS, useSharedValue as useWorkletValue } from 'react-native-work
 import { ThemedText } from '@/components/themed-text';
 import {
   computeCoach,
+  clusterDetectionCandidates,
   fullFrameToPreview,
-  initialTrackState,
-  isStable,
-  modelCropToFullFrame,
+  initialActiveTargetState,
+  modelRoiToFullFrame,
   padDrawnBox,
+  searchRoiForZoom,
   stepStability,
-  stepTrack,
+  stepActiveTarget,
   type Coach,
   type CoachKind,
-  type TrackState,
+  type DetectionCandidate,
+  type SearchRoi,
   GATE_BLURRY,
   GATE_DARK,
   GATE_OK,
-  KEEP_SCORE,
+  RAW_CANDIDATE_SCORE,
+  STABLE_FRAMES,
   LOCK_SCORE,
 } from '@/lib/capture-core';
 import { DARK } from '@/lib/image-quality-core';
@@ -54,6 +59,7 @@ import { GradientBackground } from '@/components/ui/gradient-background';
 import { CaptureCoach } from '@/components/scan/too-dark-overlay';
 import {
   DetectionBox,
+  handoverDetectionBox,
   resetDetectionBox,
   trackDetectionBox,
   useDetectionBoxValues,
@@ -63,9 +69,7 @@ import { useDeviceTier } from '@/lib/device-tier';
 import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
 import {
   DETECTION_SMOOTHING_CONFIG as SMOOTH,
-  initialAssociationState,
   softDeadband,
-  stepAssociation,
 } from '@/lib/detection-smoothing';
 import { makeOneEuro } from '@/lib/one-euro';
 import { Radius, Space } from '@/constants/theme';
@@ -76,12 +80,9 @@ import { StatusBar } from 'expo-status-bar';
 const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
 Reanimated.addWhitelistedNativeProps({ zoom: true });
 
-// One-Euro filter params, the deadbands, the association gate and the box spring all live in
-// lib/detection-smoothing.ts (DETECTION_SMOOTHING_CONFIG) so they can be tuned in one place - and
-// so the CENTRE and the SIZE can be filtered differently, which is what stops the box breathing.
-// Worklet-only: anchors this confident (and near the best) are fused into the box. Stays here
-// because it is consumed inside the frame processor, not by any decision capture-core owns.
-const FUSE_SCORE = 0.25;
+// One-Euro filter params, deadbands and the box spring live in detection-smoothing.ts so centre and
+// size can be tuned independently. Candidate association now lives in the pure capture-core state
+// machine alongside ROI and selection behavior.
 /**
  * Live exposure coaching, DERIVED from the still gate rather than hand-typed.
  *
@@ -138,6 +139,19 @@ const DEBUG = false; // flip to true only while actively tuning best/sharp/lume
 // missing the budget costs far more (dropped preview frames, a janky JS thread) than a slower box.
 const TARGET_FPS_HIGH = 12;
 const TARGET_FPS_LOW = 6;
+/** Maximum time the shutter waits for an already-running detector pass to release the camera frame. */
+const CAPTURE_INFERENCE_WAIT_MS = 500;
+/** Keep capture paused until the navigation transition has removed this screen's camera output. */
+const CAPTURE_NAV_SETTLE_MS = 250;
+
+type DetectorBatch = {
+  candidates: DetectionCandidate[];
+  frameW: number;
+  frameH: number;
+  roi: SearchRoi;
+  zoomRatio: number;
+  postprocessFinishedAt: number;
+};
 
 // The camera is deliberately UNCONSTRAINED: no `format`, no device preference, no quality or
 // stabilisation props - exactly as it shipped before 6240da8 (2026-07-24), which capped the format
@@ -243,6 +257,7 @@ export default function CaptureScreen() {
   const [torch, setTorch] = useState(false);
   const [guide, setGuide] = useState(true);
   const [busy, setBusy] = useState(false);
+  const captureInFlightRef = useRef(false);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
   // The ONLY per-frame-derived React state. Everything else the detector produces (the box pose,
@@ -271,15 +286,42 @@ export default function CaptureScreen() {
 
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
   const minZoom = device?.minZoom ?? 1;
+  const neutralZoom = device?.neutralZoom ?? 1;
 
   const zoomSV = useSharedValue(1);
   const startZoom = useSharedValue(1);
+  // The detector's copy of the zoom. `zoomSV` is a Reanimated value living on Reanimated's UI
+  // runtime; the frame processor runs on VisionCamera's separate react-native-worklets-core
+  // runtime, and reading a foreign runtime's mutable from there crashes on device. So the zoom
+  // crosses over as a plain number and lands in a worklets-core value the frame processor owns.
+  const detectorZoomSV = useWorkletValue(1);
+  /* eslint-disable react-hooks/immutability -- worklet shared values are native-backed handles,
+     not React state; the compiler flags every write to one (same false positive as elsewhere). */
+  const syncDetectorZoom = useCallback(
+    (zoom: number) => {
+      detectorZoomSV.value = zoom;
+    },
+    [detectorZoomSV],
+  );
   useEffect(() => {
-    if (device?.neutralZoom) zoomSV.value = device.neutralZoom;
-  }, [device, zoomSV]);
+    zoomSV.value = neutralZoom;
+    syncDetectorZoom(neutralZoom);
+  }, [neutralZoom, zoomSV, syncDetectorZoom]);
+  /* eslint-enable react-hooks/immutability */
+  // Quantized so a pinch cannot flood the JS thread: the ROI schedule is smooth in log2(zoom), so
+  // 2% steps are far finer than anything the crop can resolve.
+  useAnimatedReaction(
+    () => Math.round(zoomSV.value * 50) / 50,
+    (zoom, previous) => {
+      if (zoom !== previous) runOnJS(syncDetectorZoom)(zoom);
+    },
+    [syncDetectorZoom],
+  );
 
-  // Detection hysteresis + stability, owned by capture-core so it can be tested without a camera.
-  const trackRef = useRef<TrackState>(initialTrackState);
+  // Candidate association, handover hysteresis and miss retention live in a pure tested state
+  // machine. Only its single active target is ever allowed to reach the drawing layer.
+  const targetRef = useRef(initialActiveTargetState);
+  const stableStreakRef = useRef(0);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
   const lastSize = useRef<{ w: number; h: number } | null>(null);
   // The detected box in full-frame (= saved photo) normalized coords, carried to the crop
@@ -287,148 +329,134 @@ export default function CaptureScreen() {
   const lastImgBox = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
   // One-Euro filters - one per tracked scalar. Preview box (what's drawn) + img box (forwarded
   // to crop). These keep the box steady under small camera shifts but responsive to real motion.
-  const euro = useRef({
-    px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-    py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-    pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-    ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-    ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-    iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-    iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-    ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-  }).current;
-  // Which lesion the track is following, so the box can't be stolen by a competing detection -
-  // see stepAssociation. Reset with the filters.
-  const assocRef = useRef(initialAssociationState);
-  // True until the next detection is drawn, so re-acquisition places the box instead of gliding to
-  // it. Set whenever the track is cleared or handed to a different lesion.
-  const snapNext = useRef(true);
+  const euro = useMemo(
+    () => ({
+      px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+      py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+      pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+      ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+      ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+      iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
+      iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+      ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+    }),
+    [],
+  );
   const clearTrack = () => {
-    trackRef.current = initialTrackState;
+    targetRef.current = initialActiveTargetState;
+    stableStreakRef.current = 0;
     resetDetectionBox(boxValues);
     metricsRef.current = null;
     lastCenter.current = null;
     lastSize.current = null;
     lastImgBox.current = null;
-    assocRef.current = initialAssociationState;
-    snapNext.current = true;
     // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
     Object.values(euro).forEach((f) => f.reset());
     applyCoach();
   };
-  const onDetection = useRunOnJS(
-    (
-      d: {
-        mcx: number;
-        mcy: number;
-        mw: number;
-        mh: number;
-        frameW: number;
-        frameH: number;
-        score: number;
-        locked: boolean;
-      } | null,
-    ) => {
-      // The decision logic lives in two tested pure modules and this function is the wiring between
-      // the worklet and them: capture-core.ts owns the confidence hysteresis, stability and the
-      // coordinate mapping (npm run test:capture), detection-smoothing.ts owns the association gate,
-      // the deadband and every smoothing constant (npm run test:smoothing).
-      const step = stepTrack(trackRef.current, d ? d.score : null);
-      trackRef.current = step.state;
-      if (!d) {
-        if (step.cleared) clearTrack();
+  /* eslint-disable react-hooks/immutability -- this callback writes native-backed worklet counters
+     and transient refs after render; none of those values participate in React rendering. */
+  const onDetections = useRunOnJS(
+    (batch: DetectorBatch) => {
+      // The timestamp originates immediately before the worklet schedules this callback, so this
+      // number includes the native/worklet -> JS bridge as well as mapping, selection and smoothing.
+      const recordSelection = () => {
+        if (PERF_ENABLED) perf.selectionMs.value += Date.now() - batch.postprocessFinishedAt;
+      };
+      const candidates = batch.candidates.map((candidate) => {
+        const imageBox = modelRoiToFullFrame(candidate.box, batch.roi);
+        return {
+          box: fullFrameToPreview(imageBox, batch.frameW, batch.frameH, SW, SH),
+          imageBox,
+          score: candidate.score,
+        };
+      });
+      const previewRoiBox = fullFrameToPreview(batch.roi, batch.frameW, batch.frameH, SW, SH);
+      const previewRoi: SearchRoi = {
+        ...previewRoiBox,
+        fraction: batch.roi.fraction,
+        zoomProgress: batch.roi.zoomProgress,
+      };
+      const decision = stepActiveTarget(
+        targetRef.current,
+        candidates,
+        previewRoi,
+        batch.roi.zoomProgress,
+        batch.zoomRatio,
+      );
+      targetRef.current = decision.state;
+
+      if (decision.kind === 'clear') {
+        clearTrack();
+        recordSelection();
         return;
       }
-      if (!step.visible) return; // still acquiring, or too weak to start a track
-
-      {
-        const t = Date.now();
-        // Undo the detector's centred square crop, then apply the preview's cover-crop.
-        const full = modelCropToFullFrame(
-          { cx: d.mcx, cy: d.mcy, w: d.mw, h: d.mh },
-          d.frameW,
-          d.frameH,
-        );
-        const prevBox = fullFrameToPreview(full, d.frameW, d.frameH, SW, SH);
-        const drawn = padDrawnBox(prevBox, BOX_PAD, BOX_MAX);
-        const b = { x: drawn.cx - drawn.w / 2, y: drawn.cy - drawn.h / 2, w: drawn.w, h: drawn.h };
-
-        // Is this the lesion we are already following? The worklet argmaxes ~12k anchors with no
-        // memory of the previous frame, so with two lesions in view the winner can alternate and
-        // the box teleports between them. Reject a detection that lands implausibly far from the
-        // tracked box - unless it keeps insisting, which means the user really has moved to a
-        // different lesion, and then the track is handed over cleanly rather than gliding across.
-        const assoc = stepAssociation(
-          assocRef.current,
-          lastCenter.current,
-          { x: b.x + b.w / 2, y: b.y + b.h / 2 },
-          SMOOTH,
-        );
-        assocRef.current = assoc.state;
-        if (!assoc.accept) return; // a competing detection; keep drawing the lesion we were on
-        if (assoc.handover) {
-          // New object: drop the filter history so it starts clean at the new position, and place
-          // the box there instead of animating the whole way.
-          Object.values(euro).forEach((f) => f.reset());
-          lastCenter.current = null;
-          lastSize.current = null;
-          snapNext.current = true;
-        }
-
-        // Filter the preview box. Centre and size use different constants (SMOOTH.position vs
-        // SMOOTH.size): the detector's extents are noisier than its centre, so filtering both the
-        // same way is what made the box breathe. Then a SOFT deadband - it damps sub-threshold
-        // movement without freezing the value, so nothing accumulates to be released as a step.
-        let fx = euro.px.filter(b.x + b.w / 2, t);
-        let fy = euro.py.filter(b.y + b.h / 2, t);
-        let fw = euro.pw.filter(b.w, t);
-        let fh = euro.ph.filter(b.h, t);
-        const prev = lastCenter.current;
-        // How far the box moved this frame → "stable" once it holds still for a while.
-        const moved = prev ? Math.max(Math.abs(fx - prev.x), Math.abs(fy - prev.y)) : 1;
-        fx = softDeadband(fx, prev ? prev.x : null, SMOOTH.positionDeadband);
-        fy = softDeadband(fy, prev ? prev.y : null, SMOOTH.positionDeadband);
-        const prevS = lastSize.current;
-        const sizeBand = SMOOTH.positionDeadband * SMOOTH.sizeDeadbandScale;
-        fw = softDeadband(fw, prevS ? prevS.w : null, sizeBand);
-        fh = softDeadband(fh, prevS ? prevS.h : null, sizeBand);
-        trackRef.current = {
-          ...trackRef.current,
-          stableStreak: stepStability(trackRef.current.stableStreak, moved),
-        };
-        lastCenter.current = { x: fx, y: fy };
-        lastSize.current = { w: fw, h: fh };
-        // Straight to the UI thread: the critically-damped spring interpolates these 12 Hz updates
-        // up to display rate, but React is not involved. The first detection of a track is placed
-        // rather than sprung, so re-acquisition appears where the lesion is instead of flying in.
-        trackDetectionBox(
-          boxValues,
-          { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh },
-          { snap: snapNext.current },
-        );
-        snapNext.current = false;
-
-        // Filter the forward-to-crop box in full-frame coords (also feeds positional coaching).
-        const icx = euro.ix.filter(full.cx, t);
-        const icy = euro.iy.filter(full.cy, t);
-        const iw = euro.iw.filter(full.w, t);
-        const ih = euro.ih.filter(full.h, t);
-        lastImgBox.current = { cx: icx, cy: icy, w: iw, h: ih };
-        metricsRef.current = {
-          cx: icx,
-          cy: icy,
-          w: iw,
-          h: ih,
-          locked: d.locked,
-          stable: isStable(trackRef.current),
-        };
-        applyCoach();
+      if (!decision.target || decision.kind === 'none' || decision.kind === 'hold') {
+        recordSelection();
+        return;
       }
+
+      const target = decision.target;
+      const imageBox = target.imageBox;
+      if (!imageBox) {
+        recordSelection();
+        return;
+      }
+      const t = Date.now();
+      const handover = decision.kind === 'handover';
+      const acquired = decision.kind === 'acquire';
+      if (handover) {
+        Object.values(euro).forEach((filter) => filter.reset());
+        lastCenter.current = null;
+        lastSize.current = null;
+      }
+
+      const drawn = padDrawnBox(target.box, BOX_PAD, BOX_MAX);
+      let fx = euro.px.filter(drawn.cx, t);
+      let fy = euro.py.filter(drawn.cy, t);
+      let fw = euro.pw.filter(drawn.w, t);
+      let fh = euro.ph.filter(drawn.h, t);
+      const previousCenter = lastCenter.current;
+      const moved = previousCenter
+        ? Math.max(Math.abs(fx - previousCenter.x), Math.abs(fy - previousCenter.y))
+        : 1;
+      fx = softDeadband(fx, previousCenter?.x ?? null, SMOOTH.positionDeadband);
+      fy = softDeadband(fy, previousCenter?.y ?? null, SMOOTH.positionDeadband);
+      const previousSize = lastSize.current;
+      const sizeBand = SMOOTH.positionDeadband * SMOOTH.sizeDeadbandScale;
+      fw = softDeadband(fw, previousSize?.w ?? null, sizeBand);
+      fh = softDeadband(fh, previousSize?.h ?? null, sizeBand);
+      stableStreakRef.current = acquired || handover
+        ? 0
+        : stepStability(stableStreakRef.current, moved);
+      lastCenter.current = { x: fx, y: fy };
+      lastSize.current = { w: fw, h: fh };
+
+      const displayBox = { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh };
+      if (handover) handoverDetectionBox(boxValues, displayBox);
+      else trackDetectionBox(boxValues, displayBox, { snap: acquired });
+
+      const icx = euro.ix.filter(imageBox.cx, t);
+      const icy = euro.iy.filter(imageBox.cy, t);
+      const iw = euro.iw.filter(imageBox.w, t);
+      const ih = euro.ih.filter(imageBox.h, t);
+      lastImgBox.current = { cx: icx, cy: icy, w: iw, h: ih };
+      metricsRef.current = {
+        cx: icx,
+        cy: icy,
+        w: iw,
+        h: ih,
+        locked: target.score >= LOCK_SCORE,
+        stable: stableStreakRef.current >= STABLE_FRAMES,
+      };
+      applyCoach();
+      recordSelection();
     },
     // SW/SH feed the preview mapping, so a rotation must rebuild this closure rather than keep
     // mapping against the old screen size.
     [SW, SH],
   );
+  /* eslint-enable react-hooks/immutability */
   // Quality gates arrive as a single code, already debounced in the worklet, and only when the
   // verdict actually changes - instead of three unconditional JS hops per frame.
   const onGate = useRunOnJS((code: number) => {
@@ -441,6 +469,10 @@ export default function CaptureScreen() {
   // change-gated without a JS round trip. `-1` forces the next frame to re-emit.
   const blurStreakSV = useWorkletValue(0);
   const lastGateSV = useWorkletValue(-1);
+  // Shutter coordination crosses JS and the camera worklet. Pausing first prevents a new detector
+  // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
+  const capturePausedSV = useWorkletValue(false);
+  const inferenceBusySV = useWorkletValue(false);
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
   // model (unbox inside the worklet) and read the output/input shapes here on the JS thread.
@@ -448,9 +480,6 @@ export default function CaptureScreen() {
   const layout = useMemo(() => (model == null ? null : readLayout(model)), [model]);
 
   const targetFps = tier === 'low' ? TARGET_FPS_LOW : TARGET_FPS_HIGH;
-  // Weighted Boxes Fusion costs a second walk over the confident anchors to steady the box. The
-  // One-Euro filter already does most of that job, so low-end devices spend the budget on cadence.
-  const fuseBoxes = tier !== 'low';
 
   // Re-arm the gate whenever the detector stops or starts, so a stale "too dark" overlay can't
   // outlive the frames that produced it.
@@ -463,193 +492,177 @@ export default function CaptureScreen() {
     blurStreakSV.value = 0;
     gateRef.current = GATE_OK;
     if (!guide || !isFocused) {
+      targetRef.current = initialActiveTargetState;
+      stableStreakRef.current = 0;
+      lastCenter.current = null;
+      lastSize.current = null;
+      lastImgBox.current = null;
+      Object.values(euro).forEach((filter) => filter.reset());
       metricsRef.current = null;
       // Teardown, not detection loss: the guide was switched off or the screen left, so there
       // is nothing to fade for - reset the pose immediately rather than animating a box the user
       // is no longer looking at (and which would otherwise fade in again on return).
       resetDetectionBox(boxValues, { immediate: true });
-      snapNext.current = true;
     }
     applyCoach();
-  }, [guide, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV]);
+  }, [guide, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV, euro]);
   /* eslint-enable react-hooks/immutability */
 
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
-      if (boxedModel == null || layout == null) return;
+      if (boxedModel == null || layout == null || capturePausedSV.value) return;
       runAtTargetFps(targetFps, () => {
         'worklet';
-        const t0 = Date.now();
-        const tflite = boxedModel.unbox();
-        const input = resize(frame, {
-          scale: { width: layout.inputSize, height: layout.inputSize },
-          pixelFormat: 'rgb',
-          dataType: 'float32',
-          rotation: '90deg',
-        });
+        if (capturePausedSV.value) return;
+        inferenceBusySV.value = true;
+        try {
+          // Fast-TFLite's interpreter is deliberately invoked on VisionCamera's established frame
+          // processor runtime. Moving this HybridObject into VisionCamera's secondary runAsync
+          // context caused physical iOS builds to stop completing inference. This runtime remains
+          // separate from React/UI, and the 12/6 FPS limiter bounds how often it can block analysis.
+          const t0 = Date.now();
+          const zoom = detectorZoomSV.value;
+          const zoomRatio = Math.max(1, zoom / Math.max(0.001, neutralZoom));
+          const roi = searchRoiForZoom(frame.width, frame.height, zoom, neutralZoom);
+          // Keep YUV crop origins and dimensions even for device compatibility.
+          const side = Math.max(
+            2,
+            Math.floor((Math.min(frame.width, frame.height) * roi.fraction) / 2) * 2,
+          );
+          const cropX = Math.max(0, Math.floor((frame.width - side) / 4) * 2);
+          const cropY = Math.max(0, Math.floor((frame.height - side) / 4) * 2);
+          const tflite = boxedModel.unbox();
+          const input = resize(frame, {
+            crop: { x: cropX, y: cropY, width: side, height: side },
+            scale: { width: layout.inputSize, height: layout.inputSize },
+            pixelFormat: 'rgb',
+            dataType: 'float32',
+            rotation: '90deg',
+          });
 
-        // Quality gates over the model input (rgb float 0..1): mean luminance for "too dark",
-        // mean horizontal gradient energy for "too blurry / hold steady".
-        const Wn = layout.inputSize;
-        let sum = 0;
-        let n = 0;
-        let grad = 0;
-        let gc = 0;
-        for (let y = 0; y < Wn; y += 16) {
-          const row = y * Wn;
-          for (let x = 0; x < Wn - 8; x += 16) {
-            const r = input[(row + x) * 3];
-            sum += r;
-            n++;
-            const d = input[(row + x + 8) * 3] - r;
-            grad += d * d;
-            gc++;
-          }
-        }
-        const lume = n > 0 ? sum / n : 1;
-        const sharp = gc > 0 ? grad / gc : 1;
-
-        // Fold the gates into one code, in the same priority order the overlays use, and
-        // debounce the blur streak here so the JS thread only hears about real changes.
-        let gate = GATE_OK;
-        if (lume < DARK_THRESHOLD) gate = GATE_DARK;
-        else if (sharp < BLUR_THRESHOLD) gate = GATE_BLURRY;
-        if (gate === GATE_BLURRY) {
-          blurStreakSV.value = Math.min(BLUR_SHOW + 2, blurStreakSV.value + 1);
-          if (blurStreakSV.value < BLUR_SHOW) gate = GATE_OK; // not yet enough consecutive blurry frames
-        } else {
-          blurStreakSV.value = 0;
-        }
-        if (gate !== lastGateSV.value) {
-          lastGateSV.value = gate;
-          onGate(gate);
-        }
-
-        // `resize` hands back a Float32Array over its own freshly allocated buffer, so the whole
-        // buffer IS the tensor - copying it would burn ~5 MB per frame for nothing. The guard
-        // keeps the copy as a fallback in case the plugin ever returns a view into a pool.
-        // (fast-tflite takes a raw ArrayBuffer, never a TypedArray.)
-        const inputBuffer =
-          input.byteOffset === 0 && input.byteLength === input.buffer.byteLength
-            ? input.buffer
-            : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
-        const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
-        const out = new Float32Array(outputs[0]);
-        const chMajor = layout.chMajor;
-        const channels = layout.channels;
-        const anchors = layout.anchors;
-        const numClasses = layout.numClasses;
-
-        // Single pass - argmax + candidate collection. Find the highest-scoring anchor and its box
-        // (center in channels 0,1; w/h in channels 2,3, all normalized to the model input), and at
-        // the same time remember every anchor confident enough to be fused below. The fusion used
-        // to re-walk all ~8400 anchors and recompute the same per-anchor class max; collecting the
-        // handful of survivors here makes that second walk proportional to the candidates instead.
-        let best = 0;
-        let bcx = 0;
-        let bcy = 0;
-        let bbw = 0;
-        let bbh = 0;
-        const candIdx: number[] = [];
-        const candScore: number[] = [];
-        for (let i = 0; i < anchors; i++) {
-          let score = 0;
-          if (chMajor) {
-            for (let k = 0; k < numClasses; k++) {
-              const v = out[(4 + k) * anchors + i];
-              if (v > score) score = v;
+          // Quality coaching follows the active ROI, measuring the area the user is inspecting.
+          const Wn = layout.inputSize;
+          let sum = 0;
+          let n = 0;
+          let grad = 0;
+          let gc = 0;
+          for (let y = 0; y < Wn; y += 16) {
+            const row = y * Wn;
+            for (let x = 0; x < Wn - 8; x += 16) {
+              const red = input[(row + x) * 3];
+              sum += red;
+              n++;
+              const delta = input[(row + x + 8) * 3] - red;
+              grad += delta * delta;
+              gc++;
             }
+          }
+          const lume = n > 0 ? sum / n : 1;
+          const sharp = gc > 0 ? grad / gc : 1;
+
+          let gate = GATE_OK;
+          if (lume < DARK_THRESHOLD) gate = GATE_DARK;
+          else if (sharp < BLUR_THRESHOLD) gate = GATE_BLURRY;
+          if (gate === GATE_BLURRY) {
+            blurStreakSV.value = Math.min(BLUR_SHOW + 2, blurStreakSV.value + 1);
+            if (blurStreakSV.value < BLUR_SHOW) gate = GATE_OK;
           } else {
-            const base = i * channels;
-            for (let k = 0; k < numClasses; k++) {
-              const v = out[base + 4 + k];
-              if (v > score) score = v;
+            blurStreakSV.value = 0;
+          }
+          if (gate !== lastGateSV.value) {
+            lastGateSV.value = gate;
+            onGate(gate);
+          }
+          const tPreprocessed = Date.now();
+
+          const inputBuffer =
+            input.byteOffset === 0 && input.byteLength === input.buffer.byteLength
+              ? input.buffer
+              : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
+          const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
+          const tInferred = Date.now();
+          const out = new Float32Array(outputs[0]);
+          const { chMajor, channels, anchors, numClasses } = layout;
+
+          const rawCandidates: DetectionCandidate[] = [];
+          for (let i = 0; i < anchors; i++) {
+            let score = 0;
+            if (chMajor) {
+              for (let k = 0; k < numClasses; k++) {
+                const value = out[(4 + k) * anchors + i];
+                if (value > score) score = value;
+              }
+            } else {
+              const base = i * channels;
+              for (let k = 0; k < numClasses; k++) {
+                const value = out[base + 4 + k];
+                if (value > score) score = value;
+              }
+            }
+            if (score >= RAW_CANDIDATE_SCORE) {
+              rawCandidates.push({
+                box: {
+                  cx: out[chMajor ? i : i * channels],
+                  cy: out[chMajor ? anchors + i : i * channels + 1],
+                  w: out[chMajor ? 2 * anchors + i : i * channels + 2],
+                  h: out[chMajor ? 3 * anchors + i : i * channels + 3],
+                },
+                score,
+              });
             }
           }
-          if (score > best) {
-            best = score;
-            bcx = out[chMajor ? i : i * channels];
-            bcy = out[chMajor ? anchors + i : i * channels + 1];
-            bbw = out[chMajor ? 2 * anchors + i : i * channels + 2];
-            bbh = out[chMajor ? 3 * anchors + i : i * channels + 3];
+          const candidates = clusterDetectionCandidates(rawCandidates);
+          const tPostprocessed = Date.now();
+          if (DEBUG) {
+            const best = candidates.length > 0 ? candidates[0].score : 0;
+            onDebug(
+              'best=' + best.toFixed(2) + ' n=' + candidates.length + ' sharp=' + sharp.toFixed(4),
+            );
           }
-          if (score >= FUSE_SCORE) {
-            candIdx.push(i);
-            candScore.push(score);
-          }
-        }
-
-        // Weighted Boxes Fusion: a single argmax anchor flickers frame-to-frame (a different
-        // anchor wins each frame), which makes the box jitter. Fuse all confident anchors near
-        // the best one (confidence-weighted average of cx,cy,w,h) into one steady box. The
-        // proximity gate keeps a second, distant lesion from being merged in.
-        let cx = bcx;
-        let cy = bcy;
-        let bw = bbw;
-        let bh = bbh;
-        if (fuseBoxes && best >= KEEP_SCORE) {
-          const near = Math.max(bbw, bbh) * 0.5;
-          let ws = 0;
-          let sx = 0;
-          let sy = 0;
-          let sw = 0;
-          let sh = 0;
-          for (let c = 0; c < candIdx.length; c++) {
-            const i = candIdx[c];
-            const ax = out[chMajor ? i : i * channels];
-            const ay = out[chMajor ? anchors + i : i * channels + 1];
-            if (Math.abs(ax - bcx) > near || Math.abs(ay - bcy) > near) continue;
-            const aw = out[chMajor ? 2 * anchors + i : i * channels + 2];
-            const ah = out[chMajor ? 3 * anchors + i : i * channels + 3];
-            const score = candScore[c];
-            ws += score;
-            sx += score * ax;
-            sy += score * ay;
-            sw += score * aw;
-            sh += score * ah;
-          }
-          if (ws > 0) {
-            cx = sx / ws;
-            cy = sy / ws;
-            bw = sw / ws;
-            bh = sh / ws;
-          }
-        }
-
-        if (DEBUG) onDebug('best=' + best.toFixed(2) + ' sharp=' + sharp.toFixed(4) + ' lume=' + lume.toFixed(2));
-
-        if (best >= KEEP_SCORE) {
-          // The model→screen mapping lives in capture-core (pinned by npm run test:capture) and
-          // runs on the JS side. A worklet can only call functions marked 'worklet', and keeping
-          // this arithmetic somewhere it can be imported and unit-tested normally is worth
-          // forwarding four extra numbers across the bridge - it is the piece whose failure mode
-          // is a silently off-target crop rather than a visible error.
-          onDetection({
-            mcx: cx,
-            mcy: cy,
-            mw: bw,
-            mh: bh,
+          onDetections({
+            candidates,
             frameW: frame.width,
             frameH: frame.height,
-            score: best,
-            locked: best >= LOCK_SCORE,
+            roi,
+            zoomRatio,
+            postprocessFinishedAt: tPostprocessed,
           });
-        } else {
-          onDetection(null);
-        }
 
-        if (PERF_ENABLED) {
-          const dt = Date.now() - t0;
-          perf.frames.value = perf.frames.value + 1;
-          perf.sumMs.value = perf.sumMs.value + dt;
-          if (dt > perf.maxMs.value) perf.maxMs.value = dt;
+          if (PERF_ENABLED) {
+            const total = tPostprocessed - t0;
+            perf.frames.value += 1;
+            perf.preprocessMs.value += tPreprocessed - t0;
+            perf.inferenceMs.value += tInferred - tPreprocessed;
+            perf.postprocessMs.value += tPostprocessed - tInferred;
+            perf.totalMs.value += total;
+            if (total > perf.maxMs.value) perf.maxMs.value = total;
+          }
+        } finally {
+          inferenceBusySV.value = false;
         }
       });
     },
-    [boxedModel, layout, resize, targetFps, fuseBoxes, onDetection, onGate, onDebug, blurStreakSV, lastGateSV, perf],
+    [
+      boxedModel,
+      layout,
+      resize,
+      targetFps,
+      neutralZoom,
+      detectorZoomSV,
+      onDetections,
+      onGate,
+      onDebug,
+      blurStreakSV,
+      lastGateSV,
+      capturePausedSV,
+      inferenceBusySV,
+      perf,
+    ],
   );
 
+  /* eslint-disable react-hooks/immutability -- Gesture callbacks mutate Reanimated shared values
+     on the UI runtime; React never reads these values during render. */
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
@@ -663,6 +676,7 @@ export default function CaptureScreen() {
         }),
     [maxZoom, minZoom, zoomSV, startZoom],
   );
+  /* eslint-enable react-hooks/immutability */
 
   // Tap-to-focus like the native camera: focus the device at the tapped point + show a reticle.
   const focusAt = useCallback(
@@ -674,6 +688,7 @@ export default function CaptureScreen() {
     },
     [],
   );
+  /* eslint-disable react-hooks/refs -- Gesture Handler invokes this callback after render. */
   const tap = useMemo(
     () =>
       Gesture.Tap()
@@ -682,6 +697,7 @@ export default function CaptureScreen() {
         .onEnd((e) => focusAt(e.x, e.y)),
     [focusAt],
   );
+  /* eslint-enable react-hooks/refs */
   const gesture = useMemo(() => Gesture.Simultaneous(pinch, tap), [pinch, tap]);
 
   useEffect(() => {
@@ -712,6 +728,7 @@ export default function CaptureScreen() {
    * layout ever changes.
    */
   const zoomTrackW = useSharedValue(0);
+  /* eslint-disable react-hooks/immutability -- Gesture callbacks mutate UI-runtime shared values. */
   const zoomDrag = useMemo(
     () =>
       Gesture.Pan()
@@ -730,6 +747,7 @@ export default function CaptureScreen() {
         }),
     [minZoom, maxZoom, zoomSV, zoomTrackW],
   );
+  /* eslint-enable react-hooks/immutability */
 
   // One haptic tick the moment the frame becomes good, so a well-framed shot feels earned.
   const wasReady = useRef(false);
@@ -739,14 +757,31 @@ export default function CaptureScreen() {
     wasReady.current = ready;
   }, [coach]);
 
+  /* eslint-disable react-hooks/immutability -- shoot coordinates native-backed shared values with
+     the camera worklet; React never reads either value during render. */
   async function shoot() {
-    if (!camera.current || busy) return;
-    setBusy(true);
+    const cam = camera.current;
+    if (!cam || busy || captureInFlightRef.current) return;
+    captureInFlightRef.current = true;
+    capturePausedSV.value = true;
+    let navigated = false;
     try {
+      // The current detector pass owns a camera frame and the shared TFLite interpreter. Let it
+      // finish before asking the native camera to capture a still; new passes are already paused.
+      const waitStarted = Date.now();
+      while (inferenceBusySV.value && Date.now() - waitStarted < CAPTURE_INFERENCE_WAIT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, 8));
+      }
+      if (inferenceBusySV.value) throw new Error('Detector did not become idle before capture');
+
+      // Only enter the UI's capturing state after the active frame has completed. The processor
+      // remains attached but no-ops through capturePausedSV, avoiding camera reconfiguration at
+      // exactly the moment takePhoto asks the same session for a still.
+      setBusy(true);
       // Never fire a flash burst: it flickers (VisionCamera toggles the torch off→burst→on) and
       // captures at the wrong exposure. The torch toggle is the light control - WYSIWYG with the
       // preview - so we shoot under the steady light already shown.
-      const photo = await camera.current.takePhoto({ flash: 'off' });
+      const photo = await cam.takePhoto({ flash: 'off' });
       const raw = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
       // VisionCamera writes orientation as EXIF only; bake it into the pixels so the crop
       // screen's Image.getSize dims and the displayed image agree (otherwise it shows sideways).
@@ -777,10 +812,27 @@ export default function CaptureScreen() {
             : {}),
         },
       });
+      navigated = true;
+    } catch (error) {
+      console.warn('[capture] takePhoto failed', error);
+      Alert.alert(t("Couldn't capture photo"), t("Please try again."));
     } finally {
-      setBusy(false);
+      if (navigated) {
+        // Do not reattach the frame processor during the push transition. The capture screen stays
+        // mounted below crop, so release it after navigation has made the camera inactive.
+        setTimeout(() => {
+          captureInFlightRef.current = false;
+          capturePausedSV.value = false;
+          setBusy(false);
+        }, CAPTURE_NAV_SETTLE_MS);
+      } else {
+        captureInFlightRef.current = false;
+        capturePausedSV.value = false;
+        setBusy(false);
+      }
     }
   }
+  /* eslint-enable react-hooks/immutability */
 
   if (!hasPermission) {
     return (
@@ -883,6 +935,7 @@ export default function CaptureScreen() {
           <View
             style={styles.zoomHit}
             onLayout={(e) => {
+              // eslint-disable-next-line react-hooks/immutability -- native-backed shared value
               zoomTrackW.value = e.nativeEvent.layout.width;
             }}>
             <View style={styles.zoomTrack}>
@@ -911,6 +964,8 @@ export default function CaptureScreen() {
             </ThemedText>
           </View>
         ) : null}
+        {/* eslint-disable-next-line react-hooks/immutability -- event handler coordinates a
+            native-backed worklet signal after render */}
         <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")}>
           <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
           <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />

@@ -26,6 +26,9 @@ const c = await import(pathToFileURL(join(out, 'capture-core.js')).href);
 const {
   computeCoach, stepTrack, stepStability, isStable, applyDeadband, initialTrackState,
   modelCropToFullFrame, fullFrameToModelCrop, fullFrameToPreview, previewToFullFrame, padDrawnBox,
+  roiFractionForZoom, searchRoiForZoom, modelRoiToFullFrame, fullFrameToModelRoi,
+  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState,
+  MAX_CLUSTERED_CANDIDATES,
   CREATE_SCORE, KEEP_SCORE, DETECT_SHOW, KEEP_GRACE, STABLE_EPS, STABLE_FRAMES, DEADBAND,
   FAR_MAX, CLOSE_MIN, OFFSET_MAX,
   GATE_OK, GATE_DARK, GATE_BLURRY,
@@ -230,6 +233,157 @@ check('square frame is an identity crop', boxNear(modelCropToFullFrame(BOXES[1],
 check('padding grows the box', padDrawnBox({ cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 }, 0.25, 0.98).w > 0.2);
 check('padding never moves the centre', padDrawnBox({ cx: 0.3, cy: 0.7, w: 0.2, h: 0.2 }, 0.25, 0.98).cx === 0.3);
 check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0.98).w === 0.98);
+
+/* ------------------------------------------------------------------ zoom ROI */
+{
+  check('1x keeps the validated full square', near(roiFractionForZoom(1, 1), 1));
+  check('2x uses the moderate 68% ROI', near(roiFractionForZoom(2, 1), 0.68));
+  check('4x uses the strong 46% ROI', near(roiFractionForZoom(4, 1), 0.46));
+  check('stronger zoom does not shrink below 46%', near(roiFractionForZoom(8, 1), 0.46));
+  check('ultra-wide zoom below neutral does not narrow the ROI', near(roiFractionForZoom(0.5, 1), 1));
+
+  let monotonic = true;
+  let previous = 2;
+  for (let zoom = 1; zoom <= 4; zoom += 0.05) {
+    const fraction = roiFractionForZoom(zoom, 1);
+    if (fraction > previous + 1e-12) monotonic = false;
+    previous = fraction;
+  }
+  check('ROI shrinks monotonically and continuously with zoom', monotonic);
+
+  const portrait = searchRoiForZoom(1080, 1920, 2, 1);
+  const landscape = searchRoiForZoom(1920, 1080, 2, 1);
+  check('ROI geometry is orientation independent', boxNear(portrait, landscape));
+  check('ROI remains centered', near(portrait.cx, 0.5) && near(portrait.cy, 0.5));
+  check('ROI is bounded by the upright frame', portrait.w <= 1 && portrait.h <= 1);
+
+  const modelBox = { cx: 0.27, cy: 0.71, w: 0.19, h: 0.13 };
+  const full = modelRoiToFullFrame(modelBox, portrait);
+  check('ROI mapping round-trips exactly', boxNear(fullFrameToModelRoi(full, portrait), modelBox));
+  check('mapped ROI box stays in the full frame', full.cx >= 0 && full.cx <= 1 && full.cy >= 0 && full.cy <= 1);
+}
+
+/* ------------------------------------------------------------------ candidate clustering */
+{
+  const tight = { cx: 0.5, cy: 0.5, w: 0.2, h: 0.18 };
+  const raw = [
+    { box: tight, score: 0.8 },
+    { box: { cx: 0.502, cy: 0.498, w: 0.202, h: 0.178 }, score: 0.75 },
+    { box: { cx: 0.5, cy: 0.5, w: 0.26, h: 0.23 }, score: 0.7 },
+    { box: { cx: 0.82, cy: 0.8, w: 0.08, h: 0.09 }, score: 0.65 },
+    { box: { cx: Number.NaN, cy: 0.5, w: 0.2, h: 0.2 }, score: 0.99 },
+    { box: { cx: 0.1, cy: 0.1, w: 0, h: 0.1 }, score: 0.99 },
+  ];
+  const clustered = clusterDetectionCandidates(raw);
+  check('overlapping anchors collapse into object candidates', clustered.length === 2);
+  check('weighted median resists an oversized duplicate', clustered[0].box.w < 0.23);
+  check('distant lesions remain separate candidates', boxIou(clustered[0].box, clustered[1].box) === 0);
+  check('malformed candidates are removed', clustered.every((candidate) => Number.isFinite(candidate.box.cx)));
+
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    box: { cx: (i % 5) * 0.2 + 0.02, cy: Math.floor(i / 5) * 0.22 + 0.02, w: 0.015, h: 0.015 },
+    score: 0.9 - i * 0.01,
+  }));
+  check('clustered output is capped for the JS bridge', clusterDetectionCandidates(many).length === MAX_CLUSTERED_CANDIDATES);
+}
+
+/* ------------------------------------------------------------------ single-target sequences */
+{
+  const roi = { cx: 0.5, cy: 0.5, w: 1, h: 1, fraction: 1, zoomProgress: 0 };
+  const C = (cx, cy, score = 0.8, w = 0.1, h = 0.1) => ({ box: { cx, cy, w, h }, score });
+  const acquire = (candidate, activeRoi = roi) => {
+    const one = stepActiveTarget(initialActiveTargetState, [candidate], activeRoi, activeRoi.zoomProgress, 1);
+    return stepActiveTarget(one.state, [candidate], activeRoi, activeRoi.zoomProgress, 1);
+  };
+
+  const centered = C(0.5, 0.5);
+  const acquired = acquire(centered);
+  check('target is hidden for the first acquisition cycle',
+    stepActiveTarget(initialActiveTargetState, [centered], roi, 0, 1).kind === 'none');
+  check('matching second acquisition cycle shows one target', acquired.kind === 'acquire' && acquired.target === centered);
+
+  const initialNominee = C(0.42, 0.5, 0.6);
+  const firstNomination = stepActiveTarget(initialActiveTargetState, [initialNominee], roi, 0, 1);
+  const brieflyHigher = C(0.62, 0.5, 0.95);
+  const stickyAcquire = stepActiveTarget(
+    firstNomination.state,
+    [C(0.42, 0.5, 0.3), brieflyHigher],
+    roi,
+    0,
+    1,
+  );
+  check(
+    'acquisition confirms its nominee before re-running the global ranking',
+    stickyAcquire.kind === 'acquire' && near(stickyAcquire.target.box.cx, 0.42),
+  );
+
+  const huge = C(0.5, 0.5, 0.99, 0.9, 0.9);
+  const localized = C(0.62, 0.5, 0.3, 0.12, 0.12);
+  const firstChoice = stepActiveTarget(initialActiveTargetState, [huge, localized], roi, 0, 1);
+  check('localized candidate is preferred over a frame-sized region', firstChoice.state.acquisition.candidate === localized);
+
+  const active = acquire(C(0.72, 0.5, 0.5)).state;
+  const sameLow = C(0.72, 0.5, 0.25);
+  const distantHigh = C(0.9, 0.85, 0.99);
+  const confidenceOnly = stepActiveTarget(active, [sameLow, distantHigh], roi, 0, 1);
+  check('higher confidence alone cannot steal the track', confidenceOnly.kind === 'update' && confidenceOnly.target === sameLow);
+
+  const tightContinuation = C(0.72, 0.5, 0.3, 0.1, 0.1);
+  const oversizedContinuation = C(0.72, 0.5, 0.99, 0.85, 0.85);
+  const tightAssociation = stepActiveTarget(
+    active,
+    [oversizedContinuation, tightContinuation],
+    roi,
+    0,
+    1,
+  );
+  check(
+    'active association prefers a tight candidate over an oversized match',
+    tightAssociation.kind === 'update' && tightAssociation.target === tightContinuation,
+  );
+
+  let missing = acquired.state;
+  const missKinds = [];
+  for (let i = 0; i < 4; i++) {
+    const result = stepActiveTarget(missing, [], roi, 0, 1);
+    missing = result.state;
+    missKinds.push(result.kind);
+  }
+  check('three consecutive misses retain the previous box', missKinds.slice(0, 3).every((kind) => kind === 'hold'));
+  check('the fourth consecutive miss clears the box', missKinds[3] === 'clear');
+
+  const moved = C(0.53, 0.51, 0.7);
+  check('small camera motion updates the same track', stepActiveTarget(acquired.state, [moved], roi, 0, 1).kind === 'update');
+
+  const spike = C(0.5, 0.5, 0.9, 0.45, 0.45);
+  const spikeOnce = stepActiveTarget(acquired.state, [spike], roi, 0, 1);
+  const spikeTwice = stepActiveTarget(spikeOnce.state, [spike], roi, 0, 1);
+  check('one-frame geometry spike is held, not drawn', spikeOnce.kind === 'hold');
+  check('persistent geometry change is accepted on cycle two', spikeTwice.kind === 'update');
+
+  let switching = acquire(C(0.78, 0.5, 0.8)).state;
+  const incumbent = C(0.78, 0.5, 0.4);
+  const challenger = C(0.5, 0.5, 0.9);
+  const switchKinds = [];
+  for (let i = 0; i < 3; i++) {
+    const result = stepActiveTarget(switching, [incumbent, challenger], roi, 0, 1);
+    switching = result.state;
+    switchKinds.push(result.kind);
+  }
+  check('challenger cannot switch during its first two cycles', switchKinds[0] === 'update' && switchKinds[1] === 'update');
+  check('persistent centered challenger switches on cycle three', switchKinds[2] === 'handover');
+
+  const narrowRoi = { cx: 0.5, cy: 0.5, w: 0.46, h: 0.46, fraction: 0.46, zoomProgress: 1 };
+  let outside = acquire(C(0.75, 0.5, 0.8), roi).state;
+  const outsideIncumbent = C(0.75, 0.5, 0.5, 0.02, 0.02);
+  const insideChallenger = C(0.65, 0.6, 0.8, 0.02, 0.02);
+  let outsideResult;
+  for (let i = 0; i < 3; i++) {
+    outsideResult = stepActiveTarget(outside, [outsideIncumbent, insideChallenger], narrowRoi, 1, 4);
+    outside = outsideResult.state;
+  }
+  check('ROI exit still requires a controlled three-cycle handoff', outsideResult.kind === 'handover');
+}
 
 if (fails.length) {
   console.error(`\ncapture core: ${pass} passed, ${fails.length} FAILED`);

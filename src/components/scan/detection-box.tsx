@@ -3,6 +3,8 @@ import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withDelay,
+  withSequence,
   withSpring,
   withTiming,
   type SharedValue,
@@ -33,8 +35,8 @@ const SPRING = boxSpring();
  * lag on low-end Android. Writing shared values instead keeps the animation entirely on the UI
  * thread: the spring interpolates the 12 Hz detections up to display rate, but React never runs.
  *
- * `active` is a 0..1 cross-fade between the two views below, not a visibility flag - see
- * DetectionBox for why that distinction is what removes the teleport on detection loss.
+ * `active` and `searching` are independent opacities. Normal loss cross-fades them, while a target
+ * handover can briefly hide the lesion box without flashing the centered search guide underneath.
  */
 export type DetectionBoxValues = {
   x: SharedValue<number>;
@@ -42,6 +44,7 @@ export type DetectionBoxValues = {
   w: SharedValue<number>;
   h: SharedValue<number>;
   active: SharedValue<number>;
+  searching: SharedValue<number>;
 };
 
 /** The centered "searching" guide the overlay rests in when nothing is detected. */
@@ -58,9 +61,13 @@ export function useDetectionBoxValues(): DetectionBoxValues {
   const w = useSharedValue(rest.w);
   const h = useSharedValue(rest.h);
   const active = useSharedValue(0);
+  const searching = useSharedValue(1);
   // Stable identity: callers put this in effect and frame-processor dependency arrays, where a
   // fresh object each render would re-run the effect (and rebuild the worklet) every time.
-  return useMemo(() => ({ x, y, w, h, active }), [x, y, w, h, active]);
+  return useMemo(
+    () => ({ x, y, w, h, active, searching }),
+    [x, y, w, h, active, searching],
+  );
 }
 
 /**
@@ -95,7 +102,28 @@ export function trackDetectionBox(
     v.w.value = withSpring(pw, SPRING);
     v.h.value = withSpring(ph, SPRING);
   }
+  v.searching.value = withTiming(0, { duration: CFG.fadeInMs });
   v.active.value = withTiming(1, { duration: CFG.fadeInMs });
+}
+
+/**
+ * Move the one tracked overlay to a different lesion without drawing a travel path or briefly
+ * showing two boxes. The old target fades down, the pose changes while transparent, and the same
+ * view fades back up at the new target.
+ */
+export function handoverDetectionBox(v: DetectionBoxValues, bbox: DetectionBBox): void {
+  const { width, height } = Dimensions.get('window');
+  // Finish before the next 12 Hz detector update can cancel the delayed pose change.
+  const delay = 50;
+  v.searching.value = 0;
+  v.active.value = withSequence(
+    withTiming(0, { duration: delay }),
+    withTiming(1, { duration: CFG.fadeInMs }),
+  );
+  v.x.value = withDelay(delay, withTiming(bbox.x * width, { duration: 0 }));
+  v.y.value = withDelay(delay, withTiming(bbox.y * height, { duration: 0 }));
+  v.w.value = withDelay(delay, withTiming(bbox.w * width, { duration: 0 }));
+  v.h.value = withDelay(delay, withTiming(bbox.h * height, { duration: 0 }));
 }
 
 /**
@@ -108,6 +136,7 @@ export function trackDetectionBox(
  */
 export function resetDetectionBox(v: DetectionBoxValues, opts?: { immediate?: boolean }): void {
   v.active.value = opts?.immediate ? 0 : withTiming(0, { duration: CFG.fadeOutMs });
+  v.searching.value = opts?.immediate ? 1 : withTiming(1, { duration: CFG.fadeOutMs });
 }
 
 /**
@@ -136,7 +165,7 @@ export function DetectionBox({ values }: { values: DetectionBoxValues }) {
     top: rest.y,
     width: rest.w,
     height: rest.h,
-    opacity: 1 - values.active.value,
+    opacity: values.searching.value,
   }));
 
   const trackedStyle = useAnimatedStyle(() => ({

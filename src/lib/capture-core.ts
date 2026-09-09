@@ -291,6 +291,80 @@ export function applyDeadband(next: number, prev: number | null, epsilon: number
 /** A box in normalized coordinates: centre + size, each 0..1 of its reference space. */
 export type NormBox = { cx: number; cy: number; w: number; h: number };
 
+/** A detector candidate. `imageBox` carries the same lesion in saved-photo coordinates. */
+export type DetectionCandidate = { box: NormBox; score: number; imageBox?: NormBox };
+
+/** The square detector crop expressed in normalized upright-frame or preview coordinates. */
+export type SearchRoi = NormBox & { fraction: number; zoomProgress: number };
+
+const ROI_AT_1X = 1;
+const ROI_AT_2X = 0.68;
+const ROI_AT_4X = 0.46;
+
+function smoothstep01(value: number): number {
+  'worklet';
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Continuous detector ROI schedule. Zoom is measured relative to the device's neutral lens so an
+ * ultra-wide minimum zoom does not accidentally narrow the detector before the user zooms in.
+ */
+export function roiFractionForZoom(zoom: number, neutralZoom: number): number {
+  'worklet';
+  const ratio = Math.max(1, zoom / Math.max(0.001, neutralZoom));
+  const stops = Math.log(ratio) / Math.log(2);
+  if (stops <= 1) {
+    return ROI_AT_1X + (ROI_AT_2X - ROI_AT_1X) * smoothstep01(stops);
+  }
+  return ROI_AT_2X + (ROI_AT_4X - ROI_AT_2X) * smoothstep01(stops - 1);
+}
+
+/** Build the centered square ROI in normalized upright-frame coordinates. */
+export function searchRoiForZoom(
+  frameW: number,
+  frameH: number,
+  zoom: number,
+  neutralZoom: number,
+): SearchRoi {
+  'worklet';
+  const uprightW = Math.min(frameW, frameH);
+  const uprightH = Math.max(frameW, frameH);
+  const fraction = roiFractionForZoom(zoom, neutralZoom);
+  const side = uprightW * fraction;
+  const w = side / uprightW;
+  const h = side / uprightH;
+  return {
+    cx: 0.5,
+    cy: 0.5,
+    w,
+    h,
+    fraction,
+    zoomProgress: Math.max(0, Math.min(1, (ROI_AT_1X - fraction) / (ROI_AT_1X - ROI_AT_4X))),
+  };
+}
+
+/** Map a detector box out of a zoom-dependent square ROI and into the upright camera frame. */
+export function modelRoiToFullFrame(box: NormBox, roi: SearchRoi): NormBox {
+  return {
+    cx: roi.cx - roi.w / 2 + box.cx * roi.w,
+    cy: roi.cy - roi.h / 2 + box.cy * roi.h,
+    w: box.w * roi.w,
+    h: box.h * roi.h,
+  };
+}
+
+/** Inverse of modelRoiToFullFrame, used to pin the ROI mapping with round-trip tests. */
+export function fullFrameToModelRoi(box: NormBox, roi: SearchRoi): NormBox {
+  return {
+    cx: (box.cx - (roi.cx - roi.w / 2)) / roi.w,
+    cy: (box.cy - (roi.cy - roi.h / 2)) / roi.h,
+    w: box.w / roi.w,
+    h: box.h / roi.h,
+  };
+}
+
 /**
  * Undo the detector's centred square crop.
  *
@@ -374,4 +448,384 @@ export function padDrawnBox(box: NormBox, pad: number, max: number): NormBox {
     w: Math.min(max, box.w * (1 + pad)),
     h: Math.min(max, box.h * (1 + pad)),
   };
+}
+
+/* ------------------------------------------------------------------ candidate clustering */
+
+export const RAW_CANDIDATE_SCORE = 0.2;
+export const MAX_RAW_CANDIDATES = 64;
+export const MAX_CLUSTERED_CANDIDATES = 8;
+export const CANDIDATE_CLUSTER_IOU = 0.5;
+
+function finiteBox(box: NormBox): boolean {
+  'worklet';
+  return (
+    Number.isFinite(box.cx) &&
+    Number.isFinite(box.cy) &&
+    Number.isFinite(box.w) &&
+    Number.isFinite(box.h) &&
+    box.w > 0 &&
+    box.h > 0
+  );
+}
+
+function clampBox(box: NormBox): NormBox | null {
+  'worklet';
+  if (!finiteBox(box)) return null;
+  const x1 = Math.max(0, Math.min(1, box.cx - box.w / 2));
+  const y1 = Math.max(0, Math.min(1, box.cy - box.h / 2));
+  const x2 = Math.max(0, Math.min(1, box.cx + box.w / 2));
+  const y2 = Math.max(0, Math.min(1, box.cy + box.h / 2));
+  if (x2 - x1 < 0.002 || y2 - y1 < 0.002) return null;
+  return { cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 };
+}
+
+/** Intersection-over-union for normalized center/size boxes. */
+export function boxIou(a: NormBox, b: NormBox): number {
+  'worklet';
+  const ax1 = a.cx - a.w / 2;
+  const ay1 = a.cy - a.h / 2;
+  const ax2 = a.cx + a.w / 2;
+  const ay2 = a.cy + a.h / 2;
+  const bx1 = b.cx - b.w / 2;
+  const by1 = b.cy - b.h / 2;
+  const bx2 = b.cx + b.w / 2;
+  const by2 = b.cy + b.h / 2;
+  const iw = Math.max(0, Math.min(ax2, bx2) - Math.max(ax1, bx1));
+  const ih = Math.max(0, Math.min(ay2, by2) - Math.max(ay1, by1));
+  const intersection = iw * ih;
+  const union = a.w * a.h + b.w * b.h - intersection;
+  return union > 0 ? intersection / union : 0;
+}
+
+function weightedMedian(values: { value: number; weight: number }[]): number {
+  'worklet';
+  values.sort((a, b) => a.value - b.value);
+  let total = 0;
+  for (let i = 0; i < values.length; i++) total += values[i].weight;
+  let seen = 0;
+  for (let i = 0; i < values.length; i++) {
+    seen += values[i].weight;
+    if (seen >= total / 2) return values[i].value;
+  }
+  return values.length > 0 ? values[values.length - 1].value : 0;
+}
+
+/**
+ * Collapse YOLO's many overlapping anchors into a small object-level candidate list. Median edges
+ * make the result resistant to a single oversized anchor, the failure that produced frame-sized
+ * boxes in crowded scenes.
+ */
+export function clusterDetectionCandidates(raw: DetectionCandidate[]): DetectionCandidate[] {
+  'worklet';
+  const clean: DetectionCandidate[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    if (!Number.isFinite(raw[i].score) || raw[i].score < RAW_CANDIDATE_SCORE) continue;
+    const box = clampBox(raw[i].box);
+    if (box) clean.push({ box, score: raw[i].score });
+  }
+  clean.sort((a, b) => b.score - a.score);
+  if (clean.length > MAX_RAW_CANDIDATES) clean.length = MAX_RAW_CANDIDATES;
+
+  const clusters: DetectionCandidate[][] = [];
+  for (let i = 0; i < clean.length; i++) {
+    const candidate = clean[i];
+    let destination = -1;
+    for (let c = 0; c < clusters.length; c++) {
+      if (boxIou(candidate.box, clusters[c][0].box) >= CANDIDATE_CLUSTER_IOU) {
+        destination = c;
+        break;
+      }
+    }
+    if (destination >= 0) clusters[destination].push(candidate);
+    else clusters.push([candidate]);
+  }
+
+  const result: DetectionCandidate[] = [];
+  for (let c = 0; c < clusters.length; c++) {
+    const cluster = clusters[c];
+    const left: { value: number; weight: number }[] = [];
+    const top: { value: number; weight: number }[] = [];
+    const right: { value: number; weight: number }[] = [];
+    const bottom: { value: number; weight: number }[] = [];
+    let score = 0;
+    for (let i = 0; i < cluster.length; i++) {
+      const candidate = cluster[i];
+      const weight = candidate.score * candidate.score;
+      const box = candidate.box;
+      left.push({ value: box.cx - box.w / 2, weight });
+      top.push({ value: box.cy - box.h / 2, weight });
+      right.push({ value: box.cx + box.w / 2, weight });
+      bottom.push({ value: box.cy + box.h / 2, weight });
+      score = Math.max(score, candidate.score);
+    }
+    const x1 = weightedMedian(left);
+    const y1 = weightedMedian(top);
+    const x2 = weightedMedian(right);
+    const y2 = weightedMedian(bottom);
+    const box = clampBox({ cx: (x1 + x2) / 2, cy: (y1 + y2) / 2, w: x2 - x1, h: y2 - y1 });
+    if (box) result.push({ box, score });
+  }
+  result.sort((a, b) => b.score - a.score);
+  if (result.length > MAX_CLUSTERED_CANDIDATES) result.length = MAX_CLUSTERED_CANDIDATES;
+  return result;
+}
+
+/* ------------------------------------------------------------------ single-target tracker */
+
+const ACQUIRE_FRAMES = 2;
+const MAX_MISSES = 3;
+const CHALLENGER_FRAMES = 3;
+const CHALLENGER_RELATIVE_CENTER = 0.75;
+const CHALLENGER_ABSOLUTE_CENTER = 0.08;
+const ASSOCIATION_IOU = 0.2;
+const ASSOCIATION_MIN_DISTANCE = 0.08;
+const ASSOCIATION_DIAGONAL_SCALE = 0.6;
+const GEOMETRY_MIN_SCALE = 0.6;
+const GEOMETRY_MAX_SCALE = 1.7;
+const GEOMETRY_CONFIRM_FRAMES = 2;
+
+type PendingCandidate = { candidate: DetectionCandidate; streak: number };
+
+export type ActiveTargetState = {
+  active: DetectionCandidate | null;
+  acquisition: PendingCandidate | null;
+  challenger: PendingCandidate | null;
+  geometry: PendingCandidate | null;
+  misses: number;
+  lastZoomRatio: number;
+};
+
+export const initialActiveTargetState: ActiveTargetState = {
+  active: null,
+  acquisition: null,
+  challenger: null,
+  geometry: null,
+  misses: 0,
+  lastZoomRatio: 1,
+};
+
+export type TrackerDecision = {
+  state: ActiveTargetState;
+  kind: 'none' | 'hold' | 'acquire' | 'update' | 'handover' | 'clear';
+  target: DetectionCandidate | null;
+};
+
+function centerDistance(box: NormBox): number {
+  return Math.hypot(box.cx - 0.5, box.cy - 0.5);
+}
+
+function associationDistance(box: NormBox): number {
+  return Math.max(ASSOCIATION_MIN_DISTANCE, Math.hypot(box.w, box.h) * ASSOCIATION_DIAGONAL_SCALE);
+}
+
+function belongsTo(reference: NormBox, candidate: NormBox): boolean {
+  return (
+    boxIou(reference, candidate) >= ASSOCIATION_IOU ||
+    Math.hypot(reference.cx - candidate.cx, reference.cy - candidate.cy) <= associationDistance(reference)
+  );
+}
+
+function associationValue(reference: NormBox, candidate: DetectionCandidate): number {
+  const limit = associationDistance(reference);
+  const distance = Math.hypot(reference.cx - candidate.box.cx, reference.cy - candidate.box.cy);
+  const proximity = 1 - Math.min(1, distance / limit);
+  return boxIou(reference, candidate.box) * 0.55 + proximity * 0.3 + candidate.score * 0.15;
+}
+
+function isLocalized(candidate: DetectionCandidate, roi: SearchRoi): boolean {
+  return (
+    Math.max(
+      candidate.box.w / Math.max(roi.w, 0.001),
+      candidate.box.h / Math.max(roi.h, 0.001),
+    ) <= CLOSE_MIN
+  );
+}
+
+function chooseAssociated(
+  reference: NormBox,
+  candidates: DetectionCandidate[],
+  roi: SearchRoi,
+): DetectionCandidate | null {
+  const associated: DetectionCandidate[] = [];
+  for (let i = 0; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (candidate.score >= KEEP_SCORE && belongsTo(reference, candidate.box)) {
+      associated.push(candidate);
+    }
+  }
+  const localized = associated.filter((candidate) => isLocalized(candidate, roi));
+  const pool = localized.length > 0 ? localized : associated;
+  let best: DetectionCandidate | null = null;
+  let bestValue = -1;
+  for (let i = 0; i < pool.length; i++) {
+    const candidate = pool[i];
+    const value = associationValue(reference, candidate);
+    if (value > bestValue) {
+      best = candidate;
+      bestValue = value;
+    }
+  }
+  return best;
+}
+
+function targetUtility(candidate: DetectionCandidate, zoomProgress: number): number {
+  const centerWeight = 0.45 + 0.25 * Math.max(0, Math.min(1, zoomProgress));
+  const centrality = 1 - Math.min(1, centerDistance(candidate.box) / Math.SQRT1_2);
+  return centerWeight * centrality + (1 - centerWeight) * candidate.score;
+}
+
+function chooseTarget(
+  candidates: DetectionCandidate[],
+  roi: SearchRoi,
+  zoomProgress: number,
+): DetectionCandidate | null {
+  const eligible = candidates.filter((candidate) => candidate.score >= CREATE_SCORE);
+  if (eligible.length === 0) return null;
+  const localized = eligible.filter((candidate) => isLocalized(candidate, roi));
+  const pool = localized.length > 0 ? localized : eligible;
+  let best = pool[0];
+  let bestValue = targetUtility(best, zoomProgress);
+  for (let i = 1; i < pool.length; i++) {
+    const value = targetUtility(pool[i], zoomProgress);
+    if (value > bestValue) {
+      best = pool[i];
+      bestValue = value;
+    }
+  }
+  return best;
+}
+
+function nextPending(previous: PendingCandidate | null, candidate: DetectionCandidate): PendingCandidate {
+  return {
+    candidate,
+    streak: previous && belongsTo(previous.candidate.box, candidate.box) ? previous.streak + 1 : 1,
+  };
+}
+
+function centerIsInside(box: NormBox, roi: SearchRoi): boolean {
+  return (
+    box.cx >= roi.cx - roi.w / 2 &&
+    box.cx <= roi.cx + roi.w / 2 &&
+    box.cy >= roi.cy - roi.h / 2 &&
+    box.cy <= roi.cy + roi.h / 2
+  );
+}
+
+function geometryIsPlausible(previous: ActiveTargetState, candidate: DetectionCandidate, zoomRatio: number): boolean {
+  if (!previous.active) return true;
+  const expected = zoomRatio / Math.max(0.001, previous.lastZoomRatio);
+  const widthScale = candidate.box.w / Math.max(0.001, previous.active.box.w) / expected;
+  const heightScale = candidate.box.h / Math.max(0.001, previous.active.box.h) / expected;
+  return (
+    widthScale >= GEOMETRY_MIN_SCALE &&
+    widthScale <= GEOMETRY_MAX_SCALE &&
+    heightScale >= GEOMETRY_MIN_SCALE &&
+    heightScale <= GEOMETRY_MAX_SCALE
+  );
+}
+
+/** Advance the one-box tracker by one inference batch. */
+export function stepActiveTarget(
+  previous: ActiveTargetState,
+  candidates: DetectionCandidate[],
+  roi: SearchRoi,
+  zoomProgress: number,
+  zoomRatio: number,
+): TrackerDecision {
+  if (!previous.active) {
+    // Once the first CREATE-qualified frame nominates a lesion, look for that same lesion first on
+    // the confirmation frame. Re-running the global ranking here lets crowded scenes alternate
+    // between two nearly equal candidates forever, so neither can complete its two-frame acquire.
+    const candidate = previous.acquisition
+      ? chooseAssociated(previous.acquisition.candidate.box, candidates, roi) ??
+        chooseTarget(candidates, roi, zoomProgress)
+      : chooseTarget(candidates, roi, zoomProgress);
+    if (!candidate) {
+      return { state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio }, kind: 'none', target: null };
+    }
+    const acquisition = nextPending(previous.acquisition, candidate);
+    if (acquisition.streak < ACQUIRE_FRAMES) {
+      return {
+        state: { ...previous, acquisition, lastZoomRatio: zoomRatio },
+        kind: 'none',
+        target: null,
+      };
+    }
+    const state: ActiveTargetState = {
+      ...initialActiveTargetState,
+      active: candidate,
+      lastZoomRatio: zoomRatio,
+    };
+    return { state, kind: 'acquire', target: candidate };
+  }
+
+  const active = previous.active;
+  const associated = chooseAssociated(active.box, candidates, roi);
+  let nextActive = active;
+  let kind: TrackerDecision['kind'] = 'hold';
+  let misses = previous.misses;
+  let geometry = previous.geometry;
+
+  if (associated) {
+    misses = 0;
+    if (geometryIsPlausible(previous, associated, zoomRatio)) {
+      nextActive = associated;
+      geometry = null;
+      kind = 'update';
+    } else {
+      geometry = nextPending(previous.geometry, associated);
+      if (geometry.streak >= GEOMETRY_CONFIRM_FRAMES) {
+        nextActive = associated;
+        geometry = null;
+        kind = 'update';
+      }
+    }
+  } else {
+    misses += 1;
+    geometry = null;
+  }
+
+  const alternatives = candidates.filter(
+    (candidate) => candidate.score >= CREATE_SCORE && !belongsTo(nextActive.box, candidate.box),
+  );
+  const challengerCandidate = chooseTarget(alternatives, roi, zoomProgress);
+  let challenger: PendingCandidate | null = null;
+  if (challengerCandidate) {
+    const activeDistance = centerDistance(nextActive.box);
+    const challengerDistance = centerDistance(challengerCandidate.box);
+    const outsideRoi = !centerIsInside(nextActive.box, roi);
+    const significantlyCloser =
+      challengerDistance <= activeDistance * CHALLENGER_RELATIVE_CENTER &&
+      (outsideRoi || activeDistance - challengerDistance >= CHALLENGER_ABSOLUTE_CENTER);
+    if (significantlyCloser) challenger = nextPending(previous.challenger, challengerCandidate);
+  }
+
+  if (challenger && challenger.streak >= CHALLENGER_FRAMES) {
+    const state: ActiveTargetState = {
+      ...initialActiveTargetState,
+      active: challenger.candidate,
+      lastZoomRatio: zoomRatio,
+    };
+    return { state, kind: 'handover', target: challenger.candidate };
+  }
+
+  if (!associated && misses > MAX_MISSES) {
+    return {
+      state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio },
+      kind: 'clear',
+      target: null,
+    };
+  }
+
+  const state: ActiveTargetState = {
+    ...previous,
+    active: nextActive,
+    acquisition: null,
+    challenger,
+    geometry,
+    misses,
+    lastZoomRatio: kind === 'update' ? zoomRatio : previous.lastZoomRatio,
+  };
+  return { state, kind, target: nextActive };
 }
