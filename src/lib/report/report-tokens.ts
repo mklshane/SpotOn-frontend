@@ -40,7 +40,7 @@ export const PrintTier: Record<TriageTier, { fg: string; bg: string; border: str
 };
 
 /** US Letter in PostScript points (1/72"). Expo Print defaults to this page size. */
-export const PRINT_PAGE = { width: 612, height: 792, margin: 30 } as const;
+export const PRINT_PAGE = { width: 612, height: 792, margin: 24 } as const;
 
 /** Usable width inside the print margins. */
 export const CONTENT_WIDTH = PRINT_PAGE.width - PRINT_PAGE.margin * 2;
@@ -49,11 +49,11 @@ export const CONTENT_WIDTH = PRINT_PAGE.width - PRINT_PAGE.margin * 2;
  * The lesion photo box, in points (~2.6in square). Under the reference figure's 216pt: the
  * questionnaire wording here runs longer than the figure's, and in the worst case (every
  * answer "Unsure", three rows wrapping to two lines) this is the cheapest space to reclaim
- * to keep the report on a single page.
+ * to keep the report on a single page while leaving the image clearly legible.
  */
-export const PHOTO_PT = 180;
+export const PHOTO_PT = 160;
 
-/** Source pixels fed into the data URI: 640px in a 216pt box is ~213 dpi. */
+/** Source pixels fed into the data URI: 640px in a 160pt box is ~288 dpi. */
 export const PHOTO_PX = 640;
 
 /** Additional-view thumbnails print at 58pt, so 240px is ~300 dpi - sharp, and ~15 KB each. */
