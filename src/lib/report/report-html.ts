@@ -1,5 +1,5 @@
 import { h } from './escape';
-import { A4, PHOTO_PT, PrintColors as C, PrintTier, EXTRA_PHOTO_PT } from './report-tokens';
+import { PRINT_PAGE, PHOTO_PT, PrintColors as C, PrintTier, EXTRA_PHOTO_PT } from './report-tokens';
 import type { ReportModel, ReportSymptom, RichText } from './summary-report';
 
 /**
@@ -7,7 +7,7 @@ import type { ReportModel, ReportSymptom, RichText } from './summary-report';
  *
  * Deliberately free of runtime imports beyond two constant-only modules, mirroring the
  * `tps-core.ts` convention, so `scripts/test-report-html.mjs` can render and assert on it in
- * node without a simulator. Everything the page needs — styles, images, fonts — is inline:
+ * node without a simulator. Everything the page needs - styles, images, fonts - is inline:
  * the print WebView must never reach the network, because the page holds patient PII and a
  * lesion photograph. `assertNoRemoteRefs` enforces that rather than trusting it.
  *
@@ -19,9 +19,9 @@ import type { ReportModel, ReportSymptom, RichText } from './summary-report';
 
 /** Base64 image data URIs supplied by report-assets.ts. */
 export type ReportAssets = {
-  /** "data:image/png;base64,…" — the SpotOn wordmark for the header. */
+  /** "data:image/png;base64,…" - the SpotOn wordmark for the header. */
   wordmark: string | null;
-  /** "data:image/jpeg;base64,…" — the lesion photo, or null when unavailable. */
+  /** "data:image/jpeg;base64,…" - the lesion photo, or null when unavailable. */
   photo: string | null;
   /**
    * Additional views of the SAME lesion, in capture order, excluding the primary. Absent or empty
@@ -30,17 +30,17 @@ export type ReportAssets = {
   extraPhotos?: string[];
 };
 
-const EM_DASH = '—';
+const MISSING_VALUE = '-';
 
 export function buildReportHtml(model: ReportModel, assets: ReportAssets): string {
   const tier = PrintTier[model.tier];
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <title>Screening Summary Report</title>
-<!-- No viewport meta: the layout is sized in points against the A4 print box that
+<!-- No viewport meta: the layout is sized in points against the Letter print box that
      Print.printToFileAsync sets up. A CSS-pixel viewport would rescale it. -->
 <style>${styles(tier)}</style></head>
-<body>
+<body class="${assets.extraPhotos?.length ? 'hasExtraPhotos' : ''}">
   <div class="hdr">
     <div class="hdrLeft">
       ${assets.wordmark ? `<img class="mark" src="${assets.wordmark}" alt="SpotOn">` : `<div class="markText">SpotOn</div>`}
@@ -92,7 +92,13 @@ ${extraViews(assets.extraPhotos)}
     </div>
   </div>
 
-  <div class="alert"><b>IMPORTANT:</b> ${h(model.printDisclaimer)}</div>
+  <div class="alert">
+    <div class="warningTitle">AVOID SELF-MEDICATION</div>
+    <div>${h(model.avoidSelfMedicationWarning)}</div>
+    <div class="alertRule"></div>
+    <div><b>SpotOn reminder:</b> ${h(model.disclaimer)}</div>
+    <div class="alertFinePrint">${h(model.printDisclaimer)}</div>
+  </div>
 </body></html>`;
   assertNoRemoteRefs(html);
   return html;
@@ -102,7 +108,7 @@ ${extraViews(assets.extraPhotos)}
  * Why the urgency reads the way it does, when it was not the classifier's own verdict.
  *
  * Both flags were computed, persisted and put on the report model, and neither had a single render
- * site — so a screening whose photo could not be read printed as a clean clinical document
+ * site - so a screening whose photo could not be read printed as a clean clinical document
  * ("MODERATE urgency… the system detected a low-confidence Melanoma classification") with no
  * statement that the image was unreadable. The in-app result screen has always shown this; the PDF
  * a clinician actually reads did not. Same wording as the app, so the two surfaces agree.
@@ -120,7 +126,7 @@ function qualifierNote(model: ReportModel): string {
  * reference would make the print WebView hit the network while rendering a page full of
  * patient PII. Throws so it can never ship silently.
  *
- * `data:` URIs are stripped before scanning — base64 uses `/` freely, so their payloads
+ * `data:` URIs are stripped before scanning - base64 uses `/` freely, so their payloads
  * would otherwise trip the protocol-relative pattern.
  */
 export function assertNoRemoteRefs(html: string): void {
@@ -132,7 +138,7 @@ export function assertNoRemoteRefs(html: string): void {
 }
 
 function value(v: string | null): string {
-  return v ? h(v) : EM_DASH;
+  return v ? h(v) : MISSING_VALUE;
 }
 
 /** "See a dermatologist as soon as possible" -> "see a dermatologist as soon as possible". */
@@ -175,11 +181,11 @@ function symptomRow(s: ReportSymptom): string {
 
 function styles(tier: { fg: string; bg: string; border: string }): string {
   return `
-  @page { size: A4; margin: 0; }
+  @page { size: Letter; margin: 0; }
   html, body { margin: 0; padding: 0; }
   * { box-sizing: border-box; }
   body {
-    padding: ${A4.margin}pt;
+    padding: ${PRINT_PAGE.margin}pt;
     font-family: -apple-system, "Helvetica Neue", Helvetica, Roboto, "Segoe UI", Arial, sans-serif;
     font-size: 9.5pt;
     line-height: 1.35;
@@ -189,33 +195,33 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
     print-color-adjust: exact;
   }
 
-  /* 1 — header */
+  /* 1 - header */
   .hdr { display: flex; align-items: flex-end; justify-content: space-between; }
   .mark { height: 15pt; width: auto; display: block; margin-bottom: 5pt; }
   .markText { font-size: 11pt; font-weight: 700; color: #F26A2E; letter-spacing: -.2pt; margin-bottom: 4pt; }
   .hdr h1 { font-size: 21pt; font-weight: 700; color: ${C.ink}; margin: 0; letter-spacing: -.3pt; }
   .stamp { text-align: right; font-size: 8.5pt; color: ${C.labelMuted}; line-height: 1.55; }
-  /* Sunset lead-in on the rule — the one brand accent in the document body. */
+  /* Sunset lead-in on the rule - the one brand accent in the document body. */
   .rule {
-    height: 1.5pt; margin: 7pt 0 4pt;
+    height: 1.5pt; margin: 6pt 0 4pt;
     background: linear-gradient(90deg, #FF8A4C 0, #FFB98E 78pt, ${C.hairline} 78pt, ${C.hairline} 100%);
   }
 
   /* section labels */
   .sec {
     font-size: 7.5pt; font-weight: 700; letter-spacing: .6pt; text-transform: uppercase;
-    color: ${C.labelMuted}; margin: 8pt 0 3pt;
+    color: ${C.labelMuted}; margin: 5pt 0 2pt;
   }
 
-  /* 2 — profile grid */
+  /* 2 - profile grid */
   table.profile { width: 100%; border-collapse: collapse; }
-  table.profile td { padding: 4pt 0; border-bottom: .5pt solid ${C.hairlineSoft}; vertical-align: top; }
+  table.profile td { padding: 3pt 0; border-bottom: .5pt solid ${C.hairlineSoft}; vertical-align: top; }
   table.profile tr:last-child td { border-bottom: 0; }
   td.k { width: 78pt; font-size: 8pt; font-weight: 700; color: ${C.labelMuted}; }
   td.v { font-size: 9.5pt; color: ${C.body}; padding-left: 8pt; padding-right: 12pt; }
 
-  /* 3 — lesion + classification */
-  .lesion { display: flex; gap: 22pt; align-items: flex-start; margin-top: 2pt; }
+  /* 3 - lesion + classification */
+  .lesion { display: flex; gap: 20pt; align-items: flex-start; margin-top: 2pt; }
   .photo {
     width: ${PHOTO_PT}pt; height: ${PHOTO_PT}pt; flex: 0 0 ${PHOTO_PT}pt;
     object-fit: cover; display: block;
@@ -225,31 +231,31 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
     display: flex; align-items: center; justify-content: center; text-align: center;
     border: 1pt dashed ${C.hairline}; color: ${C.answerNo}; font-size: 9pt; line-height: 1.5;
   }
-  /* Optically centres the block against the photo, as on the approved layout — flex
+  /* Optically centres the block against the photo, as on the approved layout - flex
      centring sits noticeably lower than the reference. */
-  .cls { flex: 1; padding-top: 48pt; text-align: center; }
-  .clsLabel { font-size: 11pt; font-weight: 700; color: ${C.ink}; }
-  .clsName { font-size: 19pt; font-weight: 700; color: ${C.ink}; margin: 5pt 0 4pt; letter-spacing: -.2pt; }
-  .clsConf { font-size: 11pt; color: ${C.body}; }
+  .cls { flex: 1; padding-top: 36pt; text-align: center; }
+  .clsLabel { font-size: 10.5pt; font-weight: 700; color: ${C.ink}; }
+  .clsName { font-size: 18pt; font-weight: 700; color: ${C.ink}; margin: 5pt 0 4pt; letter-spacing: -.2pt; }
+  .clsConf { font-size: 10.5pt; color: ${C.body}; }
   .clsConf b { font-weight: 700; }
 
-  /* 3b — additional views (only present on multi-photo screenings) */
-  .views { margin-top: 10pt; page-break-inside: avoid; }
-  .viewsLabel { font-size: 8pt; font-weight: 700; color: ${C.labelMuted}; margin-bottom: 5pt; }
-  .viewsRow { display: flex; gap: 8pt; }
+  /* 3b - additional views (only present on multi-photo screenings) */
+  .views { margin-top: 8pt; page-break-inside: avoid; }
+  .viewsLabel { font-size: 7.5pt; font-weight: 700; color: ${C.labelMuted}; margin-bottom: 4pt; }
+  .viewsRow { display: flex; gap: 7pt; }
   .viewThumb {
     width: ${EXTRA_PHOTO_PT}pt; height: ${EXTRA_PHOTO_PT}pt; flex: 0 0 ${EXTRA_PHOTO_PT}pt;
     object-fit: cover; display: block;
     background: ${C.photoPlaceholderBg}; border: .5pt solid ${C.hairlineSoft};
   }
 
-  /* 4 — symptom table */
+  /* 4 - symptom table */
   table.sym { width: 100%; border-collapse: collapse; table-layout: fixed; }
   table.sym thead { display: table-header-group; }
   table.sym tr { page-break-inside: avoid; }
   table.sym th {
-    background: ${C.ink}; color: #fff; font-size: 8.5pt; font-weight: 700;
-    text-align: left; padding: 5pt 7pt;
+    background: ${C.ink}; color: #fff; font-size: 8pt; font-weight: 700;
+    text-align: left; padding: 3.5pt 7pt;
   }
   /* Wider than the reference's 79/21: the questionnaire wording here is a little longer
      than the figure's, and the extra width is what keeps every row to a single line. */
@@ -257,7 +263,7 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   th.a { width: 15%; text-align: center; }
   table.sym td {
     background: ${C.rowCream}; border: .5pt solid ${C.rowCreamBorder};
-    padding: 4.5pt 7pt; font-size: 8.5pt;
+    padding: 3pt 7pt; font-size: 8pt;
   }
   td.a { text-align: center; font-weight: 700; }
   /* Yes / No / Unsure differ by weight and style as well as hue, so the table survives a
@@ -267,26 +273,38 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   .aUnsure { color: ${C.answerUnsure}; font-style: italic; }
   tr.rNo td.q { color: ${C.mutedRow}; }
 
-  /* 5 — urgency */
-  .urg { display: flex; gap: 14pt; align-items: stretch; margin-top: 2pt; }
+  /* 5 - urgency */
+  .urg { display: flex; gap: 12pt; align-items: stretch; margin-top: 1pt; }
   .urgBox {
-    width: 167pt; flex: 0 0 167pt; min-height: 76pt;
+    width: 150pt; flex: 0 0 150pt; min-height: 64pt;
     display: flex; align-items: center; justify-content: center;
     border: .75pt solid ${tier.border}; background: ${tier.bg};
   }
-  .urgWord { font-size: 20pt; font-weight: 700; color: ${tier.fg}; letter-spacing: .4pt; }
-  .urgText { flex: 1; font-size: 9pt; text-align: justify; }
-  .urgText p { margin: 0 0 5pt; }
+  .urgWord { font-size: 18pt; font-weight: 700; color: ${tier.fg}; letter-spacing: .4pt; }
+  .urgText { flex: 1; font-size: 8pt; text-align: justify; }
+  .urgText p { margin: 0 0 3pt; }
   .urgText p:last-child { margin-bottom: 0; }
   .urgText b { font-weight: 700; }
 
-  .caveat { margin-top: 6pt; padding-left: 8pt; border-left: 2pt solid ${tier.border}; }
+  .caveat { margin-top: 4pt; padding-left: 7pt; border-left: 2pt solid ${tier.border}; }
 
-  /* 6 — disclaimer */
+  /* 6 - disclaimer */
   .alert {
-    margin-top: 11pt; border: .75pt solid ${C.alertBorder}; background: ${C.alertBg};
-    padding: 7pt 9pt; font-size: 8pt; color: ${C.answerYes}; text-align: justify; line-height: 1.4;
+    margin-top: 6pt; border: .75pt solid ${C.alertBorder}; background: ${C.alertBg};
+    padding: 5.5pt 9pt; font-size: 7.25pt; color: ${C.answerYes}; text-align: justify; line-height: 1.3;
   }
+  .warningTitle { font-size: 8pt; font-weight: 700; letter-spacing: .4pt; margin-bottom: 2pt; }
+  .alertRule { border-top: .5pt solid ${C.alertBorder}; opacity: .35; margin: 4pt 0; }
+  .alertFinePrint { margin-top: 3pt; color: ${C.body}; font-size: 6.75pt; }
   .alert b { font-weight: 700; }
+
+  /* Extra views are useful context, but the report must remain a one-page handoff. */
+  .hasExtraPhotos .photo { width: 150pt; height: 150pt; flex-basis: 150pt; }
+  .hasExtraPhotos .cls { padding-top: 26pt; }
+  .hasExtraPhotos .sec { margin-top: 4pt; margin-bottom: 2pt; }
+  .hasExtraPhotos table.sym th { padding-top: 2.5pt; padding-bottom: 2.5pt; }
+  .hasExtraPhotos table.sym td { padding-top: 2.4pt; padding-bottom: 2.4pt; }
+  .hasExtraPhotos .alert { margin-top: 4pt; padding-top: 4pt; padding-bottom: 4pt; font-size: 6.75pt; }
+  .hasExtraPhotos .alertFinePrint { font-size: 6.5pt; }
   `;
 }
