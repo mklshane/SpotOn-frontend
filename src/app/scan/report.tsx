@@ -26,8 +26,8 @@ import type { TriageTier } from '@/lib/triage/types';
 /**
  * Screening Summary Report.
  *
- * Shows the report's contents in the app's own visual language — warm cards, risk-tier
- * colors, answer chips — rather than a facsimile of the printed page, then hands off to
+ * Shows the report's contents in the app's own visual language - warm cards, risk-tier
+ * colors, answer chips - rather than a facsimile of the printed page, then hands off to
  * Share or Print. The PDF itself (report-html.ts) keeps the clinical navy/cream layout a
  * clinician expects. Generation is entirely on-device: the page embeds the lesion photo and
  * patient details and never touches the network.
@@ -82,7 +82,7 @@ export default function ReportScreen() {
     return () => task.cancel();
   }, [model, ensurePdf]);
 
-  // The PDF holds PII and lives in the cache directory — drop it when the screen goes away.
+  // The PDF holds PII and lives in the cache directory - drop it when the screen goes away.
   useEffect(
     () => () => {
       const report = generated.current;
@@ -194,6 +194,17 @@ function ReportHead({ model }: { model: ReportModel }) {
         <ThemedText type="subhead" themeColor="textSecondary">
           {model.dateLabel} · {model.timeLabel}
         </ThemedText>
+      </View>
+      <View style={styles.reportWarning}>
+        <Icon name="exclamationmark.triangle.fill" tintColor="#B25E09" size={17} />
+        <View style={styles.disclaimerText}>
+          <ThemedText type="subhead" style={{ color: '#9A6510' }}>
+            Avoid self-medication
+          </ThemedText>
+          <ThemedText type="footnote" themeColor="textSecondary">
+            {model.avoidSelfMedicationWarning.replace('Avoid self-medication. ', '')}
+          </ThemedText>
+        </View>
       </View>
     </Card>
   );
@@ -322,7 +333,10 @@ function DisclaimerCard({ model }: { model: ReportModel }) {
         <Icon name="exclamationmark.triangle.fill" tintColor={theme.muted} size={18} />
         <View style={styles.disclaimerText}>
           <ThemedText type="headline" themeColor="textSecondary">
-            Printed on the report
+            Important reminder
+          </ThemedText>
+          <ThemedText type="footnote" themeColor="muted">
+            {model.disclaimer}
           </ThemedText>
           <ThemedText type="footnote" themeColor="muted">
             {model.printDisclaimer}
@@ -341,7 +355,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
       <ThemedText type="caption" themeColor="muted" style={styles.fieldLabel}>
         {label.toUpperCase()}
       </ThemedText>
-      <ThemedText type="callout">{value ?? '—'}</ThemedText>
+      <ThemedText type="callout">{value ?? '-'}</ThemedText>
     </View>
   );
 }
@@ -468,6 +482,16 @@ const styles = StyleSheet.create({
 
   head: { gap: Space.base },
   headText: { gap: Space.xs },
+  reportWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    padding: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: '#FFF4DE',
+    borderWidth: 1,
+    borderColor: '#F2C77D',
+  },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: Space.base, columnGap: Space.sm },
   // Two per row, wide enough that "July 7, 2001 (25 y/o)" stays on one line.
