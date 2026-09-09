@@ -903,5 +903,6 @@
   "See my results": "Tingnan ang resulta ko",
   "Zoom": "Zoom",
   "We couldn’t save this screening": "Hindi namin na-save ang screening na ito",
-  "The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.": "Tapos na ang analysis, pero hindi ito na-save. Kung bukas ang SpotOn sa ibang tab, isara mo iyon at subukan ulit."
+  "The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.": "Tapos na ang analysis, pero hindi ito na-save. Kung bukas ang SpotOn sa ibang tab, isara mo iyon at subukan ulit.",
+  "The server is waking up. Give it a moment and try again.": "Ginigising pa ang server. Sandali lang at subukan ulit."
 }

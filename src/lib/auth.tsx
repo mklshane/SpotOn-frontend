@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { ApiError } from '@/api/client';
+import { t } from '@/lib/i18n';
 import type { UserProfile } from '@/api/types';
 
 import * as authApi from './auth-api';
@@ -29,8 +30,14 @@ function isNetworkError(e: unknown): boolean {
 
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) return e.detail;
-  if (isNetworkError(e)) return "Can't reach the server. Check your internet connection and try again.";
-  return 'Something went wrong. Please try again.';
+  // A timeout on a free-tier host usually means the server is waking, not that the user's
+  // connection is broken — telling them to check their internet sends them to fix the wrong
+  // thing. client.ts throws exactly 'timed out' for an aborted request.
+  if (e instanceof Error && /timed out/i.test(e.message)) {
+    return t('The server is waking up. Give it a moment and try again.');
+  }
+  if (isNetworkError(e)) return t("Can't reach the server. Check your internet connection and try again.");
+  return t('Something went wrong. Please try again.');
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

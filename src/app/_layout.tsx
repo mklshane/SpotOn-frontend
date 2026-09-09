@@ -1,5 +1,6 @@
 import { LanguageGate, loadLanguage } from '@/lib/i18n';
 import { captureDebugFlag } from '@/lib/debug-flag';
+import { warmUpApi } from '@/api/client';
 import {
   HankenGrotesk_600SemiBold,
   HankenGrotesk_700Bold,
@@ -26,6 +27,10 @@ import { ScreeningSessionProvider } from '@/lib/screening-session';
 // Runs at module evaluation — before the router mounts and rewrites the URL, which is the only
 // moment `?debug=1` is still readable. See lib/debug-flag.ts.
 captureDebugFlag();
+
+// Free-tier backend sleeps after ~15 min idle; start waking it now so the first real request
+// is not the one paying the 30-60s cold start.
+warmUpApi();
 
 // react-native-screens defaults itself off on web (`ENABLE_SCREENS = isNativePlatformSupported`),
 // which quietly makes the navigators' `detachInactiveScreens` a no-op: expo-router's `MaybeScreen`
