@@ -15,7 +15,7 @@
  * Run:  npm run test:report
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,6 +51,7 @@ execFileSync(
 const require = createRequire(import.meta.url);
 const { buildReportHtml, assertNoRemoteRefs } = require(join(out, 'report/report-html.js'));
 const { buildReportModel } = require(join(out, 'report/summary-report.js'));
+const { applyLocale } = require(join(out, 'i18n/core.js'));
 
 let failures = 0;
 function check(name, condition, detail = '') {
@@ -202,7 +203,78 @@ const CASES = [
     ),
     assets: MULTI,
   },
+  {
+    // The report that shipped broken: a safety-floor caveat adds four lines under the
+    // recommendation, and with every answer "Unsure" the roomy layout paginates on iOS.
+    name: 'safety-floor-all-unsure',
+    model: buildReportModel(
+      record({
+        tier: 'moderate',
+        topClass: 'OTHER',
+        confidence: 0.32,
+        tps: 1.05,
+        answerSpec: Array(8).fill('unsure'),
+        safetyFloorApplied: true,
+      }),
+      PROFILE,
+    ),
+    assets: PHOTO,
+  },
+  {
+    // Tagalog runs longer than English almost everywhere, so it is the tighter budget.
+    name: 'fil-safety-floor',
+    model: (() => {
+      applyLocale('fil');
+      const model = buildReportModel(
+        record({
+          tier: 'moderate',
+          topClass: 'OTHER',
+          confidence: 0.32,
+          tps: 1.05,
+          answerSpec: Array(8).fill('unsure'),
+          safetyFloorApplied: true,
+        }),
+        PROFILE,
+      );
+      applyLocale('en');
+      return model;
+    })(),
+    assets: PHOTO,
+  },
 ];
+
+/* -------------------------------------------------- one-page budget
+
+ The report must print on a single page, and until now that was only ever checked by hand in
+ Chrome - which is why a paginating report reached a phone: iOS's print WebView lays the same
+ HTML out taller than Chrome does. Measured on 2026-09-09 against one real screening (a
+ safety-floor OTHER result, every answer "Unsure"): ~825pt of content in Chrome, ~880pt in
+ WKWebView via Print.printToFileAsync - about 7% taller. So the offline budget is the Letter
+ page height discounted by that: anything under it in Chrome still fits on iOS.
+
+ What is asserted is the compact layout, because that is the one report-pdf.ts falls back to
+ when the roomy layout paginates. A roomy layout that overflows is a note, not a failure. */
+const IOS_LAYOUT_HEADROOM = 1.07;
+const LETTER_HEIGHT_PT = 792;
+// REPORT_BUDGET_PT overrides it, which is how the headroom above was calibrated: sweep the
+// height until the page count flips, in Chrome and then in the app's own print path.
+const BUDGET_PT = Number(process.env.REPORT_BUDGET_PT) || Math.floor(LETTER_HEIGHT_PT / IOS_LAYOUT_HEADROOM);
+
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+/** Pages the html occupies when the page box is `heightPt` tall, or null when Chrome is absent. */
+function pageCount(html, name, heightPt = BUDGET_PT) {
+  if (!existsSync(CHROME)) return null;
+  // The template pins `@page { size: Letter }`; swapping in the budget height is what turns a
+  // page count into a height measurement.
+  const file = join(out, `budget-${name}.html`);
+  writeFileSync(file, html.replace('size: Letter', `size: 612pt ${heightPt}pt`));
+  const pdf = join(out, `budget-${name}.pdf`);
+  execFileSync(CHROME, ['--headless', '--no-pdf-header-footer', `--print-to-pdf=${pdf}`, `file://${file}`], {
+    stdio: 'ignore',
+  });
+  return (readFileSync(pdf).toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+}
 
 console.log('\nScreening Summary Report - template checks\n');
 
@@ -210,6 +282,9 @@ for (const c of CASES) {
   const html = buildReportHtml(c.model, c.assets);
   const file = join(out, `report-${c.name}.html`);
   writeFileSync(file, html);
+  // The compact variant lands next to it, so the fallback layout can be eyeballed too.
+  const compactHtml = buildReportHtml(c.model, c.assets, { compact: true });
+  writeFileSync(join(out, `report-${c.name}-compact.html`), compactHtml);
   console.log(`${c.name}  →  ${file}`);
 
   const rows = html.match(/<tr[^>]*><td class="q">/g) ?? [];
@@ -218,6 +293,22 @@ for (const c of CASES) {
   check(`${c.name}: no remote references`, safe(() => assertNoRemoteRefs(html)));
   check(`${c.name}: styles inlined`, html.includes('-webkit-print-color-adjust: exact'));
   check(`${c.name}: self-medication warning`, html.includes(c.model.avoidSelfMedicationWarning));
+
+  const compactPages = pageCount(compactHtml, c.name);
+  if (compactPages == null) {
+    console.log(`  skip ${c.name}: one-page budget (Chrome not installed)`);
+  } else {
+    check(
+      `${c.name}: compact layout fits ${BUDGET_PT}pt (one page on iOS)`,
+      compactPages === 1,
+      `${compactPages} pages`,
+    );
+    if (pageCount(html, `${c.name}-roomy`) !== 1) {
+      // Informational: the base layout was tuned to just fit Letter in Chrome, so on iOS most
+      // reports land on the compact retry and pay a second render (~1s, once per screen visit).
+      console.log(`  note ${c.name}: roomy layout misses the iOS budget - the compact retry pays for it`);
+    }
+  }
 }
 
 // Placeholder handling

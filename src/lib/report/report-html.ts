@@ -31,16 +31,37 @@ export type ReportAssets = {
   extraPhotos?: string[];
 };
 
-export function buildReportHtml(model: ReportModel, assets: ReportAssets): string {
+/** Layout knobs the caller can turn when the default rhythm does not fit the page budget. */
+export type ReportLayoutOptions = {
+  /**
+   * Tightens vertical rhythm - smaller primary photo, closer section labels, denser symptom
+   * rows - so a long report (a safety-floor caveat, a wrapping question, Tagalog copy) still
+   * lands on one page. report-pdf.ts turns this on only after a first render paginated, so an
+   * ordinary report keeps the roomier approved layout.
+   */
+  compact?: boolean;
+};
+
+export function buildReportHtml(
+  model: ReportModel,
+  assets: ReportAssets,
+  options: ReportLayoutOptions = {},
+): string {
   const t = (source: string) => translate(source, undefined, model.locale);
   const tier = PrintTier[model.tier];
+  const hasExtraPhotos = Boolean(assets.extraPhotos?.length);
+  // Multi-photo reports have always printed with the tighter rhythm - the thumbnail strip is
+  // pure addition - so they stay compact by construction.
+  const bodyClass = [hasExtraPhotos && 'hasExtraPhotos', (hasExtraPhotos || options.compact) && 'compact']
+    .filter(Boolean)
+    .join(' ');
   const html = `<!DOCTYPE html>
 <html lang="${model.locale}"><head><meta charset="utf-8">
 <title>${t('Screening Summary Report')}</title>
 <!-- No viewport meta: the layout is sized in points against the Letter print box that
      Print.printToFileAsync sets up. A CSS-pixel viewport would rescale it. -->
 <style>${styles(tier)}</style></head>
-<body class="${assets.extraPhotos?.length ? 'hasExtraPhotos' : ''}">
+<body class="${bodyClass}">
   <div class="hdr">
     <div class="hdrLeft">
       ${assets.wordmark ? `<img class="mark" src="${assets.wordmark}" alt="SpotOn">` : `<div class="markText">SpotOn</div>`}
@@ -300,12 +321,28 @@ function styles(tier: { fg: string; bg: string; border: string }): string {
   .warningTitle { font-size: 8pt; font-weight: 700; letter-spacing: .4pt; margin-bottom: 2pt; }
   .alertRule { border-top: .5pt solid ${C.alertBorder}; opacity: .35; margin: 4pt 0; }
   .alertFinePrint { margin-top: 3pt; color: ${C.labelMuted}; font-size: 6.75pt; }
-  .hasExtraPhotos .photo { width: 150pt; height: 150pt; flex-basis: 150pt; }
-  .hasExtraPhotos .cls { padding-top: 26pt; }
-  .hasExtraPhotos .sec { margin-top: 4pt; margin-bottom: 2pt; }
-  .hasExtraPhotos table.sym th { padding-top: 2.5pt; padding-bottom: 2.5pt; }
-  .hasExtraPhotos table.sym td { padding-top: 2.4pt; padding-bottom: 2.4pt; }
-  .hasExtraPhotos .alert { margin-top: 4pt; padding-top: 4pt; padding-bottom: 4pt; font-size: 6.75pt; }
-  .hasExtraPhotos .alertFinePrint { font-size: 6.5pt; }
+  /* 7 - compact rhythm, applied when the roomy layout would paginate (see ReportLayoutOptions).
+     Worth ~130pt on a single-photo report, which is roughly what a safety-floor caveat plus
+     Tagalog copy costs. Multi-photo reports have always printed on this rhythm - the thumbnail
+     strip is pure addition - and need it just as much. */
+  .compact .rule { margin: 5pt 0 3pt; }
+  .compact .hdr h1 { font-size: 19pt; }
+  .compact .photo { width: 130pt; height: 130pt; flex-basis: 130pt; }
+  .compact .cls { padding-top: 22pt; }
+  .compact .sec { margin-top: 3pt; margin-bottom: 2pt; }
+  .compact:not(.hasExtraPhotos) table.profile td { padding: 3pt 0; }
+  .compact table.sym th { padding-top: 2.5pt; padding-bottom: 2.5pt; }
+  .compact table.sym td { padding-top: 2pt; padding-bottom: 2pt; }
+  .compact .urgText p { margin-bottom: 4pt; }
+  .compact .urgBox { min-height: 66pt; }
+  .compact .alert { margin-top: 4pt; padding-top: 4pt; padding-bottom: 4pt; font-size: 6.5pt; }
+  .compact .alertFinePrint { font-size: 6.25pt; }
+  /* Multi-photo reports carry ~90pt of extra strip, so they need the deepest trim: at the
+     signed-off 58pt thumbs and 150pt primary, a report with every answer "Unsure" printed to
+     two pages on iOS. */
+  .compact .views { margin-top: 4pt; }
+  .compact .viewsLabel { margin-bottom: 3pt; }
+  .compact .viewThumb { width: 50pt; height: 50pt; flex-basis: 50pt; }
+  .compact.hasExtraPhotos .photo { width: 120pt; height: 120pt; flex-basis: 120pt; }
   `;
 }

@@ -221,11 +221,17 @@ export default function ReportScreen() {
         <Animated.View entering={FadeInDown.delay(240)}>
           <DisclaimerCard model={model} />
         </Animated.View>
-
-        {pdf.status === 'error' ? <ErrorCard message={t(pdf.message)} onRetry={() => void ensurePdf()} /> : null}
       </ScrollView>
 
-      <ActionBar busy={pdf.status === 'working'} onShare={onShare} onPrint={onPrint} />
+      {/* A failure is reported in the bar, not in the scroll content: the buttons sit below a
+          page the reader has to scroll, so a message appended after the cards is invisible
+          exactly when it matters - which is how a failing Share read as a dead button. */}
+      <ActionBar
+        busy={pdf.status === 'working'}
+        error={pdf.status === 'error' ? t(pdf.message) : null}
+        onShare={onShare}
+        onPrint={onPrint}
+      />
 
       {record.imageUri ? (
         <ImageViewer visible={viewerOpen} uri={record.imageUri} onClose={() => setViewerOpen(false)} />
@@ -444,25 +450,14 @@ function IncompleteProfileCard() {
   );
 }
 
-function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
-  useLocale();
-  const theme = useTheme();
-  return (
-    <Card style={[styles.card, { backgroundColor: theme.riskCriticalBg }]}>
-      <ThemedText type="subhead" style={{ color: theme.riskCritical }}>
-        {message}
-      </ThemedText>
-      <Button label={t("Try again")} variant="ghost" onPress={onRetry} />
-    </Card>
-  );
-}
-
 function ActionBar({
   busy,
+  error,
   onShare,
   onPrint,
 }: {
   busy: boolean;
+  error?: string | null;
   onShare: () => void;
   onPrint: () => void;
 }) {
@@ -480,6 +475,14 @@ function ActionBar({
           paddingBottom: insets.bottom + Space.md,
         },
       ]}>
+      {error ? (
+        <View style={[styles.barError, { backgroundColor: theme.riskCriticalBg }]}>
+          <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskCritical} size={14} />
+          <ThemedText type="footnote" style={[styles.barErrorText, { color: theme.riskCritical }]}>
+            {`${error} ${t('Tap to try again.')}`}
+          </ThemedText>
+        </View>
+      ) : null}
       {Platform.OS === 'web' ? (
         // Both actions open the browser's print dialog. Without this the screen looked inert:
         // the dialog is chrome, not DOM, so nothing on the page changes when it appears.
@@ -624,5 +627,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   barNote: { width: '100%', textAlign: 'center', marginBottom: Space.xs },
+  barError: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    marginBottom: Space.xs,
+    borderRadius: Radius.md,
+  },
+  barErrorText: { flex: 1 },
   barButton: { flex: 1 },
 });
