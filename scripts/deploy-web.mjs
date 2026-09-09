@@ -12,6 +12,10 @@
  *
  * Usage:  npm run deploy:web            (production — updates https://spoton-dlsl.vercel.app)
  *         npm run deploy:web -- --preview   (preview URL, does not touch the live alias)
+ *
+ * The CLI version is PINNED. Left unpinned, `npx vercel` silently pulled a newer release
+ * mid-session and stopped to ask "Ok to proceed? (y)", which a non-interactive script cannot
+ * answer — the export had already run by then, so the failure looked like a deploy bug.
  */
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync } from 'node:fs';
@@ -22,10 +26,26 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 const link = join(root, '.vercel', 'project.json');
 const preview = process.argv.includes('--preview');
+const VERCEL = 'vercel@59.13.1';
 const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, stdio: 'inherit' });
 
 if (!existsSync(link)) {
   console.error('No .vercel/project.json — run `npx vercel link` once, or copy the link file in.');
+  process.exit(1);
+}
+
+// Check auth BEFORE the export, so a lapsed session costs a second instead of a full bundle.
+// Sessions are short-lived (~8 h) and the original project was created from an anonymous
+// `--temporary` deploy, which expires and then fails with a bare "Not authorized".
+try {
+  const who = execFileSync('npx', ['--yes', VERCEL, 'whoami'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  console.log(`▸ Vercel account: ${who.trim().split('\n').pop()}`);
+} catch {
+  console.error(
+    '\nNot signed in to Vercel — the session has expired.\n' +
+      `Run:  npx ${VERCEL} login\n` +
+      'then re-run npm run deploy:web. (Sessions last about 8 hours.)\n',
+  );
   process.exit(1);
 }
 
@@ -37,4 +57,4 @@ mkdirSync(join(dist, '.vercel'), { recursive: true });
 cpSync(link, join(dist, '.vercel', 'project.json'));
 
 console.log(`\n▸ Deploying to Vercel (${preview ? 'preview' : 'production'})…`);
-run('npx', ['vercel', 'deploy', '--yes', ...(preview ? [] : ['--prod'])], dist);
+run('npx', ['--yes', VERCEL, 'deploy', '--yes', ...(preview ? [] : ['--prod'])], dist);
