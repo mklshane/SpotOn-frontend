@@ -2,7 +2,7 @@ import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { InteractionManager, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,6 +40,17 @@ type PdfState =
   | { status: 'ready'; report: GeneratedReport }
   | { status: 'error'; message: string };
 
+const PDF_PREPARE_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new ReportError('render-failed', 'The report took too long to prepare. Please try again.'));
+    }, timeoutMs);
+    promise.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}
+
 export default function ReportScreen() {
   const locale = useLocale();
   const insets = useSafeAreaInsets();
@@ -58,34 +69,62 @@ export default function ReportScreen() {
   const [viewerOpen, setViewerOpen] = useState(false);
 
   // One in-flight generation at a time; a second tap awaits the first rather than re-rendering.
-  const inFlight = useRef<Promise<GeneratedReport> | null>(null);
+  const modelVersion = useRef(0);
+  const inFlight = useRef<{ version: number; promise: Promise<GeneratedReport> } | null>(null);
   const generated = useRef<GeneratedReport | null>(null);
 
   // A locale change must regenerate the preview/PDF so its copy matches the app.
   useEffect(() => {
+    modelVersion.current += 1;
     const previous = generated.current;
     generated.current = null;
-    inFlight.current = null;
+    // A profile or locale refresh invalidates an in-progress render. Re-enable the actions so
+    // the stale request cannot leave both buttons spinning after it settles.
+    setPdf((state) => (state.status === 'working' ? { status: 'idle' } : state));
     if (previous) void discardReportPdf(previous);
   }, [model]);
 
   const ensurePdf = useCallback(async (): Promise<GeneratedReport | null> => {
     if (!model) return null;
     if (generated.current) return generated.current;
-    if (!inFlight.current) inFlight.current = generateReportPdf(model);
-    const pending = inFlight.current;
+    const requestedVersion = modelVersion.current;
+    let request = inFlight.current;
+
+    // If the profile or locale changed while an older request was rendering, let that native
+    // request settle before starting another one. Expo Print can otherwise leave two WebViews
+    // competing for the print renderer on some Android devices.
+    if (request && request.version !== requestedVersion) {
+      try {
+        await request.promise;
+      } catch {
+        // The newer request below is still allowed to try.
+      }
+      if (modelVersion.current !== requestedVersion) return null;
+      if (inFlight.current === request) inFlight.current = null;
+      request = null;
+    }
+
+    if (!request) {
+      request = {
+        version: requestedVersion,
+        promise: withTimeout(generateReportPdf(model), PDF_PREPARE_TIMEOUT_MS),
+      };
+      inFlight.current = request;
+    }
+
     setPdf({ status: 'working' });
     try {
-      const report = await pending;
-      if (inFlight.current !== pending) {
+      const report = await request.promise;
+      if (inFlight.current !== request || modelVersion.current !== requestedVersion) {
         await discardReportPdf(report);
         return null;
       }
       generated.current = report;
+      inFlight.current = null;
       setPdf({ status: 'ready', report });
       return report;
     } catch (e) {
-      if (inFlight.current !== pending) return null;
+      if (inFlight.current !== request || modelVersion.current !== requestedVersion) return null;
       inFlight.current = null;
       const message =
         e instanceof ReportError ? e.message : 'The summary could not be prepared. Please try again.';
@@ -93,15 +132,6 @@ export default function ReportScreen() {
       return null;
     }
   }, [model]);
-
-  // Pre-render once the push animation has settled, so Share and Print feel instant.
-  useEffect(() => {
-    if (!model) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      void ensurePdf();
-    });
-    return () => task.cancel();
-  }, [model, ensurePdf]);
 
   // The PDF holds PII and lives in the cache directory - drop it when the screen goes away.
   useEffect(
