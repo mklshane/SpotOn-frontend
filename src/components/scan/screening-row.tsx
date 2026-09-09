@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { CLASS_DISPLAY } from '@/lib/triage/recommendations';
+import { CLASS_DISPLAY, TIER_CONTENT } from '@/lib/triage/recommendations';
 import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
 
 /** Map a triage tier to its foreground/background risk colors (mirrors the result screen). */
@@ -33,6 +33,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
   const { fg, bg } = tierColor(theme, item.triage.tier);
   const cls = CLASS_DISPLAY[item.classification.topClass];
   const pct = Math.round(item.classification.topConfidence * 100);
+  const urgency = TIER_CONTENT[item.triage.tier].name;
   const date = new Date(item.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -43,26 +44,26 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
     <Pressable
       onPress={() => router.push({ pathname: '/scan/result', params: { id: item.id } })}
       accessibilityRole="button"
-      accessibilityLabel={`${cls.name} screening from ${date}`}
+      accessibilityLabel={`${cls.name} screening from ${date}, ${urgency} urgency`}
       style={({ pressed }) => pressed && styles.pressed}>
       <Card padded={false} style={styles.row}>
         <ScreeningThumbnail uri={item.imageUri} style={styles.thumb} />
         <View style={styles.rowText}>
           <View style={styles.rowTitle}>
             <View style={[styles.tierDot, { backgroundColor: fg }]} />
-            {/* Hedged label — a scrollable history of "Melanoma" reads as a list of diagnoses.
+            {/* Hedged label - a scrollable history of "Melanoma" reads as a list of diagnoses.
                 Same choice as the result hero and scan-timeline. */}
             <ThemedText type="headline" numberOfLines={1} style={styles.rowTitleText}>
               {cls.name}
             </ThemedText>
           </View>
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-            {pct}% confidence · {date}
+            {pct}% model confidence · {date}
           </ThemedText>
         </View>
         <View style={[styles.tierPill, { backgroundColor: bg }]}>
           <ThemedText type="caption" style={{ color: fg }}>
-            {pct}%
+            {urgency}
           </ThemedText>
         </View>
         <Icon name="chevron.right" tintColor={theme.muted} size={16} />
