@@ -32,7 +32,7 @@ import { routeAfterAuth } from '@/lib/profile';
 
 export default function LoginScreen() {
   const locale = useLocale();
-  const { signIn } = useAuth();
+  const { signIn, setUser } = useAuth();
   const [mode, setMode] = useState<IdentifierMode>('phone');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -84,7 +84,9 @@ export default function LoginScreen() {
       setFormError(error);
       return;
     }
-    const next = await routeAfterAuth();
+    // routeAfterAuth already fetches the authoritative /me profile; install that same object in
+    // auth state so profile fields never depend on a potentially stale login response.
+    const next = await routeAfterAuth(setUser);
     setSubmitting(false);
     router.replace(next);
   }

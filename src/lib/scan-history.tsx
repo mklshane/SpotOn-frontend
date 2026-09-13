@@ -12,6 +12,9 @@ import {
   listScreenings,
   setScreeningLesion,
 } from '@/data/screening-repo';
+import { claimLegacyHistory } from '@/data/db';
+import { useAuth } from '@/lib/auth';
+import { syncSelfCheckReminder } from '@/lib/notifications';
 import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/triage/types';
 
 /**
@@ -24,7 +27,7 @@ import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/tr
  * supply an id, so "tracking" is the default rather than an opt-in the user has to
  * remember at scan time.
  */
-type NewScreening = Omit<ScreeningRecord, 'id' | 'createdAt' | 'lesionId' | 'images'> & {
+type NewScreening = Omit<ScreeningRecord, 'id' | 'createdAt' | 'lesionId' | 'images' | 'userId'> & {
   /** Existing lesion to link to. Omitted/null mints a new one. */
   lesionId?: string | null;
   /** Label for a newly minted lesion. Ignored when linking to an existing one. */
@@ -61,13 +64,16 @@ type ScanHistoryContextValue = {
 
 const ScanHistoryContext = createContext<ScanHistoryContextValue | undefined>(undefined);
 
-const SCREENINGS_DIR = `${FileSystem.documentDirectory ?? ''}screenings/`;
+function screeningsDir(userId: string): string {
+  return `${FileSystem.documentDirectory ?? ''}screenings/${encodeURIComponent(userId)}/`;
+}
 
 /** Copy the (cache-dir) capture into permanent storage so history thumbnails survive. */
-async function persistImage(id: string, uri: string): Promise<string> {
+async function persistImage(userId: string, id: string, uri: string): Promise<string> {
   try {
-    await FileSystem.makeDirectoryAsync(SCREENINGS_DIR, { intermediates: true }).catch(() => {});
-    const dest = `${SCREENINGS_DIR}${id}.jpg`;
+    const dir = screeningsDir(userId);
+    await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+    const dest = `${dir}${id}.jpg`;
     await FileSystem.copyAsync({ from: uri, to: dest });
     return dest;
   } catch (e) {
@@ -77,28 +83,52 @@ async function persistImage(id: string, uri: string): Promise<string> {
 }
 
 export function ScanHistoryProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const accountId = user?.id ?? null;
   const [entries, setEntries] = useState<ScreeningRecord[]>([]);
   const [lesions, setLesions] = useState<Lesion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadState, setLoadState] = useState<{
+    accountId: string | null;
+    error: boolean;
+  }>({ accountId: null, error: false });
+  const loading = accountId != null && loadState.accountId !== accountId;
+  const loadError = loadState.accountId === accountId && loadState.error;
 
   useEffect(() => {
     let alive = true;
-    Promise.all([listScreenings(), listLesions({ includeArchived: true })])
+    if (!accountId) return () => { alive = false; };
+
+    claimLegacyHistory(accountId)
+      .then(() => {
+        void syncSelfCheckReminder().catch((e) => console.warn('[notifications] account sync failed', e));
+        return Promise.all([
+          listScreenings(accountId),
+          listLesions(accountId, { includeArchived: true }),
+        ]);
+      })
       .then(([records, ls]) => {
         if (!alive) return;
         setEntries(records);
         setLesions(ls);
+        setLoadState({ accountId, error: false });
       })
       .catch((e) => {
         console.warn('[history] load failed', e);
-        if (alive) setLoadError(true);
-      })
-      .finally(() => alive && setLoading(false));
+        if (alive) setLoadState({ accountId, error: true });
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [accountId]);
+
+  const scopedEntries = useMemo(
+    () => accountId ? entries.filter((entry) => entry.userId === accountId) : [],
+    [accountId, entries],
+  );
+  const scopedLesions = useMemo(
+    () => accountId ? lesions.filter((lesion) => lesion.userId === accountId) : [],
+    [accountId, lesions],
+  );
 
   /** Replace one lesion in the cache (or append it if it's new). */
   const mergeLesion = useCallback((lesion: Lesion) => {
@@ -113,6 +143,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
 
   const addEntry = useCallback<ScanHistoryContextValue['addEntry']>(
     async ({ lesionId, lesionLabel, images, ...record }) => {
+      if (!accountId) throw new Error('Cannot save screening history while signed out');
       const id = `scan-${Date.now()}`;
       const createdAt = new Date().toISOString();
 
@@ -125,7 +156,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
           : [{ uri: record.imageUri, index: 0, source: record.source, qualityPassed: true }];
       const persisted: ScreeningImage[] = [];
       for (const img of captured) {
-        const uri = await persistImage(img.index === 0 ? id : `${id}-${img.index}`, img.uri);
+        const uri = await persistImage(accountId, img.index === 0 ? id : `${id}-${img.index}`, img.uri);
         persisted.push({ ...img, uri });
       }
       const imageUri = persisted[0].uri;
@@ -140,46 +171,51 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
         imageUri,
         images: persisted,
         lesionId: targetLesionId,
+        userId: accountId,
       };
       const lesion = await insertScreeningLinked(full, {
         id: targetLesionId,
         mark: record.mark,
         label: lesionId ? undefined : (lesionLabel ?? null),
-        userId: record.userId ?? null,
+        userId: accountId,
       });
       setEntries((prev) => [full, ...prev]);
       mergeLesion(lesion);
       return full;
     },
-    [mergeLesion],
+    [accountId, mergeLesion],
   );
 
   const renameLesion = useCallback<ScanHistoryContextValue['renameLesion']>(async (id, label) => {
-    await updateLesionLabel(id, label);
+    if (!accountId) return;
+    await updateLesionLabel(id, label, accountId);
     setLesions((prev) => prev.map((l) => (l.id === id ? { ...l, label } : l)));
-  }, []);
+  }, [accountId]);
 
   const archiveLesion = useCallback<ScanHistoryContextValue['archiveLesion']>(
     async (id, archived) => {
-      await setLesionArchived(id, archived);
+      if (!accountId) return;
+      await setLesionArchived(id, archived, accountId);
       setLesions((prev) => prev.map((l) => (l.id === id ? { ...l, archived } : l)));
     },
-    [],
+    [accountId],
   );
 
   const linkScreening = useCallback<ScanHistoryContextValue['linkScreening']>(
     async (screeningId, lesionId) => {
-      await setScreeningLesion(screeningId, lesionId);
+      if (!accountId) return;
+      await setScreeningLesion(screeningId, lesionId, accountId);
       setEntries((prev) => prev.map((e) => (e.id === screeningId ? { ...e, lesionId } : e)));
       // Rollups on both sides moved; re-read rather than trying to patch them in place.
-      setLesions(await listLesions({ includeArchived: true }));
+      setLesions(await listLesions(accountId, { includeArchived: true }));
     },
-    [],
+    [accountId],
   );
 
   const trackScreening = useCallback<ScanHistoryContextValue['trackScreening']>(
     async (screeningId, label) => {
-      const screening = entries.find((e) => e.id === screeningId);
+      if (!accountId) return undefined;
+      const screening = scopedEntries.find((e) => e.id === screeningId);
       if (!screening) return undefined;
       const lesionId = screening.lesionId ?? `lesion-${Date.now()}`;
       const created: Lesion = {
@@ -194,29 +230,30 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
         lastScreeningId: null,
         lastTier: null,
         archived: false,
-        userId: screening.userId ?? null,
+        userId: accountId,
       };
       const { insertLesion, refreshLesionRollup } = await import('@/data/lesion-repo');
       await insertLesion(created);
-      await setScreeningLesion(screeningId, lesionId);
-      const fresh = await refreshLesionRollup(lesionId);
+      await setScreeningLesion(screeningId, lesionId, accountId);
+      const fresh = await refreshLesionRollup(lesionId, accountId);
       setEntries((prev) => prev.map((e) => (e.id === screeningId ? { ...e, lesionId } : e)));
       if (fresh) mergeLesion(fresh);
       return fresh ?? created;
     },
-    [entries, mergeLesion],
+    [accountId, scopedEntries, mergeLesion],
   );
 
   const deleteLesion = useCallback<ScanHistoryContextValue['deleteLesion']>(async (id) => {
-    await deleteLesionRow(id);
+    if (!accountId) return;
+    await deleteLesionRow(id, accountId);
     setLesions((prev) => prev.filter((l) => l.id !== id));
     setEntries((prev) => prev.map((e) => (e.lesionId === id ? { ...e, lesionId: null } : e)));
-  }, []);
+  }, [accountId]);
 
   const value = useMemo<ScanHistoryContextValue>(
     () => ({
-      entries,
-      lesions,
+      entries: scopedEntries,
+      lesions: scopedLesions,
       loading,
       loadError,
       addEntry,
@@ -225,17 +262,17 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       linkScreening,
       trackScreening,
       deleteLesion,
-      getById: (id) => entries.find((e) => e.id === id),
-      getLesionById: (id) => lesions.find((l) => l.id === id),
+      getById: (id) => scopedEntries.find((e) => e.id === id),
+      getLesionById: (id) => scopedLesions.find((l) => l.id === id),
       screeningsForLesion: (lesionId) =>
-        entries
+        scopedEntries
           .filter((e) => e.lesionId === lesionId)
           .slice()
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     }),
     [
-      entries,
-      lesions,
+      scopedEntries,
+      scopedLesions,
       loading,
       loadError,
       addEntry,

@@ -18,6 +18,7 @@ import { Platform } from 'react-native';
 
 import { getMeta, setMeta } from '@/data/db';
 
+import { accountStorageKey, getActiveAccountId } from './account-scope';
 import { STORAGE_KEYS } from './storage-keys';
 
 /** Default re-check interval for a Low-tier result (spec: Low urgency schedules a monthly re-check). */
@@ -40,13 +41,24 @@ export type ReminderOutcome =
   /** No OS notification support (web). */
   | 'unsupported';
 
+async function getAccountMeta(key: string): Promise<string | null> {
+  const accountId = getActiveAccountId();
+  return accountId ? getMeta(accountStorageKey(accountId, key)) : null;
+}
+
+async function setAccountMeta(key: string, value: string): Promise<void> {
+  const accountId = getActiveAccountId();
+  if (!accountId) throw new Error('Cannot persist reminder state without an active account');
+  await setMeta(accountStorageKey(accountId, key), value);
+}
+
 /** Whether the user has opted into re-screening reminders. */
 export async function getRemindersEnabled(): Promise<boolean> {
-  return (await getMeta(STORAGE_KEYS.reengagementRemindersEnabled)) === '1';
+  return (await getAccountMeta(STORAGE_KEYS.reengagementRemindersEnabled)) === '1';
 }
 
 export async function getSelfCheckReminderDueAt(): Promise<string | null> {
-  return (await getMeta(STORAGE_KEYS.selfCheckReminderDueAt)) || null;
+  return (await getAccountMeta(STORAGE_KEYS.selfCheckReminderDueAt)) || null;
 }
 
 /** The reminder currently waiting to fire, or null if there isn't one (or its date has passed). */
@@ -58,11 +70,11 @@ export async function getPendingSelfCheckReminder(): Promise<PendingReminder | n
   if (!dueAt) return null;
   const due = Date.parse(dueAt);
   if (!Number.isFinite(due) || due <= Date.now()) return null;
-  return { dueAt, lesionId: (await getMeta(STORAGE_KEYS.selfCheckReminderLesionId)) || null };
+  return { dueAt, lesionId: (await getAccountMeta(STORAGE_KEYS.selfCheckReminderLesionId)) || null };
 }
 
 async function writeEnabled(enabled: boolean): Promise<void> {
-  await setMeta(STORAGE_KEYS.reengagementRemindersEnabled, enabled ? '1' : '');
+  await setAccountMeta(STORAGE_KEYS.reengagementRemindersEnabled, enabled ? '1' : '');
 }
 
 /** When `days` from now falls, snapped to a civil hour. */
@@ -132,10 +144,10 @@ async function arm(due: Date, lesionId: string | null): Promise<string> {
 
 /** Cancel the pending OS notification (if any), leaving the stored due date alone. */
 async function disarm(): Promise<void> {
-  const id = await getMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
+  const id = await getAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
   if (!id) return;
   await Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
-  await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, '');
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId, '');
 }
 
 /**
@@ -155,9 +167,9 @@ export async function scheduleSelfCheckReminder(
   const due = reminderDate(days);
   const id = await arm(due, lesionId);
 
-  await setMeta(STORAGE_KEYS.selfCheckReminderDueAt, due.toISOString());
-  await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, id);
-  await setMeta(STORAGE_KEYS.selfCheckReminderLesionId, lesionId ?? '');
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderDueAt, due.toISOString());
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId, id);
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderLesionId, lesionId ?? '');
   await writeEnabled(true);
   return 'scheduled';
 }
@@ -165,8 +177,8 @@ export async function scheduleSelfCheckReminder(
 /** Cancel the pending reminder and forget the due date entirely. */
 export async function cancelSelfCheckReminder(): Promise<void> {
   await disarm();
-  await setMeta(STORAGE_KEYS.selfCheckReminderDueAt, '');
-  await setMeta(STORAGE_KEYS.selfCheckReminderLesionId, '');
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderDueAt, '');
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderLesionId, '');
 }
 
 /**
@@ -214,7 +226,7 @@ export async function syncSelfCheckReminder(): Promise<void> {
     return;
   }
 
-  const id = await getMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
+  const id = await getAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
   if (id) {
     const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
     if (pending.some((n) => n.identifier === id)) return; // still armed, nothing to do
@@ -224,8 +236,8 @@ export async function syncSelfCheckReminder(): Promise<void> {
   if (!status.granted && status.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
     return; // permission was revoked - leave the intent stored, re-arm if it's granted again
   }
-  const lesionId = (await getMeta(STORAGE_KEYS.selfCheckReminderLesionId)) || null;
-  await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, await arm(new Date(due), lesionId));
+  const lesionId = (await getAccountMeta(STORAGE_KEYS.selfCheckReminderLesionId)) || null;
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId, await arm(new Date(due), lesionId));
 }
 
 /** What a tap on our reminder should open. `lesionId` is null for reminders saved before a lesion existed. */
@@ -299,8 +311,8 @@ export async function refreshReminderLanguage(): Promise<void> {
   const pending = await getPendingSelfCheckReminder();
   if (!pending) return;
   // Do not clear the stored ID until cancellation succeeds; a retry must not duplicate alarms.
-  const id = await getMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
+  const id = await getAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId);
   if (id) await Notifications.cancelScheduledNotificationAsync(id);
-  await setMeta(STORAGE_KEYS.selfCheckReminderNotificationId, '');
+  await setAccountMeta(STORAGE_KEYS.selfCheckReminderNotificationId, '');
   await syncSelfCheckReminder();
 }

@@ -26,11 +26,11 @@ const SEX_OPTIONS: { value: Sex; label: string }[] = localizedCopy([
 
 export default function CompleteProfileScreen() {
   const locale = useLocale();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   // Already captured at sign-up if they registered by phone - don't ask again.
   const hasPhone = Boolean(user?.phone);
-  const [dob, setDob] = useState<string | null>(null);
-  const [sex, setSex] = useState<Sex | null>(null);
+  const [dob, setDob] = useState<string | null>(user?.date_of_birth ?? null);
+  const [sex, setSex] = useState<Sex | null>((user?.sex as Sex | null) ?? null);
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ dob?: string; sex?: string; phone?: string }>({});
@@ -57,11 +57,14 @@ export default function CompleteProfileScreen() {
     if (!validate() || !dob || !sex) return;
     setSubmitting(true);
     try {
-      await saveProfile({
+      const { user: saved } = await saveProfile({
         dateOfBirth: dob,
         sex,
         phone: hasPhone || !phone.trim() ? undefined : normalizePhilippinePhone(phone) ?? undefined,
       });
+      // saveProfile re-fetches /me; keep the auth context and its account-scoped cache aligned with
+      // the server before leaving setup. Previously the stale registration response stayed live.
+      setUser(saved);
       router.replace('/home');
     } catch {
       setFormError("Couldn't save your details. Check your connection and try again.");

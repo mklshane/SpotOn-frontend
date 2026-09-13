@@ -58,8 +58,7 @@ export type Lesion = {
   lastTier: TriageTier | null;
   /** "No longer tracking". Archived lesions are hidden from the body model, never hard-deleted. */
   archived: boolean;
-  /** Recorded on create; deliberately never used in a WHERE clause while the app is
-   *  single-account-on-device (pre-migration rows have NULL and would vanish from history). */
+  /** Stable backend account UUID. All local reads and writes are scoped by this value. */
   userId: string | null;
 };
 

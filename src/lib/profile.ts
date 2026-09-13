@@ -5,9 +5,9 @@ export function fetchProfile(): Promise<UserProfile> {
   return api.get<UserProfile>("/me", undefined, true);
 }
 
-/** A profile counts as complete once a date of birth has been recorded. */
+/** Both required demographics must be present before profile setup is complete. */
 export function isProfileComplete(user: UserProfile): boolean {
-  return user.date_of_birth != null;
+  return user.date_of_birth != null && user.sex != null;
 }
 
 export type ProfileInput = {
@@ -121,11 +121,12 @@ export async function saveProfile({
  * Where an authenticated user should land: the profile step if incomplete, else
  * the app. Defaults to the app on network error so offline users aren't blocked.
  */
-export async function routeAfterAuth(): Promise<
+export async function routeAfterAuth(applyProfile?: (user: UserProfile) => void): Promise<
   "/(auth)/complete-profile" | "/home"
 > {
   try {
     const me = await fetchProfile();
+    applyProfile?.(me);
     return isProfileComplete(me) ? "/home" : "/(auth)/complete-profile";
   } catch {
     return "/home";

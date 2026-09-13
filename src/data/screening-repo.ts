@@ -158,6 +158,7 @@ function toRecord(row: Row): ScreeningRecord {
 }
 
 export async function insertScreening(record: ScreeningRecord): Promise<void> {
+  if (!record.userId) throw new Error("A screening must belong to an authenticated account");
   const db = await getDb();
   await db.runAsync(
     `INSERT OR REPLACE INTO screenings (
@@ -217,11 +218,12 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
 }
 
 /** A lesion's screenings oldest-first - the order the timeline and trend summary read them in. */
-export async function listScreeningsForLesion(lesionId: string): Promise<ScreeningRecord[]> {
+export async function listScreeningsForLesion(lesionId: string, userId: string): Promise<ScreeningRecord[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
-    "SELECT * FROM screenings WHERE lesion_id = ? ORDER BY created_at ASC",
+    "SELECT * FROM screenings WHERE lesion_id = ? AND user_id = ? ORDER BY created_at ASC",
     lesionId,
+    userId,
   );
   const out: ScreeningRecord[] = [];
   for (const row of rows) {
@@ -236,11 +238,13 @@ export async function listScreeningsForLesion(lesionId: string): Promise<Screeni
 
 export async function getLatestScreeningForLesion(
   lesionId: string,
+  userId: string,
 ): Promise<ScreeningRecord | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<Row>(
-    "SELECT * FROM screenings WHERE lesion_id = ? ORDER BY created_at DESC LIMIT 1",
+    "SELECT * FROM screenings WHERE lesion_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1",
     lesionId,
+    userId,
   );
   return row ? toRecord(row) : null;
 }
@@ -249,15 +253,27 @@ export async function getLatestScreeningForLesion(
 export async function setScreeningLesion(
   screeningId: string,
   lesionId: string | null,
+  userId: string,
 ): Promise<void> {
   const db = await getDb();
   const prev = await db.getFirstAsync<{ lesion_id: string | null }>(
-    "SELECT lesion_id FROM screenings WHERE id = ?",
+    "SELECT lesion_id FROM screenings WHERE id = ? AND user_id = ?",
     screeningId,
+    userId,
   );
-  await db.runAsync("UPDATE screenings SET lesion_id = ? WHERE id = ?", lesionId, screeningId);
-  if (prev?.lesion_id && prev.lesion_id !== lesionId) await refreshLesionRollup(prev.lesion_id);
-  if (lesionId) await refreshLesionRollup(lesionId);
+  if (!prev) return;
+  if (lesionId) {
+    const destination = await getLesion(lesionId, userId);
+    if (!destination) throw new Error("Cannot link a screening to another account's lesion");
+  }
+  await db.runAsync(
+    "UPDATE screenings SET lesion_id = ? WHERE id = ? AND user_id = ?",
+    lesionId,
+    screeningId,
+    userId,
+  );
+  if (prev.lesion_id && prev.lesion_id !== lesionId) await refreshLesionRollup(prev.lesion_id, userId);
+  if (lesionId) await refreshLesionRollup(lesionId, userId);
 }
 
 export type LesionSeed = {
@@ -279,6 +295,9 @@ export async function insertScreeningLinked(
   record: ScreeningRecord,
   seed: LesionSeed,
 ): Promise<Lesion> {
+  if (!record.userId || !seed.userId || record.userId !== seed.userId) {
+    throw new Error("Screening and lesion must belong to the same authenticated account");
+  }
   const db = await getDb();
   const now = new Date().toISOString();
   await db.withTransactionAsync(async () => {
@@ -302,19 +321,26 @@ export async function insertScreeningLinked(
     await insertScreening({ ...record, lesionId: seed.id });
   });
   // Outside the transaction: the rollup is derived state, and a failure here must not lose the scan.
-  const lesion = await refreshLesionRollup(seed.id);
-  return lesion ?? (await getLesion(seed.id))!;
+  const lesion = await refreshLesionRollup(seed.id, seed.userId);
+  return lesion ?? (await getLesion(seed.id, seed.userId))!;
 }
 
-export async function getScreening(id: string): Promise<ScreeningRecord | null> {
+export async function getScreening(id: string, userId: string): Promise<ScreeningRecord | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<Row>("SELECT * FROM screenings WHERE id = ?", id);
+  const row = await db.getFirstAsync<Row>(
+    "SELECT * FROM screenings WHERE id = ? AND user_id = ?",
+    id,
+    userId,
+  );
   return row ? toRecord(row) : null;
 }
 
-export async function listScreenings(): Promise<ScreeningRecord[]> {
+export async function listScreenings(userId: string): Promise<ScreeningRecord[]> {
   const db = await getDb();
-  const rows = await db.getAllAsync<Row>("SELECT * FROM screenings ORDER BY created_at DESC");
+  const rows = await db.getAllAsync<Row>(
+    "SELECT * FROM screenings WHERE user_id = ? ORDER BY created_at DESC",
+    userId,
+  );
   const out: ScreeningRecord[] = [];
   for (const row of rows) {
     try {
@@ -334,19 +360,20 @@ export async function listScreenings(): Promise<ScreeningRecord[]> {
  * Only files under the app's own screenings/ directory are removed - a record whose image copy
  * failed still points at the original cache URI, which is not ours to delete.
  */
-export async function deleteScreening(id: string): Promise<void> {
+export async function deleteScreening(id: string, userId: string): Promise<void> {
   const db = await getDb();
   const row = await db.getFirstAsync<{ lesion_id: string | null; image_uri: string; images_json: string | null }>(
-    "SELECT lesion_id, image_uri, images_json FROM screenings WHERE id = ?",
+    "SELECT lesion_id, image_uri, images_json FROM screenings WHERE id = ? AND user_id = ?",
     id,
+    userId,
   );
-  await db.runAsync("DELETE FROM screenings WHERE id = ?", id);
+  await db.runAsync("DELETE FROM screenings WHERE id = ? AND user_id = ?", id, userId);
   if (!row) return;
   const images = safeParse<{ uri: string }[]>(row.images_json, [{ uri: row.image_uri }]);
   // Raw columns, so these are whatever the writing install stored - relative (v14+), or absolute
   // under a container that may no longer exist. Resolve before the ownership test below.
   await deleteImageFiles(images.map((i) => toDisplayUri(i.uri)));
-  if (row.lesion_id) await refreshLesionRollup(row.lesion_id);
+  if (row.lesion_id) await refreshLesionRollup(row.lesion_id, userId);
 }
 
 /** Best-effort unlink of owned photo files. A failure here must never fail the delete. */

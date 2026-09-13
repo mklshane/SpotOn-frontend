@@ -59,6 +59,7 @@ function toLesion(row: Row): Lesion {
 }
 
 export async function insertLesion(lesion: Lesion): Promise<void> {
+  if (!lesion.userId) throw new Error("A lesion must belong to an authenticated account");
   const db = await getDb();
   await db.runAsync(
     `INSERT OR REPLACE INTO lesions (
@@ -85,37 +86,46 @@ export async function insertLesion(lesion: Lesion): Promise<void> {
   );
 }
 
-export async function getLesion(id: string): Promise<Lesion | null> {
+export async function getLesion(id: string, userId: string): Promise<Lesion | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<Row>("SELECT * FROM lesions WHERE id = ?", id);
+  const row = await db.getFirstAsync<Row>(
+    "SELECT * FROM lesions WHERE id = ? AND user_id = ?",
+    id,
+    userId,
+  );
   return row ? toLesion(row) : null;
 }
 
 /** Active lesions first, most recently updated first. */
-export async function listLesions(opts?: { includeArchived?: boolean }): Promise<Lesion[]> {
+export async function listLesions(
+  userId: string,
+  opts?: { includeArchived?: boolean },
+): Promise<Lesion[]> {
   const db = await getDb();
-  const where = opts?.includeArchived ? "" : "WHERE archived = 0";
+  const archived = opts?.includeArchived ? "" : "AND archived = 0";
   const rows = await db.getAllAsync<Row>(
-    `SELECT * FROM lesions ${where} ORDER BY archived ASC, updated_at DESC`,
+    `SELECT * FROM lesions WHERE user_id = ? ${archived} ORDER BY archived ASC, updated_at DESC`,
+    userId,
   );
   return rows.map(toLesion);
 }
 
-export async function updateLesionLabel(id: string, label: string | null): Promise<void> {
+export async function updateLesionLabel(id: string, label: string | null, userId: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    "UPDATE lesions SET label = ?, updated_at = ? WHERE id = ?",
+    "UPDATE lesions SET label = ?, updated_at = ? WHERE id = ? AND user_id = ?",
     label,
     new Date().toISOString(),
     id,
+    userId,
   );
 }
 
-export async function updateLesionMark(id: string, mark: BodyMark | null): Promise<void> {
+export async function updateLesionMark(id: string, mark: BodyMark | null, userId: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `UPDATE lesions SET mark_x = ?, mark_y = ?, mark_z = ?, mark_region = ?, mark_view = ?,
-                        updated_at = ? WHERE id = ?`,
+                        updated_at = ? WHERE id = ? AND user_id = ?`,
     mark?.point[0] ?? null,
     mark?.point[1] ?? null,
     mark?.point[2] ?? null,
@@ -123,16 +133,18 @@ export async function updateLesionMark(id: string, mark: BodyMark | null): Promi
     mark?.view ?? null,
     new Date().toISOString(),
     id,
+    userId,
   );
 }
 
-export async function setLesionArchived(id: string, archived: boolean): Promise<void> {
+export async function setLesionArchived(id: string, archived: boolean, userId: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
-    "UPDATE lesions SET archived = ?, updated_at = ? WHERE id = ?",
+    "UPDATE lesions SET archived = ?, updated_at = ? WHERE id = ? AND user_id = ?",
     archived ? 1 : 0,
     new Date().toISOString(),
     id,
+    userId,
   );
 }
 
@@ -141,7 +153,7 @@ export async function setLesionArchived(id: string, archived: boolean): Promise<
  * relink. A lesion with no screenings left keeps its row (the user may still be tracking the spot)
  * with a zeroed count.
  */
-export async function refreshLesionRollup(id: string): Promise<Lesion | null> {
+export async function refreshLesionRollup(id: string, userId: string): Promise<Lesion | null> {
   const db = await getDb();
   const agg = await db.getFirstAsync<{
     n: number;
@@ -149,16 +161,19 @@ export async function refreshLesionRollup(id: string): Promise<Lesion | null> {
     last_at: string | null;
   }>(
     `SELECT COUNT(*) AS n, MIN(created_at) AS first_at, MAX(created_at) AS last_at
-       FROM screenings WHERE lesion_id = ?`,
+       FROM screenings WHERE lesion_id = ? AND user_id = ?`,
     id,
+    userId,
   );
   const latest = await db.getFirstAsync<{ id: string; tier: string }>(
-    "SELECT id, tier FROM screenings WHERE lesion_id = ? ORDER BY created_at DESC LIMIT 1",
+    "SELECT id, tier FROM screenings WHERE lesion_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1",
     id,
+    userId,
   );
   await db.runAsync(
     `UPDATE lesions SET screening_count = ?, first_screened_at = ?, last_screened_at = ?,
-                        last_screening_id = ?, last_tier = ?, updated_at = ? WHERE id = ?`,
+                        last_screening_id = ?, last_tier = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?`,
     agg?.n ?? 0,
     agg?.first_at ?? null,
     agg?.last_at ?? null,
@@ -167,18 +182,23 @@ export async function refreshLesionRollup(id: string): Promise<Lesion | null> {
     // The lesion's own recency should track its screenings, not the moment of this recompute.
     agg?.last_at ?? new Date().toISOString(),
     id,
+    userId,
   );
-  return getLesion(id);
+  return getLesion(id, userId);
 }
 
 /**
  * Delete the lesion and unlink its screenings - they survive as standalone history rather than
  * disappearing. Callers that also want the photos gone must delete the screenings explicitly.
  */
-export async function deleteLesion(id: string): Promise<void> {
+export async function deleteLesion(id: string, userId: string): Promise<void> {
   const db = await getDb();
   await db.withTransactionAsync(async () => {
-    await db.runAsync("UPDATE screenings SET lesion_id = NULL WHERE lesion_id = ?", id);
-    await db.runAsync("DELETE FROM lesions WHERE id = ?", id);
+    await db.runAsync(
+      "UPDATE screenings SET lesion_id = NULL WHERE lesion_id = ? AND user_id = ?",
+      id,
+      userId,
+    );
+    await db.runAsync("DELETE FROM lesions WHERE id = ? AND user_id = ?", id, userId);
   });
 }
