@@ -7,6 +7,8 @@
 import * as SQLite from "expo-sqlite";
 
 import { DB_NAME } from "../config";
+import { accountStorageKey } from "../lib/account-scope";
+import { STORAGE_KEYS } from "../lib/storage-keys";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS facilities (
@@ -190,7 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -335,6 +337,15 @@ const MIGRATION_V14 = [
     WHERE instr(image_uri, '/screenings/') > 0`,
 ];
 
+// v15 - account-scoped history. The columns were added in v10, but reads never filtered them and
+// the scan flow never populated them. Indexes make the now-mandatory account predicates cheap.
+// They live in a migration (not the base SCHEMA) because an upgrading pre-v10 screenings table does
+// not have user_id until MIGRATION_V10 runs.
+const MIGRATION_V15 = [
+  "CREATE INDEX IF NOT EXISTS idx_screenings_user_created ON screenings(user_id, created_at DESC)",
+  "CREATE INDEX IF NOT EXISTS idx_lesions_user_updated ON lesions(user_id, archived, updated_at DESC)",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -353,6 +364,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 12 ? MIGRATION_V12 : []),
     ...(version < 13 ? MIGRATION_V13 : []),
     ...(version < 14 ? MIGRATION_V14 : []),
+    ...(version < 15 ? MIGRATION_V15 : []),
   ];
   for (const stmt of pending) {
     try {
@@ -434,4 +446,53 @@ export async function setMeta(key: string, value: string): Promise<void> {
     key,
     value,
   );
+}
+
+const LEGACY_HISTORY_OWNER_KEY = "account_history_legacy_owner";
+
+/**
+ * Assign history written by builds that left user_id NULL to one stable account exactly once.
+ *
+ * There is no account identifier in those legacy rows, so the only safe compatibility choice is
+ * the authenticated account present during the first post-upgrade history load. Once claimed, a
+ * later account can never inherit the rows. New writes reject a missing user id at the repository
+ * boundary, so this migration cannot accumulate more unowned data.
+ */
+export async function claimLegacyHistory(userId: string): Promise<void> {
+  if (!userId) throw new Error("Cannot claim legacy history without an account id");
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    const owner = await db.getFirstAsync<{ value: string | null }>(
+      "SELECT value FROM sync_meta WHERE key = ?",
+      LEGACY_HISTORY_OWNER_KEY,
+    );
+    if (owner?.value) return;
+
+    await db.runAsync("UPDATE screenings SET user_id = ? WHERE user_id IS NULL", userId);
+    await db.runAsync("UPDATE lesions SET user_id = ? WHERE user_id IS NULL", userId);
+    for (const key of [
+      STORAGE_KEYS.reengagementRemindersEnabled,
+      STORAGE_KEYS.selfCheckReminderDueAt,
+      STORAGE_KEYS.selfCheckReminderNotificationId,
+      STORAGE_KEYS.selfCheckReminderLesionId,
+    ]) {
+      const legacy = await db.getFirstAsync<{ value: string | null }>(
+        "SELECT value FROM sync_meta WHERE key = ?",
+        key,
+      );
+      if (legacy) {
+        await db.runAsync(
+          "INSERT OR IGNORE INTO sync_meta (key, value) VALUES (?, ?)",
+          accountStorageKey(userId, key),
+          legacy.value,
+        );
+        await db.runAsync("DELETE FROM sync_meta WHERE key = ?", key);
+      }
+    }
+    await db.runAsync(
+      "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+      LEGACY_HISTORY_OWNER_KEY,
+      userId,
+    );
+  });
 }

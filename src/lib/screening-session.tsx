@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { LoadedModel, SetPart } from './classifier/classify';
+import { useAuth } from './auth';
 
 import { carryForwardAnswers, MAJOR_QUESTIONS, MINOR_QUESTIONS } from './triage/tps-core';
 import type {
@@ -96,6 +97,9 @@ const ScreeningSessionContext = createContext<ScreeningSessionValue | undefined>
 const ALL_QUESTIONS: readonly QuestionId[] = [...MAJOR_QUESTIONS, ...MINOR_QUESTIONS];
 
 export function ScreeningSessionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const accountId = user?.id ?? null;
+  const previousAccountId = useRef(accountId);
   const [bodyMark, setBodyMark] = useState<BodyMark | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [source, setSource] = useState<'camera' | 'gallery'>('camera');
@@ -278,6 +282,13 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     partsRef.current = { attempt: 1, runs: new Map() };
     lastOutputRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (previousAccountId.current !== accountId) {
+      reset();
+      previousAccountId.current = accountId;
+    }
+  }, [accountId, reset]);
 
   const startFollowUp = useCallback<ScreeningSessionValue['startFollowUp']>((lesion, prior) => {
     // reset() first, deliberately: `attempt` is the Safety Floor's two-strike counter, and a
