@@ -23,6 +23,19 @@ export function applyLocale(next: Locale) {
   locale = next;
   listeners.forEach((listener) => listener());
 }
+/**
+ * WHY `experiments.reactCompiler` IS OFF IN app.json.
+ *
+ * `t()` takes a literal and reads the module-level `locale`, so React Compiler sees a call with
+ * no reactive inputs and caches its result for the life of the component instance. Screens call
+ * `useLocale()` for its subscription only and discard the value, so switching language re-rendered
+ * every mounted screen but replayed the memoised English JSX: the whole Home tab stayed in English
+ * after a switch in Settings, while the tab bar (rendered fresh) turned Tagalog. Only the
+ * auth/onboarding screens escaped it - they key their <Screen> on the locale, which remounts.
+ *
+ * Turning the compiler back on requires making the locale a real dependency of every screen -
+ * e.g. a `const t = useT()` whose identity changes with the language - not just this file.
+ */
 /** Source-keyed, offline catalog. Parameters are inserted once, never re-translated. */
 export function translate(source: string, params?: Parameters, language: Locale = locale): string {
   const translated = language === 'fil'

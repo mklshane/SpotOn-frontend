@@ -171,7 +171,7 @@ export default function ProfileScreen() {
             <View style={styles.rowText}>
               <ThemedText type="headline">
                 {scanCount === 0
-                  ? "No screenings yet"
+                  ? t("No screenings yet")
                   : `${scanCount} ${scanCount === 1 ? "screening" : "screenings"} completed`}
               </ThemedText>
               {lastScanLabel ? (

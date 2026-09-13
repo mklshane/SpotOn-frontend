@@ -157,48 +157,64 @@ export function symptomBurden(yesCount: number): string {
 
 /**
  * Lay-language display for each model class. Framed as visual patterns, not verdicts.
- *  - `full`  : disease name for the result hero.
- *  - `name`  : short "-like" label for the probability breakdown.
+ *  - `full`/`name` : the clinical name. Identical in every locale - the user reads this
+ *    out to a clinician, and it is what the summary report prints, so it is deliberately
+ *    never translated (it would also collide with the profile's "Other" -> "Iba").
  *  - `lay`   : sentence fragment ("a pattern with features similar to…").
  *  - `about` : factual, non-alarming description of the condition (physician-reviewable).
  */
-export const CLASS_DISPLAY: Record<
-  LesionClass,
-  { full: string; name: string; lay: string; about: string }
-> = localizedCopy({
+export type ClassDisplay = { full: string; name: string; lay: string; about: string };
+
+const CLASS_NAME: Record<LesionClass, string> = {
+  MEL: 'Melanoma',
+  SCC: 'Squamous Cell Carcinoma',
+  BCC: 'Basal Cell Carcinoma',
+  OTHER: 'Other',
+  BENIGN: 'Benign',
+};
+
+const CLASS_COPY: Record<LesionClass, { lay: string; about: string }> = localizedCopy({
   MEL: {
-    full: 'Melanoma',
-    name: 'Melanoma-like',
     lay: 'a pattern with features similar to melanoma',
     about:
       'Melanoma is the most serious form of skin cancer. It begins in the skin’s pigment-producing cells and can spread to other parts of the body if it is not treated early. Found early, it is highly treatable - which is why prompt evaluation matters. Warning signs include a mole that is asymmetric, has an irregular border, uneven color, is larger than about 6 mm, or is changing.',
   },
   SCC: {
-    full: 'Squamous Cell Carcinoma',
-    name: 'SCC-like',
     lay: 'a pattern with features similar to squamous cell carcinoma',
     about:
       'Squamous cell carcinoma is the second most common skin cancer. It develops in the outer layer of the skin, often on sun-exposed areas, and can look like a firm, rough, or scaly bump that may crust or bleed. It usually grows slowly and is very treatable when found early, but it can spread if left untreated.',
   },
   BCC: {
-    full: 'Basal Cell Carcinoma',
-    name: 'BCC-like',
     lay: 'a pattern with features similar to basal cell carcinoma',
     about:
       'Basal cell carcinoma is the most common skin cancer. It grows slowly and very rarely spreads, but it still needs treatment to stop local damage. It often appears as a pearly or waxy bump, a shiny patch, or a sore that heals and returns.',
   },
   OTHER: {
-    full: 'Uncertain Pattern',
-    name: 'Unusual / pre-malignant',
     lay: 'an unusual or possibly pre-malignant pattern',
     about:
       'This pattern does not clearly match the common skin-cancer types. It may be a pre-cancerous change (such as an actinic keratosis) or another harmless skin condition. An in-person exam is the most reliable way to identify exactly what it is.',
   },
   BENIGN: {
-    full: 'Likely Benign',
-    name: 'Likely benign',
     lay: 'a pattern that looks non-cancerous',
     about:
       'Benign spots are non-cancerous - for example ordinary moles, freckles, or age-related growths such as seborrhoeic keratoses. They are very common and usually harmless, though it is still worth watching any spot that changes in size, shape, or color over time.',
   },
 });
+
+// Getters, not a spread: localizedCopy is lazy, and copying its values here would freeze
+// `lay`/`about` in whichever language was active when this module first loaded.
+export const CLASS_DISPLAY = Object.fromEntries(
+  (Object.keys(CLASS_NAME) as LesionClass[]).map((c) => [
+    c,
+    {
+      full: CLASS_NAME[c],
+      name: CLASS_NAME[c],
+      get lay() {
+        return CLASS_COPY[c].lay;
+      },
+      get about() {
+        return CLASS_COPY[c].about;
+      },
+    },
+  ]),
+) as Record<LesionClass, ClassDisplay>;

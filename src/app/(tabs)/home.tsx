@@ -73,7 +73,7 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
   useLocale();
   const theme = useTheme();
   const tierColors = getTierColors(theme, item.triage.tier);
-  const location = item.mark?.region ?? 'Unmarked location';
+  const location = item.mark?.region ? t(item.mark.region) : t('Unmarked location');
 
   return (
     <Pressable
@@ -182,7 +182,9 @@ export default function HomeScreen() {
             style={[styles.headerGlow, { backgroundColor: theme.brandTint }]}
             pointerEvents="none"
           />
-          <ThemedText type="largeTitle">
+          {/* title1, not largeTitle: the greeting carries a name and, in Tagalog, a longer
+              salutation ("Magandang hapon, …"), so 34pt ran into two lines on a narrow phone. */}
+          <ThemedText type="title1">
             {getGreeting()}, {firstName}
           </ThemedText>
           <ThemedText type="footnote" themeColor="textSecondary">
@@ -263,7 +265,7 @@ export default function HomeScreen() {
                 themeColor="brand"
                 numberOfLines={2}
                 style={styles.activityLabel}>
-                {'TOTAL\nSCREENINGS'}
+                {t("TOTAL SCREENINGS")}
               </ThemedText>
               <ThemedText type="title2" style={styles.activityValue}>
                 {loading ? '-' : entries.length}
@@ -291,7 +293,7 @@ export default function HomeScreen() {
                 themeColor="brand"
                 numberOfLines={2}
                 style={styles.activityLabel}>
-                {'LAST\nSCREENING'}
+                {t("LAST SCREENING")}
               </ThemedText>
               <ThemedText
                 type="title2"
@@ -308,7 +310,7 @@ export default function HomeScreen() {
                 adjustsFontSizeToFit
                 minimumFontScale={0.65}
                 style={styles.activityCaption}>
-                {lastScreening ? 'Most recent activity' : 'No screenings yet'}
+                {lastScreening ? t("Most recent activity") : t("No screenings yet")}
               </ThemedText>
             </View>
           </View>
@@ -345,12 +347,12 @@ export default function HomeScreen() {
             </View>
             <View style={styles.emptyText}>
               <ThemedText type="headline">
-                {loading ? 'Loading screenings…' : 'No screenings yet'}
+                {loading ? t("Loading screenings…") : t("No screenings yet")}
               </ThemedText>
               <ThemedText type="footnote" themeColor="textSecondary">
                 {loading
-                  ? 'Your activity will appear in a moment.'
-                  : 'Your completed screenings will appear here.'}
+                  ? t("Your activity will appear in a moment.")
+                  : t("Your completed screenings will appear here.")}
               </ThemedText>
             </View>
           </View>

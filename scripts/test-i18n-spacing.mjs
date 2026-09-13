@@ -17,10 +17,14 @@ import { join } from 'node:path';
 const ROOT = new URL('..', import.meta.url).pathname;
 const SPACERS = ['{" "}', "{' '}"];
 
-/** `file:line` sites where the join is deliberate. Keep this list short and explain each. */
+/**
+ * `file::key` sites where the join is deliberate. Keep this list short and explain each.
+ * Keyed on the string, not the line number - an edit above the call used to silently
+ * unpin the exception and fail the guard.
+ */
 const ALLOW = new Set([
   // "…pattern (MEL)" - no space wanted after an opening parenthesis.
-  'src/app/scan/result.tsx:251',
+  'src/app/scan/result.tsx::pattern (',
 ]);
 
 function walk(dir) {
@@ -46,7 +50,7 @@ for (const file of walk('src')) {
       if (/[  ]$/.test(key)) continue;
       if (SPACERS.some((s) => after.startsWith(s))) continue;
       const site = `${file}:${i + 1}`;
-      if (ALLOW.has(site)) continue;
+      if (ALLOW.has(`${file}::${key}`)) continue;
       findings.push({ site, key: key.slice(0, 48), next: after.slice(0, 28) });
     }
   });

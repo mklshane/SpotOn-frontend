@@ -114,7 +114,7 @@ export default function FollowUpConfirmScreen() {
               </ThemedText>
             </View>
             <ThemedText type="footnote" themeColor="textSecondary">
-              {lesion.mark?.region ?? 'Location not marked'}
+              {lesion.mark?.region ? t(lesion.mark.region) : t('Location not marked')}
             </ThemedText>
           </View>
         </Card>

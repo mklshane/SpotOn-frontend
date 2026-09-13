@@ -131,16 +131,15 @@ export default function ResultScreen() {
             end={{ x: 1, y: 1 }}
             style={[styles.hero, { shadowColor: colors.fg }]}>
             <View style={styles.heroTop}>
-              {/* `cls.name` ("Melanoma-like"), not `cls.full` ("Melanoma"). CLASS_DISPLAY ships
-                  both for exactly this reason and scan-timeline already uses the hedged one - this
-                  headline sat directly above an "AI confidence" ring, so the unhedged name read as
-                  a diagnosis. */}
+              {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
+                  "% match to a pattern with features similar to…" line right below, and in the
+                  disclaimer - not in the label the user repeats to a clinician. */}
               <ThemedText type="title1" style={styles.heroTitle}>
                 {cls.name}
               </ThemedText>
               <View style={[styles.tierBadge, { backgroundColor: colors.fg, shadowColor: colors.fg }]}>
                 <ThemedText type="subhead" style={{ color: theme.onBrand }}>
-                  {qualifier ? 'Precautionary' : tier.name}
+                  {qualifier ? t('Precautionary') : tier.name}
                 </ThemedText>
               </View>
             </View>
@@ -205,7 +204,7 @@ export default function ResultScreen() {
             <View style={[styles.photoCaption, { borderTopColor: theme.hairline }]}>
               <Icon name="mappin.circle.fill" tintColor={theme.brand} size={18} />
               <View style={styles.photoCaptionText}>
-                <ThemedText type="headline">{mark?.region ?? 'Location not marked'}</ThemedText>
+                <ThemedText type="headline">{mark?.region ? t(mark.region) : t('Location not marked')}</ThemedText>
                 <ThemedText type="subhead" themeColor="textSecondary">
                   {t("Checked on")} {date}
                   {record.images.length > 1 ? ` · ${record.images.length} photos` : ''}
@@ -395,7 +394,7 @@ function WarningBanner() {
           {t('Avoid self-medication')}
         </ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          {t(AVOID_SELF_MEDICATION_WARNING).replace('Avoid self-medication. ', '')}
+          {t(AVOID_SELF_MEDICATION_WARNING).replace(/^[^.]*\.\s*/, '')}
         </ThemedText>
       </View>
     </View>
@@ -443,7 +442,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">{t("About")} {cls.full.toLowerCase()}</ThemedText>
+      <ThemedText type="headline">{t('About {{name}}', { name: cls.full })}</ThemedText>
       <ThemedText type="body" themeColor="textSecondary">
         {cls.about}
       </ThemedText>
@@ -454,7 +453,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
           accessibilityState={{ expanded: open }}
           style={styles.expandRow}>
           <ThemedText type="subhead" themeColor="brand">
-            {open ? 'Hide pattern breakdown' : 'See pattern breakdown'}
+            {open ? t('Hide pattern breakdown') : t('See pattern breakdown')}
           </ThemedText>
           <Icon name={open ? 'chevron.up' : 'chevron.down'} tintColor={theme.brand} size={14} />
         </Pressable>

@@ -71,7 +71,7 @@ export type ReportModel = {
   classificationCode: LesionClass;
   /** "Melanoma" - the disease name, for the report's "Melanoma (MEL)" line. */
   classificationFull: string;
-  /** "Melanoma-like" - the lay pattern label used by in-app surfaces. */
+  /** Same clinical name as `classificationFull`; kept for the in-app surfaces that read it. */
   classificationName: string;
   confidencePct: number;
   /** "87.4%" - one decimal, as on the approved layout. */

@@ -55,3 +55,9 @@ npm run prebuild:clean
 ```
 
 This wipes and regenerates `ios/`/`android/` from `app.json`, re-applying every config plugin.
+
+## Build flags
+
+`experiments.reactCompiler` is **off** on purpose. The compiler caches `t("…")` results (they have
+no reactive inputs), so an in-app language switch left every already-mounted screen in English.
+See the comment at the top of `src/lib/i18n/core.ts` before turning it back on.

@@ -291,7 +291,7 @@ export default function LesionDetailScreen() {
                 and this fixed dark warm gray hold 5:1+ across every tier. */}
               <View style={styles.heroMeta}>
                 <ThemedText type="subhead" style={{ color: theme.text }}>
-                  {lesion.mark?.region ?? "Location not marked"}
+                  {lesion.mark?.region ? t(lesion.mark.region) : t("Location not marked")}
                   {lesion.archived ? " · not tracked" : ""}
                 </ThemedText>
                 {trend.count ? (
