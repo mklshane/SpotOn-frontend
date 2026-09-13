@@ -53,8 +53,6 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
         <View style={styles.rowText}>
           <View style={styles.rowTitle}>
             <View style={[styles.tierDot, { backgroundColor: fg }]} />
-            {/* Hedged label - a scrollable history of "Melanoma" reads as a list of diagnoses.
-                Same choice as the result hero and scan-timeline. */}
             <ThemedText type="headline" numberOfLines={1} style={styles.rowTitleText}>
               {cls.name}
             </ThemedText>

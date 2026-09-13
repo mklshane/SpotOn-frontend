@@ -23,7 +23,7 @@ import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { useScanHistory } from '@/lib/scan-history';
-import { TIER_CONTENT } from '@/lib/triage/recommendations';
+import { CLASS_DISPLAY, TIER_CONTENT } from '@/lib/triage/recommendations';
 import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
 
 /** "Good morning" / "Good afternoon" / "Good evening" based on the device clock. */
@@ -42,14 +42,17 @@ const todayLabel = () => new Date().toLocaleDateString(getIntlLocale(), {
 
 function formatActivityDate(value?: string): string {
   if (!value) return '-';
-  return new Date(value).toLocaleDateString(undefined, {
-    month: 'long',
+  // Abbreviated month: the tile is a half-width column at title2, so "September 13" was
+  // rendering as "Septembe…" - and the Tagalog months are longer still.
+  return new Date(value).toLocaleDateString(getIntlLocale(), {
+    month: 'short',
     day: 'numeric',
   });
 }
 
 function formatScreeningDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, {
+  // App language, not device locale - the header date and the activity tile already follow it.
+  return new Date(value).toLocaleDateString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -73,7 +76,11 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
   useLocale();
   const theme = useTheme();
   const tierColors = getTierColors(theme, item.triage.tier);
-  const location = item.mark?.region ? t(item.mark.region) : t('Unmarked location');
+  const cls = CLASS_DISPLAY[item.classification.topClass];
+  // The classified type is what the card is about; the body region is context for it, so it
+  // rides in the caption next to the date and simply drops out when the spot was never marked.
+  const location = item.mark?.region ? t(item.mark.region) : null;
+  const date = formatScreeningDate(item.createdAt);
 
   return (
     <Pressable
@@ -84,9 +91,9 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
         })
       }
       accessibilityRole="button"
-      accessibilityLabel={`${location}, ${TIER_CONTENT[item.triage.tier].name}, ${formatScreeningDate(
-        item.createdAt
-      )}`}
+      accessibilityLabel={[cls.name, location, TIER_CONTENT[item.triage.tier].name, date]
+        .filter(Boolean)
+        .join(', ')}
       style={({ pressed }) => [
         styles.screeningCard,
         {
@@ -99,10 +106,10 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
 
       <View style={styles.screeningInfo}>
         <ThemedText type="headline" numberOfLines={1}>
-          {location}
+          {cls.name}
         </ThemedText>
-        <ThemedText type="footnote" themeColor="textSecondary">
-          {formatScreeningDate(item.createdAt)}
+        <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
+          {location ? `${location} · ${date}` : date}
         </ThemedText>
       </View>
 
