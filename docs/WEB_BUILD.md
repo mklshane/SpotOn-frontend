@@ -53,7 +53,7 @@ LiteRT.js runs the shipped `.tflite` files unmodified. Measured 2026-09-08 again
 
 The shim sits at `loadTensorflowModel`, *below* `lesion-model.ts` and `classifier-model.ts`, so
 model caching, warm-up and layout introspection stay single-sourced. `readClassifierLayout()`'s
-NHWC-vs-NCHW sniffing reads LiteRT's shapes correctly (D13 introspects as `[1,3,260,260]`, NCHW)
+NHWC-vs-NCHW sniffing reads LiteRT's shapes correctly (D_final introspects as `[1,3,260,260]`, NCHW)
 and must not be short-circuited.
 
 ### The virtual filesystem
