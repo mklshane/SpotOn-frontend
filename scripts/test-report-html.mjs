@@ -52,6 +52,7 @@ const require = createRequire(import.meta.url);
 const { buildReportHtml, assertNoRemoteRefs } = require(join(out, 'report/report-html.js'));
 const { buildReportModel } = require(join(out, 'report/summary-report.js'));
 const { applyLocale } = require(join(out, 'i18n/core.js'));
+const { TIER_CONTENT } = require(join(out, 'triage/recommendations.js'));
 
 let failures = 0;
 function check(name, condition, detail = '') {
@@ -277,6 +278,10 @@ function pageCount(html, name, heightPt = BUDGET_PT) {
 }
 
 console.log('\nScreening Summary Report - template checks\n');
+
+for (const tier of ['low', 'moderate', 'high', 'critical']) {
+  check(`${tier}: report action available`, TIER_CONTENT[tier].showReport === true);
+}
 
 for (const c of CASES) {
   const html = buildReportHtml(c.model, c.assets);
