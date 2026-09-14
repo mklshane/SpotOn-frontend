@@ -358,5 +358,6 @@
   "Loading screenings…": "Nilo-load ang mga screening…",
   "Your activity will appear in a moment.": "Lalabas dito ang aktibidad mo sa ilang sandali.",
   "Your completed screenings will appear here.": "Lalabas dito ang mga natapos mong screening.",
-  "Location not marked": "Hindi namarkahan ang lokasyon"
+  "Location not marked": "Hindi namarkahan ang lokasyon",
+  "Auto-detect is unavailable. Center the spot and take the photo.": "Hindi available ang auto-detect. Itapat sa gitna ang spot at kunan ng litrato."
 }

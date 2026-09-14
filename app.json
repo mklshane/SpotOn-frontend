@@ -82,6 +82,7 @@
     "plugins": [
       "./plugins/withDisableScriptSandboxing",
       "./plugins/withAndroidAccentColor",
+      "./plugins/withAndroidKeepRawAssets",
       "expo-router",
       [
         "expo-splash-screen",

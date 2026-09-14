@@ -242,13 +242,26 @@ export default function CaptureScreen() {
   // photoResolution is ranked first: capping the analysis stream must never cost capture quality.
   //
   const [model, setModel] = useState<LesionModel | null>(null);
+  /**
+   * The detector failed to load, so there will never be a box.
+   *
+   * This used to be a bare console.warn, which is invisible on a release build - and the symptom
+   * it produces (the white searching guide sits there forever) is indistinguishable from "no
+   * lesion in frame". That ambiguity is what made the Android release asset-URI bug in
+   * asset-uri.ts expensive to find. Say it on screen instead: capture still works without the
+   * detector, it just can't auto-frame.
+   */
+  const [detectorFailed, setDetectorFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     getLesionModel()
       .then((m) => {
         if (alive) setModel(m);
       })
-      .catch((e) => console.warn('[tflite] model load failed', e));
+      .catch((e) => {
+        console.warn('[tflite] model load failed', e);
+        if (alive) setDetectorFailed(true);
+      });
     return () => {
       alive = false;
     };
@@ -897,7 +910,9 @@ export default function CaptureScreen() {
       {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' ? (
         <View style={[styles.frameHint, { bottom: frameHintBottom(SH) }]} pointerEvents="none">
           <ThemedText type="caption" style={styles.frameHintText}>
-            {t("Keep the spot centered in the box")}</ThemedText>
+            {detectorFailed
+              ? t("Auto-detect is unavailable. Center the spot and take the photo.")
+              : t("Keep the spot centered in the box")}</ThemedText>
         </View>
       ) : null}
 

@@ -1,9 +1,8 @@
-import * as FileSystem from '@/lib/fs';
-import { assetUri } from '@/lib/asset-uri';
+import { assetFileUri } from '@/lib/asset-uri';
 import { loadTensorflowModel } from '@/lib/tflite';
 
 import { ClassifierError } from './errors';
-import { FALLBACK_INPUT_SIZE, MODEL_ASSET, MODEL_VERSION } from './model-config';
+import { FALLBACK_INPUT_SIZE, MODEL_ASSET } from './model-config';
 
 /** The loaded TFLite classifier handle (5-class lesion classifier). */
 export type ClassifierModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
@@ -11,22 +10,16 @@ export type ClassifierModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 let modelPromise: Promise<ClassifierModel> | null = null;
 
 /**
- * Load the classifier once and cache it (same pattern as lesion-model.ts). In dev,
- * Metro serves the asset over http, which the native loader can't fetch directly -
- * download it to a local file first. Call early (e.g. on quality-screen mount) to
- * overlap the load with UI time the user is already spending.
+ * Load the classifier once and cache it (same pattern as lesion-model.ts). `assetFileUri`
+ * turns the bundled asset into a URI the native loader can open on every platform and build
+ * type - including an Android release build, where the raw asset resolves to a schemeless
+ * res/raw identifier that fast-tflite's loader cannot open (see asset-uri.ts). Call early
+ * (e.g. on quality-screen mount) to overlap the load with UI time the user is already spending.
  */
 export function getClassifierModel(): Promise<ClassifierModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      let uri = assetUri(MODEL_ASSET);
-      if (uri.startsWith('http')) {
-        // Name the cache file after the model version so a model swap can't be served a stale
-        // download from a previous build.
-        const dest = `${FileSystem.cacheDirectory}${MODEL_VERSION}.tflite`;
-        await FileSystem.downloadAsync(uri, dest);
-        uri = dest;
-      }
+      const uri = await assetFileUri(MODEL_ASSET);
       return loadTensorflowModel({ url: uri }, []);
     })().catch((e) => {
       modelPromise = null; // allow a retry on the next call
