@@ -1,5 +1,4 @@
-import * as FileSystem from '@/lib/fs';
-import { assetUri } from '@/lib/asset-uri';
+import { assetFileUri } from '@/lib/asset-uri';
 import { loadTensorflowModel } from '@/lib/tflite';
 
 /** The loaded TFLite model handle (single-class YOLO lesion detector). */
@@ -62,8 +61,9 @@ let modelPromise: Promise<LesionModel> | null = null;
 /**
  * Load the lesion-detection model once and cache it, so the live camera
  * (`scan/capture.tsx`) and the still-image quality gate (`scan/quality.tsx`) share
- * a single instance. In dev, Metro serves the asset over http, which the native
- * loader can't fetch directly - so download it to a local file first.
+ * a single instance. `assetFileUri` is what turns the bundled asset into something the
+ * native loader can open on every platform and build type - see asset-uri.ts; getting that
+ * wrong is what silently killed the detector on Android release builds.
  *
  * Idempotent and safe to call before the camera exists - see `prewarmLesionModel`, which is what
  * the body-part screen uses to get the load off the capture screen's critical path.
@@ -71,12 +71,7 @@ let modelPromise: Promise<LesionModel> | null = null;
 export function getLesionModel(): Promise<LesionModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
-      let uri = assetUri(MODEL_ASSET);
-      if (uri.startsWith('http')) {
-        const dest = `${FileSystem.cacheDirectory}lesion_det_y11n_v1_float16.tflite`;
-        await FileSystem.downloadAsync(uri, dest);
-        uri = dest;
-      }
+      const uri = await assetFileUri(MODEL_ASSET);
       const m = await loadTensorflowModel({ url: uri }, []);
       // Warm up before handing the model out. TFLite defers a chunk of its setup (XNNPACK delegate
       // partitioning, buffer allocation) to the first invoke, which measures ~12 ms slower than the
