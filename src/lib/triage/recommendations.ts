@@ -35,7 +35,7 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
       'Your spot does not show strong signs of concern at this time. Keep checking it monthly using the ABCDE guide, and scan again - or visit a skin doctor - if you notice any changes.',
     timeframe: null,
     priorityAction: 'Self-check monthly with the ABCDE guide',
-    showReport: false,
+    showReport: true,
     showDirectory: false,
     showEducation: true,
     offerReminder: true,
