@@ -149,14 +149,14 @@ const styles = StyleSheet.create({
   },
   centerShadow: {
     shadowColor: '#E5571B',
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
     // Android elevation renders as an ambient shadow spreading in all
     // directions (not just the declared offset), and this ring floats
     // (marginTop: -30) up into the content area above the bar - at 10 it
     // washed a wide orange glow over cards sitting near the tab bar.
-    elevation: 4,
+    elevation: 2,
   },
   centerCircle: {
     width: CIRCLE,
