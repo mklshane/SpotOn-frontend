@@ -435,6 +435,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
     paddingTop: Space.sm,
     paddingBottom: Space.xxl,
+    maxWidth: 760,
+    alignSelf: "center",
+    width: "100%",
   },
   section: {
     marginTop: Space.xxl,
@@ -450,6 +453,7 @@ const styles = StyleSheet.create({
   },
   paragraph: {
     lineHeight: 21,
+    textAlign: "justify",
   },
   inlineLink: {
     fontWeight: "600",
@@ -469,6 +473,7 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     lineHeight: 21,
+    textAlign: "justify",
   },
   bulletLabel: {
     fontWeight: "700",
