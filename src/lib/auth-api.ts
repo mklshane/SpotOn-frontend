@@ -3,6 +3,7 @@ import * as SecureStore from './secure-store';
 import { api, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
 import { setMeta } from '@/data/db';
+import { deleteAllForUser } from '@/data/screening-repo';
 
 import { cancelSelfCheckReminder } from './notifications';
 import { accountStorageKey, getActiveAccountId, setActiveAccountId } from './account-scope';
@@ -119,8 +120,9 @@ export async function clearCachedProfile(): Promise<void> {
 }
 
 /**
- * Wipes every local trace of the current account: auth tokens, cached profile,
- * and app-scoped local preferences (onboarding-seen, notification prefs).
+ * Wipes every local trace of the current account: screening history and its lesion
+ * photos, auth tokens, cached profile, and app-scoped local preferences
+ * (onboarding-seen, notification prefs).
  * Called before `signOut()` when an account is deleted, so a fresh install/login
  * on the same device never inherits a deleted account's stray local flags.
  * Does NOT touch the directory sync cache (facilities/doctors) - that data isn't
@@ -131,6 +133,11 @@ export async function clearAllLocalData(): Promise<void> {
   // Reminder metadata is account-scoped, and cancellation must happen while that scope is active.
   await cancelSelfCheckReminder().catch(() => {});
   if (accountId) {
+    // The server row is already gone, so this history is unreachable - leaving it
+    // would strand the account's lesion photos in documentDirectory for good.
+    await deleteAllForUser(accountId).catch((e) => {
+      console.warn('[auth] could not clear local history for deleted account', e);
+    });
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.reengagementRemindersEnabled), '');
   }
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');

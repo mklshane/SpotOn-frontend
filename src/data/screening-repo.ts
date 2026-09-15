@@ -376,6 +376,31 @@ export async function deleteScreening(id: string, userId: string): Promise<void>
   if (row.lesion_id) await refreshLesionRollup(row.lesion_id, userId);
 }
 
+/**
+ * Delete every screening and lesion belonging to one account, photos included.
+ *
+ * Used when the account itself is deleted: the server row is gone, so this history could never
+ * be reached again - it would just sit in documentDirectory as orphaned lesion photos under a
+ * user_id that can no longer sign in.
+ */
+export async function deleteAllForUser(userId: string): Promise<void> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ image_uri: string; images_json: string | null }>(
+    "SELECT image_uri, images_json FROM screenings WHERE user_id = ?",
+    userId,
+  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync("DELETE FROM screenings WHERE user_id = ?", userId);
+    await db.runAsync("DELETE FROM lesions WHERE user_id = ?", userId);
+  });
+  // Files last: the rows are what make the history reachable, and a failed unlink
+  // must not leave them behind.
+  for (const row of rows) {
+    const images = safeParse<{ uri: string }[]>(row.images_json, [{ uri: row.image_uri }]);
+    await deleteImageFiles(images.map((i) => toDisplayUri(i.uri)));
+  }
+}
+
 /** Best-effort unlink of owned photo files. A failure here must never fail the delete. */
 async function deleteImageFiles(uris: readonly string[]): Promise<void> {
   const FileSystem = await import("@/lib/fs");
