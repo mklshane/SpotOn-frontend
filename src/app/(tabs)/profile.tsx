@@ -13,6 +13,7 @@ import { Icon } from "@/components/ui/icon";
 import { IconCircle } from "@/components/ui/icon-circle";
 import { Screen } from "@/components/ui/screen";
 import { SettingsRow } from "@/components/ui/settings-row";
+import { Entrance, EntranceProvider } from "@/components/ui/entrance";
 import { Gradients, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
@@ -154,6 +155,8 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.sheet, { backgroundColor: theme.background }]}>
+      <EntranceProvider screen="profile">
+      <Entrance index={0}>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -166,7 +169,7 @@ export default function ProfileScreen() {
             style={styles.sectionLabel}
           >
             {t("ACTIVITY")}</ThemedText>
-          <Card style={styles.row}>
+          <Card style={[styles.row, styles.compactCard]}>
             <IconCircle icon="sparkles" variant="tint" size={48} />
             <View style={styles.rowText}>
               <ThemedText type="headline">
@@ -182,7 +185,7 @@ export default function ProfileScreen() {
             </View>
           </Card>
 
-          <Card style={styles.menu}>
+          <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
               icon="figure.stand"
               label={t("See body lesions")}
@@ -191,7 +194,7 @@ export default function ProfileScreen() {
             />
           </Card>
 
-          <Card style={styles.menu}>
+          <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
               icon="gearshape.fill"
               label={t("Settings")}
@@ -208,6 +211,8 @@ export default function ProfileScreen() {
             />
           </View>
         </ScrollView>
+      </Entrance>
+      </EntranceProvider>
       </View>
     </Screen>
   );
@@ -279,5 +284,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: Space.base },
   rowText: { flex: 1, gap: 2 },
   menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
+  compactCard: { paddingVertical: Space.base },
   actions: { marginTop: Space.xl },
 });
