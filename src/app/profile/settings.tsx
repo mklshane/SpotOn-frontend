@@ -2,7 +2,7 @@ import { LanguagePicker } from '@/components/ui/language-picker';
 import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { ApiError } from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
-import { ActionSheet } from "@/components/ui/action-sheet";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -163,6 +163,10 @@ export default function SettingsScreen() {
       await signOut();
       router.replace("/(auth)/login");
     } catch (e) {
+      // Close the dialog before alerting: an Alert stacked on top of an open Modal is
+      // unreliable on iOS, and the user needs to read this one.
+      setDeleting(false);
+      setConfirmDeleteVisible(false);
       Alert.alert(
         t("Could not delete account"),
         isNotDeployed(e)
@@ -171,7 +175,6 @@ export default function SettingsScreen() {
             ? e.detail
             : t("Something went wrong. Please try again."),
       );
-      setDeleting(false);
     }
   }
 
@@ -340,18 +343,19 @@ export default function SettingsScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <ActionSheet
+      <ConfirmDialog
         visible={confirmDeleteVisible}
-        title={t("Delete your account? This can't be undone.")}
-        onClose={() => setConfirmDeleteVisible(false)}
-        options={[
-          {
-            key: "delete",
-            label: t("Delete account"),
-            destructive: true,
-            onPress: handleDeleteAccount,
-          },
-        ]}
+        icon="trash.fill"
+        destructive
+        loading={deleting}
+        title={t("Delete your account?")}
+        message={t(
+          "This can't be undone. Your account is removed for good, and the screening history and photos saved on this device are deleted with it.",
+        )}
+        confirmLabel={deleting ? t("Deleting…") : t("Delete account")}
+        cancelLabel={t("Keep my account")}
+        onConfirm={handleDeleteAccount}
+        onCancel={() => setConfirmDeleteVisible(false)}
       />
     </Screen>
   );

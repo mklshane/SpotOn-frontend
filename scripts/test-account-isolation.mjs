@@ -74,6 +74,34 @@ check('Account B does not inherit Account A results', idsFor('account-b').join('
 sqlite.prepare('INSERT INTO screenings VALUES (?, ?, ?)').run('b-2', '2026-04-01', 'account-b');
 check('Account B retains only its own new and old results', idsFor('account-b').join(',') === 'b-1,b-2');
 check('switching back leaves Account A results unchanged', idsFor('account-a').join(',') === 'a-1,legacy-a');
+
+// Deleting an account must take its local history with it - and only its own. The server row is
+// gone by then, so anything left here is unreachable lesion photo data belonging to a dead account.
+const wipeScreeningsSql = /"(DELETE FROM screenings WHERE user_id = \?)"/.exec(screeningRepo)?.[1];
+const wipeLesionsSql = /"(DELETE FROM lesions WHERE user_id = \?)"/.exec(screeningRepo)?.[1];
+check('real account-wipe screening SQL is discoverable', Boolean(wipeScreeningsSql));
+check('real account-wipe lesion SQL is discoverable', Boolean(wipeLesionsSql));
+check(
+  'account deletion collects photo rows before wiping them',
+  /SELECT image_uri, images_json FROM screenings WHERE user_id = \?/.test(screeningRepo),
+);
+check('account deletion clears local history', /deleteAllForUser\(accountId\)/.test(auth));
+
+sqlite.exec('CREATE TABLE lesions (id TEXT PRIMARY KEY, user_id TEXT)');
+sqlite.prepare('INSERT INTO lesions VALUES (?, ?)').run('lesion-a', 'account-a');
+sqlite.prepare('INSERT INTO lesions VALUES (?, ?)').run('lesion-b', 'account-b');
+sqlite.prepare(wipeScreeningsSql).run('account-a');
+sqlite.prepare(wipeLesionsSql).run('account-a');
+check('deleted account keeps no screenings', idsFor('account-a').length === 0);
+check(
+  'deleted account keeps no lesions',
+  sqlite.prepare('SELECT id FROM lesions WHERE user_id = ?').all('account-a').length === 0,
+);
+check('the surviving account keeps its screenings', idsFor('account-b').join(',') === 'b-1,b-2');
+check(
+  'the surviving account keeps its lesions',
+  sqlite.prepare('SELECT id FROM lesions WHERE user_id = ?').all('account-b').length === 1,
+);
 sqlite.close();
 
 const reminders = read('src/lib/notifications.ts');

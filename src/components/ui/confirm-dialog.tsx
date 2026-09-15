@@ -20,6 +20,12 @@ export type ConfirmDialogProps = {
   cancelLabel?: string;
   /** Tints the icon circle and the confirm button for a consequential choice. */
   destructive?: boolean;
+  /**
+   * Keeps the dialog up with a spinner on the confirm button while the action runs, and
+   * blocks both buttons and backdrop dismissal. For work that can fail (a network call),
+   * so the user sees the outcome on the dialog that asked rather than on the screen behind it.
+   */
+  loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
@@ -37,15 +43,17 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = t("Cancel"),
   destructive = false,
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   useLocale();
   const theme = useTheme();
+  const dismiss = loading ? () => {} : onCancel;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.backdrop} onPress={onCancel} accessibilityLabel={t("Dismiss")}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={dismiss}>
+      <Pressable style={styles.backdrop} onPress={dismiss} accessibilityLabel={t("Dismiss")}>
         {/* Stop propagation so taps inside the card don't dismiss it. */}
         <Animated.View entering={FadeIn.duration(160)} style={styles.cardWrap}>
           <Pressable style={[styles.card, { backgroundColor: theme.surface }, Elevation.lg]}>
@@ -71,12 +79,16 @@ export function ConfirmDialog({
               <Button
                 label={confirmLabel}
                 variant="brand"
+                loading={loading}
                 onPress={onConfirm}
-                style={styles.action}
+                // A destructive confirm must not wear the brand orange: on this screen the
+                // same pill shape is the *safe* action everywhere else.
+                style={[styles.action, destructive && { backgroundColor: theme.riskCritical }]}
               />
               <Button
                 label={cancelLabel}
                 variant="ghost"
+                disabled={loading}
                 onPress={onCancel}
                 style={styles.action}
               />
