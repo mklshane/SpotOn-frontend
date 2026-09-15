@@ -13,7 +13,6 @@ import { Icon } from "@/components/ui/icon";
 import { IconCircle } from "@/components/ui/icon-circle";
 import { Screen } from "@/components/ui/screen";
 import { SettingsRow } from "@/components/ui/settings-row";
-import { Entrance, EntranceProvider } from "@/components/ui/entrance";
 import { Gradients, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
@@ -155,8 +154,6 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.sheet, { backgroundColor: theme.background }]}>
-      <EntranceProvider screen="profile">
-      <Entrance index={0}>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}
@@ -211,8 +208,6 @@ export default function ProfileScreen() {
             />
           </View>
         </ScrollView>
-      </Entrance>
-      </EntranceProvider>
       </View>
     </Screen>
   );
