@@ -536,14 +536,6 @@ function TpsSparkline({
   );
 }
 
-/** Blend two #RRGGBB hex colors; t=0 → a, t=1 → b. Same helper result.tsx uses for its hero. */
-function mix(a: string, b: string, t: number): string {
-  const ch = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
-  const to = (x: number) => Math.round(x).toString(16).padStart(2, "0");
-  const l = (x: number, y: number) => x + (y - x) * Math.max(0, Math.min(1, t));
-  return `#${to(l(ch(a, 1), ch(b, 1)))}${to(l(ch(a, 3), ch(b, 3)))}${to(l(ch(a, 5), ch(b, 5)))}`;
-}
-
 const styles = StyleSheet.create({
   disclaimer: { textAlign: "center", paddingHorizontal: Space.md, paddingTop: Space.base },
   centerFill: {
