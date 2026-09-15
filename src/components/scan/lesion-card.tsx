@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { Canvas } from '@react-three/fiber/native';
 
-import { BodyGlyph } from '@/components/scan/body-glyph';
+import { BodyModel } from '@/components/scan/body-model';
+import { BodyLights, Marker } from '@/components/scan/mannequin';
 import { lesionTitle, relativeDate } from '@/components/scan/lesion-row';
 import { tierColor } from '@/components/scan/screening-row';
 import { ThemedText } from '@/components/themed-text';
@@ -40,7 +42,13 @@ export function LesionCard({ lesion, latest }: { lesion: Lesion; latest?: Screen
         <View style={styles.art}>
           {/* The body part, not the lesion photo: a patch of skin at this size identifies nothing,
               whereas "left hand" vs "right foot" tells the spots apart at a glance. */}
-          <BodyGlyph region={lesion.mark?.region} size={104} />
+          {lesion.mark ? (
+            <Canvas camera={{ position: [0, 0.25, 5.6], fov: 30 }} gl={{ antialias: true }}>
+              <BodyLights />
+              <BodyModel />
+              <Marker point={lesion.mark.point} />
+            </Canvas>
+          ) : null}
           {/* Tier as a solid pill rather than a bare dot - the same treatment the lesion
               timeline uses. */}
           <View style={[styles.tier, { backgroundColor: theme.surface }]}>
