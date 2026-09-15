@@ -97,11 +97,12 @@ function SoloScan({
         style={[styles.soloCard, { borderColor: theme.hairline }]}
       >
         <View style={styles.soloPhotoWrap}>
-          <ScreeningThumbnail
-            uri={screening.imageUri}
-            style={styles.soloPhoto}
-            iconSize={32}
-          />
+            <ScreeningThumbnail
+              uri={screening.imageUri}
+              style={styles.soloPhoto}
+              iconSize={32}
+              contentFit="contain"
+            />
           <View
             style={[
               styles.tierPill,
