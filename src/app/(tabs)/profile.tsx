@@ -294,7 +294,13 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center", gap: Space.base },
   rowText: { flex: 1, gap: 2 },
-  summaryCard: { flexDirection: "row", alignItems: "center", minHeight: 100 },
+  summaryCard: {
+    height: 112,
+    paddingVertical: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   summaryColumn: { flex: 1, flexDirection: "row", alignItems: "center", gap: Space.sm },
   summaryIcon: {
     width: 36,
@@ -306,7 +312,12 @@ const styles = StyleSheet.create({
   },
   summaryText: { flex: 1, justifyContent: "center", gap: 2 },
   summaryLabel: { fontWeight: "700", letterSpacing: 0.4 },
-  summaryDivider: { width: StyleSheet.hairlineWidth, height: 64, marginHorizontal: Space.sm },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 64,
+    alignSelf: "center",
+    marginHorizontal: Space.sm,
+  },
   menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
   compactCard: { paddingVertical: Space.base },
   actions: { marginTop: Space.xl },
