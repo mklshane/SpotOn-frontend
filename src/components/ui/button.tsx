@@ -15,7 +15,8 @@ import { ThemedText } from '../themed-text';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export type ButtonVariant = 'brand' | 'ink' | 'outline' | 'ghost';
+/** `danger` is the destructive counterpart to `brand` - same pill, risk-critical red. */
+export type ButtonVariant = 'brand' | 'ink' | 'outline' | 'ghost' | 'danger';
 
 export type ButtonProps = Omit<PressableProps, 'style'> & {
   label: string;
@@ -40,10 +41,10 @@ export function Button({
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   const isDisabled = disabled || loading;
-  const filled = variant === 'brand' || variant === 'ink';
+  const filled = variant === 'brand' || variant === 'ink' || variant === 'danger';
 
   const textColor =
-    variant === 'brand'
+    variant === 'brand' || variant === 'danger'
       ? theme.onBrand
       : variant === 'ink'
         ? theme.background
@@ -54,6 +55,8 @@ export function Button({
   const surfaceStyle =
     variant === 'brand'
       ? { backgroundColor: theme.brand }
+      : variant === 'danger'
+        ? { backgroundColor: theme.riskCritical }
       : variant === 'ink'
         ? { backgroundColor: theme.text }
         : variant === 'outline'

@@ -78,12 +78,12 @@ export function ConfirmDialog({
             <View style={styles.actions}>
               <Button
                 label={confirmLabel}
-                variant="brand"
+                // A destructive confirm must not wear the brand orange - everywhere else
+                // that same pill is the safe, encouraged action.
+                variant={destructive ? 'danger' : 'brand'}
                 loading={loading}
                 onPress={onConfirm}
-                // A destructive confirm must not wear the brand orange: on this screen the
-                // same pill shape is the *safe* action everywhere else.
-                style={[styles.action, destructive && { backgroundColor: theme.riskCritical }]}
+                style={styles.action}
               />
               <Button
                 label={cancelLabel}
