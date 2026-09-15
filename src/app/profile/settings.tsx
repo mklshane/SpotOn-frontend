@@ -26,18 +26,14 @@ import {
 import { Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
-import { clearAllLocalData } from "@/lib/auth-api";
+import { changePassword, clearAllLocalData } from "@/lib/auth-api";
+import { getRegistrationPasswordError } from "@/lib/form-validation";
 import {
   getRemindersEnabled,
   getSelfCheckReminderDueAt,
   setRemindersEnabled,
 } from "@/lib/notifications";
-import {
-  changePassword,
-  deleteAccount,
-  isNotDeployed,
-  requestDataExport,
-} from "@/lib/settings-api";
+import { deleteAccount, isNotDeployed, requestDataExport } from "@/lib/settings-api";
 
 const SUPPORT_EMAIL = "help.spoton@gmail.com";
 
@@ -101,29 +97,54 @@ export default function SettingsScreen() {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  function resetPasswordForm() {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError(null);
+  }
+
   async function handleChangePassword() {
     setPasswordError(null);
-    if (!currentPassword || !newPassword) {
-      setPasswordError("Enter both your current and new password.");
+    if (!currentPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+    // Same rule the backend enforces, so an 8-character minimum fails here
+    // rather than after a round trip.
+    const newPasswordError = getRegistrationPasswordError(newPassword);
+    if (newPasswordError) {
+      setPasswordError(newPasswordError);
+      return;
+    }
+    // There is no password-reset flow, so a typo in the new password would lock
+    // the account out for good. Confirm it before we rotate the credential.
+    if (newPassword !== confirmPassword) {
+      setPasswordError("The new passwords don't match.");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("Your new password must be different from your current one.");
       return;
     }
     setPasswordSubmitting(true);
     try {
       await changePassword(currentPassword, newPassword);
-      setCurrentPassword("");
-      setNewPassword("");
+      resetPasswordForm();
       setShowPasswordForm(false);
-      Alert.alert(t("Password changed"), t("Your password has been updated."));
+      Alert.alert(
+        t("Password changed"),
+        t("Your password has been updated. Any other devices signed in to this account have been signed out."),
+      );
     } catch (e) {
       setPasswordError(
-        isNotDeployed(e)
-          ? "This isn't available yet - check back soon."
-          : e instanceof ApiError
-            ? e.detail
-            : "Couldn't change your password. Check your connection and try again.",
+        e instanceof ApiError
+          ? e.detail
+          : "Couldn't change your password. Check your connection and try again.",
       );
     } finally {
       setPasswordSubmitting(false);
@@ -221,7 +242,11 @@ export default function SettingsScreen() {
             <SettingsRow
               icon="key.fill"
               label={t("Change password")}
-              onPress={() => setShowPasswordForm((s) => !s)}
+              onPress={() => {
+                // Never leave a half-typed password behind a collapsed row.
+                if (showPasswordForm) resetPasswordForm();
+                setShowPasswordForm((open) => !open);
+              }}
             />
             {showPasswordForm ? (
               <View style={styles.passwordForm}>
@@ -239,6 +264,16 @@ export default function SettingsScreen() {
                   value={newPassword}
                   onChangeText={setNewPassword}
                 />
+                <TextField
+                  label={t("Confirm new password")}
+                  secure
+                  textContentType="newPassword"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                />
+                <ThemedText type="footnote" themeColor="textSecondary">
+                  {t("Use at least 8 characters.")}
+                </ThemedText>
                 {passwordError ? (
                   <ThemedText type="footnote" themeColor="riskCritical">
                     {t(passwordError)}

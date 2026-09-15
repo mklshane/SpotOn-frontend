@@ -149,6 +149,25 @@ export async function login(identifier: string, password: string): Promise<Token
   return tokens;
 }
 
+/**
+ * Change the account password.
+ *
+ * The server revokes every refresh token the account holds (so other devices are
+ * signed out) and hands back a fresh pair for this one - which we must persist,
+ * or this device keeps a refresh token the server has just revoked and silently
+ * drops to the login screen the next time the access token expires.
+ */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const tokens = await api.post<TokenOut>('/auth/change-password', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+  await persist(tokens);
+}
+
 /** Exchange the stored refresh token for a fresh access token. Returns it, or null. */
 export async function refresh(): Promise<string | null> {
   if (!refreshToken) return null;
