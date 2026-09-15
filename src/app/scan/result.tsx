@@ -1,6 +1,5 @@
 import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -125,11 +124,7 @@ export default function ResultScreen() {
         {/* 1 · Hero - classified type, tier, confidence ring. A gradient + colored glow keyed to
             the risk level so it lifts off the page while staying tonally on-tier. */}
         <Animated.View entering={FadeInDown}>
-          <LinearGradient
-            colors={[mix(colors.fg, '#FFFFFF', 0.82), mix(colors.fg, '#FFFFFF', 0.5)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.hero, { shadowColor: colors.fg }]}>
+          <View style={[styles.hero, { backgroundColor: colors.bg, shadowColor: colors.fg }]}>
             <View style={styles.heroTop}>
               {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                   "% match to a pattern with features similar to…" line right below, and in the
@@ -154,7 +149,7 @@ export default function ResultScreen() {
                 </ThemedText>
               </View>
             </View>
-          </LinearGradient>
+          </View>
         </Animated.View>
 
         {/* 2 · The photo, straight under the verdict - it's what the user just captured, so it
@@ -684,14 +679,14 @@ const styles = StyleSheet.create({
   heroConfText: { flex: 1, gap: 2 },
   // The lesion photo: fills the card's top edge-to-edge (hence padded={false} + overflow
   // hidden), with the location/date caption as a divided row inside the same card.
-  photoCard: { overflow: 'hidden' },
+  photoCard: { overflow: 'hidden', paddingBottom: Space.sm },
   pressed: { opacity: 0.9 },
-  photo: { width: '100%', height: 200 },
+  photo: { width: '100%', height: 184 },
   photoEmpty: { alignItems: 'center', justifyContent: 'center' },
   photoExpand: {
     position: 'absolute',
     right: Space.md,
-    bottom: Space.md,
+    top: Space.md,
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -703,7 +698,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    padding: Space.base,
+    paddingHorizontal: Space.base,
+    paddingTop: Space.md,
+    paddingBottom: Space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   thumbStrip: { gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md },
