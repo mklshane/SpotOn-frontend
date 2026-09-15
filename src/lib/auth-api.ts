@@ -3,7 +3,6 @@ import * as SecureStore from './secure-store';
 import { api, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
 import { setMeta } from '@/data/db';
-import { deleteAllForUser } from '@/data/screening-repo';
 
 import { cancelSelfCheckReminder } from './notifications';
 import { accountStorageKey, getActiveAccountId, setActiveAccountId } from './account-scope';
@@ -135,9 +134,17 @@ export async function clearAllLocalData(): Promise<void> {
   if (accountId) {
     // The server row is already gone, so this history is unreachable - leaving it
     // would strand the account's lesion photos in documentDirectory for good.
-    await deleteAllForUser(accountId).catch((e) => {
+    //
+    // Imported lazily: `auth-api` is reachable from the root layout, and this is the only
+    // thing here that needs the screening data layer - a static import would pull SQLite and
+    // the whole repo graph into every bundle, SSR included, to serve one rare action.
+    // Same reason `deleteImageFiles` defers `@/lib/fs`.
+    try {
+      const { deleteAllForUser } = await import('@/data/screening-repo');
+      await deleteAllForUser(accountId);
+    } catch (e) {
       console.warn('[auth] could not clear local history for deleted account', e);
-    });
+    }
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.reengagementRemindersEnabled), '');
   }
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
