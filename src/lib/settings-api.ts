@@ -17,7 +17,12 @@ export async function requestDataExport(): Promise<void> {
   await api.post('/me/export');
 }
 
-/** True when the failure means "this endpoint isn't deployed yet" rather than a real error. */
+/**
+ * True when the failure means "this endpoint isn't deployed yet" rather than a real error.
+ *
+ * 405 counts: when the path exists but the verb doesn't, FastAPI answers "Method Not Allowed"
+ * rather than 404, which is what `DELETE /me` showed the user before it was implemented.
+ */
 export function isNotDeployed(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404;
+  return error instanceof ApiError && (error.status === 404 || error.status === 405);
 }
