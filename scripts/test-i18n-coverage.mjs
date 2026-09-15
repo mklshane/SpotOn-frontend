@@ -33,6 +33,11 @@ const INDIRECT = [
   'Please confirm you are 18 or older.',
   'Please accept the Terms and Privacy Policy to continue.',
   'Enter a valid date of birth.', 'Please select one.', 'Please enter your name.',
+  // Change-password errors: held in state, then translated at the display site.
+  // The last one is the API's own `detail` for a wrong current password.
+  'Enter your current password.', "The new passwords don't match.",
+  'Your new password must be different from your current one.',
+  'Your current password is incorrect.',
 ];
 
 const walk = (dir) =>

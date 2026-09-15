@@ -14,6 +14,15 @@ export class ApiError extends Error {
     try {
       const parsed = JSON.parse(this.body);
       if (typeof parsed?.detail === "string") return parsed.detail;
+      // A 422 carries `detail` as a list of pydantic errors, not a string. Show
+      // the first message rather than dumping the raw JSON at the user.
+      if (Array.isArray(parsed?.detail)) {
+        const first = parsed.detail.find(
+          (e: unknown) => typeof (e as { msg?: unknown })?.msg === "string",
+        ) as { msg: string } | undefined;
+        // Pydantic prefixes custom ValueErrors with "Value error, ".
+        if (first) return first.msg.replace(/^Value error,\s*/, "");
+      }
     } catch {
       // not JSON
     }
