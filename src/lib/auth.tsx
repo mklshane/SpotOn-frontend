@@ -54,7 +54,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const hasStored = await authApi.loadTokens();
+      // SecureStore can remain pending when a dev client/native module is unavailable.
+      // Never keep the entire app on the splash screen indefinitely in that case.
+      const hasStored = await Promise.race([
+        authApi.loadTokens(),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
+      ]);
       if (!hasStored) {
         if (mounted) setLoading(false);
         return;

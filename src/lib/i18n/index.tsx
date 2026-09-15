@@ -38,7 +38,12 @@ export function setLanguage(next: Locale): Promise<void> {
 export function LanguageGate({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const locale = useLocale();
-  useEffect(() => { let active = true; loadLanguage().then(() => { if (active) setReady(true); }); return () => { active = false; }; }, []);
+  useEffect(() => {
+    let active = true;
+    const fallback = setTimeout(() => { if (active) setReady(true); }, 3000);
+    loadLanguage().then(() => { if (active) setReady(true); });
+    return () => { active = false; clearTimeout(fallback); };
+  }, []);
   useEffect(() => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') document.documentElement.lang = locale;
   }, [locale]);
