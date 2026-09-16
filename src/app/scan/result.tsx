@@ -50,14 +50,8 @@ export default function ResultScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  const { getById, loading, unsavedEntryId, storageIsEphemeral } = useScanHistory();
+  const { getById, loading, storageIsEphemeral } = useScanHistory();
   const record = id ? getById(id) : undefined;
-  /**
-   * This result exists only in memory: the analysis finished but the write failed, and showing it
-   * anyway beats throwing away a two-minute flow (see analysis.tsx attemptSave). The one thing we
-   * owe the user in exchange is saying so, here, before they assume it is in their history.
-   */
-  const notSaved = record != null && unsavedEntryId === record.id;
   // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
   // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
   const flowTerminal = from === 'scan';
@@ -127,14 +121,12 @@ export default function ResultScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
         showsVerticalScrollIndicator={false}>
-        {notSaved || storageIsEphemeral ? (
+        {storageIsEphemeral ? (
           <Animated.View entering={FadeInDown}>
             <Card style={[styles.storageNotice, { borderColor: theme.riskModerate }]}>
               <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={18} />
               <ThemedText type="footnote" themeColor="textSecondary" style={styles.storageNoticeText}>
-                {notSaved
-                  ? t("This result was not saved to your history. Take a screenshot or download the report before you leave this page.")
-                  : t("This browser cannot store SpotOn data, so your history will be gone when you close this page.")}
+                {t("This browser cannot store SpotOn data, so your history will be gone when you close this page.")}
               </ThemedText>
             </Card>
           </Animated.View>

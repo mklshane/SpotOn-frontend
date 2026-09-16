@@ -109,6 +109,8 @@ npx eas deploy
   falls back to an in-memory database: everything works for that page and nothing survives a
   reload. The UI says so explicitly - a banner on Home, on the spot/screening lists, and on a
   result - because an empty-looking history is otherwise indistinguishable from data loss.
+  If even that database cannot be written, the scan ends on the error screen: the copy names the
+  cause (`classifyDbError`) and "Try again" retries the SAVE, not the model.
 
   This depends on `patches/expo-sqlite+56.0.5.patch`. Stock expo-sqlite assigns its `_sqlite3`
   handle BEFORE awaiting `AccessHandlePoolVFS.create()`, so the first VFS failure made every later

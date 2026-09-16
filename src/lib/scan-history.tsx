@@ -59,18 +59,6 @@ type ScanHistoryContextValue = {
   /** A lesion's screenings, oldest first - the order the timeline reads them in. */
   screeningsForLesion: (lesionId: string) => ScreeningRecord[];
   addEntry: (record: NewScreening) => Promise<ScreeningRecord>;
-  /**
-   * Hold a finished screening in memory when it could not be written.
-   *
-   * A completed analysis is the whole product of a two-minute flow, and a storage fault is not a
-   * reason to throw it away: the user still needs to read their result and act on it. The record
-   * lives until the page goes away, is reachable from getById so the result screen renders
-   * normally, and is reported by `unsavedEntryId` so every surface showing it can say plainly
-   * that it is not in their history.
-   */
-  keepUnsaved: (record: NewScreening) => ScreeningRecord;
-  /** Id of the in-memory-only screening, if there is one. */
-  unsavedEntryId: string | null;
   /** True when the database itself is a throwaway - nothing written this session will survive. */
   storageIsEphemeral: boolean;
   renameLesion: (id: string, label: string | null) => Promise<void>;
@@ -137,7 +125,6 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
   const accountId = user?.id ?? null;
   const [entries, setEntries] = useState<ScreeningRecord[]>([]);
   const [lesions, setLesions] = useState<Lesion[]>([]);
-  const [unsaved, setUnsaved] = useState<ScreeningRecord | null>(null);
   const [ephemeral, setEphemeral] = useState(false);
   const [loadState, setLoadState] = useState<{
     accountId: string | null;
@@ -241,29 +228,6 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
     [accountId, mergeLesion],
   );
 
-  const keepUnsaved = useCallback<ScanHistoryContextValue['keepUnsaved']>(
-    ({ id, images, ...record }) => {
-      // Deliberately does NOT copy the photos: whatever went wrong with storage is exactly what
-      // would fail again. The capture URIs are still live for as long as this page is, which is
-      // also exactly how long this record lasts.
-      const full: ScreeningRecord = {
-        ...record,
-        id: id ?? `scan-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-        imageUri: images?.[0]?.uri ?? record.imageUri,
-        images: images?.length
-          ? images
-          : [{ uri: record.imageUri, index: 0, source: record.source, qualityPassed: true }],
-        lesionId: null,
-        userId: accountId,
-      };
-      setUnsaved(full);
-      setEphemeral(isDatabaseEphemeral());
-      return full;
-    },
-    [accountId],
-  );
-
   const renameLesion = useCallback<ScanHistoryContextValue['renameLesion']>(async (id, label) => {
     if (!accountId) return;
     await updateLesionLabel(id, label, accountId);
@@ -335,19 +299,13 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       loading,
       loadError,
       addEntry,
-      keepUnsaved,
-      unsavedEntryId: unsaved?.id ?? null,
       storageIsEphemeral: ephemeral,
       renameLesion,
       archiveLesion,
       linkScreening,
       trackScreening,
       deleteLesion,
-      // The unsaved record is NOT account-filtered: it exists precisely for the cases where the
-      // account scope is part of what failed (an expired session), and it is only ever reachable
-      // by its own id, which nothing but this session's result screen knows.
-      getById: (id) =>
-        scopedEntries.find((e) => e.id === id) ?? (unsaved?.id === id ? unsaved : undefined),
+      getById: (id) => scopedEntries.find((e) => e.id === id),
       getLesionById: (id) => scopedLesions.find((l) => l.id === id),
       screeningsForLesion: (lesionId) =>
         scopedEntries
@@ -360,10 +318,8 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       scopedLesions,
       loading,
       loadError,
-      unsaved,
       ephemeral,
       addEntry,
-      keepUnsaved,
       renameLesion,
       archiveLesion,
       linkScreening,

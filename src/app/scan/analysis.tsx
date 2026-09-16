@@ -124,7 +124,7 @@ export default function AnalysisScreen() {
   const insets = useSafeAreaInsets();
   const width = useSurfaceWidth();
   const session = useScreeningSession();
-  const { addEntry, keepUnsaved } = useScanHistory();
+  const { addEntry } = useScanHistory();
 
   const CARD = Math.min(width - Space.xl * 2, 216);
 
@@ -196,26 +196,6 @@ export default function AnalysisScreen() {
         // answers were precisely what did not save.
         console.warn('[analysis] persist failed', e);
         setErrorDetail(describeError('persist', e));
-        // Last resort: keep the finished screening in memory and show it. The user spent two
-        // minutes on this and the result is the only thing that matters clinically - dropping it
-        // because a database write failed is the worst possible trade. The result screen says
-        // plainly that it was not saved, and it is gone on reload, so nobody is misled.
-        if (Platform.OS === 'web') {
-          try {
-            const held = keepUnsaved(payload);
-            // The run really is over, so end it like a successful save would. reset() clears
-            // session state only - it does not revoke the blob: URLs the held record points at,
-            // so the result screen and its report still render.
-            session.reset();
-            router.replace({
-              pathname: '/scan/result',
-              params: { id: held.id, from: 'scan', unsaved: '1' },
-            });
-            return true;
-          } catch (inner) {
-            console.warn('[analysis] in-memory fallback failed too', inner);
-          }
-        }
         setSaveError(kind);
         setStage('error');
         return false;
