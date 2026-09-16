@@ -10,7 +10,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { ThemedText } from '@/components/themed-text';
 import { Button, Card, ImageViewer, Screen } from '@/components/ui';
 import { Icon } from '@/components/ui/icon';
-import { Radius, Space } from '@/constants/theme';
+import { Elevation, Radius, Space } from '@/constants/theme';
 import { useAndroidBack } from '@/hooks/use-android-back';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -155,47 +155,49 @@ export default function ResultScreen() {
             belongs in the first screenful rather than buried below the explanations. */}
         <Animated.View entering={FadeInDown.delay(60)}>
           <Card padded={false} style={styles.photoCard}>
-            {record.imageUri ? (
-              <Pressable
-                onPress={() => setViewerUri(record.imageUri)}
-                accessibilityRole="button"
-                accessibilityLabel={t("View photo full screen")}
-                style={({ pressed }) => pressed && styles.pressed}>
-                <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
-                <View style={styles.photoExpand}>
-                  <Icon
-                    name="arrow.up.left.and.arrow.down.right"
-                    tintColor="#FFFFFF"
-                    size={12}
-                    weight="semibold"
-                  />
+            <View style={styles.photoMedia}>
+              {record.imageUri ? (
+                <Pressable
+                  onPress={() => setViewerUri(record.imageUri)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("View photo full screen")}
+                  style={({ pressed }) => pressed && styles.pressed}>
+                  <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
+                  <View style={styles.photoExpand}>
+                    <Icon
+                      name="arrow.up.left.and.arrow.down.right"
+                      tintColor="#FFFFFF"
+                      size={12}
+                      weight="semibold"
+                    />
+                  </View>
+                </Pressable>
+              ) : (
+                <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
+                  <Icon name="photo" tintColor={theme.muted} size={28} />
                 </View>
-              </Pressable>
-            ) : (
-              <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
-                <Icon name="photo" tintColor={theme.muted} size={28} />
-              </View>
-            )}
-            {/* Extra angles, when the user took more than one. The main photo above is what the
-                classifier read and what the report carries; these are the fuller record. */}
-            {record.images.length > 1 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.thumbStrip}>
-                {record.images.map((img) => (
-                  <Pressable
-                    key={img.uri}
-                    onPress={() => setViewerUri(img.uri)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View photo ${img.index + 1} of ${record.images.length}`}
-                    style={({ pressed }) => pressed && styles.pressed}>
-                    <Image source={{ uri: img.uri }} style={styles.thumbSmall} contentFit="cover" />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
-            <View style={[styles.photoCaption, { borderTopColor: theme.hairline }]}>
+              )}
+              {/* Extra angles, when the user took more than one. The main photo above is what the
+                  classifier read and what the report carries; these are the fuller record. */}
+              {record.images.length > 1 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.thumbStrip}>
+                  {record.images.map((img) => (
+                    <Pressable
+                      key={img.uri}
+                      onPress={() => setViewerUri(img.uri)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View photo ${img.index + 1} of ${record.images.length}`}
+                      style={({ pressed }) => pressed && styles.pressed}>
+                      <Image source={{ uri: img.uri }} style={styles.thumbSmall} contentFit="cover" />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : null}
+            </View>
+            <View style={styles.photoCaption}>
               <Icon name="mappin.circle.fill" tintColor={theme.brand} size={18} />
               <View style={styles.photoCaptionText}>
                 <ThemedText type="headline">{mark?.region ? t(mark.region) : t('Location not marked')}</ThemedText>
@@ -650,6 +652,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: Space.xl,
     gap: Space.lg,
+    ...Elevation.sm,
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
   heroTitle: { flex: 1 },
@@ -660,9 +663,15 @@ const styles = StyleSheet.create({
   },
   heroBottom: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   heroConfText: { flex: 1, gap: 2 },
-  // The lesion photo: fills the card's top edge-to-edge (hence padded={false} + overflow
-  // hidden), with the location/date caption as a divided row inside the same card.
-  photoCard: { overflow: 'hidden', paddingBottom: Space.sm },
+  // Keep the photo inset inside the white card so the media and details read as one framed
+  // record, matching the tracked-spot card treatment.
+  photoCard: {
+    overflow: 'hidden',
+    paddingTop: Space.md,
+    paddingHorizontal: Space.md,
+    paddingBottom: Space.sm,
+  },
+  photoMedia: { borderRadius: Radius.lg, overflow: 'hidden' },
   pressed: { opacity: 0.9 },
   photo: { width: '100%', height: 184 },
   photoEmpty: { alignItems: 'center', justifyContent: 'center' },
@@ -684,7 +693,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.base,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   thumbStrip: { gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md },
   thumbSmall: { width: 56, height: 56, borderRadius: Radius.sm },
