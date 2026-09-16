@@ -20,6 +20,7 @@ metadata from the inspiration image carry over.
   a new shared component (see "Row component" below for the one exception).
 
 **Out of scope (explicitly deferred):**
+
 - The actual SpotOn Questionnaire flow (question bank, scoring, results) - its own future
   brainstorm/spec. This pass only adds a row that navigates to a "coming soon" screen.
 - Real photography/illustration assets - hero images are placeholder gradient icon circles
@@ -46,14 +47,39 @@ export type Article = {
 };
 
 export type Topic =
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'article'; article: Article }
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'subtopics'; subtopics: Article[] }
-  | { id: string; title: string; subtitle: string; icon: IconName; kind: 'comingSoon' };
+  | {
+      id: string;
+      title: string;
+      subtitle: string;
+      icon: IconName;
+      kind: "article";
+      article: Article;
+    }
+  | {
+      id: string;
+      title: string;
+      subtitle: string;
+      icon: IconName;
+      kind: "subtopics";
+      subtopics: Article[];
+    }
+  | {
+      id: string;
+      title: string;
+      subtitle: string;
+      icon: IconName;
+      kind: "comingSoon";
+    };
 
-export const LEARN_TOPICS: Topic[] = [ /* the 7 topics below */ ];
+export const LEARN_TOPICS: Topic[] = [
+  /* the 7 topics below */
+];
 
 export function getTopic(id: string): Topic | undefined;
-export function getArticle(topicId: string, articleId?: string): Article | undefined;
+export function getArticle(
+  topicId: string,
+  articleId?: string,
+): Article | undefined;
 ```
 
 `getArticle` handles both cases: for an `article`-kind topic, `articleId` is omitted and it
@@ -95,6 +121,7 @@ matching `SettingsRow`'s visual weight but as a single-purpose local component (
 doesn't need.
 
 Tapping a row navigates based on `kind`:
+
 - `article` → `/learn/article?topicId=<id>`
 - `subtopics` → `/learn/topic?topicId=<id>`
 - `comingSoon` → `/learn/questionnaire`
