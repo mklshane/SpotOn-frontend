@@ -23,7 +23,7 @@ export type IqaTerms = {
   sharpOk: boolean;
   skinOk: boolean;
   presenceOk: boolean;
-  /** The still detector RAN and located a lesion. 'failed'/'pending' must map to true, not false. */
+  /** The still detector RAN and located a lesion. A failure or timeout is false: could-not-check is not a pass. */
   detectorFound: boolean;
 };
 
@@ -72,8 +72,9 @@ export type IqaVerdict = {
  *     detector              rejects warm non-skin scenes: carpet, wood, a shoe
  *
  * The cost is real and was paid deliberately: requiring the detector to fire drops lesion recall
- * (synth/eval/NONSKIN_GATE.md). `'failed'` and `'pending'` are NOT `'absent'` - a detector that
- * could not answer must not veto, only one that ran and found nothing.
+ * (synth/eval/NONSKIN_GATE.md). `detectorFound` means the detector RAN and FOUND a lesion. A failure
+ * or a timeout used to count as found, which let a slow model load silently switch this term off
+ * on one device while it kept working on another (2026-09-17). Could-not-check is not a pass.
  */
 export function decideIqa(input: IqaTerms): IqaVerdict {
   const lesionRowOk = input.skinOk && input.presenceOk && input.detectorFound;

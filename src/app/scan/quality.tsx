@@ -59,9 +59,12 @@ const READABILITY_GRACE_MS = 2000;
  * Bound on the post-capture lesion detection. The detector is the same ~6 MB model the camera has
  * already loaded and one still takes well under the ~3.9s the rows spend revealing, so on the
  * camera path this is never spent; a gallery upload on a cold start is the case that can reach it.
- * Exceeding it degrades to "could not answer", which does NOT veto the row.
+ * Exceeding it degrades to "could not answer", which BLOCKS the row (2026-09-17) - so this is 20 s,
+ * not 4 s: a first scan on the web build loads the WASM runtime and the model, and a slow load must
+ * not be mistaken for a failure. It only costs time when the detector is slow; a normal answer lands
+ * well inside the ~3.9 s the rows spend revealing, and body.tsx prewarms the model before capture.
  */
-const LESION_DETECT_TIMEOUT_MS = 4000;
+const LESION_DETECT_TIMEOUT_MS = 20000;
 
 type RowStatus = 'pending' | 'ok' | 'warn';
 const ROW_META: { label: string; icon: IconName }[] = localizedCopy([
@@ -160,8 +163,16 @@ export default function QualityScreen() {
   useEffect(() => {
     if (!uri) return;
     let alive = true;
-    import('@/lib/classifier/lesion-detector')
-      .then((m) => m.detectLesionBox(uri))
+    // One retry: a failed model load clears lesion-model.ts's cached promise, so a second call
+    // genuinely reloads - and since a failure now blocks the row, a transient error (a flaky asset
+    // fetch on the web build) should not be the final answer.
+    const detect = () =>
+      import('@/lib/classifier/lesion-detector').then((m) => m.detectLesionBox(uri));
+    detect()
+      .catch((e) => {
+        console.warn('[iqa] lesion detection failed, retrying once', e);
+        return detect();
+      })
       .then((box) => alive && setLesionDet(box ? 'found' : 'absent'))
       .catch((e) => {
         console.warn('[iqa] lesion detection failed', e);
@@ -172,7 +183,8 @@ export default function QualityScreen() {
     };
   }, [uri]);
 
-  // Bound it: exceeding this degrades to "could not answer", which does not veto.
+  // Bound it: exceeding this degrades to "could not answer", which now blocks the row (see decideIqa
+  // below), so the bound is generous enough for a cold web model load.
   useEffect(() => {
     if (lesionDet !== 'pending') return;
     const t = setTimeout(
@@ -260,9 +272,11 @@ export default function QualityScreen() {
     sharpOk,
     skinOk,
     presenceOk,
-    // Only a detector that RAN and found nothing vetoes. A failure or a timeout cannot answer, and
-    // must not be read as "no lesion" - see decideIqa.
-    detectorFound: lesionDet !== 'absent',
+    // Only a detector that RAN and FOUND a lesion passes (changed 2026-09-17). A failure or timeout
+    // used to count as a pass, so a slow cold model load silently removed the one term that rejects
+    // photos of scenes - the same photo passed on one device and failed on a faster one. If we could
+    // not check, we cannot say "Lesion in frame".
+    detectorFound: lesionDet === 'found',
   });
   const readableOk = readability !== 'unreadable';
   // The verdict itself lives in scan-flow.ts so every branch is pinned by npm run test:flow.
@@ -306,7 +320,11 @@ export default function QualityScreen() {
     if (!sharpOk) out.push('The photo looks blurry - hold still, and tap the spot to focus.');
     // Reached only on a skin frame (see the early return), so this is the honest reading: skin,
     // but nothing on it that looks like a spot.
-    if (!presenceOk) out.push('We couldn’t find a clear lesion - center the spot in the frame.');
+    if (lesionDet === 'failed') {
+      out.push('We couldn’t check this photo for a spot - please try again.');
+    } else if (!presenceOk || lesionDet === 'absent') {
+      out.push('We couldn’t find a clear lesion - center the spot in the frame.');
+    }
     // Confidence is a readability signal like blur is - surfaced here rather than after the
     // questionnaire, so a retake costs the user a photo and not eight answers.
     if (!readableOk) out.push('We couldn’t get a clear read of this spot - a sharper, closer photo usually fixes it.');
@@ -328,7 +346,7 @@ export default function QualityScreen() {
       out.push('Tip: hair is covering the spot - move it aside and retake for a clearer read.');
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, readableOk, hairTip]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, lesionDet, readableOk, hairTip]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {
