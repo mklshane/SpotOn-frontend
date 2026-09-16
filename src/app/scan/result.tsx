@@ -121,10 +121,9 @@ export default function ResultScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
         showsVerticalScrollIndicator={false}>
-        {/* 1 · Hero - classified type, tier, confidence ring. A gradient + colored glow keyed to
-            the risk level so it lifts off the page while staying tonally on-tier. */}
+        {/* 1 · Hero - classified type, tier, confidence ring. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: colors.bg, shadowColor: colors.fg }]}>
+          <View style={[styles.hero, { backgroundColor: colors.bg }]}>
             <View style={styles.heroTop}>
               {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                   "% match to a pattern with features similar to…" line right below, and in the
@@ -132,7 +131,7 @@ export default function ResultScreen() {
               <ThemedText type="title1" style={styles.heroTitle}>
                 {cls.name}
               </ThemedText>
-              <View style={[styles.tierBadge, { backgroundColor: colors.fg, shadowColor: colors.fg }]}>
+              <View style={[styles.tierBadge, { backgroundColor: colors.fg }]}>
                 <ThemedText type="subhead" style={{ color: theme.onBrand }}>
                   {qualifier ? t('Precautionary') : tier.name}
                 </ThemedText>
@@ -646,15 +645,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm, gap: Space.base },
   center: { textAlign: 'center' },
-  // Hero - gradient is set inline from the tier color; shadowColor is the tier color too.
+  // Hero background is set inline from the tier color; keep the card flat without a glow.
   hero: {
     borderRadius: Radius.xl,
     padding: Space.xl,
     gap: Space.lg,
-    shadowOpacity: 0.35,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
   },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
   heroTitle: { flex: 1 },
@@ -662,10 +657,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.pill,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
   },
   heroBottom: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   heroConfText: { flex: 1, gap: 2 },
