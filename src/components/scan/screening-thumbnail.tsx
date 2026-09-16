@@ -20,10 +20,12 @@ export function ScreeningThumbnail({
   uri,
   style,
   iconSize = 20,
+  contentFit = 'cover',
 }: {
   uri?: string | null;
   style?: StyleProp<ImageStyle>;
   iconSize?: number;
+  contentFit?: 'cover' | 'contain' | 'fill' | 'none' | 'scale-down';
 }) {
   const theme = useTheme();
   // The failure is keyed to the URI that produced it rather than held as a bare boolean: list rows
@@ -50,7 +52,7 @@ export function ScreeningThumbnail({
     <Image
       source={{ uri }}
       style={style}
-      contentFit="cover"
+      contentFit={contentFit}
       transition={180}
       onError={() => setFailedUri(uri)}
     />

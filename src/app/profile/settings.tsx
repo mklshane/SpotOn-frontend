@@ -33,7 +33,7 @@ import {
   getSelfCheckReminderDueAt,
   setRemindersEnabled,
 } from "@/lib/notifications";
-import { deleteAccount, isNotDeployed, requestDataExport } from "@/lib/settings-api";
+import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
 
 const SUPPORT_EMAIL = "help.spoton@gmail.com";
 
@@ -178,31 +178,6 @@ export default function SettingsScreen() {
     }
   }
 
-  // Data export
-  const [exporting, setExporting] = useState(false);
-
-  async function handleDataExport() {
-    setExporting(true);
-    try {
-      await requestDataExport();
-      Alert.alert(
-        t("Export requested"),
-        t("We'll email your data export within a few days."),
-      );
-    } catch (e) {
-      Alert.alert(
-        t("Could not request export"),
-        isNotDeployed(e)
-          ? t("Data export isn't available yet - check back soon.")
-          : e instanceof ApiError
-            ? e.detail
-            : t("Something went wrong. Please try again."),
-      );
-    } finally {
-      setExporting(false);
-    }
-  }
-
   const appVersion = Constants.expoConfig?.version ?? t("Unknown");
 
   return (
@@ -326,14 +301,6 @@ export default function SettingsScreen() {
               label={t("Data privacy consent")}
               sublabel={formatConsentStatus(user)}
               accessory={null}
-            />
-          </Card>
-
-          <Card style={[styles.section, styles.sectionSpaced]}>
-            <SettingsRow
-              icon="doc.text.fill"
-              label={exporting ? t("Requesting export…") : t("Request data export")}
-              onPress={exporting ? undefined : handleDataExport}
             />
           </Card>
 

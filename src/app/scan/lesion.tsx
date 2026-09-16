@@ -1,5 +1,4 @@
 import { t, localizedCopy, useLocale } from '@/lib/i18n';
-import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -84,11 +83,6 @@ export default function LesionDetailScreen() {
   // values, new identity - on every keystroke, and LinearGradient repainted its bitmap
   // each time, stealing frames from the text input and making typed characters lag behind.
   // `fg` only changes when the tier does, never while editing, so this stays stable.
-  const heroColors = useMemo(
-    () =>
-      [mix(fg, "#FFFFFF", 0.82), mix(fg, "#FFFFFF", 0.5)] as [string, string],
-    [fg],
-  );
 
   if (!lesion) {
     return (
@@ -216,12 +210,7 @@ export default function LesionDetailScreen() {
             {/* Tier-tinted gradient, matching the result screen's hero - this is the same "how
               urgent is this" signal, so the two screens should read as one visual language
               rather than the plain white block this used to be. */}
-            <LinearGradient
-              colors={heroColors}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.hero, { shadowColor: fg }]}
-            >
+            <View style={[styles.hero, { backgroundColor: bg, shadowColor: fg }]}>
               <View style={styles.heroTop}>
                 {editing ? (
                   <TextField
@@ -303,7 +292,7 @@ export default function LesionDetailScreen() {
                   </ThemedText>
                 ) : null}
               </View>
-            </LinearGradient>
+            </View>
           </Entrance>
 
           {/* Photo timeline - the highest-value element on this screen */}
@@ -545,14 +534,6 @@ function TpsSparkline({
       ))}
     </Svg>
   );
-}
-
-/** Blend two #RRGGBB hex colors; t=0 → a, t=1 → b. Same helper result.tsx uses for its hero. */
-function mix(a: string, b: string, t: number): string {
-  const ch = (h: string, i: number) => parseInt(h.slice(i, i + 2), 16);
-  const to = (x: number) => Math.round(x).toString(16).padStart(2, "0");
-  const l = (x: number, y: number) => x + (y - x) * Math.max(0, Math.min(1, t));
-  return `#${to(l(ch(a, 1), ch(b, 1)))}${to(l(ch(a, 3), ch(b, 3)))}${to(l(ch(a, 5), ch(b, 5)))}`;
 }
 
 const styles = StyleSheet.create({

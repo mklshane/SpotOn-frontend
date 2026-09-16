@@ -1,6 +1,11 @@
 import * as FileSystem from '@/lib/fs';
-import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
+
+// expo-print is native-only. Keep it out of the web/dev-client module graph so the
+// report route can be registered without requiring ExpoPrint at app startup.
+type PrintModule = typeof import('expo-print');
+const Print: PrintModule | null = Platform.OS === 'web' ? null : require('expo-print');
 
 import { loadReportAssets } from './report-assets';
 import { phtFileStamp } from './report-datetime';
@@ -81,6 +86,7 @@ export async function generateReportPdf(model: ReportModel): Promise<GeneratedRe
 
 /** One pass through the print WebView, at the report's page geometry. */
 function renderToFile(html: string): Promise<{ uri: string; numberOfPages: number }> {
+  if (!Print) return Promise.reject(new ReportError('render-failed', 'PDF export is unavailable on web.'));
   return Print.printToFileAsync({
     html,
     width: PRINT_PAGE.width,
@@ -114,6 +120,7 @@ export async function shareReportPdf(report: GeneratedReport): Promise<void> {
  * re-renders from the identical HTML instead - same input, same output.
  */
 export async function printReportPdf(report: GeneratedReport): Promise<void> {
+  if (!Print) throw new ReportError('print-failed', 'Printing is unavailable on web.');
   try {
     await Print.printAsync({ uri: report.uri });
   } catch (e) {

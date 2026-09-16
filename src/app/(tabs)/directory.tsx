@@ -12,6 +12,7 @@ import {
 import { DoctorsView } from "@/components/directory/DoctorsView";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
+import { Entrance, EntranceProvider } from "@/components/ui/entrance";
 import { SearchBar } from "@/components/ui/search-bar";
 import { Radius, Space } from "@/constants/theme";
 import { needsInitialSync, needsReconcile, runSync } from "@/data/sync";
@@ -105,7 +106,9 @@ export default function DirectoryScreen() {
   );
 
   return (
-    <View style={[styles.fill, { backgroundColor: theme.background }]}>
+    <EntranceProvider screen="directory">
+      <Entrance index={0} style={styles.fill}>
+      <View style={[styles.fill, { backgroundColor: theme.background }]}>
       {/* Switching back to Clinics doesn't refetch GPS from scratch and visibly pan from a default location.*/}
       <View
         style={[
@@ -131,7 +134,9 @@ export default function DirectoryScreen() {
           header={header}
         />
       </View>
-    </View>
+      </View>
+      </Entrance>
+    </EntranceProvider>
   );
 }
 

@@ -166,23 +166,39 @@ export default function ProfileScreen() {
             style={styles.sectionLabel}
           >
             {t("ACTIVITY")}</ThemedText>
-          <Card style={styles.row}>
-            <IconCircle icon="sparkles" variant="tint" size={48} />
-            <View style={styles.rowText}>
-              <ThemedText type="headline">
-                {scanCount === 0
-                  ? t("No screenings yet")
-                  : `${scanCount} ${scanCount === 1 ? "screening" : "screenings"} completed`}
-              </ThemedText>
-              {lastScanLabel ? (
-                <ThemedText type="footnote" themeColor="textSecondary">
-                  {t("Last screening")} {lastScanLabel}
+          <Card style={[styles.summaryCard, styles.compactCard]}>
+            <View style={styles.summaryColumn}>
+              <View style={styles.summaryIcon}>
+                <Icon name="clock.arrow.circlepath" tintColor={theme.brand} size={18} />
+              </View>
+              <View style={styles.summaryText}>
+                <ThemedText type="caption" themeColor="brand" style={styles.summaryLabel}>
+                  {t("TOTAL SCREENINGS")}
                 </ThemedText>
-              ) : null}
+                <ThemedText type="title2">{scanCount}</ThemedText>
+                <ThemedText type="caption" themeColor="muted">
+                  {t("Completed screenings")}
+                </ThemedText>
+              </View>
+            </View>
+            <View style={[styles.summaryDivider, { backgroundColor: theme.hairline }]} />
+            <View style={styles.summaryColumn}>
+              <View style={styles.summaryIcon}>
+                <Icon name="calendar" tintColor={theme.brand} size={18} />
+              </View>
+              <View style={styles.summaryText}>
+                <ThemedText type="caption" themeColor="brand" style={styles.summaryLabel}>
+                  {t("LAST SCREENING")}
+                </ThemedText>
+                <ThemedText type="title2">{lastScanLabel ?? "—"}</ThemedText>
+                <ThemedText type="caption" themeColor="muted">
+                  {t("Most recent activity")}
+                </ThemedText>
+              </View>
             </View>
           </Card>
 
-          <Card style={styles.menu}>
+          <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
               icon="figure.stand"
               label={t("See body lesions")}
@@ -191,7 +207,7 @@ export default function ProfileScreen() {
             />
           </Card>
 
-          <Card style={styles.menu}>
+          <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
               icon="gearshape.fill"
               label={t("Settings")}
@@ -278,6 +294,31 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: "row", alignItems: "center", gap: Space.base },
   rowText: { flex: 1, gap: 2 },
+  summaryCard: {
+    height: 112,
+    paddingVertical: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryColumn: { flex: 1, flexDirection: "row", alignItems: "center", gap: Space.sm },
+  summaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF0E7",
+  },
+  summaryText: { flex: 1, justifyContent: "center", gap: 2 },
+  summaryLabel: { fontWeight: "700", letterSpacing: 0.4 },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 64,
+    alignSelf: "center",
+    marginHorizontal: Space.sm,
+  },
   menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
+  compactCard: { paddingVertical: Space.base },
   actions: { marginTop: Space.xl },
 });
