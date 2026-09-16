@@ -81,13 +81,12 @@ function SoloScan({
 
   return (
     // Shadow lives on this outer layer, not the clipped card below: a shadow and
-    // `overflow: hidden` on the same view fight on iOS, and the card needs the
-    // clip to keep the photo's corners rounded. A solid backgroundColor here is
-    // what gives iOS a backing to derive the shadow's shape from.
+    // `overflow: hidden` on the same view fight on iOS. The solid white backing
+    // creates the framed-card treatment from the reference UI.
     <View
       style={[
         styles.soloShadow,
-        { backgroundColor: theme.surface, shadowColor: c.fg },
+        { backgroundColor: theme.surface },
       ]}
     >
       <PressableScale
@@ -97,47 +96,49 @@ function SoloScan({
         style={[styles.soloCard, { borderColor: theme.hairline }]}
       >
         <View style={styles.soloPhotoWrap}>
+          <View style={styles.soloMedia}>
             <ScreeningThumbnail
               uri={screening.imageUri}
               style={styles.soloPhoto}
               iconSize={32}
               contentFit="contain"
             />
-          <View
-            style={[
-              styles.tierPill,
-              styles.soloTier,
-              { backgroundColor: theme.surface },
-            ]}
-          >
-            <View style={[styles.tierDot, { backgroundColor: c.fg }]} />
-            <ThemedText type="caption" style={{ color: c.fg }}>
-              {TIER_LABEL[screening.triage.tier]}
-            </ThemedText>
-          </View>
-          {/* Same chip as the capture screen's multi-shot indicator, so "more than one
-              angle was taken" reads the same way everywhere it shows up. */}
-          {screening.images.length > 1 ? (
             <View
               style={[
-                styles.countChip,
-                styles.soloCount,
+                styles.tierPill,
+                styles.soloTier,
                 { backgroundColor: theme.surface },
               ]}
             >
-              <Icon
-                name="square.stack.3d.up.fill"
-                tintColor={theme.textSecondary}
-                size={12}
-              />
-              <ThemedText type="caption" themeColor="textSecondary">
-                {screening.images.length}
+              <View style={[styles.tierDot, { backgroundColor: c.fg }]} />
+              <ThemedText type="caption" style={{ color: c.fg }}>
+                {TIER_LABEL[screening.triage.tier]}
               </ThemedText>
             </View>
-          ) : null}
+            {/* Same chip as the capture screen's multi-shot indicator, so "more than one
+                angle was taken" reads the same way everywhere it shows up. */}
+            {screening.images.length > 1 ? (
+              <View
+                style={[
+                  styles.countChip,
+                  styles.soloCount,
+                  { backgroundColor: theme.surface },
+                ]}
+              >
+                <Icon
+                  name="square.stack.3d.up.fill"
+                  tintColor={theme.textSecondary}
+                  size={12}
+                />
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {screening.images.length}
+                </ThemedText>
+              </View>
+            ) : null}
+          </View>
         </View>
 
-        <View style={[styles.soloFooter, { borderTopColor: theme.hairline }]}>
+        <View style={styles.soloFooter}>
           {/* Date and AI read stacked as one column, so the "Latest Scan" pill can sit
               beside both of them at once - centered on their combined height - rather
               than pinned to just the top row. */}
@@ -335,15 +336,23 @@ const styles = StyleSheet.create({
   },
   soloCount: { position: "absolute", right: Space.md, top: Space.md },
 
-  // A soft tier-tinted shadow (rather than the usual flat warm-brown one) ties the
-  // container back to the status it's showing, without spending a second color on it.
-  soloShadow: { borderRadius: Radius.xl, ...Elevation.md, shadowOpacity: 0.18 },
+  // The white outer layer creates the same framed-card silhouette as the reference.
+  soloShadow: { borderRadius: Radius.xl, ...Elevation.sm },
   soloCard: {
     borderRadius: Radius.xl,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
   },
-  soloPhotoWrap: { width: "100%" },
+  soloPhotoWrap: {
+    width: "100%",
+    paddingTop: Space.md,
+    paddingHorizontal: Space.md,
+  },
+  soloMedia: {
+    width: "100%",
+    borderRadius: Radius.lg,
+    overflow: "hidden",
+  },
   // 4:3 rather than square: closer to how the capture screen frames a lesion,
   // so the stored photo is not cropped a second time on the way in.
   soloPhoto: { width: "100%", aspectRatio: 4 / 3 },
@@ -355,7 +364,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.base,
     paddingTop: Space.md,
     paddingBottom: Space.base,
-    borderTopWidth: StyleSheet.hairlineWidth,
   },
   soloFooterLeft: { gap: Space.xs },
   soloFooterItem: { flexDirection: "row", alignItems: "center", gap: Space.xs },
