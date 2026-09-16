@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { BodyGlyph } from '@/components/scan/body-glyph';
+import { BodySpotPreview } from '@/components/scan/body-spot-preview';
 import { lesionTitle, relativeDate } from '@/components/scan/lesion-row';
 import { tierColor } from '@/components/scan/screening-row';
 import { ThemedText } from '@/components/themed-text';
@@ -37,10 +38,14 @@ export function LesionCard({ lesion, latest }: { lesion: Lesion; latest?: Screen
       }, last checked ${relativeDate(lesion.lastScreenedAt)}`}
       style={({ pressed }) => pressed && styles.pressed}>
       <Card padded={false} style={styles.card}>
-        <View style={styles.art}>
-          {/* The body part, not the lesion photo: a patch of skin at this size identifies nothing,
-              whereas "left hand" vs "right foot" tells the spots apart at a glance. */}
-          <BodyGlyph region={lesion.mark?.region} size={104} />
+        <View style={[styles.artFrame, { backgroundColor: theme.elementBg }]}>
+          {/* A marked spot gets the same 3D model the user just placed it on, cropped around the
+              saved point. Unmarked legacy records keep the simple region illustration fallback. */}
+          {lesion.mark ? (
+            <BodySpotPreview mark={lesion.mark} />
+          ) : (
+            <BodyGlyph region={null} size={104} />
+          )}
           {/* Tier as a solid pill rather than a bare dot - the same treatment the lesion
               timeline uses. */}
           <View style={[styles.tier, { backgroundColor: theme.surface }]}>
@@ -68,7 +73,14 @@ export function LesionCard({ lesion, latest }: { lesion: Lesion; latest?: Screen
 const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
   card: { width: CARD_W, overflow: 'hidden' },
-  art: { width: CARD_W, height: 132 },
+  artFrame: {
+    width: CARD_W - Space.base,
+    height: 132,
+    marginTop: Space.sm,
+    marginHorizontal: Space.sm,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+  },
   tier: {
     position: 'absolute',
     left: Space.sm,
