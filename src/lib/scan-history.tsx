@@ -12,7 +12,7 @@ import {
   listScreenings,
   setScreeningLesion,
 } from '@/data/screening-repo';
-import { claimLegacyHistory } from '@/data/db';
+import { claimLegacyHistory, isDatabaseEphemeral } from '@/data/db';
 import { useAuth } from '@/lib/auth';
 import { syncSelfCheckReminder } from '@/lib/notifications';
 import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/triage/types';
@@ -28,6 +28,12 @@ import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/tr
  * remember at scan time.
  */
 type NewScreening = Omit<ScreeningRecord, 'id' | 'createdAt' | 'lesionId' | 'images' | 'userId'> & {
+  /**
+   * Reuse a specific screening id. The scan flow passes one so that retrying a failed save
+   * re-writes the SAME row (insertScreening is INSERT OR REPLACE) instead of minting a second
+   * screening from the same photo and answers. Omitted means "mint a new one".
+   */
+  id?: string;
   /** Existing lesion to link to. Omitted/null mints a new one. */
   lesionId?: string | null;
   /** Label for a newly minted lesion. Ignored when linking to an existing one. */
@@ -53,6 +59,20 @@ type ScanHistoryContextValue = {
   /** A lesion's screenings, oldest first - the order the timeline reads them in. */
   screeningsForLesion: (lesionId: string) => ScreeningRecord[];
   addEntry: (record: NewScreening) => Promise<ScreeningRecord>;
+  /**
+   * Hold a finished screening in memory when it could not be written.
+   *
+   * A completed analysis is the whole product of a two-minute flow, and a storage fault is not a
+   * reason to throw it away: the user still needs to read their result and act on it. The record
+   * lives until the page goes away, is reachable from getById so the result screen renders
+   * normally, and is reported by `unsavedEntryId` so every surface showing it can say plainly
+   * that it is not in their history.
+   */
+  keepUnsaved: (record: NewScreening) => ScreeningRecord;
+  /** Id of the in-memory-only screening, if there is one. */
+  unsavedEntryId: string | null;
+  /** True when the database itself is a throwaway - nothing written this session will survive. */
+  storageIsEphemeral: boolean;
   renameLesion: (id: string, label: string | null) => Promise<void>;
   archiveLesion: (id: string, archived: boolean) => Promise<void>;
   /** Attach an existing screening to a lesion (retroactive "track this"), or detach with null. */
@@ -68,18 +88,48 @@ function screeningsDir(userId: string): string {
   return `${FileSystem.documentDirectory ?? ''}screenings/${encodeURIComponent(userId)}/`;
 }
 
-/** Copy the (cache-dir) capture into permanent storage so history thumbnails survive. */
+/**
+ * A URI that stops resolving the moment this page goes away.
+ *
+ * On web the capture pipeline hands us `blob:` URLs (image-ops.web.ts revokes nothing, but the
+ * browser drops them on unload) and occasionally `data:` ones. Keeping one of those as a
+ * screening's photo path writes a row that is already broken: the thumbnail, the result hero and
+ * the PDF all render blank forever, with no error anyone saw.
+ */
+function isEphemeral(uri: string): boolean {
+  return uri.startsWith('blob:') || uri.startsWith('data:');
+}
+
+/**
+ * Copy the (cache-dir) capture into permanent storage so history thumbnails survive.
+ *
+ * Retries once: the common web failure is a transient OPFS/service-worker hiccup, and a second
+ * attempt costs a few milliseconds against losing the photo.
+ *
+ * If the copy still fails, the fallback is the ORIGINAL uri - which is fine on device (a real
+ * file in the cache directory, at worst evicted later) and useless on web. So an ephemeral
+ * fallback throws instead: a visible "we couldn't save this" the user can act on beats a saved
+ * record whose photo is already dead. That asymmetry is the whole point of the check - see
+ * isEphemeral above.
+ */
 async function persistImage(userId: string, id: string, uri: string): Promise<string> {
-  try {
-    const dir = screeningsDir(userId);
-    await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-    const dest = `${dir}${id}.jpg`;
-    await FileSystem.copyAsync({ from: uri, to: dest });
-    return dest;
-  } catch (e) {
-    console.warn('[history] image copy failed, keeping original uri', e);
-    return uri;
+  const dir = screeningsDir(userId);
+  const dest = `${dir}${id}.jpg`;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+      await FileSystem.copyAsync({ from: uri, to: dest });
+      return dest;
+    } catch (e) {
+      lastError = e;
+    }
   }
+  if (isEphemeral(uri)) {
+    throw new Error(`could not store screening photo: ${String(lastError)}`, { cause: lastError });
+  }
+  console.warn('[history] image copy failed, keeping original uri', lastError);
+  return uri;
 }
 
 export function ScanHistoryProvider({ children }: { children: React.ReactNode }) {
@@ -87,6 +137,8 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
   const accountId = user?.id ?? null;
   const [entries, setEntries] = useState<ScreeningRecord[]>([]);
   const [lesions, setLesions] = useState<Lesion[]>([]);
+  const [unsaved, setUnsaved] = useState<ScreeningRecord | null>(null);
+  const [ephemeral, setEphemeral] = useState(false);
   const [loadState, setLoadState] = useState<{
     accountId: string | null;
     error: boolean;
@@ -110,6 +162,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
         if (!alive) return;
         setEntries(records);
         setLesions(ls);
+        setEphemeral(isDatabaseEphemeral());
         setLoadState({ accountId, error: false });
       })
       .catch((e) => {
@@ -142,9 +195,9 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const addEntry = useCallback<ScanHistoryContextValue['addEntry']>(
-    async ({ lesionId, lesionLabel, images, ...record }) => {
+    async ({ id: reuseId, lesionId, lesionLabel, images, ...record }) => {
       if (!accountId) throw new Error('Cannot save screening history while signed out');
-      const id = `scan-${Date.now()}`;
+      const id = reuseId ?? `scan-${Date.now()}`;
       const createdAt = new Date().toISOString();
 
       // Photos are copied out of the evictable cache dir in capture order. Index 0 keeps the
@@ -163,7 +216,9 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
 
       // A follow-up links to its lesion; a fresh scan mints one, so every screening is trackable
       // without the user having to opt in at scan time.
-      const targetLesionId = lesionId ?? `lesion-${Date.now()}`;
+      // Derived from the screening id, not the clock: a retry of a failed save must land on the
+      // same lesion rather than minting a second one for the same spot.
+      const targetLesionId = lesionId ?? `lesion-${id}`;
       const full: ScreeningRecord = {
         ...record,
         id,
@@ -184,6 +239,29 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       return full;
     },
     [accountId, mergeLesion],
+  );
+
+  const keepUnsaved = useCallback<ScanHistoryContextValue['keepUnsaved']>(
+    ({ id, images, ...record }) => {
+      // Deliberately does NOT copy the photos: whatever went wrong with storage is exactly what
+      // would fail again. The capture URIs are still live for as long as this page is, which is
+      // also exactly how long this record lasts.
+      const full: ScreeningRecord = {
+        ...record,
+        id: id ?? `scan-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        imageUri: images?.[0]?.uri ?? record.imageUri,
+        images: images?.length
+          ? images
+          : [{ uri: record.imageUri, index: 0, source: record.source, qualityPassed: true }],
+        lesionId: null,
+        userId: accountId,
+      };
+      setUnsaved(full);
+      setEphemeral(isDatabaseEphemeral());
+      return full;
+    },
+    [accountId],
   );
 
   const renameLesion = useCallback<ScanHistoryContextValue['renameLesion']>(async (id, label) => {
@@ -257,12 +335,19 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       loading,
       loadError,
       addEntry,
+      keepUnsaved,
+      unsavedEntryId: unsaved?.id ?? null,
+      storageIsEphemeral: ephemeral,
       renameLesion,
       archiveLesion,
       linkScreening,
       trackScreening,
       deleteLesion,
-      getById: (id) => scopedEntries.find((e) => e.id === id),
+      // The unsaved record is NOT account-filtered: it exists precisely for the cases where the
+      // account scope is part of what failed (an expired session), and it is only ever reachable
+      // by its own id, which nothing but this session's result screen knows.
+      getById: (id) =>
+        scopedEntries.find((e) => e.id === id) ?? (unsaved?.id === id ? unsaved : undefined),
       getLesionById: (id) => scopedLesions.find((l) => l.id === id),
       screeningsForLesion: (lesionId) =>
         scopedEntries
@@ -275,7 +360,10 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       scopedLesions,
       loading,
       loadError,
+      unsaved,
+      ephemeral,
       addEntry,
+      keepUnsaved,
       renameLesion,
       archiveLesion,
       linkScreening,

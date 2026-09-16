@@ -132,17 +132,37 @@ for (const uri of [
   eq(`store is idempotent: ${uri || '(empty)'}`, toStoredUri(toStoredUri(uri)), toStoredUri(uri));
 }
 
+// ------------------------------------------------------------ account scope
+// History became account-scoped, so persistImage() now writes screenings/<userId>/<file>. When
+// ownership was still "exactly one segment below screenings/", every one of those rows quietly
+// failed the shape test and went back to the database as an ABSOLUTE container path - re-arming
+// the blank-thumbnail-after-reinstall bug this module exists to prevent, for all new screenings.
+const UID = '7f3c1e00-0000-4000-8000-0123456789ab';
+eq(
+  'an account-scoped path is stored relative',
+  toStoredUri(`${CONTAINER_A}screenings/${UID}/scan-1.jpg`),
+  `screenings/${UID}/scan-1.jpg`,
+);
+setDocDir(CONTAINER_B);
+eq(
+  'an account-scoped path survives a container change',
+  toDisplayUri(`${CONTAINER_A}screenings/${UID}/scan-1.jpg`),
+  `${CONTAINER_B}screenings/${UID}/scan-1.jpg`,
+);
+setDocDir(CONTAINER_A);
+
 // ---------------------------------------------------------------- not ours
 // Rebasing a path we do not own would invent a location that holds no file, turning a working URI
-// into a broken one. Ownership is "exactly one segment below screenings/", so a deeper path or a
-// bare directory is left alone. NOTE this is a shape test, not a provenance test: a foreign file
-// at <anything>/screenings/x.jpg would be claimed. Nothing produces one - persistImage() is the
-// only writer under screenings/, and its failure fallback yields tmp/ImagePicker paths - but if a
-// future caller stores third-party paths, tighten ownership here before it does.
+// into a broken one. Ownership is "one or two segments below screenings/" - the file itself, or
+// the account directory and the file - so anything deeper, or a bare directory, is left alone.
+// NOTE this is a shape test, not a provenance test: a foreign file at <anything>/screenings/x.jpg
+// would be claimed. Nothing produces one - persistImage() is the only writer under screenings/,
+// and its failure fallback yields tmp/ImagePicker paths - but if a future caller stores
+// third-party paths, tighten ownership here before it does.
 eq(
-  'a nested path below screenings/ is not claimed',
-  toDisplayUri(`${CONTAINER_A}screenings/sub/scan-1.jpg`),
-  `${CONTAINER_A}screenings/sub/scan-1.jpg`,
+  'a path three levels below screenings/ is not claimed',
+  toDisplayUri(`${CONTAINER_A}screenings/a/b/scan-1.jpg`),
+  `${CONTAINER_A}screenings/a/b/scan-1.jpg`,
 );
 eq(
   'the bare screenings/ directory is not claimed',

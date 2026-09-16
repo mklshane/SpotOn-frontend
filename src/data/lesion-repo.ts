@@ -9,7 +9,7 @@
  * Same conventions as screening-repo.ts: booleans as INTEGER 0/1, ISO timestamps as TEXT.
  */
 import type { BodyMark, Lesion, TriageTier } from "../lib/triage/types";
-import { getDb } from "./db";
+import { getDb, withDbTransaction } from "./db";
 
 type Row = {
   id: string;
@@ -193,7 +193,7 @@ export async function refreshLesionRollup(id: string, userId: string): Promise<L
  */
 export async function deleteLesion(id: string, userId: string): Promise<void> {
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     await db.runAsync(
       "UPDATE screenings SET lesion_id = NULL WHERE lesion_id = ? AND user_id = ?",
       id,

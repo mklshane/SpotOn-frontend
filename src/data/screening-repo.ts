@@ -14,7 +14,7 @@ import type {
   ScreeningRecord,
   TriageResult,
 } from "../lib/triage/types";
-import { getDb } from "./db";
+import { getDb, withDbTransaction } from "./db";
 import { toDisplayUri, toStoredUri } from "./image-paths";
 import { getLesion, refreshLesionRollup } from "./lesion-repo";
 
@@ -300,7 +300,7 @@ export async function insertScreeningLinked(
   }
   const db = await getDb();
   const now = new Date().toISOString();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     await db.runAsync(
       `INSERT OR IGNORE INTO lesions
          (id, created_at, updated_at, label, mark_x, mark_y, mark_z, mark_region, mark_view,
@@ -389,7 +389,7 @@ export async function deleteAllForUser(userId: string): Promise<void> {
     "SELECT image_uri, images_json FROM screenings WHERE user_id = ?",
     userId,
   );
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     await db.runAsync("DELETE FROM screenings WHERE user_id = ?", userId);
     await db.runAsync("DELETE FROM lesions WHERE user_id = ?", userId);
   });

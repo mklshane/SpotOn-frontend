@@ -23,7 +23,7 @@ type Tab = 'lesions' | 'scans';
 export default function AllScreeningsScreen() {
   useLocale();
   const insets = useSafeAreaInsets();
-  const { entries, lesions, loading, loadError, screeningsForLesion } = useScanHistory();
+  const { entries, lesions, loading, loadError, storageIsEphemeral, screeningsForLesion } = useScanHistory();
   // Seeded from the route once, then left alone: Home's two "See all" links open the tab that
   // matches the section they sit beside. Syncing this in an effect instead would fight the user's
   // own taps on the Segmented (and trip the React Compiler's cascading-render rule).
@@ -38,7 +38,9 @@ export default function AllScreeningsScreen() {
   // yet" - telling a user their history is gone when it is merely unread.
   const emptyCopy = loading
     ? 'Loading your screenings…'
-    : loadError
+    : storageIsEphemeral
+      ? 'This page can’t open your saved screenings. They are not lost - close any other SpotOn tab and reload, or open SpotOn outside private browsing.'
+      : loadError
       ? 'We couldn’t open your saved screenings. They are still on this device - close the app and open it again.'
       : tab === 'lesions'
         ? 'No tracked spots yet. Every scan you take starts tracking the spot it was taken of.'

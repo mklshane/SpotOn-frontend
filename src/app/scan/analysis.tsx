@@ -1,12 +1,11 @@
 import { t, useLocale } from '@/lib/i18n';
-import { isDebug } from '@/lib/debug-flag';
-import { isDatabaseLockedOut } from '@/data/db';
+import { classifyDbError, type DbErrorKind } from '@/data/db';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -26,6 +25,7 @@ import { Radius, Space } from '@/constants/theme';
 import { useBlockAndroidBack } from '@/hooks/use-android-back';
 import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
+import { describeNonError } from '@/lib/classifier/errors';
 import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
 import {
@@ -55,10 +55,18 @@ const STATUS_LINES = [
 
 type Stage = 'analyzing' | 'retake' | 'error';
 
-/** Diagnostic line for the error state: step + ClassifierError kind + message + cause. */
+/**
+ * Diagnostic line for the error state: step + ClassifierError kind + message + cause.
+ *
+ * Shown to everyone, not just under isDebug(). The deployed web replica has no telemetry of any
+ * kind, so this line is the ONLY channel a remote tester has for telling us what actually broke -
+ * and "we couldn't save this screening" on its own sent us hunting the wrong cause for a week.
+ * Non-Error rejections go through describeNonError because the web stack rejects with DOM objects
+ * (Event, HTMLCanvasElement), which String() renders as a useless "[object Event]".
+ */
 function describeError(step: string, e: unknown): string {
   const kind = (e as { kind?: string })?.kind;
-  const msg = e instanceof Error ? e.message : String(e);
+  const msg = e instanceof Error ? `${e.name}: ${e.message}` : describeNonError(e);
   const cause = e instanceof Error && e.cause ? ` ← ${String((e.cause as Error)?.message ?? e.cause)}` : '';
   return `${step}${kind ? `/${kind}` : ''}: ${msg}${cause}`;
 }
@@ -69,25 +77,84 @@ function describeError(step: string, e: unknown): string {
  * non-alarming retake prompt; second → Moderate floor with a confidence qualifier),
  * persists the record, and hands off to the results screen.
  */
+type PendingSave = Parameters<ReturnType<typeof useScanHistory>['addEntry']>[0];
+
+/**
+ * What to tell the user when the save failed, per cause.
+ *
+ * This screen used to show ONE message - "If SpotOn is open in another tab, close it and try
+ * again" - for every save failure, because analysis.tsx called isDatabaseLockedOut() and threw the
+ * answer away. A user whose session had expired, or whose disk was full, was told to close a tab
+ * they did not have open. Each branch below now names a cause the user can actually act on; the
+ * matching detection lives in data/db.ts classifyDbError, next to the code that emits each error.
+ */
+function describeSaveFailure(kind: DbErrorKind): { title: string; body: string } {
+  switch (kind) {
+    case 'locked':
+      return {
+        title: t("We couldn’t save this screening"),
+        body: t("Another SpotOn tab or window is holding your data. Close the others, reload this page, and try again."),
+      };
+    case 'poisoned':
+      return {
+        title: t("We couldn’t save this screening"),
+        body: t("This page lost its connection to SpotOn's storage. Reload the page and try again - the screenings you already have are safe."),
+      };
+    case 'full':
+      return {
+        title: t("Not enough space to save"),
+        body: t("Your device is out of storage for SpotOn. Free up some space, or delete an older screening, then try again."),
+      };
+    case 'signed-out':
+      return {
+        title: t("Your session has ended"),
+        body: t("Sign in again to save screenings to your history."),
+      };
+    default:
+      return {
+        title: t("We couldn’t save this screening"),
+        body: t("The analysis finished, but saving it was interrupted. Your result is still here - try again."),
+      };
+  }
+}
+
 export default function AnalysisScreen() {
   useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const width = useSurfaceWidth();
   const session = useScreeningSession();
-  const { addEntry } = useScanHistory();
+  const { addEntry, keepUnsaved } = useScanHistory();
 
   const CARD = Math.min(width - Space.xl * 2, 216);
 
   const [stage, setStage] = useState<Stage>('analyzing');
   const [statusIdx, setStatusIdx] = useState(0);
-  // Dev-only diagnostic: which step failed (ClassifierError kind + message + cause).
+  // Which step failed (ClassifierError kind + message + cause). Rendered in every build - see
+  // describeError.
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
-  /** Distinguishes "the save failed" from "the analysis failed" - very different for the user. */
-  const [saveFailed, setSaveFailed] = useState(false);
+  /**
+   * Why the save failed, or null when the failure was in the analysis itself - very different
+   * things for the user, and until now they rendered identically.
+   */
+  const [saveError, setSaveError] = useState<DbErrorKind | null>(null);
+  /**
+   * The TPS engine refused the answers. Only reachable if a question never got answered - a
+   * follow-up carrying answers written by an older build, or a questionnaire left in a state the
+   * gates missed - and it used to dead-end on "we couldn't save this screening", which is both
+   * wrong and unfixable by the user. There is an obvious way out: go answer them.
+   */
+  const [answersIncomplete, setAnswersIncomplete] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   // Snapshot the low-confidence output so "continue anyway" works even after
   // beginRescan clears the session's run state.
   const pendingOutput = useRef<ClassificationOutput | null>(null);
+  /**
+   * The fully-built record, kept so "Try again" re-runs the SAVE and nothing else. Re-running the
+   * classifier for a storage failure costs the user another wait on a result we already have, and
+   * on web it reloads a 30 MB model to answer a question that was never in doubt.
+   */
+  const pendingSave = useRef<PendingSave | null>(null);
   const finalized = useRef(false);
 
   useEffect(() => {
@@ -96,10 +163,71 @@ export default function AnalysisScreen() {
     return () => clearInterval(id);
   }, [stage]);
 
+  /**
+   * Write the record, retrying the transient failures silently.
+   *
+   * The failure this backs off for is a collision with the background directory sync: it opens
+   * eight transactions per page on the SAME SQLite connection, keeps running long after the user
+   * leaves the Clinics tab, and used to make the screening save throw "cannot start a transaction
+   * within a transaction". data/db.ts's withDbTransaction queue is the real fix; these two retries
+   * cover what a queue in this process cannot reach (a second tab, a native SQLITE_BUSY).
+   */
+  async function attemptSave(payload: PendingSave): Promise<boolean> {
+    const BACKOFF_MS = [150, 600];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const entry = await addEntry(payload);
+        session.reset();
+        // `from: 'scan'` tells the result screen it is the END of a capture run rather than a row
+        // someone tapped in a list. Back from here must LEAVE the flow - every screen underneath
+        // (followup-confirm, capture, crop, quality, questionnaire) belongs to a session that has
+        // just been reset, so popping into them shows empty states. See result.tsx `exitFlow`.
+        router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
+        return true;
+      } catch (e) {
+        const kind = classifyDbError(e);
+        if ((kind === 'busy' || kind === 'locked') && attempt < BACKOFF_MS.length) {
+          await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+          continue;
+        }
+        // NOT the same failure as "we couldn't analyze": by this point classification has already
+        // succeeded and only the save threw. Saying "something went wrong while analyzing ... your
+        // answers are saved" was doubly wrong - nothing was wrong with the analysis, and the
+        // answers were precisely what did not save.
+        console.warn('[analysis] persist failed', e);
+        setErrorDetail(describeError('persist', e));
+        // Last resort: keep the finished screening in memory and show it. The user spent two
+        // minutes on this and the result is the only thing that matters clinically - dropping it
+        // because a database write failed is the worst possible trade. The result screen says
+        // plainly that it was not saved, and it is gone on reload, so nobody is misled.
+        if (Platform.OS === 'web') {
+          try {
+            const held = keepUnsaved(payload);
+            // The run really is over, so end it like a successful save would. reset() clears
+            // session state only - it does not revoke the blob: URLs the held record points at,
+            // so the result screen and its report still render.
+            session.reset();
+            router.replace({
+              pathname: '/scan/result',
+              params: { id: held.id, from: 'scan', unsaved: '1' },
+            });
+            return true;
+          } catch (inner) {
+            console.warn('[analysis] in-memory fallback failed too', inner);
+          }
+        }
+        setSaveError(kind);
+        setStage('error');
+        return false;
+      }
+    }
+  }
+
   async function finalize(output: ClassificationOutput, applyFloor: boolean) {
     if (finalized.current) return;
     finalized.current = true;
     const s = session; // captured pre-reset; reset() runs only after the record persists
+    let payload: PendingSave;
     try {
       const triage = computeTriage(
         output.topClass,
@@ -111,7 +239,11 @@ export default function AnalysisScreen() {
           malignantThreshold: MALIGNANT_THRESHOLD,
         },
       );
-      const entry = await addEntry({
+      payload = {
+        // Minted here rather than inside addEntry so that a retry REPLACES this row instead of
+        // minting a second screening (and a second tracked lesion) from the same photo and
+        // answers - insertScreening is INSERT OR REPLACE, keyed on exactly this id.
+        id: `scan-${Date.now()}`,
         // On a follow-up the lesion owns the location, so the user is never asked to re-place it.
         mark: s.followUp?.lesion.mark ?? s.bodyMark,
         imageUri: s.images[0]?.uri ?? s.imageUri ?? '',
@@ -130,26 +262,32 @@ export default function AnalysisScreen() {
         followUpOf: s.followUp?.priorScreening.id,
         answersCarried: s.followUp != null,
         answersSourceId: s.followUp?.priorScreening.id,
-      });
-      s.reset();
-      // `from: 'scan'` tells the result screen it is the END of a capture run rather than a row
-      // someone tapped in a list. Back from here must LEAVE the flow - every screen underneath
-      // (followup-confirm, capture, crop, quality, questionnaire) belongs to a session that has
-      // just been reset, so popping into them shows empty states. See result.tsx `exitFlow`.
-      router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });
+      };
     } catch (e) {
-      // NOT the same failure as "we couldn't analyze": by this point classification has already
-      // succeeded and only the save threw. Saying "something went wrong while analyzing … your
-      // answers are saved" was doubly wrong - nothing was wrong with the analysis, and the
-      // answers were precisely what did not save. db.ts now degrades to an in-memory database
-      // rather than throwing, so reaching here means something else broke.
-      console.warn('[analysis] persist failed', e);
+      // computeTriage validates every input and throws on a bad one. That is a scoring failure,
+      // not a storage failure, so it keeps the "we couldn't analyze" copy and a retry that really
+      // does re-run the analysis.
+      console.warn('[analysis] triage failed', e);
       finalized.current = false;
-      setErrorDetail(describeError('persist', e));
-      // A locked database is the common, explainable case and has its own copy.
-      isDatabaseLockedOut(e);
-      setSaveFailed(true);
+      setErrorDetail(describeError('triage', e));
+      setAnswersIncomplete(e instanceof Error && /missing or invalid answer/i.test(e.message));
       setStage('error');
+      return;
+    }
+    pendingSave.current = payload;
+    await attemptSave(payload);
+  }
+
+  /** Retry the SAVE only. finalized stays true, so the analysing effect cannot re-enter. */
+  async function retrySave() {
+    const payload = pendingSave.current;
+    if (!payload) return retryAfterError();
+    setRetrying(true);
+    setErrorDetail(null);
+    try {
+      await attemptSave(payload);
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -243,8 +381,28 @@ export default function AnalysisScreen() {
   function retryAfterError() {
     setStatusIdx(0);
     setErrorDetail(null);
+    setSaveError(null); // was never cleared, so a later analysis failure kept the save wording
+    setAnswersIncomplete(false);
     setStage('analyzing');
     session.retryClassification();
+  }
+
+  /** `poisoned`: the page's database worker is unrecoverable in-process. Only a reload fixes it. */
+  function reloadPage() {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.reload();
+    else retrySave();
+  }
+
+  function goSignIn() {
+    session.reset();
+    router.replace('/(auth)/login');
+  }
+
+  /** Back to the questionnaire with the run intact - the photo and classification are still good. */
+  function goAnswerQuestions() {
+    finalized.current = false;
+    setStage('analyzing');
+    router.replace('/scan/questionnaire');
   }
 
   function exitToHome() {
@@ -258,6 +416,42 @@ export default function AnalysisScreen() {
   // buttons, each of which says what it discards. A silent pop would throw the photo and answers
   // away without asking.
   useBlockAndroidBack();
+
+  /**
+   * Title, body and primary action for the error state, in one place.
+   *
+   * `saveError == null` means the ANALYSIS failed, which is a different apology and a retry that
+   * really does re-run the model. Everything else is a save failure, and each kind gets the one
+   * instruction that can actually help - the whole point of this rewrite, since the screen used to
+   * tell every user to close a second tab.
+   */
+  const failure: { title: string; body: string; cta: string; onPress: () => void } = answersIncomplete
+    ? {
+        title: t("A few answers are missing"),
+        body: t("We need every question answered before we can score this screening. Your photo is still here."),
+        cta: t("Answer the questions"),
+        onPress: goAnswerQuestions,
+      }
+    : saveError
+    ? {
+        ...describeSaveFailure(saveError),
+        cta: saveError === 'poisoned'
+          ? t("Reload the page")
+          : saveError === 'signed-out'
+            ? t("Sign in")
+            : t("Try again"),
+        onPress: saveError === 'poisoned'
+          ? reloadPage
+          : saveError === 'signed-out'
+            ? goSignIn
+            : retrySave,
+      }
+    : {
+        title: t("We couldn’t analyze this photo"),
+        body: t("Something went wrong while analyzing on your device. Your answers are saved - you can try again, or come back later."),
+        cta: t("Try again"),
+        onPress: retryAfterError,
+      };
 
   const sweep = useSharedValue(0);
   useEffect(() => {
@@ -321,13 +515,11 @@ export default function AnalysisScreen() {
           <Animated.View entering={FadeInDown} style={styles.stateWrap}>
             <IconCircle icon="exclamationmark.triangle.fill" variant="tint" size={72} iconColor={theme.riskModerate} />
             <ThemedText type="title2" style={styles.center}>
-              {saveFailed ? t("We couldn’t save this screening") : t("We couldn’t analyze this photo")}</ThemedText>
+              {failure.title}</ThemedText>
             <ThemedText type="body" themeColor="textSecondary" style={styles.center}>
-              {saveFailed
-                ? t("The analysis finished, but saving it failed. If SpotOn is open in another tab, close it and try again.")
-                : t("Something went wrong while analyzing on your device. Your answers are saved - you can try again, or come back later.")}</ThemedText>
-            {isDebug() && errorDetail ? (
-              <ThemedText type="footnote" themeColor="muted" style={styles.center}>
+              {failure.body}</ThemedText>
+            {errorDetail ? (
+              <ThemedText type="footnote" themeColor="muted" style={styles.center} selectable>
                 {errorDetail}
               </ThemedText>
             ) : null}
@@ -353,7 +545,13 @@ export default function AnalysisScreen() {
             </>
           ) : (
             <>
-              <Button label={t("Try again")} variant="brand" onPress={retryAfterError} style={styles.cta} />
+              <Button
+                label={failure.cta}
+                variant="brand"
+                loading={retrying}
+                onPress={failure.onPress}
+                style={styles.cta}
+              />
               <Pressable hitSlop={10} onPress={exitToHome} style={styles.secondary} accessibilityRole="button">
                 <ThemedText type="headline" themeColor="textSecondary">
                   {t("Back to home")}</ThemedText>

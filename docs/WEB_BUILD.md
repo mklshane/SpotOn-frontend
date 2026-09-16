@@ -102,8 +102,31 @@ npx eas deploy
 
 - **`localStorage` is not the Keychain.** Auth tokens and the cached profile sit in plain text.
   Point the web build at throwaway accounts only, never production auth or real patient data.
-- **One tab at a time.** wa-sqlite takes an exclusive OPFS access handle; a second tab on the same
-  origin fails to open the database.
+- **Persistent storage is best-effort, and the app is built for its absence.** wa-sqlite takes an
+  EXCLUSIVE OPFS sync access handle per file, so persistent SQLite is unavailable whenever another
+  page instance already holds it (a second tab; on iOS Safari a bfcached previous instance) or the
+  browser does not offer OPFS at all (Safari private browsing). In all of those cases the app now
+  falls back to an in-memory database: everything works for that page and nothing survives a
+  reload. The UI says so explicitly - a banner on Home, on the spot/screening lists, and on a
+  result - because an empty-looking history is otherwise indistinguishable from data loss.
+
+  This depends on `patches/expo-sqlite+56.0.5.patch`. Stock expo-sqlite assigns its `_sqlite3`
+  handle BEFORE awaiting `AccessHandlePoolVFS.create()`, so the first VFS failure made every later
+  call throw a bare `Invalid VFS state` for the life of the page, and never registered the memory
+  VFS either - there was no database at all, and `:memory:` could not rescue it. The patch attempts
+  the persistent VFS, tolerates its failure, always registers the memory VFS, and assigns
+  `_sqlite3` last.
+
+- **The OPFS pool is fixed at 6 files.** `AccessHandlePoolVFS` tops itself up only when the pool is
+  completely empty, and `jOpen` fails with `cannot create file` -> `SQLITE_CANTOPEN` once every
+  handle is associated. Writes need a rollback journal, and `sync.ts` briefly needs a TEMP table,
+  so this shows up as "reads fine, saves fail". `classifyDbError` reports it as `full`.
+
+- **One transaction at a time, app-wide.** `withTransactionAsync` is a bare BEGIN/COMMIT on a
+  shared connection with no queueing, so the background directory sync (eight transactions per
+  page, started from the Clinics tab and outliving it) used to collide with a screening save and
+  lose it. Every transaction goes through `withDbTransaction` in `src/data/db.ts`;
+  `npm run test:db-guards` fails the build if a new call site bypasses it.
 - The report is the browser's print dialog, not a generated PDF file, so there is no share sheet
   and the filename comes from the print dialog.
 - No torch or pinch-zoom on the web capture screen.

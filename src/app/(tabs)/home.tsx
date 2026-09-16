@@ -128,7 +128,7 @@ export default function HomeScreen() {
   useLocale();
   const theme = useTheme();
   const { user } = useAuth();
-  const { entries, lesions, loading } = useScanHistory();
+  const { entries, lesions, loading, storageIsEphemeral } = useScanHistory();
   const dashboardOpacity = useSharedValue(0);
   const dashboardTranslateY = useSharedValue(14);
   const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
@@ -237,6 +237,19 @@ export default function HomeScreen() {
             </View>
           </View>
         </Pressable>
+
+        {/* Every tile below is a claim about the user's data. When the database is a throwaway
+            (another tab holds the real one, or the browser refuses persistent storage) they all
+            read zero, which looks exactly like "your history was deleted" - the one impression
+            this app must never give by accident. Say what is actually happening instead. */}
+        {storageIsEphemeral ? (
+          <View style={[styles.storageNotice, { backgroundColor: theme.riskModerateBg }]}>
+            <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={16} />
+            <ThemedText type="footnote" themeColor="textSecondary" style={styles.storageNoticeText}>
+              {t("Your saved screenings can't be opened here. They are not lost - close any other SpotOn tab and reload, or open SpotOn outside private browsing.")}
+            </ThemedText>
+          </View>
+        ) : null}
 
         <View style={styles.sectionHead}>
           <ThemedText type="title2">{t("Your activity")}</ThemedText>
@@ -424,6 +437,15 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  storageNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    padding: Space.md,
+    marginBottom: Space.base,
+  },
+  storageNoticeText: { flex: 1 },
   content: {
     paddingHorizontal: Space.xl,
     // Keep the original Home spacing below the last card and above the tab bar.

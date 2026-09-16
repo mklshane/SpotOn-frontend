@@ -25,7 +25,7 @@ export class ClassifierError extends Error {
  * exactly the useless text that reached the analysis screen's diagnostic line. Pull out whatever
  * the object actually carries so the failure can be identified.
  */
-function describeNonError(e: unknown): string {
+export function describeNonError(e: unknown): string {
   if (typeof e === 'string') return e;
   if (e == null) return String(e);
 

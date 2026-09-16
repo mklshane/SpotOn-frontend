@@ -4,6 +4,7 @@
  * Arrays (services, specialties) and JSON (opening hours) are stored as TEXT;
  * booleans as INTEGER 0/1/NULL. The repositories parse these back on read.
  */
+import { Platform } from "react-native";
 import * as SQLite from "expo-sqlite";
 
 import { DB_NAME } from "../config";
@@ -379,53 +380,197 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /**
- * True once any database operation has failed because another page instance holds the OPFS lock.
- * Set by `isDatabaseLockedOut`; read by the UI to explain the situation instead of guessing.
+ * What went wrong with a database write, in the terms a user can act on.
+ *
+ * Every value maps to a different instruction, which is the whole point: the screening-save error
+ * screen used to show the "close the other tab" copy for ALL of them, including a signed-out
+ * session and a transaction collision, and told users to do something that could not help.
  */
-export let dbLockedByAnotherInstance = false;
+export type DbErrorKind = 'locked' | 'poisoned' | 'busy' | 'full' | 'signed-out' | 'unknown';
+
+function messageOf(e: unknown): string {
+  if (e instanceof Error) return `${e.name}: ${e.message}${e.cause ? ` <- ${messageOf(e.cause)}` : ''}`;
+  // DOMException-shaped rejections are not Errors in every runtime; read the same two fields.
+  const o = e as { name?: unknown; message?: unknown } | null;
+  if (o && typeof o === 'object' && (typeof o.name === 'string' || typeof o.message === 'string')) {
+    return `${o.name ?? ''}: ${o.message ?? ''}`;
+  }
+  return String(e);
+}
 
 /**
- * The web build stores SQLite in OPFS via wa-sqlite, which takes an EXCLUSIVE access handle:
+ * The web build stores SQLite in OPFS via wa-sqlite's AccessHandlePoolVFS, which takes an
+ * EXCLUSIVE sync access handle per file:
  *
  *   NoModificationAllowedError: Failed to execute 'createSyncAccessHandle' ...
  *   Access Handles cannot be created if there is another open Access Handle
  *
  * A second page instance on the origin therefore cannot use the database - a second tab does it,
  * and on iOS Safari a bfcached previous instance can still hold the handle after the user
- * navigates back. Note the lock bites per OPERATION, not at open: `getDb()` resolves happily and
- * then reads and writes throw.
+ * navigates back.
  *
  * Reported 2026-09-08 as "We couldn't analyze this photo". Classification had actually SUCCEEDED
  * and only the save threw, but analysis.tsx rendered both failures identically. Verified by
  * controlled experiment: two tabs fail, one tab succeeds, same photo and build.
  *
- * There is no in-page recovery - falling back to `:memory:` does not work either, because the
- * failed persistent-VFS init leaves the worker in an "Invalid VFS state". So this only labels the
- * condition; callers surface it honestly and the user closes the other tab.
+ * Closing the other tab is NOT enough to recover the page - see the 'poisoned' kind below.
  */
 export function isDatabaseLockedOut(e: unknown): boolean {
-  const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
-  const locked = /NoModificationAllowedError|createSyncAccessHandle|Access Handles/i.test(msg);
-  if (locked) dbLockedByAnotherInstance = true;
-  return locked;
+  return /NoModificationAllowedError|createSyncAccessHandle|Access Handles/i.test(messageOf(e));
 }
 
-/** Open (once) and initialize the database. Safe to call from anywhere. */
+/**
+ * Classify a failure from any database operation.
+ *
+ * Each pattern is traced to the code that emits it, in node_modules, so this stays checkable:
+ *
+ * - `poisoned`  expo-sqlite/web/worker.ts maybeInitAsync() assigns `_sqlite3` BEFORE awaiting
+ *               `AccessHandlePoolVFS.create()`. Once that create rejects (the lock above), the
+ *               `if (!_sqlite3)` guard skips the retry block forever and every later call throws
+ *               a bare 'Invalid VFS state'. Nulling `dbPromise` cannot help: the worker, not this
+ *               module, is the thing that is stuck. Only a page reload recovers.
+ * - `busy`      expo-sqlite's withTransactionAsync is a bare BEGIN/COMMIT on the shared
+ *               connection with no queueing. Overlapping transactions make the second BEGIN throw.
+ *               withDbTransaction below is what prevents this; the kind stays for anything that
+ *               slips past it (another tab, a native SQLITE_BUSY).
+ * - `full`      OPFS quota, or AccessHandlePoolVFS running out of pool files ('cannot create
+ *               file' -> SQLITE_CANTOPEN 'unable to open database file'). The pool is fixed at 6
+ *               and only topped up when it is completely empty, so this does not self-heal.
+ * - `signed-out` the account-scope guards in scan-history.tsx / screening-repo.ts / lesion-repo.ts.
+ */
+export function classifyDbError(e: unknown): DbErrorKind {
+  const msg = messageOf(e);
+  if (/Invalid VFS state|Failed to initialize (AccessHandlePoolVFS|MemoryVFS|wa-sqlite)/i.test(msg)) {
+    return 'poisoned';
+  }
+  if (isDatabaseLockedOut(e)) return 'locked';
+  if (/signed out|belong to (an authenticated|the same authenticated) account|without an account id/i.test(msg)) {
+    return 'signed-out';
+  }
+  if (/QuotaExceeded|SQLITE_FULL|database or disk is full|disk I\/O error|unable to open database file|cannot create file/i.test(msg)) {
+    return 'full';
+  }
+  if (/transaction within a transaction|database is locked|database table is locked|SQLITE_BUSY/i.test(msg)) {
+    return 'busy';
+  }
+  return 'unknown';
+}
+
+/**
+ * True when the database in use is in-memory: everything works for this page, and NOTHING survives
+ * a reload. Read by the UI, which owes the user an explicit warning - an app whose history silently
+ * looks empty is indistinguishable from one that lost it, and this one tracks moles over months.
+ */
+let ephemeral = false;
+let ephemeralReason: string | null = null;
+
+export function isDatabaseEphemeral(): boolean {
+  return ephemeral;
+}
+
+/** Why persistence is unavailable, for the diagnostic line. Null when the database is durable. */
+export function databaseEphemeralReason(): string | null {
+  return ephemeralReason;
+}
+
+async function openAndMigrate(name: string): Promise<SQLite.SQLiteDatabase> {
+  const db = await SQLite.openDatabaseAsync(name);
+  // No-op under AccessHandlePoolVFS (it has no shared-memory implementation, so SQLite stays in a
+  // rollback-journal mode) but still worth having on device.
+  await db.execAsync("PRAGMA journal_mode = WAL;");
+  await db.execAsync(SCHEMA);
+  await migrate(db);
+  return db;
+}
+
+/**
+ * Open (once) and initialize the database. Safe to call from anywhere.
+ *
+ * On web, persistent storage is unavailable in several completely ordinary situations - a second
+ * tab holding the OPFS sync access handles, Safari private browsing, OPFS turned off - and the app
+ * used to have no database at all in any of them. A user would get through the whole scan, wait
+ * for the model, and lose the result at the last step. An in-memory database is a poor substitute
+ * for durable history, but it is enormously better than refusing to finish a screening, so it is
+ * what we fall back to (paired with an explicit "this will not be saved" warning in the UI).
+ *
+ * This depends on the patch in patches/expo-sqlite+56.0.5.patch: stock expo-sqlite poisons its
+ * worker on the first VFS failure and then rejects ':memory:' too.
+ */
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const db = await SQLite.openDatabaseAsync(DB_NAME);
-      await db.execAsync("PRAGMA journal_mode = WAL;");
-      await db.execAsync(SCHEMA);
-      await migrate(db);
-      return db;
+      try {
+        const db = await openAndMigrate(DB_NAME);
+        ephemeral = false;
+        ephemeralReason = null;
+        return db;
+      } catch (e) {
+        // Native has a real filesystem; a failure there is a genuine fault worth surfacing, and
+        // silently switching a device user to a throwaway database would hide data loss.
+        if (Platform.OS !== "web") throw e;
+        console.warn("[db] persistent storage unavailable, using an in-memory database", e);
+        const db = await openAndMigrate(":memory:");
+        ephemeral = true;
+        ephemeralReason = `${classifyDbError(e)}: ${messageOf(e)}`;
+        return db;
+      }
     })().catch((e) => {
-      isDatabaseLockedOut(e); // label it before rethrowing
-      dbPromise = null; // a later call can retry once the other instance goes away
+      dbPromise = null; // a later call can retry - the worker is no longer poisoned by one failure
       throw e;
     });
   }
   return dbPromise;
+}
+
+/**
+ * Serialize every transaction in the app onto one queue.
+ *
+ * `withTransactionAsync` issues a bare BEGIN ... COMMIT on the SHARED connection and does no
+ * queueing of its own, so two overlapping callers corrupt each other: the second BEGIN throws
+ * "cannot start a transaction within a transaction", and whichever one hits the catch first runs
+ * a ROLLBACK that unwinds the OTHER one's work.
+ *
+ * That is not theoretical. Opening the Clinics tab starts `runSync()` fire-and-forget
+ * (app/(tabs)/directory.tsx) and it keeps running after the tab unmounts - a first-run full
+ * directory download over mobile data, eight transactions per page, easily outliving the minute
+ * or two a user spends on the body map and questionnaire. The screening save at the end of that
+ * flow landed in the middle of it and the user lost a completed analysis.
+ *
+ * `withExclusiveTransactionAsync` would be the library's answer, but it throws outright on web
+ * (expo-sqlite SQLiteDatabase.ts: 'withExclusiveTransactionAsync is not supported on web'), and
+ * web is exactly where this bites. Hence a plain FIFO.
+ *
+ * Everything that opens a transaction must come through here - `npm run check:transactions`
+ * (scripts/check-transactions.mjs) fails the build on a direct `withTransactionAsync` call
+ * anywhere outside this file.
+ */
+let txnChain: Promise<unknown> = Promise.resolve();
+
+export function withDbTransaction(task: () => Promise<void>): Promise<void> {
+  // Chain on the settled result, never the rejection, so one failed transaction cannot wedge the
+  // queue for the rest of the session.
+  const run = txnChain.then(
+    async () => {
+      const db = await getDb();
+      await db.withTransactionAsync(task);
+    },
+    async () => {
+      const db = await getDb();
+      await db.withTransactionAsync(task);
+    },
+  );
+  txnChain = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Run statements that must not interleave with a transaction (temp-table setup, DDL) on the same
+ * queue, without opening a transaction of their own.
+ */
+export function withDbLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = txnChain.then(task, task);
+  txnChain = run.catch(() => {});
+  return run;
 }
 
 /** Read a value from the sync_meta key/value store. */
@@ -461,7 +606,7 @@ const LEGACY_HISTORY_OWNER_KEY = "account_history_legacy_owner";
 export async function claimLegacyHistory(userId: string): Promise<void> {
   if (!userId) throw new Error("Cannot claim legacy history without an account id");
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     const owner = await db.getFirstAsync<{ value: string | null }>(
       "SELECT value FROM sync_meta WHERE key = ?",
       LEGACY_HISTORY_OWNER_KEY,

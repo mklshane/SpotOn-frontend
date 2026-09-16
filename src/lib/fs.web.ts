@@ -44,6 +44,11 @@ export function ensureFsReady(): Promise<void> {
       }
       await navigator.serviceWorker.register('/fs-sw.js', { scope: '/' });
       await navigator.serviceWorker.ready;
+      // Ask for persistent storage once. Without it the whole origin is "best effort" and the
+      // browser may evict it under pressure with no warning and no recovery - which on this app
+      // means a user's screening photos AND the SQLite database holding their history. The
+      // browser may refuse (it decides on engagement heuristics); a refusal is not an error.
+      void navigator.storage?.persist?.().catch(() => {});
       // `ready` resolves once a worker is activated, but it may not yet be the *controller*
       // on the very first load. Without a controller our fetches bypass it and 404.
       if (!navigator.serviceWorker.controller) {
@@ -106,12 +111,31 @@ async function fileFor(uri: string, create: boolean): Promise<FileSystemFileHand
   return await dir.getFileHandle(name, { create });
 }
 
+/**
+ * OPFS runs out of room like any other disk, and the browser reports it as a DOMException whose
+ * *message* varies ("The quota has been exceeded.", "QuotaExceededError", or nothing at all on
+ * some builds). Only `name` is dependable, so it is folded into the message here - callers
+ * classify failures by message text (data/db.ts classifyDbError) and a bare
+ * "The quota has been exceeded." would otherwise come out as an unexplained save failure.
+ */
+function asStorageError(e: unknown, uri: string): Error {
+  const name = (e as { name?: string } | null)?.name ?? '';
+  const msg = e instanceof Error ? e.message : String(e);
+  return new Error(`${name || 'write failed'}: could not write ${uri}${msg ? ` - ${msg}` : ''}`, {
+    cause: e,
+  });
+}
+
 async function writeBlob(uri: string, blob: Blob): Promise<void> {
   await ensureFsReady();
-  const fh = await fileFor(uri, true);
-  const w = await fh.createWritable();
-  await w.write(blob);
-  await w.close();
+  try {
+    const fh = await fileFor(uri, true);
+    const w = await fh.createWritable();
+    await w.write(blob);
+    await w.close();
+  } catch (e) {
+    throw asStorageError(e, uri);
+  }
 }
 
 /**

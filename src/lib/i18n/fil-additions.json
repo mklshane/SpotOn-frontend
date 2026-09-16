@@ -368,5 +368,20 @@
   "Your activity will appear in a moment.": "Lalabas dito ang aktibidad mo sa ilang sandali.",
   "Your completed screenings will appear here.": "Lalabas dito ang mga natapos mong screening.",
   "Location not marked": "Hindi namarkahan ang lokasyon",
-  "Auto-detect is unavailable. Center the spot and take the photo.": "Hindi available ang auto-detect. Itapat sa gitna ang spot at kunan ng litrato."
+  "Auto-detect is unavailable. Center the spot and take the photo.": "Hindi available ang auto-detect. Itapat sa gitna ang spot at kunan ng litrato.",
+  "Show the rest of this question": "Ipakita ang natitirang bahagi ng tanong",
+  "Another SpotOn tab or window is holding your data. Close the others, reload this page, and try again.": "May isa pang SpotOn tab o window na gumagamit ng data mo. Isara ang iba, i-reload ang page na ito, at subukan ulit.",
+  "This page lost its connection to SpotOn's storage. Reload the page and try again - the screenings you already have are safe.": "Nawalan ng koneksyon ang page na ito sa storage ng SpotOn. I-reload ang page at subukan ulit - ligtas ang mga screening mong naka-save na.",
+  "Not enough space to save": "Kulang ang espasyo para makapag-save",
+  "Your device is out of storage for SpotOn. Free up some space, or delete an older screening, then try again.": "Wala nang espasyo ang device mo para sa SpotOn. Magbakante ng espasyo, o magtanggal ng lumang screening, tapos subukan ulit.",
+  "Your session has ended": "Tapos na ang session mo",
+  "Sign in again to save screenings to your history.": "Mag-sign in ulit para ma-save ang mga screening sa history mo.",
+  "The analysis finished, but saving it was interrupted. Your result is still here - try again.": "Tapos na ang analysis, pero naabala ang pag-save. Nandito pa rin ang resulta mo - subukan ulit.",
+  "A few answers are missing": "May ilang sagot na kulang",
+  "We need every question answered before we can score this screening. Your photo is still here.": "Kailangan masagot ang lahat ng tanong bago namin ma-score ang screening na ito. Nandito pa rin ang litrato mo.",
+  "Answer the questions": "Sagutin ang mga tanong",
+  "Reload the page": "I-reload ang page",
+  "This result was not saved to your history. Take a screenshot or download the report before you leave this page.": "Hindi na-save sa history mo ang resultang ito. Mag-screenshot o i-download ang report bago umalis sa page na ito.",
+  "This browser cannot store SpotOn data, so your history will be gone when you close this page.": "Hindi kayang mag-store ng SpotOn data ang browser na ito, kaya mawawala ang history mo pag isinara mo ang page.",
+  "Your saved screenings can't be opened here. They are not lost - close any other SpotOn tab and reload, or open SpotOn outside private browsing.": "Hindi mabuksan dito ang mga naka-save mong screening. Hindi ito nawala - isara ang ibang SpotOn tab at i-reload, o buksan ang SpotOn nang hindi naka-private browsing."
 }

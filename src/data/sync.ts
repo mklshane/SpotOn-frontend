@@ -22,7 +22,7 @@ import type {
   SyncResponse,
 } from "../api/types";
 import { SYNC_PAGE_LIMIT } from "../config";
-import { getDb, getMeta, setMeta } from "./db";
+import { getDb, getMeta, setMeta, withDbLock, withDbTransaction } from "./db";
 
 const CURSOR_KEY = "sync_cursor";
 const LAST_SYNC_KEY = "last_synced_at";
@@ -64,7 +64,7 @@ function partition<T extends Tombstoned>(items: T[]): { live: T[]; dead: string[
 async function purge(table: string, ids: string[]): Promise<void> {
   if (!ids.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (let i = 0; i < ids.length; i += 200) {
       const chunk = ids.slice(i, i + 200);
       await db.runAsync(
@@ -78,7 +78,7 @@ async function purge(table: string, ids: string[]): Promise<void> {
 async function upsertFacilities(items: FacilitySync[]): Promise<void> {
   if (!items.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (const f of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO facilities
@@ -103,7 +103,7 @@ async function upsertFacilities(items: FacilitySync[]): Promise<void> {
 async function upsertDoctors(items: DoctorSync[]): Promise<void> {
   if (!items.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (const d of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctors
@@ -123,7 +123,7 @@ async function upsertDoctors(items: DoctorSync[]): Promise<void> {
 async function upsertBookingLinks(items: BookingLinkSync[]): Promise<void> {
   if (!items.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (const b of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO booking_links
@@ -145,7 +145,7 @@ async function upsertBookingLinks(items: BookingLinkSync[]): Promise<void> {
 async function upsertDoctorFacilities(items: DoctorFacilitySync[]): Promise<void> {
   if (!items.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (const l of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctor_facility
@@ -160,7 +160,7 @@ async function upsertDoctorFacilities(items: DoctorFacilitySync[]): Promise<void
 async function upsertPlatforms(items: PlatformSync[]): Promise<void> {
   if (!items.length) return;
   const db = await getDb();
-  await db.withTransactionAsync(async () => {
+  await withDbTransaction(async () => {
     for (const p of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO telemedicine_platforms
@@ -192,28 +192,35 @@ async function sweepDeleted(seen: Record<string, Set<string>>): Promise<number> 
   let removed = 0;
   for (const [table, ids] of Object.entries(seen)) {
     if (ids.size === 0) continue;
-    await db.execAsync(
-      "CREATE TEMP TABLE IF NOT EXISTS _seen_ids (id TEXT PRIMARY KEY); DELETE FROM _seen_ids;",
-    );
-    await db.withTransactionAsync(async () => {
-      for (const id of ids) {
-        await db.runAsync("INSERT OR IGNORE INTO _seen_ids (id) VALUES (?)", id);
-      }
+    // The whole fill-then-compare cycle runs as ONE unit on the shared transaction queue. The
+    // temp table is connection-global: a screening save that slipped between the fill and the
+    // DELETE would have found a half-populated _seen_ids and swept live directory rows.
+    const gone = await withDbLock(async () => {
+      await db.execAsync(
+        "CREATE TEMP TABLE IF NOT EXISTS _seen_ids (id TEXT PRIMARY KEY); DELETE FROM _seen_ids;",
+      );
+      // serialized-by-withDbLock: calling withDbTransaction here would deadlock on the queue
+      // this callback already holds.
+      await db.withTransactionAsync(async () => {
+        for (const id of ids) {
+          await db.runAsync("INSERT OR IGNORE INTO _seen_ids (id) VALUES (?)", id);
+        }
+      });
+      const before = await db.getFirstAsync<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM ${table}`,
+      );
+      await db.runAsync(
+        `DELETE FROM ${table} WHERE id NOT IN (SELECT id FROM _seen_ids)`,
+      );
+      const after = await db.getFirstAsync<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM ${table}`,
+      );
+      return (before?.n ?? 0) - (after?.n ?? 0);
     });
-    const before = await db.getFirstAsync<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM ${table}`,
-    );
-    await db.runAsync(
-      `DELETE FROM ${table} WHERE id NOT IN (SELECT id FROM _seen_ids)`,
-    );
-    const after = await db.getFirstAsync<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM ${table}`,
-    );
-    const gone = (before?.n ?? 0) - (after?.n ?? 0);
     if (gone > 0) console.warn(`[sync] swept ${gone} stale row(s) from ${table}`);
     removed += gone;
   }
-  await db.execAsync("DROP TABLE IF EXISTS _seen_ids;");
+  await withDbLock(() => db.execAsync("DROP TABLE IF EXISTS _seen_ids;"));
   return removed;
 }
 

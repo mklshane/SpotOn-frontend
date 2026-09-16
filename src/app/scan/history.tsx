@@ -23,7 +23,7 @@ import { useScanHistory } from '@/lib/scan-history';
 export default function BodyLesionsScreen() {
   useLocale();
   const theme = useTheme();
-  const { lesions, entries, loading, loadError } = useScanHistory();
+  const { lesions, entries, loading, loadError, storageIsEphemeral } = useScanHistory();
 
   const tracked = useMemo(() => lesions.filter((l) => !l.archived), [lesions]);
 
@@ -74,14 +74,16 @@ export default function BodyLesionsScreen() {
         <ThemedText type="title2" style={styles.center}>
           {loading
             ? 'Loading your spots…'
-            : loadError
+            : loadError || storageIsEphemeral
               ? 'Spots unavailable'
               : `${tracked.length} ${tracked.length === 1 ? 'spot' : 'spots'} tracked`}
         </ThemedText>
         <ThemedText type="footnote" themeColor="muted" style={styles.center}>
           {loading
             ? ' '
-            : loadError
+            : storageIsEphemeral
+              ? 'This page can’t open your saved spots. They are not lost - close any other SpotOn tab and reload, or open SpotOn outside private browsing.'
+              : loadError
               ? 'We couldn’t open your saved spots. They are still on this device - close the app and open it again.'
               : tracked.length === 0
                 ? entries.length > 0

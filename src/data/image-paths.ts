@@ -46,12 +46,17 @@ function ownedRelative(uri: string): string | null {
     rel = i === -1 ? null : uri.slice(i + 1);
   }
   if (rel === null || !rel.startsWith(OWNED_DIR)) return null;
-  // Exactly one segment below screenings/. This is a shape test, not a provenance test - a foreign
-  // file at <anything>/screenings/x.jpg would be claimed. Nothing produces one today: persistImage()
-  // is the only writer under screenings/ and its failure fallback yields tmp/ImagePicker paths. A
-  // caller that starts storing third-party paths needs a tighter test than this.
-  const name = rel.slice(OWNED_DIR.length);
-  return name && !name.includes("/") ? rel : null;
+  // One or two segments below screenings/: `<file>` is the pre-account layout, `<userId>/<file>`
+  // the current one (scan-history.tsx screeningsDir). Accepting only one segment silently opted
+  // every account-scoped row out of relativization, which put absolute container paths back in
+  // the database and re-armed the blank-thumbnail-after-reinstall bug this module exists to kill.
+  //
+  // This is a shape test, not a provenance test - a foreign file at <anything>/screenings/x.jpg
+  // would be claimed. Nothing produces one today: persistImage() is the only writer under
+  // screenings/ and its failure fallback yields tmp/ImagePicker paths. A caller that starts
+  // storing third-party paths needs a tighter test than this.
+  const parts = rel.slice(OWNED_DIR.length).split("/");
+  return parts.length >= 1 && parts.length <= 2 && parts.every(Boolean) ? rel : null;
 }
 
 /** DB form: relative for files we own, untouched for anything else. */
