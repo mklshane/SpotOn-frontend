@@ -18,7 +18,6 @@ import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
-import { TabContentInset } from '@/components/ui/tab-bar';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
@@ -427,8 +426,8 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: Space.xl,
-    // Clears the tab bar and the Scan ring protruding from it - see TabContentInset.
-    paddingBottom: TabContentInset,
+    // Keep the original Home spacing below the last card and above the tab bar.
+    paddingBottom: Space.giant,
   },
   header: {
     paddingTop: Space.xxl,
@@ -513,7 +512,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: Space.sm,
   },
   activityIcon: {
@@ -523,7 +522,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    transform: [{ translateY: -4 }],
   },
   activityText: {
     flex: 1,

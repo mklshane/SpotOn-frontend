@@ -16,7 +16,6 @@ import { enableScreens } from 'react-native-screens';
 import { configureReanimatedLogger, ReanimatedLogLevel } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { DevTools } from '@/components/ui/dev-tools';
 import { AppMaxWidth } from '@/constants/theme';
 import { AuthProvider } from '@/lib/auth';
 import { initNotifications } from '@/lib/notifications';
@@ -134,7 +133,6 @@ export default function RootLayout() {
                 <Stack.Screen name="directory" />
                 <Stack.Screen name="learn" />
               </Stack>
-              <DevTools />
             </ThemeProvider>
           </ScreeningSessionProvider>
           </ScanHistoryProvider>
