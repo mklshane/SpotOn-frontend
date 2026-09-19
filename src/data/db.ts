@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS lesions (
   mark_z            REAL,
   mark_region       TEXT,
   mark_view         TEXT,
+  mark_mesh         TEXT,
   screening_count   INTEGER NOT NULL DEFAULT 0,
   first_screened_at TEXT,
   last_screened_at  TEXT,
@@ -147,6 +148,7 @@ CREATE TABLE IF NOT EXISTS screenings (
   mark_z               REAL,
   mark_region          TEXT,
   mark_view            TEXT,
+  mark_mesh            TEXT,
   image_uri            TEXT NOT NULL,
   source               TEXT NOT NULL,
   answers_json         TEXT NOT NULL,
@@ -193,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -347,6 +349,15 @@ const MIGRATION_V15 = [
   "CREATE INDEX IF NOT EXISTS idx_lesions_user_updated ON lesions(user_id, archived, updated_at DESC)",
 ];
 
+// v16 - which body mesh a mark was placed on ('male' | 'female'). The body map gained a female
+// mesh, and the two differ in proportion, so a stored point only sits on the surface of the mesh it
+// came from. NULL on every pre-v16 row, which is correct rather than a gap to backfill: until v16
+// there was only the male mesh, and readers treat NULL as 'male'.
+const MIGRATION_V16 = [
+  "ALTER TABLE lesions ADD COLUMN mark_mesh TEXT",
+  "ALTER TABLE screenings ADD COLUMN mark_mesh TEXT",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -366,6 +377,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 13 ? MIGRATION_V13 : []),
     ...(version < 14 ? MIGRATION_V14 : []),
     ...(version < 15 ? MIGRATION_V15 : []),
+    ...(version < 16 ? MIGRATION_V16 : []),
   ];
   for (const stmt of pending) {
     try {

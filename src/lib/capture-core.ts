@@ -398,6 +398,20 @@ export function fullFrameToModelCrop(box: NormBox, frameW: number, frameH: numbe
 /**
  * Apply the preview's cover-crop: the frame is scaled to fill the screen and the overflow is
  * clipped equally on both sides, so screen-normalized coords differ from frame-normalized ones.
+ *
+ * `mirrored` exists for the front camera, and ONLY the preview is mirrored.
+ *
+ * VisionCamera always mirrors the front-camera preview and gives no way to turn that off (see the
+ * `isMirrored` docs in its CameraProps). capture.tsx pins `isMirrored={false}`, so the frames the
+ * detector works on are unmirrored on both platforms and everything in THIS file is in that
+ * unmirrored space. The preview is the one surface that disagrees, hence the flag here.
+ *
+ * The saved still is mirrored separately, in capture.tsx's shoot(), which applies the same
+ * reflection to the box it forwards to the cropper. That is a different transform on a different
+ * artefact; it does not belong here.
+ *
+ * Do NOT push this into modelRoiToFullFrame or modelCropToFullFrame. Those work in frame space,
+ * which is not mirrored, and flipping there would double-correct.
  */
 export function fullFrameToPreview(
   box: NormBox,
@@ -405,14 +419,19 @@ export function fullFrameToPreview(
   frameH: number,
   screenW: number,
   screenH: number,
+  mirrored = false,
 ): NormBox {
   const Rw = Math.min(frameW, frameH);
   const Rh = Math.max(frameW, frameH);
   const sc = Math.max(screenW / Rw, screenH / Rh); // cover
   const dispW = Rw * sc;
   const dispH = Rh * sc;
+  const cx = (box.cx * dispW - (dispW - screenW) / 2) / screenW;
   return {
-    cx: (box.cx * dispW - (dispW - screenW) / 2) / screenW,
+    // The flip is the LAST step, in preview space, because that is the only space that is
+    // mirrored - see the doc comment above. Reflecting about 0.5 here rather than about the
+    // frame centre is what keeps it correct under the cover-crop offset.
+    cx: mirrored ? 1 - cx : cx,
     cy: (box.cy * dispH - (dispH - screenH) / 2) / screenH,
     w: (box.w * dispW) / screenW,
     h: (box.h * dispH) / screenH,
@@ -426,18 +445,61 @@ export function previewToFullFrame(
   frameH: number,
   screenW: number,
   screenH: number,
+  mirrored = false,
 ): NormBox {
   const Rw = Math.min(frameW, frameH);
   const Rh = Math.max(frameW, frameH);
   const sc = Math.max(screenW / Rw, screenH / Rh);
   const dispW = Rw * sc;
   const dispH = Rh * sc;
+  // Undone FIRST here, mirroring the forward direction's last step, so the pair stays an exact
+  // inverse rather than an approximate one.
+  const cx = mirrored ? 1 - box.cx : box.cx;
   return {
-    cx: (box.cx * screenW + (dispW - screenW) / 2) / dispW,
+    cx: (cx * screenW + (dispW - screenW) / 2) / dispW,
     cy: (box.cy * screenH + (dispH - screenH) / 2) / dispH,
     w: (box.w * screenW) / dispW,
     h: (box.h * screenH) / dispH,
   };
+}
+
+/* ------------------------------------------------------------------ frame orientation */
+
+/** VisionCamera's Orientation, redeclared locally so this file keeps its zero imports. */
+export type FrameOrientation =
+  | 'portrait'
+  | 'portrait-upside-down'
+  | 'landscape-left'
+  | 'landscape-right';
+
+/** The clockwise rotation the resize plugin accepts. */
+export type UprightRotation = '0deg' | '90deg' | '180deg' | '270deg';
+
+/**
+ * The rotation that makes a camera frame upright, derived rather than assumed.
+ *
+ * This used to be the literal '90deg' in capture.tsx's frame processor, which is correct for a
+ * portrait-held BACK camera - those frames report 'landscape-right'. It is not correct in general:
+ * Android front cameras typically have a sensorOrientation of 270 rather than 90, so CameraX
+ * reports a different rotation and the same literal would feed the detector a 180-degree-rotated
+ * input. The detector still fires on a round lesion, so nothing looks broken - the box just lands
+ * point-reflected through the centre of the ROI, and the crop is taken from the wrong skin.
+ *
+ * INVARIANT: 'landscape-right' -> '90deg'. That is the back-camera behaviour that has shipped, and
+ * scripts/test-capture.mjs pins it. This function must be a generalisation of that constant, never
+ * a change to it.
+ *
+ * `frame.orientation` is the orientation OF the frame (VisionCamera reverses Android's
+ * rotationDegrees to get it), so the correction is its complement: 360 - degrees.
+ */
+export function uprightRotation(orientation: FrameOrientation): UprightRotation {
+  'worklet';
+  // Written as an if-chain rather than a lookup object: this runs on the frame-processor worklet
+  // runtime, where a module-scope object would have to be captured and serialised per frame.
+  if (orientation === 'portrait') return '0deg';
+  if (orientation === 'landscape-left') return '270deg';
+  if (orientation === 'portrait-upside-down') return '180deg';
+  return '90deg'; // landscape-right, and the back-camera default if a platform ever reports junk
 }
 
 /** Grow the drawn box for breathing room, capped so a bad frame can't blow it past the screen. */

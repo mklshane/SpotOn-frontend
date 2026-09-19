@@ -35,6 +35,7 @@ export default function BodyLesionsScreen() {
         .map((l) => ({
           id: l.id,
           point: l.mark!.point,
+          mesh: l.mark!.mesh,
           color: tierColor(theme, l.lastTier ?? 'low').fg,
         })),
     [tracked, theme],

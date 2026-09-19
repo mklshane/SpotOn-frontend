@@ -1,11 +1,12 @@
 /* eslint-disable react/no-unknown-property -- react-three-fiber three.js props */
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Box3, BufferAttribute, BufferGeometry, Vector3 } from 'three';
 
-import { INDEX_BITS, INDICES_B64, POSITIONS_B64 } from './body-geometry';
+import { projectPointBetweenBodies } from '@/lib/body-projection';
+import type { BodyVariant } from '@/lib/body-variant';
 
 const SKIN = '#C6C7CD';
-const TARGET_HEIGHT = 3.7;
+export const TARGET_HEIGHT = 3.7;
 /** Flip to Math.PI if the model ends up facing away from the camera. */
 const FACE_ROT_Y = 0;
 
@@ -39,13 +40,42 @@ function decodeBase64(b64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-/** Build + fit the geometry once at module load (synchronous, no file loading). */
-function buildGeometry(): { geo: BufferGeometry; box: Box3 } {
-  const positions = new Float32Array(decodeBase64(POSITIONS_B64));
+type BakedGeometry = {
+  VERTEX_COUNT: number;
+  INDEX_BITS: 16 | 32;
+  POSITIONS_B64: string;
+  INDICES_B64: string;
+};
+
+/**
+ * Loaded through require() rather than a static import so that opening the body screen only pays
+ * to parse the ~1.3 MB base64 blob of the mesh actually shown. Metro bundles both either way, but
+ * on Hermes the string-constant parse is not free and the unused variant never has to be touched.
+ */
+function loadBaked(variant: BodyVariant): BakedGeometry {
+  return variant === 'female'
+    ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('./body-geometry.female')
+    : // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('./body-geometry.male');
+}
+
+/**
+ * Build + fit one mesh. Synchronous, no file loading.
+ *
+ * Everything about placing the mesh in the scene is derived from the mesh itself, which is what
+ * lets variants be swapped freely: the source meshes differ in units (metres vs centimetres), in
+ * where their bounding box sits, and in pose, and none of that reaches the rest of the app. After
+ * this runs, every variant is Y-up, centred on the origin and exactly TARGET_HEIGHT tall, so the
+ * camera limits, marker radii and region thresholds are shared.
+ */
+function buildGeometry(variant: BodyVariant): { geo: BufferGeometry; box: Box3 } {
+  const baked = loadBaked(variant);
+  const positions = new Float32Array(decodeBase64(baked.POSITIONS_B64));
   const indices =
-    INDEX_BITS === 16
-      ? new Uint16Array(decodeBase64(INDICES_B64))
-      : new Uint32Array(decodeBase64(INDICES_B64));
+    baked.INDEX_BITS === 16
+      ? new Uint16Array(decodeBase64(baked.INDICES_B64))
+      : new Uint32Array(decodeBase64(baked.INDICES_B64));
 
   const geo = new BufferGeometry();
   geo.setAttribute('position', new BufferAttribute(positions, 3));
@@ -68,37 +98,75 @@ function buildGeometry(): { geo: BufferGeometry; box: Box3 } {
   return { geo, box: geo.boundingBox!.clone() };
 }
 
-let BODY_GEO: BufferGeometry | null = null;
-let BODY_BOX: Box3 | null = null;
-let BUILD_ERR: string | null = null;
-try {
-  const built = buildGeometry();
-  BODY_GEO = built.geo;
-  BODY_BOX = built.box;
-} catch (e) {
-  BUILD_ERR = String((e as { message?: string })?.message ?? e);
-  console.warn('[BodyModel] build error', e);
+type Built = { geo: BufferGeometry; box: Box3; error: null } | { geo: null; box: null; error: string };
+
+/**
+ * Built once per variant and kept for the process lifetime. Both viewers and the preview card
+ * mount and unmount constantly; rebuilding 41k vertices each time would be visible.
+ */
+const CACHE = new Map<BodyVariant, Built>();
+
+export function getBodyGeometry(variant: BodyVariant): Built {
+  const hit = CACHE.get(variant);
+  if (hit) return hit;
+  let built: Built;
+  try {
+    const { geo, box } = buildGeometry(variant);
+    built = { geo, box, error: null };
+  } catch (e) {
+    const error = String((e as { message?: string })?.message ?? e);
+    console.warn('[BodyModel] build error', variant, e);
+    built = { geo: null, box: null, error };
+  }
+  CACHE.set(variant, built);
+  return built;
+}
+
+/**
+ * Where to draw a stored mark on the `variant` mesh. A point placed on that same mesh is returned
+ * untouched; one placed on the other mesh is moved onto this one's surface. `mesh` is absent on
+ * marks saved before the female mesh existed, and those were all placed on the male one.
+ */
+export function markPointOn(
+  point: [number, number, number],
+  mesh: BodyVariant | null | undefined,
+  variant: BodyVariant,
+): [number, number, number] {
+  const from = mesh ?? 'male';
+  if (from === variant) return point;
+  const src = getBodyGeometry(from);
+  const dst = getBodyGeometry(variant);
+  if (!src.geo || !src.box || !dst.geo || !dst.box) return point;
+  return projectPointBetweenBodies(
+    point,
+    { positions: src.geo.getAttribute('position').array, box: src.box },
+    { positions: dst.geo.getAttribute('position').array, box: dst.box },
+  );
 }
 
 export function BodyModel({
+  variant,
   onReady,
   onStatus,
 }: {
+  variant: BodyVariant;
   onReady?: (box: Box3) => void;
   onStatus?: (status: BodyModelStatus, message?: string) => void;
 }) {
+  const built = useMemo(() => getBodyGeometry(variant), [variant]);
+
   useEffect(() => {
-    if (BODY_GEO && BODY_BOX) {
-      onReady?.(BODY_BOX);
+    if (built.geo && built.box) {
+      onReady?.(built.box);
       onStatus?.('ready');
     } else {
-      onStatus?.('error', BUILD_ERR ?? 'no geometry');
+      onStatus?.('error', built.error ?? 'no geometry');
     }
-  }, [onReady, onStatus]);
+  }, [built, onReady, onStatus]);
 
-  if (!BODY_GEO) return null;
+  if (!built.geo) return null;
   return (
-    <mesh geometry={BODY_GEO}>
+    <mesh geometry={built.geo}>
       <meshStandardMaterial color={SKIN} roughness={0.9} metalness={0.02} />
     </mesh>
   );

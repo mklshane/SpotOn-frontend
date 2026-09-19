@@ -39,6 +39,7 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'bolt.fill': { set: 'ionicons', name: 'flash' },
   'bolt.slash.fill': { set: 'ionicons', name: 'flash-off' },
   'arrow.counterclockwise': { set: 'ionicons', name: 'refresh' },
+  'arrow.triangle.2.circlepath.camera': { set: 'ionicons', name: 'camera-reverse-outline' },
   'clock.arrow.circlepath': { set: 'mci', name: 'history' },
   'checkmark.circle.fill': { set: 'ionicons', name: 'checkmark-circle' },
   'exclamationmark.triangle.fill': { set: 'ionicons', name: 'warning' },

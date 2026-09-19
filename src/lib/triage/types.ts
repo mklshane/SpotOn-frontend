@@ -3,6 +3,7 @@
  * The scoring primitives live in tps-core.ts (kept import-free for the node harness);
  * this module re-exports them and adds the app-level record shapes.
  */
+import type { BodyVariant } from '../body-variant';
 import type { Answer, LesionClass, QuestionId, TriageResult, TriageTier } from './tps-core';
 
 export type {
@@ -23,6 +24,12 @@ export type BodyMark = {
   point: [number, number, number];
   region: string;
   view: 'front' | 'back';
+  /**
+   * Which body mesh `point` was placed on. Both meshes are fitted into the same box but differ in
+   * proportion, so a point is only guaranteed to sit on the surface of the mesh it came from.
+   * Absent on marks saved before the female mesh existed - those were all placed on the male one.
+   */
+  mesh?: BodyVariant;
 };
 
 export type QuestionnaireResponse = {

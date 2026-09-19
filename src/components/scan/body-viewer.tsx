@@ -8,10 +8,11 @@ import { type Box3, Raycaster, Vector2, type Camera, type Group } from 'three';
 
 import { ThemedText } from '@/components/themed-text';
 import { resolveRegionFromPoint } from '@/lib/body-regions';
+import { useBodyVariant } from '@/lib/body-variant';
 import { clampTarget, focalZoomTarget, toNdc } from '@/lib/orbit-camera';
 import type { BodyMark } from '@/lib/triage/types';
 
-import { BodyModel, type BodyModelStatus } from './body-model';
+import { BodyModel, markPointOn, type BodyModelStatus } from './body-model';
 import { BodyLights, Marker } from './mannequin';
 
 const TARGET_Y = -0.05;
@@ -95,6 +96,9 @@ function Rig({
 
 export function BodyViewer({ mark, onPick }: BodyViewerProps) {
   useLocale();
+  // `ready` gates the mesh: rendering before the stored override is read would build the profile
+  // default and then immediately rebuild the other mesh for anyone who has overridden it.
+  const { variant, ready: variantReady } = useBodyVariant();
   const azimuth = useSharedValue(0);
   const polar = useSharedValue(Math.PI / 2);
   const radius = useSharedValue(6.4);
@@ -161,9 +165,10 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
         point: [p.x, p.y, p.z],
         region: resolveRegionFromPoint(p, box),
         view: p.z >= cz ? 'front' : 'back',
+        mesh: variant,
       });
     },
-    [onPick, raycaster],
+    [onPick, raycaster, variant],
   );
 
   const pan = Gesture.Pan()
@@ -247,9 +252,9 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       <Canvas camera={{ position: [0, TARGET_Y, 6.4], fov: FOV_DEG }} gl={{ antialias: true }}>
         <BodyLights />
         <group ref={groupRef}>
-          <BodyModel onReady={handleReady} onStatus={handleStatus} />
+          {variantReady ? <BodyModel variant={variant} onReady={handleReady} onStatus={handleStatus} /> : null}
         </group>
-        {mark ? <Marker point={mark.point} /> : null}
+        {mark && variantReady ? <Marker point={markPointOn(mark.point, mark.mesh, variant)} /> : null}
         <Rig azimuth={azimuth} polar={polar} radius={radius} target={target} groupRef={groupRef} sceneRef={sceneRef} />
       </Canvas>
       <GestureDetector gesture={gesture}>

@@ -1,6 +1,6 @@
 import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { NitroModules } from 'react-native-nitro-modules';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { FlipType, manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { router, useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, AppState, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
@@ -23,6 +23,7 @@ import {
   useCameraDevice,
   useCameraPermission,
   useFrameProcessor,
+  type CameraPosition,
 } from 'react-native-vision-camera';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 import { useRunOnJS, useSharedValue as useWorkletValue } from 'react-native-worklets-core';
@@ -38,6 +39,7 @@ import {
   searchRoiForZoom,
   stepStability,
   stepActiveTarget,
+  uprightRotation,
   type Coach,
   type CoachKind,
   type DetectionCandidate,
@@ -220,7 +222,35 @@ export default function CaptureScreen() {
   const session = useScreeningSession();
   const insets = useSafeAreaInsets();
   const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('back');
+  /**
+   * Which camera the user is pointing with. Was hard-coded to 'back', which is right for a spot on
+   * a forearm and useless for one on your own face, neck or shoulder - the regions people check
+   * first, and the one thing UAT asked for.
+   *
+   * Both positions are probed unconditionally so the flip control can be HIDDEN on a single-camera
+   * device rather than rendering a button that swaps to `undefined` and blacks the screen out (see
+   * the `if (!device)` bail below). Two hook calls, no cost: useCameraDevice just filters the same
+   * cached device list.
+   */
+  const [position, setPosition] = useState<CameraPosition>('back');
+  const device = useCameraDevice(position);
+  const backDevice = useCameraDevice('back');
+  const frontDevice = useCameraDevice('front');
+  const canFlip = backDevice != null && frontDevice != null;
+  /**
+   * Front camera: the preview is mirrored, so the capture must end up mirrored too.
+   *
+   * Three spaces are in play and it is worth being blunt about which is which:
+   *   - PREVIEW   - always mirrored by VisionCamera on a front camera, not switchable off.
+   *   - FRAMES    - pinned UNMIRRORED by `isMirrored={false}` below, on both platforms. The
+   *                 detector works here, so its box is in unmirrored space.
+   *   - THE STILL - captured unmirrored, then flipped in shoot() so it matches what was framed.
+   *
+   * This flag is the correction between them, and it has exactly two users: fullFrameToPreview
+   * (drawing the box on the mirrored preview) and shoot() (flipping the saved pixels and the
+   * forwarded box together). Both are reflections about the same axis.
+   */
+  const mirrored = device?.position === 'front';
   const camera = useRef<Camera>(null);
   const { resize } = useResizePlugin();
   const { width: SW, height: SH } = useWindowDimensions();
@@ -300,6 +330,17 @@ export default function CaptureScreen() {
   const maxZoom = Math.min(device?.maxZoom ?? 1, 8);
   const minZoom = device?.minZoom ?? 1;
   const neutralZoom = device?.neutralZoom ?? 1;
+  /**
+   * Does this camera zoom at all? Most front cameras are a single fixed focal length and report
+   * maxZoom === minZoom, which leaves the slider arithmetic below dividing by the 0.001 floor: the
+   * knob pins to 0 and dragging resolves to minZoom whatever you do. A dead control that looks
+   * live is worse than no control, so the slider is hidden instead.
+   */
+  const canZoom = maxZoom - minZoom >= 0.1;
+  /** Fixed-focus cameras reject focus() - no point showing a reticle for something that can't happen. */
+  const canFocus = device?.supportsFocus === true;
+  /** Front cameras report hasTorch: false, and setting torch="on" on one is a runtime error. */
+  const hasTorch = device?.hasTorch === true;
 
   const zoomSV = useSharedValue(1);
   const startZoom = useSharedValue(1);
@@ -316,10 +357,21 @@ export default function CaptureScreen() {
     },
     [detectorZoomSV],
   );
+  /**
+   * Re-seat the zoom whenever the CAMERA changes, not whenever its neutralZoom happens to differ.
+   *
+   * Keying this on the number alone was safe while the device was fixed, and is not now: back and
+   * front both commonly report neutralZoom 1, so flipping at 5x would leave zoomSV at 5. The
+   * preview survives that (VisionCamera clamps to the device's range) but the DETECTOR does not -
+   * detectorZoomSV would stay at 5 and searchRoiForZoom would go on carving out the tight centre
+   * ROI that 5x implies, while the frame it is carving from is a full-width 1x view. The box then
+   * maps back through an ROI that never existed. device.id is the identity that actually changed.
+   */
+  const deviceId = device?.id;
   useEffect(() => {
     zoomSV.value = neutralZoom;
     syncDetectorZoom(neutralZoom);
-  }, [neutralZoom, zoomSV, syncDetectorZoom]);
+  }, [deviceId, neutralZoom, zoomSV, syncDetectorZoom]);
   /* eslint-enable react-hooks/immutability */
   // Quantized so a pinch cannot flood the JS thread: the ROI schedule is smooth in log2(zoom), so
   // 2% steps are far finer than anything the crop can resolve.
@@ -379,12 +431,15 @@ export default function CaptureScreen() {
       const candidates = batch.candidates.map((candidate) => {
         const imageBox = modelRoiToFullFrame(candidate.box, batch.roi);
         return {
-          box: fullFrameToPreview(imageBox, batch.frameW, batch.frameH, SW, SH),
+          // `box` is drawn on the mirrored preview, so it takes the flip; `imageBox` is forwarded
+          // to the cropper, which sees the UNMIRRORED still, so it must not. Same lesion, two
+          // coordinate systems - this is the only place they part company.
+          box: fullFrameToPreview(imageBox, batch.frameW, batch.frameH, SW, SH, mirrored),
           imageBox,
           score: candidate.score,
         };
       });
-      const previewRoiBox = fullFrameToPreview(batch.roi, batch.frameW, batch.frameH, SW, SH);
+      const previewRoiBox = fullFrameToPreview(batch.roi, batch.frameW, batch.frameH, SW, SH, mirrored);
       const previewRoi: SearchRoi = {
         ...previewRoiBox,
         fraction: batch.roi.fraction,
@@ -466,8 +521,9 @@ export default function CaptureScreen() {
       recordSelection();
     },
     // SW/SH feed the preview mapping, so a rotation must rebuild this closure rather than keep
-    // mapping against the old screen size.
-    [SW, SH],
+    // mapping against the old screen size. `mirrored` likewise: without it a flip to the front
+    // camera would keep drawing through the back camera's (unflipped) mapping.
+    [SW, SH, mirrored],
   );
   /* eslint-enable react-hooks/immutability */
   // Quality gates arrive as a single code, already debounced in the worklet, and only when the
@@ -546,12 +602,21 @@ export default function CaptureScreen() {
           const cropX = Math.max(0, Math.floor((frame.width - side) / 4) * 2);
           const cropY = Math.max(0, Math.floor((frame.height - side) / 4) * 2);
           const tflite = boxedModel.unbox();
+          // Derived, not hard-coded. '90deg' is right for a portrait-held BACK camera and wrong for
+          // an Android front camera (sensorOrientation 270), which would hand the detector a
+          // 180-degree-rotated input - a box that lands point-reflected rather than an obvious
+          // failure. See uprightRotation in capture-core for the measurement of that invariant.
+          //
+          // The crop above is a CENTRED SQUARE, which is invariant under any 90-degree rotation, so
+          // it needs no matching correction. `mirror` is deliberately left unset: the frames are
+          // already unmirrored (isMirrored={false}), and mirroring the model input here would only
+          // force an un-flip when mapping the box back out.
           const input = resize(frame, {
             crop: { x: cropX, y: cropY, width: side, height: side },
             scale: { width: layout.inputSize, height: layout.inputSize },
             pixelFormat: 'rgb',
             dataType: 'float32',
-            rotation: '90deg',
+            rotation: uprightRotation(frame.orientation),
           });
 
           // Quality coaching follows the active ROI, measuring the area the user is inspecting.
@@ -695,11 +760,11 @@ export default function CaptureScreen() {
   const focusAt = useCallback(
     (x: number, y: number) => {
       const cam = camera.current;
-      if (!cam) return;
+      if (!cam || !canFocus) return;
       setFocusPt({ x, y, id: Date.now() });
       cam.focus({ x, y }).catch((e) => console.log('[focus] err', String(e)));
     },
-    [],
+    [canFocus],
   );
   /* eslint-disable react-hooks/refs -- Gesture Handler invokes this callback after render. */
   const tap = useMemo(
@@ -770,6 +835,25 @@ export default function CaptureScreen() {
     wasReady.current = ready;
   }, [coach]);
 
+  /**
+   * Swap cameras.
+   *
+   * Everything the detector has accumulated describes the OTHER camera - the tracked target, the
+   * One-Euro filter history, the box pose and the box forwarded to the cropper - so it is all
+   * dropped rather than left to glide from a lesion that is no longer in frame. Zoom re-seats
+   * itself from the new device's neutralZoom in the effect above, and the frame processor already
+   * lists neutralZoom as a dependency, so both rebuild without help.
+   *
+   * The torch is forced off, which is not cosmetic: front cameras report hasTorch: false and
+   * leaving torch="on" while switching onto one raises a VisionCamera runtime error.
+   */
+  function flipCamera() {
+    if (busy || captureInFlightRef.current) return;
+    setTorch(false);
+    clearTrack();
+    setPosition((p) => (p === 'back' ? 'front' : 'back'));
+  }
+
   /* eslint-disable react-hooks/immutability -- shoot coordinates native-backed shared values with
      the camera worklet; React never reads either value during render. */
   async function shoot() {
@@ -803,6 +887,19 @@ export default function CaptureScreen() {
       // more than this. Capture is portrait-locked, so after `rotate: 0` the long edge is the
       // height; if a device ever surprises us the image just stays larger, never distorted.
       const actions: Parameters<typeof manipulateAsync>[1] = [{ rotate: 0 }];
+      // Front camera: bake the preview's mirror into the pixels.
+      //
+      // VisionCamera always mirrors the front preview and the still is captured unmirrored, so
+      // without this the spot jumps to the other side of the image the instant you press the
+      // shutter - you frame a mole on the left cheek and the cropper shows it on the right. UAT
+      // reported exactly that. Flipping here rather than via the `isMirrored` prop keeps the
+      // DETECTOR's frames unmirrored, which is what makes the box mapping platform-independent
+      // (iOS mirrors analysis buffers with that prop, Android does not).
+      //
+      // After `rotate: 0`, so it mirrors an already-upright image rather than one whose EXIF
+      // orientation is still pending. MUST stay in lockstep with the lx flip below: the saved
+      // pixels and the forwarded box have to move together or the cropper frames the wrong skin.
+      if (mirrored) actions.push({ flip: FlipType.Horizontal });
       if (Math.max(photo.width, photo.height) > PHOTO_LONG_EDGE) {
         actions.push({ resize: { height: PHOTO_LONG_EDGE } });
       }
@@ -815,13 +912,18 @@ export default function CaptureScreen() {
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
       const box = lastImgBox.current;
       const hadDetection = metricsRef.current != null;
+      // lastImgBox lives in unmirrored frame space (the space the detector sees). The image the
+      // cropper is about to open has just been mirrored above, so the box has to be reflected to
+      // match it. Same reflection fullFrameToPreview applies for drawing - the difference is that
+      // this one is permanent, because it describes a file rather than a viewport.
+      const imgBox = box && mirrored ? { ...box, cx: 1 - box.cx } : box;
       router.push({
         pathname: '/scan/crop',
         params: {
           uri: upright.uri,
           detected: hadDetection ? '1' : '0',
-          ...(box && hadDetection
-            ? { lx: String(box.cx), ly: String(box.cy), lw: String(box.w), lh: String(box.h) }
+          ...(imgBox && hadDetection
+            ? { lx: String(imgBox.cx), ly: String(imgBox.cy), lw: String(imgBox.w), lh: String(imgBox.h) }
             : {}),
         },
       });
@@ -880,7 +982,23 @@ export default function CaptureScreen() {
             isActive={isFocused && appActive}
             photo
             animatedProps={animatedProps}
-            torch={torch ? 'on' : 'off'}
+            /**
+             * Load-bearing; do NOT delete this as a redundant default.
+             *
+             * VisionCamera defaults isMirrored to `position === 'front'`, and the two platforms
+             * then disagree about what that means: iOS mirrors the photo output AND the
+             * frame-processor buffers, while Android only writes an EXIF flag on the photo and
+             * never mirrors the analysis stream at all. Pinning it false removes mirroring as a
+             * platform variable: the detector always sees unmirrored frames, so the box mapping is
+             * the same code on both platforms.
+             *
+             * The front camera's capture still has to COME OUT mirrored, to match the preview -
+             * shoot() does that explicitly with an image-manipulator flip, where it can move the
+             * forwarded box by the same reflection in the same breath. Doing it there rather than
+             * with this prop is what keeps the two in lockstep and platform-independent.
+             */
+            isMirrored={false}
+            torch={torch && hasTorch ? 'on' : 'off'}
             frameProcessor={guide && isFocused ? frameProcessor : undefined}
           />
         </View>
@@ -937,13 +1055,31 @@ export default function CaptureScreen() {
         <Icon name="xmark" tintColor="#FFFFFF" size={22} />
       </Pressable>
 
+      {/* Flip camera.
+          Top-right, opposite Close, rather than in the bottom row: that row already carries the
+          torch, a 76pt shutter and the guide toggle, which at 375pt leaves no room for a fourth
+          control without shrinking the shutter. Hidden outright when the phone has only one
+          camera - flipping to a device that doesn't exist just blacks the preview out. */}
+      {canFlip ? (
+        <Pressable
+          hitSlop={12}
+          onPress={flipCamera}
+          disabled={busy}
+          style={[styles.flip, { top: insets.top + Space.sm }]}
+          accessibilityRole="button"
+          accessibilityLabel={t("Switch camera")}>
+          <Icon name="arrow.triangle.2.circlepath.camera" tintColor="#FFFFFF" size={24} />
+        </Pressable>
+      ) : null}
+
       {/* Instructions */}
       <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
         <ThemedText type="subhead" style={styles.instructionsLabel}>
           {t("Instructions")}</ThemedText>
       </Pressable>
 
-      {/* Zoom indicator */}
+      {/* Zoom indicator - absent, not dead, on a fixed-focal-length camera (see canZoom). */}
+      {canZoom ? (
       <View style={styles.zoomWrap}>
         <GestureDetector gesture={zoomDrag}>
           {/* Padded so the 4pt bar has a real ~44pt touch target without looking heavier. */}
@@ -960,17 +1096,24 @@ export default function CaptureScreen() {
           </View>
         </GestureDetector>
       </View>
+      ) : null}
 
       {/* Bottom controls */}
       <View style={[styles.controls, { paddingBottom: insets.bottom + Space.lg }]}>
-        <Pressable
-          hitSlop={12}
-          onPress={() => setTorch((t) => !t)}
-          style={styles.sideBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t("Toggle flash")}>
-          <Icon name={torch ? 'bolt.fill' : 'bolt.slash.fill'} tintColor="#FFFFFF" size={26} />
-        </Pressable>
+        {/* The spacer is not decoration: this row is justified `space-around`, so dropping the
+            torch on a front camera would slide the shutter off centre. Same width, no glyph. */}
+        {hasTorch ? (
+          <Pressable
+            hitSlop={12}
+            onPress={() => setTorch((t) => !t)}
+            style={styles.sideBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t("Toggle flash")}>
+            <Icon name={torch ? 'bolt.fill' : 'bolt.slash.fill'} tintColor="#FFFFFF" size={26} />
+          </Pressable>
+        ) : (
+          <View style={styles.sideBtn} />
+        )}
 
         {session.images.length > 0 ? (
           <View style={styles.shotCount} pointerEvents="none">
@@ -1146,6 +1289,7 @@ const styles = StyleSheet.create({
   },
   frameHintText: { color: 'rgba(255,255,255,0.92)' },
   close: { position: 'absolute', left: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  flip: { position: 'absolute', right: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   instructions: {
     position: 'absolute',
     bottom: 196,

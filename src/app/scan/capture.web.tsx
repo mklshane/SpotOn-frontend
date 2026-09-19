@@ -106,6 +106,11 @@ export default function CaptureWebScreen() {
     zoom: null,
   });
   const [torchOn, setTorchOn] = useState(false);
+  /**
+   * Which camera to ask getUserMedia for. Matches the native screen's flip control so the web
+   * replica stays a faithful QA target instead of being rear-camera-only.
+   */
+  const [facing, setFacing] = useState<'environment' | 'user'>('environment');
 
   // Same trick as the native body screen: get the detector loading before the user needs it.
   useEffect(() => {
@@ -132,9 +137,11 @@ export default function CaptureWebScreen() {
     (async () => {
       try {
         // `environment` asks for the rear camera on phones and is simply ignored on desktops.
+        // `ideal` rather than `exact` throughout: a single-camera laptop should hand over the one
+        // webcam it has, not reject the request.
         const request = navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: 'environment' },
+            facingMode: { ideal: facing },
             width: { ideal: 1920 },
             height: { ideal: 1080 },
           },
@@ -206,9 +213,11 @@ export default function CaptureWebScreen() {
       stop();
     };
     // `status` is deliberately not a dependency: it is written by this effect, and re-running on
-    // its own writes would loop. `attempt` is the retry signal.
+    // its own writes would loop. `attempt` is the retry signal, `facing` the flip signal - the
+    // cleanup already calls stop(), and the body re-probes `caps`, so switching cameras tears the
+    // old stream down and re-reads torch/zoom support for the new one.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt, stop]);
+  }, [attempt, facing, stop]);
 
   /**
    * Drive the hardware where it exists. Digital zoom always applies at capture; this maps the
@@ -259,6 +268,13 @@ export default function CaptureWebScreen() {
       canvas.height = Math.round(sh * scale);
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+      // Front camera: mirror the canvas to match the mirrored preview, or the spot jumps sides the
+      // moment you press the shutter. drawImage reads the raw stream and ignores the CSS transform
+      // on the <video>, so the flip has to be re-applied here. Same behaviour as the native path.
+      if (facing === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
 
       const blob = await new Promise<Blob | null>((resolve) =>
@@ -351,7 +367,13 @@ export default function CaptureWebScreen() {
           height: '100%',
           objectFit: 'cover',
           // Preview mirror of the capture-time crop, so what you frame is what you get.
-          transform: `scale(${zoom})`,
+          //
+          // The negative X on the front camera is the selfie view. Browsers, unlike native
+          // previews, hand over a getUserMedia stream UNMIRRORED, so this is what produces the
+          // behaviour VisionCamera gives for free on the native screen. shoot() re-applies the
+          // same flip to the canvas, because drawImage ignores CSS transforms - keep the two in
+          // step or the captured photo won't match what was framed.
+          transform: `scale(${facing === 'user' ? -zoom : zoom}, ${zoom})`,
           transformOrigin: 'center',
         }}
       />
@@ -372,6 +394,20 @@ export default function CaptureWebScreen() {
         accessibilityLabel={t("Close camera")}>
         <Icon name="xmark" tintColor="#FFFFFF" size={22} />
       </Pressable>
+
+      {/* Flip camera. Always offered while live: a one-webcam desktop simply re-opens the same
+          device, since facingMode is an `ideal` hint rather than a hard constraint. */}
+      {status === 'live' ? (
+        <Pressable
+          hitSlop={12}
+          onPress={() => setFacing((f) => (f === 'environment' ? 'user' : 'environment'))}
+          disabled={busy}
+          style={[styles.flip, { top: insets.top + Space.sm }]}
+          accessibilityRole="button"
+          accessibilityLabel={t("Switch camera")}>
+          <Icon name="arrow.triangle.2.circlepath.camera" tintColor="#FFFFFF" size={24} />
+        </Pressable>
+      ) : null}
 
       <Pressable
         onPress={() => router.push('/scan/instructions')}
@@ -483,6 +519,7 @@ const styles = StyleSheet.create({
   banner: { position: 'absolute', alignSelf: 'center', paddingHorizontal: Space.md, paddingVertical: Space.xs, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.45)' },
   bannerText: { color: '#FFFFFF' },
   close: { position: 'absolute', left: Space.lg, padding: Space.xs },
+  flip: { position: 'absolute', right: Space.lg, padding: Space.xs },
   instructions: { position: 'absolute', right: Space.lg, top: Space.xxl, padding: Space.xs },
   instructionsLabel: { color: '#FFFFFF', textDecorationLine: 'underline' },
   controls: {

@@ -28,6 +28,7 @@ const {
   modelCropToFullFrame, fullFrameToModelCrop, fullFrameToPreview, previewToFullFrame, padDrawnBox,
   roiFractionForZoom, searchRoiForZoom, modelRoiToFullFrame, fullFrameToModelRoi,
   clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState,
+  uprightRotation,
   MAX_CLUSTERED_CANDIDATES,
   CREATE_SCORE, KEEP_SCORE, DETECT_SHOW, KEEP_GRACE, STABLE_EPS, STABLE_FRAMES, DEADBAND,
   FAR_MAX, CLOSE_MIN, OFFSET_MAX,
@@ -227,6 +228,75 @@ check('square frame is an identity crop', boxNear(modelCropToFullFrame(BOXES[1],
     if (px.cx > p0.cx && near(px.cy, p0.cy) && py.cy > p0.cy && near(py.cx, p0.cx)) ok++;
   }
   check(`preview mapping moves each axis independently (${ok}/${total})`, ok === total);
+}
+
+/* ------------------------------------------------------------------ front-camera mirroring */
+
+// The front camera's PREVIEW is mirrored and its frames are not (capture.tsx pins
+// isMirrored={false}), so exactly one mapping carries a flip. These pin that it is a pure
+// reflection - if it ever leaks into the y axis or the box size, the box drifts off the lesion on
+// one camera only, which is precisely the bug nobody reproduces on their own phone.
+{
+  let rtMirror = 0, total = 0;
+  for (const [fw, fh] of FRAMES) for (const b of BOXES) for (const [sw, sh] of SCREENS) {
+    total++;
+    const there = fullFrameToPreview(b, fw, fh, sw, sh, true);
+    if (boxNear(previewToFullFrame(there, fw, fh, sw, sh, true), b, 1e-12)) rtMirror++;
+  }
+  check(`mirrored preview round-trip exact (${rtMirror}/${total})`, rtMirror === total);
+}
+
+{
+  let ok = 0, total = 0;
+  for (const [fw, fh] of FRAMES) for (const b of BOXES) for (const [sw, sh] of SCREENS) {
+    total++;
+    const plain = fullFrameToPreview(b, fw, fh, sw, sh, false);
+    const flipped = fullFrameToPreview(b, fw, fh, sw, sh, true);
+    // A reflection about the preview centre, and nothing else touched.
+    if (near(flipped.cx, 1 - plain.cx) && near(flipped.cy, plain.cy) &&
+        near(flipped.w, plain.w) && near(flipped.h, plain.h)) ok++;
+  }
+  check(`mirroring is a pure x reflection (${ok}/${total})`, ok === total);
+}
+
+// Default OFF: every existing (back-camera) call site omits the argument and must be unaffected.
+{
+  let ok = 0, total = 0;
+  for (const [fw, fh] of FRAMES) for (const b of BOXES) for (const [sw, sh] of SCREENS) {
+    total++;
+    if (boxNear(fullFrameToPreview(b, fw, fh, sw, sh), fullFrameToPreview(b, fw, fh, sw, sh, false), 0)) ok++;
+  }
+  check(`mirroring defaults to off (${ok}/${total})`, ok === total);
+}
+
+// A centred lesion is the one box a flip cannot move, so it can't prove the flip happened - but it
+// CAN prove the flip introduced no offset. Off-by-one in the reflection shows up here.
+for (const [sw, sh] of SCREENS) {
+  const p = fullFrameToPreview({ cx: 0.5, cy: 0.5, w: 0.2, h: 0.2 }, 1080, 1920, sw, sh, true);
+  check(`mirrored centre stays centred (${sw}x${sh})`, near(p.cx, 0.5) && near(p.cy, 0.5));
+}
+
+/* ------------------------------------------------------------------ frame orientation */
+
+// THE invariant: this is the value the back camera has shipped with as a hard-coded literal, and
+// uprightRotation has to be a generalisation of it rather than a change to it. If this line ever
+// fails, every back-camera capture is being fed a rotated frame.
+check("landscape-right is still 90deg (the shipped back-camera value)", uprightRotation('landscape-right') === '90deg');
+check('portrait needs no rotation', uprightRotation('portrait') === '0deg');
+check('landscape-left is the opposite quarter turn', uprightRotation('landscape-left') === '270deg');
+check('portrait-upside-down is a half turn', uprightRotation('portrait-upside-down') === '180deg');
+// Every orientation must resolve to a rotation the resize plugin actually accepts.
+{
+  const allowed = ['0deg', '90deg', '180deg', '270deg'];
+  const all = ['portrait', 'portrait-upside-down', 'landscape-left', 'landscape-right']
+    .every((o) => allowed.includes(uprightRotation(o)));
+  check('every orientation maps to a legal rotation', all);
+}
+// Complementary pairs: a quarter turn one way plus a quarter turn the other is a full circle.
+{
+  const deg = (o) => parseInt(uprightRotation(o), 10);
+  check('landscape pairs are complementary', (deg('landscape-left') + deg('landscape-right')) % 360 === 0);
+  check('portrait pairs are complementary', (deg('portrait') + deg('portrait-upside-down')) % 360 === 180);
 }
 
 /* ------------------------------------------------------------------ drawn-box padding */

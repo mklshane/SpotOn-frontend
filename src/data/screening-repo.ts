@@ -26,6 +26,7 @@ type Row = {
   mark_z: number | null;
   mark_region: string | null;
   mark_view: string | null;
+  mark_mesh: string | null;
   image_uri: string;
   source: string;
   answers_json: string;
@@ -132,6 +133,8 @@ function toRecord(row: Row): ScreeningRecord {
             point: [row.mark_x, row.mark_y, row.mark_z],
             region: row.mark_region,
             view: row.mark_view as "front" | "back",
+            // NULL on every row written before v16, when the male mesh was the only one.
+            mesh: row.mark_mesh === "female" ? "female" : "male",
           }
         : null,
     // Both photo paths resolve against the CURRENT container here - see image-paths.ts. v14
@@ -162,7 +165,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
   const db = await getDb();
   await db.runAsync(
     `INSERT OR REPLACE INTO screenings (
-       id, created_at, mark_x, mark_y, mark_z, mark_region, mark_view, image_uri, source,
+       id, created_at, mark_x, mark_y, mark_z, mark_region, mark_view, mark_mesh, image_uri, source,
        answers_json, probs_json, top_class, top_confidence, attempt, model_version,
        input_size, normalization, temperature, inference_ms, first_attempt_json,
        class_weight, cs, symptom_score_raw, symptom_score, tps, tier,
@@ -170,7 +173,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
        scale_unstable, classifier_refined, detector_used,
        lesion_id, user_id, followup_of, answers_carried, answers_source_id,
        images_json, image_count, per_image_json, image_disagreement, aggregate_method
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     record.id,
     record.createdAt,
     record.mark?.point[0] ?? null,
@@ -178,6 +181,7 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     record.mark?.point[2] ?? null,
     record.mark?.region ?? null,
     record.mark?.view ?? null,
+    record.mark?.mesh ?? null,
     toStoredUri(record.imageUri),
     record.source,
     JSON.stringify(record.questionnaire),
@@ -304,9 +308,9 @@ export async function insertScreeningLinked(
     await db.runAsync(
       `INSERT OR IGNORE INTO lesions
          (id, created_at, updated_at, label, mark_x, mark_y, mark_z, mark_region, mark_view,
-          screening_count, first_screened_at, last_screened_at, last_screening_id, last_tier,
-          archived, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, NULL, 0, ?)`,
+          mark_mesh, screening_count, first_screened_at, last_screened_at, last_screening_id,
+          last_tier, archived, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, NULL, NULL, 0, ?)`,
       seed.id,
       record.createdAt,
       now,
@@ -316,6 +320,7 @@ export async function insertScreeningLinked(
       seed.mark?.point[2] ?? null,
       seed.mark?.region ?? null,
       seed.mark?.view ?? null,
+      seed.mark?.mesh ?? null,
       seed.userId ?? null,
     );
     await insertScreening({ ...record, lesionId: seed.id });

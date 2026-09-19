@@ -8,8 +8,9 @@ import { runOnJS, useSharedValue } from 'react-native-reanimated';
 import { Raycaster, Vector2, type Camera, type Group } from 'three';
 
 import { ThemedText } from '@/components/themed-text';
+import { useBodyVariant, type BodyVariant } from '@/lib/body-variant';
 
-import { BodyModel, type BodyModelStatus } from './body-model';
+import { BodyModel, markPointOn, type BodyModelStatus } from './body-model';
 import { BodyLights, MARKER_HIT_RADIUS, MARKER_RADIUS } from './mannequin';
 
 const TARGET_Y = -0.05;
@@ -34,7 +35,13 @@ const RADIUS_MAX = 9.5;
 const MARKER = '#FF7A3C';
 
 /** `color` tints the marker by triage tier, turning the body model into a risk map. */
-export type HistoryMarker = { id: string; point: [number, number, number]; color?: string };
+export type HistoryMarker = {
+  id: string;
+  point: [number, number, number];
+  /** The mesh `point` was placed on; absent means the male mesh (see BodyMark.mesh). */
+  mesh?: BodyVariant;
+  color?: string;
+};
 
 type SceneRefs = { camera: Camera; width: number; height: number };
 
@@ -72,6 +79,15 @@ export function BodyHistoryViewer({
   onSelect: (id: string) => void;
 }) {
   useLocale();
+  const { variant, ready: variantReady } = useBodyVariant();
+  // Marks placed on the other mesh are moved onto this one's surface - see markPointOn.
+  const placed = useMemo(
+    () =>
+      variantReady
+        ? markers.map((m) => ({ ...m, point: markPointOn(m.point, m.mesh, variant) }))
+        : [],
+    [markers, variant, variantReady],
+  );
   const azimuth = useSharedValue(0);
   const polar = useSharedValue(Math.PI / 2);
   const radius = useSharedValue(6.4);
@@ -135,9 +151,9 @@ export function BodyHistoryViewer({
     <View style={styles.root}>
       <Canvas camera={{ position: [0, TARGET_Y, 6.4], fov: 42 }} gl={{ antialias: true }}>
         <BodyLights />
-        <BodyModel onStatus={handleStatus} />
+        {variantReady ? <BodyModel variant={variant} onStatus={handleStatus} /> : null}
         <group ref={markersRef}>
-          {markers.map((m) => (
+          {placed.map((m) => (
             <group key={m.id} position={m.point}>
               <mesh userData={{ id: m.id }}>
                 <sphereGeometry args={[MARKER_RADIUS, 20, 20]} />

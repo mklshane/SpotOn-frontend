@@ -1,4 +1,5 @@
 import { LanguagePicker } from '@/components/ui/language-picker';
+import { BodyFigurePicker } from '@/components/ui/body-figure-picker';
 import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { ApiError } from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
@@ -213,6 +214,7 @@ export default function SettingsScreen() {
         >
           <View style={styles.sectionHead}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
           <Card style={styles.section}><LanguagePicker /></Card>
+          <Card style={styles.section}><BodyFigurePicker /></Card>
           <View style={styles.sectionHead}>
             <ThemedText type="title2">{t("Account & Security")}</ThemedText>
           </View>

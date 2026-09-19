@@ -21,6 +21,7 @@ type Row = {
   mark_z: number | null;
   mark_region: string | null;
   mark_view: string | null;
+  mark_mesh: string | null;
   screening_count: number;
   first_screened_at: string | null;
   last_screened_at: string | null;
@@ -31,13 +32,17 @@ type Row = {
 };
 
 /** The mark is only meaningful when every component survived; a partial row reads as "unmarked". */
-function toMark(row: Pick<Row, "mark_x" | "mark_y" | "mark_z" | "mark_region" | "mark_view">): BodyMark | null {
+function toMark(
+  row: Pick<Row, "mark_x" | "mark_y" | "mark_z" | "mark_region" | "mark_view" | "mark_mesh">,
+): BodyMark | null {
   if (row.mark_x == null || row.mark_y == null || row.mark_z == null) return null;
   if (!row.mark_region || !row.mark_view) return null;
   return {
     point: [row.mark_x, row.mark_y, row.mark_z],
     region: row.mark_region,
     view: row.mark_view as "front" | "back",
+    // NULL on every row written before v16, when the male mesh was the only one.
+    mesh: row.mark_mesh === "female" ? "female" : "male",
   };
 }
 
@@ -64,9 +69,9 @@ export async function insertLesion(lesion: Lesion): Promise<void> {
   await db.runAsync(
     `INSERT OR REPLACE INTO lesions (
        id, created_at, updated_at, label, mark_x, mark_y, mark_z, mark_region, mark_view,
-       screening_count, first_screened_at, last_screened_at, last_screening_id, last_tier,
-       archived, user_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       mark_mesh, screening_count, first_screened_at, last_screened_at, last_screening_id,
+       last_tier, archived, user_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     lesion.id,
     lesion.createdAt,
     lesion.updatedAt,
@@ -76,6 +81,7 @@ export async function insertLesion(lesion: Lesion): Promise<void> {
     lesion.mark?.point[2] ?? null,
     lesion.mark?.region ?? null,
     lesion.mark?.view ?? null,
+    lesion.mark?.mesh ?? null,
     lesion.screeningCount,
     lesion.firstScreenedAt,
     lesion.lastScreenedAt,
@@ -125,12 +131,13 @@ export async function updateLesionMark(id: string, mark: BodyMark | null, userId
   const db = await getDb();
   await db.runAsync(
     `UPDATE lesions SET mark_x = ?, mark_y = ?, mark_z = ?, mark_region = ?, mark_view = ?,
-                        updated_at = ? WHERE id = ? AND user_id = ?`,
+                        mark_mesh = ?, updated_at = ? WHERE id = ? AND user_id = ?`,
     mark?.point[0] ?? null,
     mark?.point[1] ?? null,
     mark?.point[2] ?? null,
     mark?.region ?? null,
     mark?.view ?? null,
+    mark?.mesh ?? null,
     new Date().toISOString(),
     id,
     userId,

@@ -24,13 +24,19 @@ function PreviewCamera({ mark }: { mark: BodyMark }) {
   return null;
 }
 
-/** A non-interactive, cropped 3D body preview for the compact tracked-spot card. */
+/**
+ * A non-interactive, cropped 3D body preview for the compact tracked-spot card.
+ *
+ * Drawn on the mesh the mark was placed on rather than the current body-figure setting: the card
+ * is a close crop of one spot, so exact placement matters more here than matching the full-body
+ * screens, and it means the stored point never needs moving.
+ */
 export function BodySpotPreview({ mark }: { mark: BodyMark }) {
   return (
     <View style={styles.root} pointerEvents="none">
       <Canvas camera={{ position: [0, 0, 2.2], fov: 36 }} gl={{ antialias: true }}>
         <BodyLights />
-        <BodyModel />
+        <BodyModel variant={mark.mesh ?? 'male'} />
         <Marker point={mark.point} />
         <PreviewCamera mark={mark} />
       </Canvas>
