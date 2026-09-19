@@ -65,11 +65,11 @@ async function loadRgba(uri: string) {
 
 /**
  * @param sourceUpscale How much crop.tsx enlarged the capture to reach OUTPUT (1 = never
- *   enlarged). Only used to undo the pixel inflation in edgeWidth - see image-quality-core.
+ *   enlarged). Diagnostics only: the gate no longer uses it - see LESION_EDGE_WIDTH.
  */
 export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaChecks> {
   const raw = await loadRgba(uri);
-  const checks = analyzeRgba(raw.data, raw.width, raw.height, sourceUpscale);
+  const checks = analyzeRgba(raw.data, raw.width, raw.height);
 
   if (DEBUG) {
     console.log(
@@ -81,7 +81,6 @@ export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaCh
       'directional=' + checks.sharpness.directional.toFixed(8),
       'edgeWidth=' + checks.sharpness.edgeWidth.toFixed(2),
       'upscale=' + sourceUpscale.toFixed(2),
-      'effEdge=' + (checks.sharpness.edgeWidth / Math.max(1, sourceUpscale)).toFixed(2),
       'sharpOk=' + checks.sharpness.ok,
       'shadow=' + checks.shadow.value.toFixed(3),
       'skin=' + checks.skin.coverage.toFixed(2),

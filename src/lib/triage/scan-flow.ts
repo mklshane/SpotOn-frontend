@@ -23,9 +23,27 @@ export type IqaTerms = {
   sharpOk: boolean;
   skinOk: boolean;
   presenceOk: boolean;
-  /** The still detector RAN and located a lesion. A failure or timeout is false: could-not-check is not a pass. */
-  detectorFound: boolean;
+  /**
+   * The learned skin gate's verdict on the still (skin-gate.ts, via skinGateVerdict). 'failed' covers
+   * a load/run failure AND a timeout, and blocks: could-not-check is not a pass (2026-09-17).
+   */
+  skinGate: SkinGateVerdict;
 };
+
+/** What the learned skin gate says the still is. */
+export type SkinGateVerdict = 'skin' | 'not_skin' | 'face' | 'failed';
+
+/** pSkin below this = not a close-up of skin. See SpotOn-synthetic/synth/skin_gate/SKIN_GATE.md. */
+export const SKIN_GATE_MIN = 0.5;
+/** pFace at or above this = a whole face, which gets its own "move closer" message. */
+export const SKIN_GATE_FACE_MAX = 0.5;
+
+/** The skin gate's softmax -> a verdict. Face is checked first: its message is the actionable one. */
+export function skinGateVerdict(p: { skin: number; notSkin: number; face: number }): SkinGateVerdict {
+  if (p.face >= SKIN_GATE_FACE_MAX) return 'face';
+  if (p.skin < SKIN_GATE_MIN) return 'not_skin';
+  return 'skin';
+}
 
 export type IqaVerdict = {
   /** True when every blocking image check passed. */
@@ -56,28 +74,22 @@ export type IqaVerdict = {
  * is not skin, so the row is the conjunction. A green tick on a photo of a street is not a
  * mis-tuned threshold, it is a false statement.
  *
- * `detectorFound` was REMOVED from this row on 2026-08-25 and RESTORED on 2026-09-08, which is the
- * most useful thing recorded here. Removing it was correct about what the detector cannot do - it
- * fires on 88% of lesion-free skin, so it cannot say whether a lesion is present - and wrong about
- * what it CAN do: it is the only term that rejects a photograph of a *scene*. Measured on the
- * reported frames, it scores 0.000 on a shoe strap lying on carpet and 0.031 on plain wood, where
- * every colour-based term passes them (carpet reads as 0.56-0.67 skin: the YCbCr box accepts any
- * low-saturation warm surface, and a per-pixel warmth floor leaves wood at 1.00). The four terms
- * are complementary, and each was added because the ones before it let a real reported photo
- * through:
+ * THE SCENE-REJECTER IS NOW A MODEL (2026-09-19). `detectorFound` was the only term that
+ * rejected photographs of scenes (carpet, wood, a shoe), so it was a required term from 2026-09-08
+ * - at a measured cost of one real lesion photo in four or five, because the YOLO detector has no
+ * background class and misses real lesions too. It also could not say no to a FACE: on a reported
+ * selfie it boxed most of the face at 0.26, and every hand-built term is right that a face is
+ * sharp, well-lit skin with dark compact regions on it.
  *
- *     skin      + presence  reject bare skin and non-skin colour
- *     sided                 rejects a limb silhouette against a room
- *     hue                   rejects cool non-skin: a navy t-shirt, a night street
- *     detector              rejects warm non-skin scenes: carpet, wood, a shoe
- *
- * The cost is real and was paid deliberately: requiring the detector to fire drops lesion recall
- * (synth/eval/NONSKIN_GATE.md). `detectorFound` means the detector RAN and FOUND a lesion. A failure
- * or a timeout used to count as found, which let a slow model load silently switch this term off
- * on one device while it kept working on another (2026-09-17). Could-not-check is not a pass.
+ * `skinGate` replaces it: a small classifier trained on skin close-ups vs textures/scenes vs faces
+ * (skin-gate.ts). On the held-out sets it rejects every non-skin frame and both reported selfie
+ * frames, and gives back most of the recall the detector veto cost - numbers in
+ * SpotOn-synthetic/synth/skin_gate/SKIN_GATE.md. The detector still owns the classifier's CROP
+ * (classify.ts); it just no longer vetoes. The hand-built terms stay: `skin` is a cheap backstop,
+ * and `presence` still answers the question the model does not - is there a spot on this skin.
  */
 export function decideIqa(input: IqaTerms): IqaVerdict {
-  const lesionRowOk = input.skinOk && input.presenceOk && input.detectorFound;
+  const lesionRowOk = input.skinOk && input.presenceOk && input.skinGate === 'skin';
   return {
     lesionRowOk,
     pass: !input.error && input.brightnessOk && input.sharpOk && lesionRowOk,

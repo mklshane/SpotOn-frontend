@@ -14,7 +14,9 @@
  *   canvas, high quality          9.95e-4      1.57e-4        4.36     pass      <- this file
  *   expo-image-manipulator        1.03e-4      3.03e-5       19.63     BLURRY
  *
- * The limit is edgeWidth <= 14, so Hermite failed a photo that clears the bar three times over on
+ * (edgeWidth here is the pre-2026-09-19 formula and its limit of 14; the term has since been
+ * rewritten - see LESION_EDGE_WIDTH - but the resampler ranking is what this note is about.)
+ * The limit was edgeWidth <= 14, so Hermite failed a photo that clears the bar three times over on
  * a phone. Canvas lands on the native reference, which means the calibrated thresholds hold on web
  * without being relaxed - relaxing them would have weakened the gate on mobile too, where the
  * calibration is correct (BLUR_GATE.md: the real blurry captures measure 23.7 and 24.4).

@@ -214,9 +214,8 @@ export default function CropScreen() {
         params: {
           uri: result.uri,
           detected,
-          // >1 when the auto-zoom had to enlarge to reach OUTPUT. The blur gate divides the
-          // measured edge width by this, so a tight crop of a small lesion is not mistaken for
-          // a soft photo.
+          // >1 when the auto-zoom had to enlarge to reach OUTPUT. Diagnostics only (the [iqa]
+          // debug line) - the blur gate stopped dividing by it 2026-09-19.
           upscale: String(Math.max(1, OUTPUT / cropSize)),
         },
       });

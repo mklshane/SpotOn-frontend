@@ -132,65 +132,67 @@ export const DIRECTIONAL_BLUR = 0.6e-5;
  *   **25px motion smear + grain**                **0%**
  *
  * A blurred, grainy photo measures a variance-of-Laplacian of 2.2e-3 - nearly 7× a SHARP photo's
- * 3.3e-4, and 50× the BLUR floor. The gate was reading the grain, not the focus. That is why two
- * obviously bad captures (hand-shake and out-of-focus) came back "Looks great".
+ * 3.3e-4, and 50× the BLUR floor. The gate was reading the grain, not the focus.
  *
  * WHAT THIS MEASURES INSTEAD. Blur is not "less high-frequency energy", it is "edges spread over
  * more pixels" - so measure that directly. Smooth with a 5×5 box first, which averages grain away
- * (uncorrelated, so it drops by 5×) while leaving any structure wider than 5px intact, then take
- * the steepest remaining slope in the lesion ROI (99th percentile of |∇|, so one hot pixel cannot
- * carry it). Divide the lesion's own contrast by that slope and the answer is a length: the number
- * of pixels its edge takes to complete. A step edge lands at ~3px however dark the lesion is, so
- * unlike the two terms above this one does not scale with subject contrast.
+ * while leaving any structure wider than 5px intact. Take the steepest 0.5% of pixels in the frame
+ * (the edges), and at each one divide the contrast AROUND IT (max − min luma within
+ * EDGE_RANGE_RADIUS) by its slope. That is a length: how many pixels that edge takes to complete. The
+ * gate reads the median over those edge pixels.
  *
- * The reused numerator is `lesion.score` - the same centre-surround contrast LESION_PRESENCE is
- * built on, so the two checks cannot disagree about how strong the lesion is.
+ * REWRITTEN 2026-09-19. The first version divided `lesion.score` (the blob's centre-surround
+ * contrast) by the frame's steepest slope. Those two come from DIFFERENT structures, so the ratio was
+ * only a width when the lesion was the most contrasty thing in frame. A defocused close-up of a
+ * red-and-white patterned subject passed with all three rows green. Its lesion score was 55 and the
+ * brighter bokeh highlights supplied the slope, so the "width" read ~20 - over the old bar of 14,
+ * but the 2026-09-09 zoom correction (÷ upscale) put it under at any zoom of 1.5× or more. Measuring
+ * each edge against its OWN contrast removes the mismatch, and with it a sharp 2.28× auto-zoom no
+ * longer measures wide on the image the classifier actually receives - so ÷ upscale is gone too.
  *
- * Noise invariance, same 65 photos: sharp scores 3.60, **the same photos plus grain score 3.59**.
+ * Calibrated on the 65 full-resolution held-out photos blur_gate_eval.py uses, plus a zoom
+ * simulation (BLUR_GATE.md round 4): the photo resized to a 1536px short edge like a capture,
+ * degraded there, then centre-cropped and enlarged to 1024 as crop.tsx does:
+ *
+ *   condition                 shipped (÷upscale, 14)   @16         → @17
+ *   sharp+grain, whole frame           2%                 0%            0%
+ *   sharp+grain, zoom 2.28×            0%                 0%            0%
+ *   sharp+grain, zoom 3.01×            0%                 2%            0%
+ *   σ=2+grain, zoom 2.28× / 3.01×      0% / 0%           25% / 34%     17% / 22%
+ *   σ=5+grain, whole frame            22%                38%           28%
+ *   25px smear+grain, whole frame     14%                 3%            3%   (DIRECTIONAL_BLUR's case)
+ *   270 app-framed real photos,
+ *     whole focus row warned           3.0%               4.4%          3.3%
+ *   the 2026-09-19 bokeh close-up    pass               20.4 → rejected at both
+ *
+ * 17, not 16: the gate has twice been relaxed on "too strict" reports (rounds 3/3b), and 17 holds
+ * app-framed warnings at that agreed ~3% while still out-detecting the shipped term everywhere
+ * except the motion smear, which DIRECTIONAL_BLUR covers. LOWER THIS FIRST if blurry photos pass.
+ *
+ * Noise-invariant like the term it replaces: the smoothing removes grain before any slope is read.
  */
-/** Box side for the pre-smooth. 5 kills grain; 9 also flattens real edges (sharp p50 3.6 → 5.9). */
+/** Box side for the pre-smooth. 5 kills grain; 9 also flattens real edges. */
 export const EDGE_SMOOTH = 5;
-/**
- * Gradient percentile taken as "the steepest slope" - robust to a handful of hot pixels.
- *
- * Measured over the WHOLE frame, not the lesion ROI, because the question is whether the PHOTO is
- * in focus, and blur from a shaking hand or a missed focus lock is global. Asking it of the ROI
- * alone conflates image focus with the lesion's own border, which is sometimes diffuse for real
- * biological reasons: the `mel_real_05` fixture is a sharp photo of a subungual melanoma whose
- * pigment band fades out under the nail plate, and the ROI form called it blurry (19.6) while the
- * whole-frame form reads the crisp nail edge beside it and correctly passes it (3.6).
- *
- * 0.995 rather than 0.99 because the frame is mostly flat skin: over 1M pixels a lower percentile
- * is diluted by the empty majority and understates how sharp the sharpest structure really is.
- */
+/** Gradient percentile above which a pixel counts as an edge. Whole frame: blur is global. */
 export const EDGE_GRAD_PCT = 0.995;
 /** Histogram resolution for that percentile, in luma units. Fixes JS/Python parity exactly. */
 export const EDGE_GRAD_BIN = 0.125;
 export const EDGE_GRAD_BINS = 1024;
 /**
- * Edge width (pixels) above this = out of focus or smeared.
- *
- * Calibrated on 65 full-resolution held-out photos (native ≥1024, i.e. what a phone actually
- * produces - lower-resolution web images are upscaled to SIZE and their edges are artificially
- * wide, which is what makes the mixed-resolution sets look noisier than they are):
- *
- *   value   sharp warned   sharp+grain   σ=2+grain   σ=5+grain   25px smear+grain
- *     10        6.2%          3.1%         13.8%       55.4%          23.1%
- *     12        1.5%          1.5%          7.7%       40.0%          16.9%
- *   → 14        1.5%          1.5%          4.6%       21.5%          13.8%
- *
- * RAISED 12 -> 14 (2026-08-26) on a second "the gate is too strict" report, after relaxing the two
- * older terms had taken app-framed warnings only from 8.5% to 5.6% and left them inert. This is the
- * term that does the work on real captures, so raising it is the one relaxation that genuinely
- * costs detection - σ=5+grain falls 38.5% -> 21.5% - and it was done knowingly, at the user's
- * repeated request, to get warnings to 3.0%. It is the FIRST thing to lower again if blurry photos
- * start getting through.
- *
- * **The two real captures that prompted round 2 measure 23.7 and 24.4**, still well clear of 14, so
- * the reported failures stay caught. 16 would buy only 0.4 more points of warnings for another 5
- * points of σ=5+grain, which is why the relaxation stops here.
+ * Half-window (px at SIZE) the contrast across an edge is read over. It caps the width the term can
+ * report at ~2R+1, so it must clear the threshold with room: 16 → a 33px window. 12 and 24 were
+ * measured too and rank the conditions identically; 16 keeps a sharp 3× zoom under the bar.
  */
-export const LESION_EDGE_WIDTH = 14;
+export const EDGE_RANGE_RADIUS = 16;
+/** Histogram for the median width, in px - same parity reason as EDGE_GRAD_BIN. Tops out at 64px. */
+export const EDGE_WIDTH_BIN = 0.0625;
+export const EDGE_WIDTH_BINS = 1024;
+/**
+ * Median edge width (px at SIZE) above this = out of focus. The name predates the 2026-09-19
+ * rewrite, when the numerator was the lesion's contrast; kept so the Python parity harness and
+ * BLUR_GATE.md's history still line up. Was 14 on the old scale, which is not comparable.
+ */
+export const LESION_EDGE_WIDTH = 17;
 export const SHADOW_GRAD = 0.25; // one side this much darker than the other (0..1) = uneven light (advisory)
 export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
 
@@ -413,69 +415,126 @@ export const LESION_SIDED_MIN = 11;
  */
 export const LESION_HUE_MIN = -20;
 
+/** Sliding max (or min) over a window of radius r along one line, clamped at the ends. In place. */
+function slideExtreme(line: Float32Array, len: number, r: number, isMax: boolean, q: Int32Array, out: Float32Array) {
+  // Monotonic deque of indices: O(len) whatever r is.
+  let head = 0;
+  let tail = 0;
+  const better = (a: number, b: number) => (isMax ? a >= b : a <= b);
+  // Clamped borders repeat the end samples, which never beat themselves, so a window can simply be
+  // truncated at the ends - same result as OpenCV BORDER_REPLICATE / scipy mode='nearest'.
+  let next = 0;
+  for (let i = 0; i < len; i++) {
+    const hi = Math.min(len - 1, i + r);
+    while (next <= hi) {
+      while (tail > head && better(line[next], line[q[tail - 1]])) tail--;
+      q[tail++] = next++;
+    }
+    while (q[head] < i - r) head++;
+    out[i] = line[q[head]];
+  }
+  line.set(out.subarray(0, len));
+}
+
 /**
- * Steepest slope anywhere in the frame, in luma units per pixel, after a 5×5 box smooth.
+ * Median width (px) of the frame's steepest edges, after a 5×5 box smooth - see LESION_EDGE_WIDTH.
+ * 0 when the frame has no slope at all (flat), which the Laplacian term already rejects.
  *
- * The smooth is the whole point - see LESION_EDGE_WIDTH. It is separable: one horizontal pass into
- * a scratch frame, then a vertical pass that only ever holds two rows, so the term costs O(W·H)
- * time and one extra frame-sized buffer.
- *
- * The percentile comes from a fixed-width histogram rather than a sort: it is O(n) instead of
- * O(n log n), and it makes the value bit-comparable with the Python mirror, which a float sort
- * would not be.
+ * Both the edge percentile and the median come from fixed-width histograms rather than sorts: O(n),
+ * and bit-comparable with the Python mirror, which a float sort would not be.
  */
-function steepestSlope(gray: ArrayLike<number>, W: number, H: number): number {
+function edgeWidthOf(gray: ArrayLike<number>, W: number, H: number): number {
   if (W < EDGE_SMOOTH + 2 || H < EDGE_SMOOTH + 2) return 0;
   const k = (EDGE_SMOOTH - 1) / 2;
   const clamp = (v: number, hi: number) => (v < 0 ? 0 : v > hi ? hi : v);
 
-  // Horizontal half of the box, full frame. The vertical half runs two rows at a time below, so
-  // this is the only frame-sized scratch buffer the term needs.
-  const hPass = new Float32Array(W * H);
+  // Separable box: horizontal into `tmp`, vertical into `sm`.
+  const tmp = new Float32Array(W * H);
   for (let y = 0; y < H; y++) {
     const row = y * W;
     for (let x = 0; x < W; x++) {
       let sum = 0;
       for (let d = -k; d <= k; d++) sum += gray[row + clamp(x + d, W - 1)];
-      hPass[row + x] = sum / EDGE_SMOOTH;
+      tmp[row + x] = sum / EDGE_SMOOTH;
     }
   }
-  const smoothRow = (y: number, out: Float32Array) => {
-    out.fill(0);
+  const sm = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
     for (let d = -k; d <= k; d++) {
-      const row = clamp(y + d, H - 1) * W;
-      for (let x = 0; x < W; x++) out[x] += hPass[row + x];
+      const src = clamp(y + d, H - 1) * W;
+      for (let x = 0; x < W; x++) sm[y * W + x] += tmp[src + x];
     }
-    for (let x = 0; x < W; x++) out[x] /= EDGE_SMOOTH;
-  };
+    for (let x = 0; x < W; x++) sm[y * W + x] /= EDGE_SMOOTH;
+  }
 
+  // Forward-difference slope histogram over (W-1)×(H-1) -> the bin where the edges start.
+  const gradBin = (x: number, y: number) => {
+    const c = sm[y * W + x];
+    const gx = sm[y * W + x + 1] - c;
+    const gy = sm[(y + 1) * W + x] - c;
+    return Math.min(EDGE_GRAD_BINS - 1, Math.floor(Math.sqrt(gx * gx + gy * gy) / EDGE_GRAD_BIN));
+  };
   const hist = new Int32Array(EDGE_GRAD_BINS);
-  let cur = new Float32Array(W);
-  let next = new Float32Array(W);
-  smoothRow(0, cur);
-  let n = 0;
-  for (let y = 0; y < H - 1; y++) {
-    smoothRow(y + 1, next);
-    for (let x = 0; x < W - 1; x++) {
-      const c = cur[x];
-      const gx = cur[x + 1] - c;
-      const gy = next[x] - c;
-      const bin = Math.min(EDGE_GRAD_BINS - 1, Math.floor(Math.sqrt(gx * gx + gy * gy) / EDGE_GRAD_BIN));
-      hist[bin]++;
-      n++;
-    }
-    const swap = cur;
-    cur = next;
-    next = swap;
-  }
-  if (n === 0) return 0;
+  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++) hist[gradBin(x, y)]++;
+  const n = (W - 1) * (H - 1);
   const target = Math.ceil(EDGE_GRAD_PCT * n);
-  let cum = 0;
-  for (let b = 0; b < EDGE_GRAD_BINS; b++) {
+  let edgeBin = EDGE_GRAD_BINS - 1;
+  for (let b = 0, cum = 0; b < EDGE_GRAD_BINS; b++) {
     cum += hist[b];
-    if (cum >= target) return b * EDGE_GRAD_BIN;
+    if (cum >= target) {
+      edgeBin = b;
+      break;
+    }
   }
-  return (EDGE_GRAD_BINS - 1) * EDGE_GRAD_BIN;
+  if (edgeBin === 0) return 0; // no slope anywhere worth the name
+
+  // Local contrast = max − min over a (2R+1)² window: separable, rows then columns. `tmp` is reused
+  // for the max, `sm2` holds the min.
+  const R = EDGE_RANGE_RADIUS;
+  const L = Math.max(W, H);
+  const q = new Int32Array(L);
+  const line = new Float32Array(L);
+  const out = new Float32Array(L);
+  const hi = tmp;
+  const lo = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const row = sm.subarray(y * W, y * W + W);
+    line.set(row);
+    slideExtreme(line, W, R, true, q, out);
+    hi.set(line.subarray(0, W), y * W);
+    line.set(row);
+    slideExtreme(line, W, R, false, q, out);
+    lo.set(line.subarray(0, W), y * W);
+  }
+  for (const [buf, isMax] of [[hi, true], [lo, false]] as const) {
+    for (let x = 0; x < W; x++) {
+      for (let y = 0; y < H; y++) line[y] = buf[y * W + x];
+      slideExtreme(line, H, R, isMax, q, out);
+      for (let y = 0; y < H; y++) buf[y * W + x] = line[y];
+    }
+  }
+
+  // Median of contrast ÷ slope over the edge pixels.
+  const wHist = new Int32Array(EDGE_WIDTH_BINS);
+  let m = 0;
+  for (let y = 0; y < H - 1; y++) {
+    for (let x = 0; x < W - 1; x++) {
+      if (gradBin(x, y) < edgeBin) continue;
+      const i = y * W + x;
+      const c = sm[i];
+      const gx = sm[i + 1] - c;
+      const gy = sm[i + W] - c;
+      const w = (hi[i] - lo[i]) / Math.sqrt(gx * gx + gy * gy);
+      wHist[Math.min(EDGE_WIDTH_BINS - 1, Math.floor(w / EDGE_WIDTH_BIN))]++;
+      m++;
+    }
+  }
+  const half = Math.ceil(m / 2);
+  for (let b = 0, cum = 0; b < EDGE_WIDTH_BINS; b++) {
+    cum += wHist[b];
+    if (cum >= half) return b * EDGE_WIDTH_BIN;
+  }
+  return (EDGE_WIDTH_BINS - 1) * EDGE_WIDTH_BIN;
 }
 
 /**
@@ -730,16 +789,7 @@ export function hairCoverage(gray: Float32Array, W: number, H: number): number {
  * Compute the six quality checks over a decoded RGBA image (Uint8-like, length W*H*4).
  * Assessed on a centered ROI ≈ the lesion (our crop step centers it), per Stanford TrueImage.
  */
-/**
- * @param sourceUpscale How much the analysed image was ENLARGED from its true captured pixels
- *   (output ÷ crop size, 1 when the crop was downscaled or 1:1). See the edgeWidth note below.
- */
-export function analyzeRgba(
-  data: ArrayLike<number>,
-  W: number,
-  H: number,
-  sourceUpscale = 1,
-): IqaChecks {
+export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaChecks {
   const n = W * H;
   const gray = new Float32Array(n);
   let sumLuma = 0;
@@ -826,11 +876,8 @@ export function analyzeRgba(
   const brightness = sumLuma / n / 255;
   const skinCov = skinCount / n;
   const { score: lesionScore, sided: lesionSided, hue: lesionHue } = lesionPresence(data, W, H);
-  // How many pixels the lesion's edge takes to complete. A photo with no lesion in it has nothing
-  // to measure, so it scores ~0 and this term abstains - that verdict belongs to `lesion`, below.
-  const slope = steepestSlope(gray, W, H);
   const hairCov = hairCoverage(gray, W, H);
-  const edgeWidth = slope > 0 ? lesionScore / slope : 0;
+  const edgeWidth = edgeWidthOf(gray, W, H);
   // Pick the single most relevant exposure problem for the message (shadow is advisory, not here).
   let issue: 'ok' | 'dark' | 'glare' = 'ok';
   if (brightness < DARK) issue = 'dark';
@@ -841,22 +888,14 @@ export function analyzeRgba(
     // All three must hold: the Laplacian catches symmetric softness, the directional term catches
     // motion smear, and edgeWidth catches both when grain is masking them. Additive by
     // construction - each can only ever reject MORE than the ones before it.
-    // edgeWidth counts PIXELS, so enlarging the image before measuring inflates it in exact
-    // proportion - a 2.28x upscale turns a true 8.3px edge into 18.9px and fails a limit of 14.
-    // That is what the auto-zoom does whenever the lesion is small in frame: it crops a few
-    // hundred pixels and stretches them to OUTPUT, and the gate then reports manufactured
-    // softness as a blurry photo. Reported 2026-09-09 on a visibly sharp capture, rejected on
-    // BOTH web and device.
-    //
-    // Dividing by the upscale recovers the edge width in real captured pixels. Guarded with
-    // max(1, …) so it can only ever RELAX the artefact case: a crop that was downscaled (which is
-    // what BLUR_GATE.md's 198 calibration photos were, and where the recorded blurry captures
-    // measure 23.7 and 24.4) has an upscale of 1 and is scored exactly as before.
+    // edgeWidth is read on the image as analysed - the same pixels the classifier resamples - and
+    // is NOT divided by the auto-zoom's upscale any more: see the 2026-09-19 note on
+    // LESION_EDGE_WIDTH for the defocused close-up that division let through.
     sharpness: {
       ok:
         sharpness >= BLUR &&
         directional >= DIRECTIONAL_BLUR &&
-        edgeWidth / Math.max(1, sourceUpscale) <= LESION_EDGE_WIDTH,
+        edgeWidth <= LESION_EDGE_WIDTH,
       value: sharpness,
       directional,
       edgeWidth,
