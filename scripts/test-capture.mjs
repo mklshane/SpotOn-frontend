@@ -28,7 +28,7 @@ const {
   modelCropToFullFrame, fullFrameToModelCrop, fullFrameToPreview, previewToFullFrame, padDrawnBox,
   roiFractionForZoom, searchRoiForZoom, modelRoiToFullFrame, fullFrameToModelRoi,
   clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState,
-  uprightRotation,
+  uprightRotation, stepScene, initialSceneState, SCENE_CONFIRM,
   MAX_CLUSTERED_CANDIDATES,
   CREATE_SCORE, KEEP_SCORE, DETECT_SHOW, KEEP_GRACE, STABLE_EPS, STABLE_FRAMES, DEADBAND,
   FAR_MAX, CLOSE_MIN, OFFSET_MAX,
@@ -63,6 +63,31 @@ check('off centre on y → offcenter', computeCoach(true, GATE_OK, M({ cy: 0.5 -
 check('unlocked → search', computeCoach(true, GATE_OK, M({ locked: false })) === 'search');
 check('locked but moving → steady', computeCoach(true, GATE_OK, M({ stable: false })) === 'steady');
 check('locked and settled → ready', computeCoach(true, GATE_OK, M()) === 'ready');
+
+// The live skin gate (2026-09-19): a whole face got a confident green box and "ready", because the
+// detector fires on any skin. A face / scene verdict outranks every positional message.
+check('face outranks a locked, settled box', computeCoach(true, GATE_OK, M(), 'face') === 'face');
+check('not skin outranks a locked box', computeCoach(true, GATE_OK, M(), 'not_skin') === 'notskin');
+check('dark still outranks face', computeCoach(true, GATE_DARK, M(), 'face') === 'dark');
+check('guide off silences the face coach too', computeCoach(false, GATE_OK, M(), 'face') === null);
+check('unknown scene (model not loaded) changes nothing', computeCoach(true, GATE_OK, M(), 'unknown') === 'ready');
+check('skin scene changes nothing', computeCoach(true, GATE_OK, M(), 'skin') === 'ready');
+
+// The verdict is debounced: one odd read can't flash the box off, SCENE_CONFIRM agreeing reads can.
+{
+  let st = initialSceneState;
+  for (let i = 0; i < SCENE_CONFIRM - 1; i++) st = stepScene(st, 'face');
+  check('one face read short of confirm does not switch', st.scene === 'unknown');
+  st = stepScene(st, 'face');
+  check('SCENE_CONFIRM face reads switch to face', st.scene === 'face');
+  st = stepScene(st, 'skin');
+  check('a single skin read does not leave face', st.scene === 'face');
+  st = stepScene(st, 'face');
+  st = stepScene(st, 'skin');
+  check('an interrupted streak starts over', st.scene === 'face');
+  for (let i = 0; i < SCENE_CONFIRM; i++) st = stepScene(st, 'skin');
+  check('SCENE_CONFIRM skin reads return to skin', st.scene === 'skin');
+}
 
 // Distance is judged on the LONGER side, so an elongated lesion isn't called "far" on its short one.
 check('size uses max(w,h)', computeCoach(true, GATE_OK, M({ w: 0.01, h: 0.4 })) !== 'far');

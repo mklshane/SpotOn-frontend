@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis } = await import(
+const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -37,7 +37,7 @@ const READS = ['pending', 'ok', 'unreadable', 'timeout'];
 // Every term is a veto and no term waives another. This is the function three separate reported
 // failures came back to, so each veto gets its own case.
 const ok = {
-  error: false, brightnessOk: true, sharpOk: true, skinOk: true, presenceOk: true, detectorFound: true,
+  error: false, brightnessOk: true, sharpOk: true, skinOk: true, presenceOk: true, skinGate: 'skin',
 };
 const iqa = (over = {}) => decideIqa({ ...ok, ...over });
 
@@ -50,17 +50,33 @@ check('iqa: blur blocks', !iqa({ sharpOk: false }).pass);
 // tick on a photo of a street is a false statement rather than a mis-tuned threshold.
 check('iqa: not skin fails the lesion ROW, not just the pass', !iqa({ skinOk: false }).lesionRowOk);
 check('iqa: no presence fails the lesion row', !iqa({ presenceOk: false }).lesionRowOk);
-check('iqa: detector finding nothing fails the lesion row', !iqa({ detectorFound: false }).lesionRowOk);
+// The learned skin gate replaced the detector veto (2026-09-19). Every non-'skin' verdict blocks the
+// row - including 'failed', because could-not-check is not a pass (2026-09-17).
+check('iqa: skin gate says not skin -> lesion row fails', !iqa({ skinGate: 'not_skin' }).lesionRowOk);
+check('iqa: skin gate says face -> lesion row fails (the selfie)', !iqa({ skinGate: 'face' }).lesionRowOk);
+check('iqa: skin gate failed/timed out -> lesion row fails', !iqa({ skinGate: 'failed' }).lesionRowOk);
+
+// The verdict mapping. Face wins over "not enough skin": a selfie's fix is "move closer".
+const v = (skin, notSkin, face) => skinGateVerdict({ skin, notSkin, face });
+check('skin verdict: confident skin', v(0.95, 0.03, 0.02) === 'skin');
+check('skin verdict: confident not skin', v(0.05, 0.93, 0.02) === 'not_skin');
+check('skin verdict: face', v(0.1, 0.02, 0.88) === 'face');
+check('skin verdict: face beats not-skin', v(0.3, 0.2, 0.5) === 'face');
+check('skin verdict: undecided below the skin bar is not skin', v(0.45, 0.3, 0.25) === 'not_skin');
 
 // No term may be waived by another - the 2026-08 bug was `skin` being waived when the detector
 // fired and presence passed, which is near-constant-true on an arbitrary photograph.
 check(
-  'iqa: a fired detector does NOT waive the skin check',
-  !iqa({ skinOk: false, detectorFound: true, presenceOk: true }).pass,
+  'iqa: the skin gate saying skin does NOT waive the colour skin check',
+  !iqa({ skinOk: false, skinGate: 'skin', presenceOk: true }).pass,
 );
 check(
-  'iqa: presence does NOT waive the detector',
-  !iqa({ presenceOk: true, detectorFound: false }).pass,
+  'iqa: presence does NOT waive the skin gate',
+  !iqa({ presenceOk: true, skinGate: 'face' }).pass,
+);
+check(
+  'iqa: the skin gate does NOT waive presence (bare skin still needs a spot)',
+  !iqa({ presenceOk: false, skinGate: 'skin' }).pass,
 );
 
 /* ------------------------------------------------------------------ decideQuality */

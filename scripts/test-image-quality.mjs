@@ -158,6 +158,99 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
   check('bare skin: edge width abstains', e.sharpness.edgeWidth <= LESION_EDGE_WIDTH && e.sharpness.ok);
 }
 
+/* ------------------------------------------------ edge width vs the auto-zoom (2026-09-19) - */
+// The other direction from the 2026-09-09 report: a genuinely SHARP lesion that crop.tsx enlarges
+// 2.28x must still pass - on the image as analysed, since the gate no longer divides by the upscale.
+// And the same scene defocused before that enlargement must not.
+{
+  const C = 450; // crop.tsx's cropSize in the 09-09 log; enlarged to OUTPUT like the app does
+  const O = SIZE;
+  const scene = (x, y) => {
+    const n = noise(x, y);
+    const t = Math.hypot(x - C / 2, y - C / 2) < C * 0.12 ? 0 : 1;
+    return [90 + 100 * t + n, 60 + 80 * t + n, 50 + 70 * t + n];
+  };
+  const defocus = (src, r) => {
+    // Three box passes ~ a gaussian, per channel - the optics, applied before the enlargement.
+    let a = src;
+    for (let pass = 0; pass < 3; pass++) {
+      const out = new Float32Array(a.length);
+      for (let y = 0; y < C; y++)
+        for (let x = 0; x < C; x++)
+          for (let c = 0; c < 3; c++) {
+            let s = 0;
+            for (let d = -r; d <= r; d++) s += a[(y * C + Math.min(C - 1, Math.max(0, x + d))) * 3 + c];
+            out[(y * C + x) * 3 + c] = s / (2 * r + 1);
+          }
+      const out2 = new Float32Array(a.length);
+      for (let y = 0; y < C; y++)
+        for (let x = 0; x < C; x++)
+          for (let c = 0; c < 3; c++) {
+            let s = 0;
+            for (let d = -r; d <= r; d++) s += out[(Math.min(C - 1, Math.max(0, y + d)) * C + x) * 3 + c];
+            out2[(y * C + x) * 3 + c] = s / (2 * r + 1);
+          }
+      a = out2;
+    }
+    return a;
+  };
+  const upscale = (src) => {
+    // Bilinear, which is the softest thing the app's resamplers do - a fair worst case for "sharp".
+    const d = new Uint8Array(O * O * 4);
+    const k = C / O;
+    for (let y = 0; y < O; y++)
+      for (let x = 0; x < O; x++) {
+        const sx = Math.min(C - 1, Math.max(0, (x + 0.5) * k - 0.5));
+        const sy = Math.min(C - 1, Math.max(0, (y + 0.5) * k - 0.5));
+        const x0 = Math.floor(sx), y0 = Math.floor(sy);
+        const x1 = Math.min(C - 1, x0 + 1), y1 = Math.min(C - 1, y0 + 1);
+        const fx = sx - x0, fy = sy - y0;
+        for (let c = 0; c < 3; c++) {
+          const v = (px, py) => src[(py * C + px) * 3 + c];
+          const top = v(x0, y0) * (1 - fx) + v(x1, y0) * fx;
+          const bot = v(x0, y1) * (1 - fx) + v(x1, y1) * fx;
+          d[(y * O + x) * 4 + c] = Math.max(0, Math.min(255, Math.round(top * (1 - fy) + bot * fy)));
+        }
+        d[(y * O + x) * 4 + 3] = 255;
+      }
+    return d;
+  };
+  const sharp = new Float32Array(C * C * 3);
+  for (let y = 0; y < C; y++) for (let x = 0; x < C; x++) sharp.set(scene(x, y), (y * C + x) * 3);
+
+  let z = analyzeRgba(upscale(sharp), O, O);
+  check(`sharp lesion enlarged 2.28x: focus ok (edgeWidth ${z.sharpness.edgeWidth.toFixed(1)})`, z.sharpness.ok);
+  z = analyzeRgba(upscale(defocus(sharp, 4)), O, O);
+  check(
+    `defocused lesion enlarged 2.28x: focus NOT ok (edgeWidth ${z.sharpness.edgeWidth.toFixed(1)})`,
+    !z.sharpness.ok && z.sharpness.edgeWidth > LESION_EDGE_WIDTH,
+  );
+}
+
+/* ------------------------------------ the defocused close-up that passed (2026-09-19) ------ */
+// A real capture, reported with all three rows green: a defocused, red-and-white close-up taken
+// with the phone too near the subject. The old edge width divided the lesion blob's contrast (55)
+// by a slope borrowed from much brighter bokeh highlights, got ~20, and the auto-zoom's upscale
+// divided that under the bar. The fixture is the photo as the result screen displayed it, resized
+// back to SIZE².
+{
+  const jpeg = (await import(pathToFileURL(join(ROOT, 'node_modules/jpeg-js/index.js')).href)).default;
+  const img = jpeg.decode(readFileSync(join(ROOT, 'scripts/fixtures/iqa-defocused-closeup-2026-09-19.jpg')), {
+    useTArray: true,
+    formatAsRGBA: true,
+  });
+  const f = analyzeRgba(img.data, img.width, img.height);
+  // Preconditions: nothing else on the screen could have caught it, so focus has to.
+  check('defocused close-up: exposure passes (precondition)', f.brightness.ok);
+  check('defocused close-up: skin passes (precondition)', f.skin.ok);
+  check('defocused close-up: lesion passes (precondition)', f.lesion.ok);
+  check(
+    `defocused close-up: edge width over the bar (${f.sharpness.edgeWidth.toFixed(1)} > ${LESION_EDGE_WIDTH})`,
+    f.sharpness.edgeWidth > LESION_EDGE_WIDTH,
+  );
+  check('defocused close-up: focus NOT ok', !f.sharpness.ok);
+}
+
 /* ------------------------------------------------------------- lesion presence ---------- */
 // The row this drives ("Lesion in frame") used to be the YOLO detector's verdict, which fires on
 // bare skin ~88% of the time. These pin the replacement signal's two ends.

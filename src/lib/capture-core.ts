@@ -140,7 +140,28 @@ export const GATE_BLURRY = 2;
 
 /* ------------------------------------------------------------------ coaching */
 
-export type CoachKind = 'search' | 'far' | 'close' | 'offcenter' | 'steady' | 'ready';
+export type CoachKind = 'search' | 'far' | 'close' | 'offcenter' | 'steady' | 'ready' | 'face' | 'notskin';
+
+/**
+ * What the live skin gate (skin-gate.ts, run on the camera loop) says the frame is. 'unknown' until
+ * it has spoken, or when its model failed to load - and 'unknown' changes nothing, so a missing
+ * model leaves the camera exactly as it was before the gate existed.
+ */
+export type LiveScene = 'unknown' | 'skin' | 'not_skin' | 'face';
+/** Consecutive agreeing reads before the live verdict switches. At ~3 reads/s this is ~0.7 s. */
+export const SCENE_CONFIRM = 2;
+export type SceneState = { scene: LiveScene; pending: LiveScene; streak: number };
+export const initialSceneState: SceneState = { scene: 'unknown', pending: 'unknown', streak: 0 };
+
+/**
+ * Debounce the live verdict: it only flips after SCENE_CONFIRM reads in a row agree, so one odd
+ * frame (motion blur while the phone swings past a face) cannot flash the box off and on.
+ */
+export function stepScene(s: SceneState, read: Exclude<LiveScene, 'unknown'>): SceneState {
+  if (read === s.scene) return { scene: s.scene, pending: read, streak: 0 };
+  const streak = read === s.pending ? s.streak + 1 : 1;
+  return streak >= SCENE_CONFIRM ? { scene: read, pending: read, streak: 0 } : { scene: s.scene, pending: read, streak };
+}
 /** Everything the capture screen can be telling the user right now, gates included. */
 export type Coach = CoachKind | 'dark' | 'blurry';
 
@@ -170,10 +191,15 @@ export function computeCoach(
   guide: boolean,
   gate: number,
   m: FrameMetrics | null,
+  scene: LiveScene = 'unknown',
 ): Coach | null {
   if (gate === GATE_DARK) return 'dark';
   if (gate === GATE_BLURRY) return 'blurry';
   if (!guide) return null;
+  // Before any positional coaching: there is no spot to centre in a whole face or a table, and the
+  // detector's box on one (it fires on any skin, faces included) is exactly what this suppresses.
+  if (scene === 'face') return 'face';
+  if (scene === 'not_skin') return 'notskin';
   if (!m) return 'search';
   const size = Math.max(m.w, m.h);
   if (size < FAR_MAX) return 'far';

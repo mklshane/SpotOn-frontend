@@ -13,6 +13,7 @@ import { BodyViewer } from '@/components/scan/body-viewer';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { prewarmLesionModel } from '@/lib/lesion-model';
+import { prewarmSkinGate } from '@/lib/skin-gate';
 import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
@@ -30,6 +31,7 @@ export default function BodyAreaScreen() {
     // capture.tsx's mount effect, as it was, that fraction lands while they are already pointing
     // the camera at a lesion waiting for a box. Fire-and-forget; capture.tsx still owns the load.
     prewarmLesionModel();
+    prewarmSkinGate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

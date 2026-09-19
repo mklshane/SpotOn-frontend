@@ -32,6 +32,9 @@ import { ThemedText } from '@/components/themed-text';
 import {
   computeCoach,
   clusterDetectionCandidates,
+  initialSceneState,
+  stepScene,
+  type SceneState,
   fullFrameToPreview,
   initialActiveTargetState,
   modelRoiToFullFrame,
@@ -69,6 +72,8 @@ import {
 import { PerfHud, PERF_ENABLED, usePerfCounters } from '@/components/scan/perf-hud';
 import { useDeviceTier } from '@/lib/device-tier';
 import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
+import { loadSkinGateForCamera, readSkinGateLayout, type SkinGateModel } from '@/lib/skin-gate';
+import { SKIN_GATE_FACE_MAX, SKIN_GATE_MIN } from '@/lib/triage/scan-flow';
 import {
   DETECTION_SMOOTHING_CONFIG as SMOOTH,
   softDeadband,
@@ -141,6 +146,8 @@ const DEBUG = false; // flip to true only while actively tuning best/sharp/lume
 // missing the budget costs far more (dropped preview frames, a janky JS thread) than a slower box.
 const TARGET_FPS_HIGH = 12;
 const TARGET_FPS_LOW = 6;
+/** Run the live skin gate on every Nth detector tick: ~3/s on high-tier devices, ~1.5/s on low. */
+const SKIN_EVERY = 4;
 /** Maximum time the shutter waits for an already-running detector pass to release the camera frame. */
 const CAPTURE_INFERENCE_WAIT_MS = 500;
 /** Keep capture paused until the navigation transition has removed this screen's camera output. */
@@ -297,6 +304,26 @@ export default function CaptureScreen() {
     };
   }, []);
 
+  /**
+   * The skin gate on the LIVE camera (2026-09-19). The detector has no background class, so it
+   * draws a confident green box on any skin - a whole face included - and the still gate rejecting
+   * that face afterwards read as the app contradicting itself. This model answers "is this a
+   * close-up of skin / not skin / a face" a few times a second, and a face or a scene clears the box
+   * and says so. Its own interpreter (see loadSkinGateForCamera). A load failure leaves the verdict
+   * 'unknown', which changes nothing: the camera behaves as it did before, and the still gate on the
+   * quality screen still blocks.
+   */
+  const [skinModel, setSkinModel] = useState<SkinGateModel | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadSkinGateForCamera()
+      .then((m) => alive && setSkinModel(m))
+      .catch((e) => console.warn('[tflite] live skin gate load failed', e));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const [torch, setTorch] = useState(false);
   const [guide, setGuide] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -315,13 +342,14 @@ export default function CaptureScreen() {
     { cx: number; cy: number; w: number; h: number; locked: boolean; stable: boolean } | null
   >(null);
   const guideRef = useRef(guide);
+  const sceneRef = useRef<SceneState>(initialSceneState);
 
   const boxValues = useDetectionBoxValues();
   const perf = usePerfCounters();
 
   /** Recompute the single coaching message from the latest gate + framing, and render only on change. */
   const applyCoach = useCallback(() => {
-    const next = computeCoach(guideRef.current, gateRef.current, metricsRef.current);
+    const next = computeCoach(guideRef.current, gateRef.current, metricsRef.current, sceneRef.current.scene);
     if (next === coachRef.current) return;
     coachRef.current = next;
     setCoach(next);
@@ -428,6 +456,12 @@ export default function CaptureScreen() {
       const recordSelection = () => {
         if (PERF_ENABLED) perf.selectionMs.value += Date.now() - batch.postprocessFinishedAt;
       };
+      // No box on a face or a scene - see skinModel. onScene already cleared any box on the switch.
+      const scene = sceneRef.current.scene;
+      if (scene === 'face' || scene === 'not_skin') {
+        recordSelection();
+        return;
+      }
       const candidates = batch.candidates.map((candidate) => {
         const imageBox = modelRoiToFullFrame(candidate.box, batch.roi);
         return {
@@ -533,6 +567,15 @@ export default function CaptureScreen() {
     applyCoach();
   }, []);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
+  // Live skin-gate reads arrive as 0 skin / 1 not skin / 2 face, debounced here by stepScene.
+  const onScene = useRunOnJS((code: number) => {
+    const before = sceneRef.current.scene;
+    sceneRef.current = stepScene(sceneRef.current, code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin');
+    const after = sceneRef.current.scene;
+    if (after === before) return;
+    if (after === 'face' || after === 'not_skin') clearTrack(); // also re-runs applyCoach
+    else applyCoach();
+  }, []);
 
   // Worklet-side gate state, so the blur streak survives between frames and the emit can be
   // change-gated without a JS round trip. `-1` forces the next frame to re-emit.
@@ -542,11 +585,14 @@ export default function CaptureScreen() {
   // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
   const capturePausedSV = useWorkletValue(false);
   const inferenceBusySV = useWorkletValue(false);
+  const skinTickSV = useWorkletValue(0);
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
   // model (unbox inside the worklet) and read the output/input shapes here on the JS thread.
   const boxedModel = useMemo(() => (model != null ? NitroModules.box(model) : undefined), [model]);
   const layout = useMemo(() => (model == null ? null : readLayout(model)), [model]);
+  const boxedSkin = useMemo(() => (skinModel != null ? NitroModules.box(skinModel) : undefined), [skinModel]);
+  const skinSize = useMemo(() => (skinModel == null ? 0 : readSkinGateLayout(skinModel)), [skinModel]);
 
   const targetFps = tier === 'low' ? TARGET_FPS_LOW : TARGET_FPS_HIGH;
 
@@ -707,6 +753,29 @@ export default function CaptureScreen() {
             postprocessFinishedAt: tPostprocessed,
           });
 
+          // Live skin gate: every SKIN_EVERY-th detector tick (~3/s at 12 fps), on the SAME centred
+          // square, upright. Cheap (MobileNetV3-small at 160²) but not free, and a verdict about
+          // the whole scene does not need 12 answers a second.
+          if (boxedSkin != null && skinSize > 0) {
+            skinTickSV.value = (skinTickSV.value + 1) % SKIN_EVERY;
+            if (skinTickSV.value === 0) {
+              const skinIn = resize(frame, {
+                crop: { x: cropX, y: cropY, width: side, height: side },
+                scale: { width: skinSize, height: skinSize },
+                pixelFormat: 'rgb',
+                dataType: 'float32',
+                rotation: uprightRotation(frame.orientation),
+              });
+              const skinBuf =
+                skinIn.byteOffset === 0 && skinIn.byteLength === skinIn.buffer.byteLength
+                  ? skinIn.buffer
+                  : skinIn.buffer.slice(skinIn.byteOffset, skinIn.byteOffset + skinIn.byteLength);
+              const pr = new Float32Array(boxedSkin.unbox().runSync([skinBuf as ArrayBuffer])[0]);
+              // Same rule as skinGateVerdict (scan-flow.ts), inlined: a worklet can't call it.
+              onScene(pr[2] >= SKIN_GATE_FACE_MAX ? 2 : pr[0] < SKIN_GATE_MIN ? 1 : 0);
+            }
+          }
+
           if (PERF_ENABLED) {
             const total = tPostprocessed - t0;
             perf.frames.value += 1;
@@ -724,6 +793,10 @@ export default function CaptureScreen() {
     [
       boxedModel,
       layout,
+      boxedSkin,
+      skinSize,
+      skinTickSV,
+      onScene,
       resize,
       targetFps,
       neutralZoom,
@@ -1025,7 +1098,7 @@ export default function CaptureScreen() {
           so the two never stack. Framing matters here beyond tidiness: the classifier is
           scale-sensitive, and a lesion parked in the corner is the wide-framing failure mode the
           whole detector-crop path exists to fight. */}
-      {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' ? (
+      {!busy && coach !== 'ready' && coach !== 'offcenter' && coach !== 'dark' && coach !== 'face' && coach !== 'notskin' ? (
         <View style={[styles.frameHint, { bottom: frameHintBottom(SH) }]} pointerEvents="none">
           <ThemedText type="caption" style={styles.frameHintText}>
             {detectorFailed
@@ -1205,6 +1278,8 @@ const COACH_COPY: Record<CoachKind, { text: string; icon: IconName }> = localize
   offcenter: { text: 'Center the spot', icon: 'camera.viewfinder' },
   steady: { text: 'Hold steady…', icon: 'camera.viewfinder' },
   ready: { text: 'Looks good - tap to capture', icon: 'checkmark.circle.fill' },
+  face: { text: 'Move closer - just the spot, not your whole face', icon: 'camera.viewfinder' },
+  notskin: { text: 'Point the camera at your skin', icon: 'camera.viewfinder' },
 });
 
 /**

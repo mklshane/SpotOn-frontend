@@ -26,7 +26,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
-import { decideIqa, decideQuality, nextStepAfterQuality } from '@/lib/triage/scan-flow';
+import {
+  decideIqa,
+  decideQuality,
+  nextStepAfterQuality,
+  skinGateVerdict,
+  type SkinGateVerdict,
+} from '@/lib/triage/scan-flow';
 import {
   combineReadability,
   evaluateSafetyFloor,
@@ -61,10 +67,11 @@ const READABILITY_GRACE_MS = 2000;
  * camera path this is never spent; a gallery upload on a cold start is the case that can reach it.
  * Exceeding it degrades to "could not answer", which BLOCKS the row (2026-09-17) - so this is 20 s,
  * not 4 s: a first scan on the web build loads the WASM runtime and the model, and a slow load must
- * not be mistaken for a failure. It only costs time when the detector is slow; a normal answer lands
+ * not be mistaken for a failure. It only costs time when the model is slow; a normal answer lands
  * well inside the ~3.9 s the rows spend revealing, and body.tsx prewarms the model before capture.
+ * (Written for the detector; since 2026-09-19 it bounds the skin gate, which replaced it here.)
  */
-const LESION_DETECT_TIMEOUT_MS = 20000;
+const SKIN_GATE_TIMEOUT_MS = 20000;
 
 type RowStatus = 'pending' | 'ok' | 'warn';
 const ROW_META: { label: string; icon: IconName }[] = localizedCopy([
@@ -100,13 +107,11 @@ export default function QualityScreen() {
   const [error, setError] = useState(false);
   const [readability, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
   /**
-   * Did the still detector locate a lesion? Restored 2026-09-08 - see decideIqa for why.
-   *
-   * It cannot say whether a lesion is PRESENT (it fires on 88% of lesion-free skin), but it is the
-   * only term that rejects a photograph of a scene: 0.000 on a shoe strap on carpet, 0.031 on wood,
-   * where every colour-based term passes them.
+   * The learned skin gate's verdict: a close-up of skin, not skin, or a whole face (skin-gate.ts).
+   * It replaced the still detector here on 2026-09-19 as the term that rejects photos of scenes -
+   * see decideIqa for why. The detector still runs, but in classify.ts, for the crop.
    */
-  const [lesionDet, setLesionDet] = useState<'pending' | 'found' | 'absent' | 'failed'>('pending');
+  const [skinGate, setSkinGate] = useState<SkinGateVerdict | 'pending'>('pending');
   const proceeded = useRef(false);
 
   // Start inference the moment the photo lands, not at proceed(): that is what lets the
@@ -154,45 +159,39 @@ export default function QualityScreen() {
   }, [readability]);
 
   /**
-   * Run the detector on the STILL, not on a preview frame.
-   *
-   * Lazy import for the same reason the classifier warm-up is lazy: keep TFLite off the app-startup
-   * path. The model is cached by lesion-model.ts, so on the camera path this is one inference.
-   * A detector FAILURE is not "no lesion" - it must not veto, so it falls through as 'failed'.
+   * Run the skin gate on the STILL. Lazy import keeps TFLite off the app-startup path.
+   * A FAILURE is 'failed', which blocks the row: could-not-check is not a pass (2026-09-17).
    */
   useEffect(() => {
     if (!uri) return;
     let alive = true;
-    // One retry: a failed model load clears lesion-model.ts's cached promise, so a second call
-    // genuinely reloads - and since a failure now blocks the row, a transient error (a flaky asset
-    // fetch on the web build) should not be the final answer.
-    const detect = () =>
-      import('@/lib/classifier/lesion-detector').then((m) => m.detectLesionBox(uri));
-    detect()
+    // One retry: a failed model load clears skin-gate.ts's cached promise, so a second call genuinely
+    // reloads - a transient error (a flaky asset fetch on the web build) should not be the answer.
+    const run = () => import('@/lib/skin-gate').then((m) => m.classifySkin(uri));
+    run()
       .catch((e) => {
-        console.warn('[iqa] lesion detection failed, retrying once', e);
-        return detect();
+        console.warn('[iqa] skin gate failed, retrying once', e);
+        return run();
       })
-      .then((box) => alive && setLesionDet(box ? 'found' : 'absent'))
+      .then((p) => {
+        if (__DEV__) console.log('[iqa] skin gate', JSON.stringify(p));
+        if (alive) setSkinGate(skinGateVerdict(p));
+      })
       .catch((e) => {
-        console.warn('[iqa] lesion detection failed', e);
-        if (alive) setLesionDet('failed');
+        console.warn('[iqa] skin gate failed', e);
+        if (alive) setSkinGate('failed');
       });
     return () => {
       alive = false;
     };
   }, [uri]);
 
-  // Bound it: exceeding this degrades to "could not answer", which now blocks the row (see decideIqa
-  // below), so the bound is generous enough for a cold web model load.
+  // Bound it: exceeding this degrades to "could not answer", which blocks the row.
   useEffect(() => {
-    if (lesionDet !== 'pending') return;
-    const t = setTimeout(
-      () => setLesionDet((s2) => (s2 === 'pending' ? 'failed' : s2)),
-      LESION_DETECT_TIMEOUT_MS,
-    );
+    if (skinGate !== 'pending') return;
+    const t = setTimeout(() => setSkinGate((s2) => (s2 === 'pending' ? 'failed' : s2)), SKIN_GATE_TIMEOUT_MS);
     return () => clearTimeout(t);
-  }, [lesionDet]);
+  }, [skinGate]);
 
   useEffect(() => {
     let alive = true;
@@ -200,8 +199,7 @@ export default function QualityScreen() {
       setError(true);
       return;
     }
-    // How far crop.tsx had to enlarge the capture. Without it the gate reads a tight auto-zoom
-    // as a blurry photo - the enlargement, not the focus, is what widens the measured edge.
+    // How far crop.tsx had to enlarge the capture - logged under ?debug=1, not used by the gate.
     assessImage(uri, Number(upscale) || 1)
       .then((c) => alive && setChecks(c))
       .catch((e) => {
@@ -234,9 +232,9 @@ export default function QualityScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // The row must not be judged before the detection lands, or a slow device would show a verdict
-  // the detector then contradicts. Bounded by LESION_DETECT_TIMEOUT_MS.
-  const settled = (checks != null || error) && lesionDet !== 'pending';
+  // The row must not be judged before the skin gate lands, or a slow device would show a verdict
+  // the model then contradicts. Bounded by SKIN_GATE_TIMEOUT_MS.
+  const settled = (checks != null || error) && skinGate !== 'pending';
 
   const brightnessOk = checks?.brightness.ok ?? false;
   const sharpOk = checks?.sharpness.ok ?? false;
@@ -272,11 +270,8 @@ export default function QualityScreen() {
     sharpOk,
     skinOk,
     presenceOk,
-    // Only a detector that RAN and FOUND a lesion passes (changed 2026-09-17). A failure or timeout
-    // used to count as a pass, so a slow cold model load silently removed the one term that rejects
-    // photos of scenes - the same photo passed on one device and failed on a faster one. If we could
-    // not check, we cannot say "Lesion in frame".
-    detectorFound: lesionDet === 'found',
+    // Only a model that RAN and said 'skin' passes; 'pending' never reaches here (see `settled`).
+    skinGate: skinGate === 'pending' ? 'failed' : skinGate,
   });
   const readableOk = readability !== 'unreadable';
   // The verdict itself lives in scan-flow.ts so every branch is pinned by npm run test:flow.
@@ -294,7 +289,7 @@ export default function QualityScreen() {
   // The advisory hair tip is the one reason worth showing on a PASSING photo (see showReasons), so
   // it is derived once here and reused there - two copies of this condition disagreed, and the
   // second one kept surfacing "hair is covering the spot" on photos with no skin in them.
-  const hairTip = skinOk && !!checks?.hair && !checks.hair.ok;
+  const hairTip = skinOk && skinGate === 'skin' && !!checks?.hair && !checks.hair.ok;
 
   const reasons = useMemo(() => {
     if (error) return ['We couldn’t analyze this photo.'];
@@ -307,7 +302,10 @@ export default function QualityScreen() {
      * Three of them fired at once on a photo of a night street, which reads as the app confidently
      * discussing a lesion that does not exist. Say what is actually wrong and stop.
      */
-    if (!skinOk) return ['This doesn’t look like a photo of skin.'];
+    // A whole face is skin, so it gets its own sentence - the fix is to move closer, not to point the
+    // camera at something else. Same early return: nothing else here is true of a selfie.
+    if (skinGate === 'face') return ['This looks like a whole face - move closer so the spot fills the frame.'];
+    if (!skinOk || skinGate === 'not_skin') return ['This doesn’t look like a photo of skin.'];
     const out: string[] = [];
     if (!brightnessOk) {
       out.push(
@@ -320,9 +318,9 @@ export default function QualityScreen() {
     if (!sharpOk) out.push('The photo looks blurry - hold still, and tap the spot to focus.');
     // Reached only on a skin frame (see the early return), so this is the honest reading: skin,
     // but nothing on it that looks like a spot.
-    if (lesionDet === 'failed') {
+    if (skinGate === 'failed') {
       out.push('We couldn’t check this photo for a spot - please try again.');
-    } else if (!presenceOk || lesionDet === 'absent') {
+    } else if (!presenceOk) {
       out.push('We couldn’t find a clear lesion - center the spot in the frame.');
     }
     // Confidence is a readability signal like blur is - surfaced here rather than after the
@@ -346,7 +344,7 @@ export default function QualityScreen() {
       out.push('Tip: hair is covering the spot - move it aside and retake for a clearer read.');
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, lesionDet, readableOk, hairTip]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, skinGate, readableOk, hairTip]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {
