@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  preferenceCards: { gap: Space.sm },
+  preferenceCards: { gap: Space.base },
   section: { gap: 0, paddingVertical: Space.sm },
   sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
