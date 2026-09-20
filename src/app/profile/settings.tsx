@@ -213,8 +213,10 @@ export default function SettingsScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.sectionHead}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
-          <Card style={styles.section}><LanguagePicker /></Card>
-          <Card style={styles.section}><BodyFigurePicker /></Card>
+          <View style={styles.preferenceCards}>
+            <Card style={styles.section}><LanguagePicker /></Card>
+            <Card style={styles.section}><BodyFigurePicker /></Card>
+          </View>
           <View style={styles.sectionHead}>
             <ThemedText type="title2">{t("Account & Security")}</ThemedText>
           </View>
@@ -397,6 +399,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  preferenceCards: { gap: Space.sm },
   section: { gap: 0, paddingVertical: Space.sm },
   sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
