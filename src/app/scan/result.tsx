@@ -132,10 +132,10 @@ export default function ResultScreen() {
           </Animated.View>
         ) : null}
 
-        {/* 1 · Hero - classified type, tier, confidence ring. A gradient + colored glow keyed to
-            the risk level so it lifts off the page while staying tonally on-tier. */}
+        {/* 1 · Hero - classified type, tier, confidence ring. Keep the card neutral so the tier
+            color stays focused on the badge and confidence ring. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: colors.bg }]}>
+          <View style={[styles.hero, { backgroundColor: theme.surface }]}>
             <View style={styles.heroTop}>
               {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                   "% match to a pattern with features similar to…" line right below, and in the
@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm, gap: Space.base },
   center: { textAlign: 'center' },
-  // Hero background is set inline from the tier color; keep the card flat without a glow.
+  // Keep the hero card neutral so the tier color is reserved for status accents.
   hero: {
     borderRadius: Radius.xl,
     padding: Space.xl,
