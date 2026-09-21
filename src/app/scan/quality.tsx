@@ -29,6 +29,7 @@ import { useScreeningSession } from '@/lib/screening-session';
 import {
   decideIqa,
   decideQuality,
+  isHeadRegion,
   nextStepAfterQuality,
   skinGateVerdict,
   type SkinGateVerdict,
@@ -341,10 +342,17 @@ export default function QualityScreen() {
     // HAIR_REMOVAL.md measured every variant of that and they all cost accuracy on exactly the
     // hairy images they were meant to help.
     if (hairTip) {
-      out.push('Tip: hair is covering the spot - move it aside and retake for a clearer read.');
+      // The scalp gets its own wording: "move it aside" undersells what dense hair needs, and the
+      // head is exactly where hair REMOVAL was measured to be most dangerous, so the fix has to be
+      // the user parting it (synth/eval/HAIR_REMOVAL.md). Face/hairline marks share the region.
+      out.push(
+        isHeadRegion(session.bodyMark?.region)
+          ? 'Tip: part the hair so the spot is fully visible, then retake.'
+          : 'Tip: hair is covering the spot - move it aside and retake for a clearer read.',
+      );
     }
     return out;
-  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, skinGate, readableOk, hairTip]);
+  }, [error, checks, brightnessOk, sharpOk, skinOk, presenceOk, skinGate, readableOk, hairTip, session.bodyMark?.region]);
 
   const sweep = useSharedValue(0);
   useEffect(() => {

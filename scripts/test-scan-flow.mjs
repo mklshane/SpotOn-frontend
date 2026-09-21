@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict } = await import(
+const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -78,6 +78,14 @@ check(
   'iqa: the skin gate does NOT waive presence (bare skin still needs a spot)',
   !iqa({ presenceOk: false, skinGate: 'skin' }).pass,
 );
+
+// Head regions get the "part the hair" tip. Stored as display text, so both languages must match.
+check('head: English front', isHeadRegion('Head / Face'));
+check('head: English back (scalp)', isHeadRegion('Back of head'));
+check('head: Tagalog front', isHeadRegion('Ulo / Mukha'));
+check('head: Tagalog back (scalp)', isHeadRegion('Likod ng ulo'));
+check('head: not the neck', !isHeadRegion('Neck') && !isHeadRegion('Nape'));
+check('head: no mark', !isHeadRegion(null) && !isHeadRegion(undefined));
 
 /* ------------------------------------------------------------------ decideQuality */
 const q = (iqaPass, read, checksSettled = true) => decideQuality({ iqaPass, read, checksSettled });

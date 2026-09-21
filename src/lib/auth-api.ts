@@ -201,12 +201,10 @@ export async function logout(): Promise<void> {
   // Never leave Account A's lesion reminder armed after Account B takes over the device.
   await cancelSelfCheckReminder().catch(() => {});
   await clearTokens();
+  // Best-effort server-side revoke, deliberately NOT awaited: the device is already signed out
+  // once tokens are cleared, and awaiting made sign-out sit through a free-tier cold start.
   if (rt) {
-    try {
-      await api.post('/auth/logout', { refresh_token: rt }, false);
-    } catch {
-      // best-effort server-side revoke
-    }
+    api.post('/auth/logout', { refresh_token: rt }, false).catch(() => {});
   }
 }
 
