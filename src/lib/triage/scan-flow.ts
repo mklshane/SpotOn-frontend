@@ -30,6 +30,22 @@ export type IqaTerms = {
   skinGate: SkinGateVerdict;
 };
 
+/**
+ * Is this body-map region the head (scalp, face, hairline)?
+ *
+ * The region is stored as DISPLAY text, translated at the moment it was picked (body-regions.ts
+ * resolves it through t()), so a mark saved in Tagalog reads "Likod ng ulo". Both languages are
+ * matched rather than re-deriving the region from the 3-D point.
+ *
+ * Used for hair: the scalp is where hair is densest and where removing it is most likely to paint
+ * over the lesion (synth/eval/HAIR_REMOVAL.md), so the head gets a "part the hair" tip instead of
+ * any image processing.
+ */
+const HEAD_REGIONS = new Set(['Head / Face', 'Back of head', 'Ulo / Mukha', 'Likod ng ulo']);
+export function isHeadRegion(region: string | null | undefined): boolean {
+  return region != null && HEAD_REGIONS.has(region.trim());
+}
+
 /** What the learned skin gate says the still is. */
 export type SkinGateVerdict = 'skin' | 'not_skin' | 'face' | 'failed';
 
