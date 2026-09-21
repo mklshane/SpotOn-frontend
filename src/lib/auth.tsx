@@ -25,11 +25,17 @@ function isNetworkError(e: unknown): boolean {
   if (!(e instanceof Error)) return false;
   // RN fetch throws TypeError('Network request failed'); newer runtimes throw
   // Error('fetch failed') wrapping the platform error (e.g. java.net.ConnectException).
-  return /network request failed|fetch failed|connect|timed? ?out|unreachable/i.test(e.message);
+  // Browsers word it differently: Chrome 'Failed to fetch', Safari 'Load failed', Firefox
+  // 'NetworkError when attempting to fetch resource.' - a CORS rejection reads the same way.
+  return /network request failed|fetch failed|failed to fetch|load failed|networkerror|connect|timed? ?out|unreachable/i.test(
+    e.message,
+  );
 }
 
 function messageFor(e: unknown): string {
   if (e instanceof ApiError) return e.detail;
+  // The friendly message hides the cause; keep the real one in the console for debugging.
+  console.warn('[auth] request failed:', e);
   // A timeout on a free-tier host usually means the server is waking, not that the user's
   // connection is broken - telling them to check their internet sends them to fix the wrong
   // thing. client.ts throws exactly 'timed out' for an aborted request.
