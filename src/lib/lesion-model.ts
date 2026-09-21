@@ -1,5 +1,5 @@
-import { assetFileUri } from '@/lib/asset-uri';
-import { loadTensorflowModel } from '@/lib/tflite';
+import { assetFileUri } from "@/lib/asset-uri";
+import { loadTensorflowModel } from "@/lib/tflite";
 
 /** The loaded TFLite model handle (single-class YOLO lesion detector). */
 export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
@@ -33,7 +33,7 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // THE ONE REAL REGRESSION IS DETECTION RATE: 99.0% -> 90.5%, i.e. 19 of 200 stills produce no box
 // against 2. On a miss, classify.ts falls back to the full frame plus the DoG zoom refinement -
 // the weaker path that DETECTOR_CROP_ENABLED exists to avoid - so this swap moves ~8.5% of stills
-// onto it. Nothing the classifier scores got worse; how often the detector fires did.
+// onto it. Nothing the classifier scored got worse; how often the detector fires did.
 //
 // THE LIVE-PATH BARS ARE UNREFITTED, AND THEY NO LONGER FIT. CREATE_SCORE / KEEP_SCORE /
 // LOCK_SCORE in capture-core.ts were set against the itobos score distribution. This model is more
@@ -54,7 +54,7 @@ export type LesionModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const MODEL_ASSET = require('../../assets/models/lesion_det_y11n_v1_float16.tflite');
+const MODEL_ASSET = require("../../assets/models/lesion_det_y11n_v1_float16.tflite");
 
 let modelPromise: Promise<LesionModel> | null = null;
 
@@ -67,12 +67,27 @@ let modelPromise: Promise<LesionModel> | null = null;
  *
  * Idempotent and safe to call before the camera exists - see `prewarmLesionModel`, which is what
  * the body-part screen uses to get the load off the capture screen's critical path.
+ *
+ * DELEGATE: currently CPU-only (`[]`) on both platforms. An Android GPU-delegate attempt
+ * (`['android-gpu']`, added 2026-09-15 alongside `enableAndroidGpuLibraries` in app.json) was
+ * reverted the same day - `enableAndroidGpuLibraries` adds a `libOpenCL.so` native-library
+ * reference to AndroidManifest.xml, and on this device that broke the app's three.js/expo-gl 3D
+ * body-model screen: `gl.getActiveUniform` started returning a broken result (shader
+ * program failed to compile/link) the moment the camera screen mounted, every time,
+ * reproducibly. Root cause is presumed to be GPU/EGL context contention between the OpenCL
+ * context TFLite's GPU delegate opens and expo-gl's WebGL context, likely a Mali-driver-specific
+ * issue, but it was not root-caused further before reverting - stability for an already-working
+ * feature took priority. If GPU acceleration is revisited, try `['nnapi']` instead first (a
+ * system service, not a GPU/OpenCL library, so it doesn't need `enableAndroidGpuLibraries` at
+ * all) and confirm the 3D screen still works before trusting it - see git history around
+ * 2026-09-15 for the reverted attempt.
  */
 export function getLesionModel(): Promise<LesionModel> {
   if (!modelPromise) {
     modelPromise = (async () => {
       const uri = await assetFileUri(MODEL_ASSET);
       const m = await loadTensorflowModel({ url: uri }, []);
+
       // Warm up before handing the model out. TFLite defers a chunk of its setup (XNNPACK delegate
       // partitioning, buffer allocation) to the first invoke, which measures ~12 ms slower than the
       // steady state on desktop and more on a phone. Paying that here, inside the load promise,
@@ -103,7 +118,8 @@ export function readLayout(model: LesionModel) {
   const channels = chMajor ? d1 : d2;
   const anchors = chMajor ? d2 : d1;
   const inShape = model.inputs[0].shape;
-  const inputSize = inShape.length === 4 ? (inShape[3] === 3 ? inShape[1] : inShape[2]) : 640;
+  const inputSize =
+    inShape.length === 4 ? (inShape[3] === 3 ? inShape[1] : inShape[2]) : 640;
   return { chMajor, channels, anchors, numClasses: channels - 4, inputSize };
 }
 

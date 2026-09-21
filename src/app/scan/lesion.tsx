@@ -1,4 +1,4 @@
-import { t, localizedCopy, useLocale } from '@/lib/i18n';
+import { t, localizedCopy, useLocale } from "@/lib/i18n";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
@@ -97,7 +97,8 @@ export default function LesionDetailScreen() {
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
           <ThemedText type="headline" themeColor="textSecondary">
-            {t("Tracked spot")}</ThemedText>
+            {t("Tracked spot")}
+          </ThemedText>
           <View style={styles.headerSpacer} />
         </View>
         <View style={styles.centerFill}>
@@ -162,7 +163,7 @@ export default function LesionDetailScreen() {
   }
 
   return (
-    <Screen padded={false} edges={['top']}>
+    <Screen padded={false} edges={["top"]}>
       <View style={styles.header}>
         <Pressable
           hitSlop={12}
@@ -173,7 +174,8 @@ export default function LesionDetailScreen() {
           <Icon name="chevron.left" tintColor={theme.brand} size={20} />
         </Pressable>
         <ThemedText type="headline" themeColor="textSecondary">
-          {t("Tracked spot")}</ThemedText>
+          {t("Tracked spot")}
+        </ThemedText>
         {/* The action itself, not a generic overflow glyph - there's only ever one thing to do
             here, and "ellipsis" has no Android/web mapping so it rendered as a bare outline
             circle. An icon that names the action also means the button doesn't need a menu to
@@ -210,7 +212,9 @@ export default function LesionDetailScreen() {
             {/* Tier-tinted gradient, matching the result screen's hero - this is the same "how
               urgent is this" signal, so the two screens should read as one visual language
               rather than the plain white block this used to be. */}
-            <View style={[styles.hero, { backgroundColor: bg, shadowColor: fg }]}>
+            <View
+              style={[styles.hero, { backgroundColor: bg, shadowColor: fg }]}
+            >
               <View style={styles.heroTop}>
                 {editing ? (
                   <TextField
@@ -280,7 +284,9 @@ export default function LesionDetailScreen() {
                 and this fixed dark warm gray hold 5:1+ across every tier. */}
               <View style={styles.heroMeta}>
                 <ThemedText type="subhead" style={{ color: theme.text }}>
-                  {lesion.mark?.region ? t(lesion.mark.region) : t("Location not marked")}
+                  {lesion.mark?.region
+                    ? t(lesion.mark.region)
+                    : t("Location not marked")}
                   {lesion.archived ? " · not tracked" : ""}
                 </ThemedText>
                 {trend.count ? (
@@ -320,7 +326,10 @@ export default function LesionDetailScreen() {
               <Card style={[styles.sparkCard, { backgroundColor: bg }]}>
                 <TpsSparkline series={trend.tpsSeries} />
                 <ThemedText type="caption" themeColor="muted">
-                  {t("Triage Priority Score, 0–8. Higher means seek care sooner.")}</ThemedText>
+                  {t(
+                    "Triage Priority Score, 0–8. Higher means seek care sooner.",
+                  )}
+                </ThemedText>
               </Card>
             </Entrance>
           ) : null}
@@ -367,7 +376,9 @@ export default function LesionDetailScreen() {
                       themeColor="textSecondary"
                       style={styles.noteText}
                     >
-                      {t("The most likely pattern has changed across scans - it now reads as")}{" "}
+                      {t(
+                        "The most likely pattern has changed across scans - it now reads as",
+                      )}{" "}
                       {CLASS_DISPLAY[latest.classification.topClass].name}.
                     </ThemedText>
                   </View>
@@ -422,7 +433,10 @@ export default function LesionDetailScreen() {
                   </View>
                 ) : (
                   <ThemedText type="footnote" themeColor="muted">
-                    {t("Your answers about this spot are unchanged since the last check.")}</ThemedText>
+                    {t(
+                      "Your answers about this spot are unchanged since the last check.",
+                    )}
+                  </ThemedText>
                 )}
               </Card>
             </Entrance>
@@ -537,7 +551,11 @@ function TpsSparkline({
 }
 
 const styles = StyleSheet.create({
-  disclaimer: { textAlign: "center", paddingHorizontal: Space.md, paddingTop: Space.base },
+  disclaimer: {
+    textAlign: "center",
+    paddingHorizontal: Space.md,
+    paddingTop: Space.base,
+  },
   centerFill: {
     flex: 1,
     alignItems: "center",
@@ -575,7 +593,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 18,
     shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
   },
   heroTop: {
     flexDirection: "row",

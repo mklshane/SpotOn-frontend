@@ -1,35 +1,42 @@
-import { t, useLocale } from '@/lib/i18n';
-import { Image } from 'expo-image';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeInDown, LayoutAnimationConfig } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle } from 'react-native-svg';
+import { t, useLocale } from "@/lib/i18n";
+import { Image } from "expo-image";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import Animated, {
+  FadeInDown,
+  LayoutAnimationConfig,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Circle } from "react-native-svg";
 
-import { ThemedText } from '@/components/themed-text';
-import { Button, Card, ImageViewer, Screen } from '@/components/ui';
-import { Icon } from '@/components/ui/icon';
-import { Elevation, Radius, Space } from '@/constants/theme';
-import { useAndroidBack } from '@/hooks/use-android-back';
-import { useTheme } from '@/hooks/use-theme';
+import { ThemedText } from "@/components/themed-text";
+import { Button, Card, ImageViewer, Screen } from "@/components/ui";
+import { Icon } from "@/components/ui/icon";
+import { Elevation, Radius, Space } from "@/constants/theme";
+import { useAndroidBack } from "@/hooks/use-android-back";
+import { useTheme } from "@/hooks/use-theme";
 import {
   getPendingSelfCheckReminder,
   getSelfCheckReminderDueAt,
   REMINDER_DAYS,
   scheduleSelfCheckReminder,
-} from '@/lib/notifications';
-import { useScanHistory } from '@/lib/scan-history';
-import { QUESTIONS } from '@/lib/triage/questions';
+} from "@/lib/notifications";
+import { useScanHistory } from "@/lib/scan-history";
+import { QUESTIONS } from "@/lib/triage/questions";
 import {
   CLASS_DISPLAY,
   CONFIDENCE_QUALIFIER,
   AVOID_SELF_MEDICATION_WARNING,
   MALIGNANT_GATE,
   TIER_CONTENT,
-} from '@/lib/triage/recommendations';
-import { CLASS_WEIGHTS } from '@/lib/triage/tps-core';
-import type { LesionClass, ScreeningRecord, TriageTier } from '@/lib/triage/types';
+} from "@/lib/triage/recommendations";
+import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
+import type {
+  LesionClass,
+  ScreeningRecord,
+  TriageTier,
+} from "@/lib/triage/types";
 
 /** Order the probability breakdown by clinical urgency, matching the spec tables. */
 const CLASS_BY_URGENCY = (Object.keys(CLASS_WEIGHTS) as LesionClass[]).sort(
@@ -38,11 +45,11 @@ const CLASS_BY_URGENCY = (Object.keys(CLASS_WEIGHTS) as LesionClass[]).sort(
 
 /** Short pattern word for the "…melanoma pattern (MEL)" phrasing (avoids "-like"/"pattern pattern"). */
 const PATTERN_WORD: Record<LesionClass, string> = {
-  MEL: 'melanoma',
-  SCC: 'squamous cell carcinoma',
-  BCC: 'basal cell carcinoma',
-  OTHER: 'uncertain',
-  BENIGN: 'benign',
+  MEL: "melanoma",
+  SCC: "squamous cell carcinoma",
+  BCC: "basal cell carcinoma",
+  OTHER: "uncertain",
+  BENIGN: "benign",
 };
 
 export default function ResultScreen() {
@@ -54,12 +61,12 @@ export default function ResultScreen() {
   const record = id ? getById(id) : undefined;
   // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
   // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
-  const flowTerminal = from === 'scan';
+  const flowTerminal = from === "scan";
   const goBack = useCallback(() => {
     if (!flowTerminal) {
       // Pushed from home / a lesion timeline / a list - popping is exactly right.
       if (router.canGoBack()) router.back();
-      else router.replace('/(tabs)/home');
+      else router.replace("/(tabs)/home");
       return;
     }
     exitFlow(record?.lesionId, record?.followUpOf != null);
@@ -71,11 +78,11 @@ export default function ResultScreen() {
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const tierColor = (tier: TriageTier) =>
-    tier === 'low'
+    tier === "low"
       ? { fg: theme.riskLow, bg: theme.riskLowBg }
-      : tier === 'moderate'
+      : tier === "moderate"
         ? { fg: theme.riskModerate, bg: theme.riskModerateBg }
-        : tier === 'high'
+        : tier === "high"
           ? { fg: theme.riskHigh, bg: theme.riskHighBg }
           : { fg: theme.riskCritical, bg: theme.riskCriticalBg };
 
@@ -85,7 +92,7 @@ export default function ResultScreen() {
         <Header onBack={goBack} />
         <View style={styles.emptyBody}>
           <ThemedText type="body" themeColor="muted" style={styles.center}>
-            {loading ? 'Loading result…' : 'This result could not be found.'}
+            {loading ? "Loading result…" : "This result could not be found."}
           </ThemedText>
         </View>
       </Screen>
@@ -102,31 +109,54 @@ export default function ResultScreen() {
   const cls = CLASS_DISPLAY[classification.topClass];
   const pct = Math.round(classification.topConfidence * 100);
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    year: "numeric",
+    month: "short",
+    day: "numeric",
   });
 
   // Reported findings = questions answered "yes", split by clinical weight (major first).
-  const reported = QUESTIONS.filter((q) => questionnaire.answers[q.id] === 'yes');
-  const majorFindings = reported.filter((q) => q.kind === 'major');
-  const minorFindings = reported.filter((q) => q.kind === 'minor');
+  const reported = QUESTIONS.filter(
+    (q) => questionnaire.answers[q.id] === "yes",
+  );
+  const majorFindings = reported.filter((q) => q.kind === "major");
+  const minorFindings = reported.filter((q) => q.kind === "minor");
 
   return (
-    <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>
+    <Screen variant="gradient" gradient="dawn" padded={false} edges={["top"]}>
       {/* A back-swipe would bypass the header and slide straight into the reset flow underneath. */}
-      {flowTerminal ? <Stack.Screen options={{ gestureEnabled: false }} /> : null}
+      {flowTerminal ? (
+        <Stack.Screen options={{ gestureEnabled: false }} />
+      ) : null}
       <Header onBack={goBack} />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Space.xl }]}
-        showsVerticalScrollIndicator={false}>
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + Space.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {storageIsEphemeral ? (
           <Animated.View entering={FadeInDown}>
-            <Card style={[styles.storageNotice, { borderColor: theme.riskModerate }]}>
-              <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={18} />
-              <ThemedText type="footnote" themeColor="textSecondary" style={styles.storageNoticeText}>
-                {t("This browser cannot store SpotOn data, so your history will be gone when you close this page.")}
+            <Card
+              style={[
+                styles.storageNotice,
+                { borderColor: theme.riskModerate },
+              ]}
+            >
+              <Icon
+                name="exclamationmark.triangle.fill"
+                tintColor={theme.riskModerate}
+                size={18}
+              />
+              <ThemedText
+                type="footnote"
+                themeColor="textSecondary"
+                style={styles.storageNoticeText}
+              >
+                {t(
+                  "This browser cannot store SpotOn data, so your history will be gone when you close this page.",
+                )}
               </ThemedText>
             </Card>
           </Animated.View>
@@ -135,7 +165,7 @@ export default function ResultScreen() {
         {/* 1 · Hero - classified type, tier, confidence ring. Keep the card neutral so the tier
             color stays focused on the badge and confidence ring. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: theme.surface }]}>
+          <View style={[styles.hero, { backgroundColor: tierColor(tier).bg }]}>
             <View style={styles.heroTop}>
               {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                   "% match to a pattern with features similar to…" line right below, and in the
@@ -145,7 +175,7 @@ export default function ResultScreen() {
               </ThemedText>
               <View style={[styles.tierBadge, { backgroundColor: colors.fg }]}>
                 <ThemedText type="subhead" style={{ color: theme.onBrand }}>
-                  {qualifier ? t('Precautionary') : tier.name}
+                  {qualifier ? t("Precautionary") : tier.name}
                 </ThemedText>
               </View>
             </View>
@@ -156,7 +186,8 @@ export default function ResultScreen() {
                 {/* `topClass` is the raw model enum - this printed "78% probability for MEL
                     pattern" in the most important sentence on the screen. */}
                 <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}{t("% match to")} {cls.lay}.
+                  {pct}
+                  {t("% match to")} {cls.lay}.
                 </ThemedText>
               </View>
             </View>
@@ -173,8 +204,13 @@ export default function ResultScreen() {
                   onPress={() => setViewerUri(record.imageUri)}
                   accessibilityRole="button"
                   accessibilityLabel={t("View photo full screen")}
-                  style={({ pressed }) => pressed && styles.pressed}>
-                  <Image source={{ uri: record.imageUri }} style={styles.photo} contentFit="cover" />
+                  style={({ pressed }) => pressed && styles.pressed}
+                >
+                  <Image
+                    source={{ uri: record.imageUri }}
+                    style={styles.photo}
+                    contentFit="cover"
+                  />
                   <View style={styles.photoExpand}>
                     <Icon
                       name="arrow.up.left.and.arrow.down.right"
@@ -185,7 +221,13 @@ export default function ResultScreen() {
                   </View>
                 </Pressable>
               ) : (
-                <View style={[styles.photo, styles.photoEmpty, { backgroundColor: theme.elementBg }]}>
+                <View
+                  style={[
+                    styles.photo,
+                    styles.photoEmpty,
+                    { backgroundColor: theme.elementBg },
+                  ]}
+                >
                   <Icon name="photo" tintColor={theme.muted} size={28} />
                 </View>
               )}
@@ -195,27 +237,41 @@ export default function ResultScreen() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.thumbStrip}>
+                  contentContainerStyle={styles.thumbStrip}
+                >
                   {record.images.map((img) => (
                     <Pressable
                       key={img.uri}
                       onPress={() => setViewerUri(img.uri)}
                       accessibilityRole="button"
                       accessibilityLabel={`View photo ${img.index + 1} of ${record.images.length}`}
-                      style={({ pressed }) => pressed && styles.pressed}>
-                      <Image source={{ uri: img.uri }} style={styles.thumbSmall} contentFit="cover" />
+                      style={({ pressed }) => pressed && styles.pressed}
+                    >
+                      <Image
+                        source={{ uri: img.uri }}
+                        style={styles.thumbSmall}
+                        contentFit="cover"
+                      />
                     </Pressable>
                   ))}
                 </ScrollView>
               ) : null}
             </View>
             <View style={styles.photoCaption}>
-              <Icon name="mappin.circle.fill" tintColor={theme.brand} size={18} />
+              <Icon
+                name="mappin.circle.fill"
+                tintColor={theme.brand}
+                size={18}
+              />
               <View style={styles.photoCaptionText}>
-                <ThemedText type="headline">{mark?.region ? t(mark.region) : t('Location not marked')}</ThemedText>
+                <ThemedText type="headline">
+                  {mark?.region ? t(mark.region) : t("Location not marked")}
+                </ThemedText>
                 <ThemedText type="subhead" themeColor="textSecondary">
                   {t("Checked on")} {date}
-                  {record.images.length > 1 ? ` · ${record.images.length} photos` : ''}
+                  {record.images.length > 1
+                    ? ` · ${record.images.length} photos`
+                    : ""}
                 </ThemedText>
               </View>
             </View>
@@ -223,10 +279,18 @@ export default function ResultScreen() {
         </Animated.View>
 
         {/* 3 · The one action to take, with the safety warning immediately underneath. */}
-        <Animated.View entering={FadeInDown.delay(110)} style={styles.priorityBlock}>
+        <Animated.View
+          entering={FadeInDown.delay(110)}
+          style={styles.priorityBlock}
+        >
           <View style={[styles.priority, { backgroundColor: colors.bg }]}>
-            <View style={[styles.priorityDot, { backgroundColor: colors.fg }]} />
-            <ThemedText type="subhead" style={[styles.priorityText, { color: colors.fg }]}>
+            <View
+              style={[styles.priorityDot, { backgroundColor: colors.fg }]}
+            />
+            <ThemedText
+              type="subhead"
+              style={[styles.priorityText, { color: colors.fg }]}
+            >
               {t("Priority action:")} {tier.priorityAction}
             </ThemedText>
           </View>
@@ -247,12 +311,15 @@ export default function ResultScreen() {
               </ThemedText>
             ) : (
               <ThemedText type="body" themeColor="textSecondary">
-                {t("This result suggests a")}{' '}
+                {t("This result suggests a")}{" "}
                 <ThemedText type="body" style={{ color: colors.fg }}>
-                  {PATTERN_WORD[classification.topClass]} {t("pattern (")}{classification.topClass})
-                </ThemedText>{' '}
-                {t("based on your photo.")}{' '}
-                <ThemedText type="body">{t("It is not a confirmed diagnosis.")}</ThemedText>{' '}
+                  {PATTERN_WORD[classification.topClass]} {t("pattern (")}
+                  {classification.topClass})
+                </ThemedText>{" "}
+                {t("based on your photo.")}{" "}
+                <ThemedText type="body">
+                  {t("It is not a confirmed diagnosis.")}
+                </ThemedText>{" "}
                 {tier.recommendation}
               </ThemedText>
             )}
@@ -268,9 +335,13 @@ export default function ResultScreen() {
         <Animated.View entering={FadeInDown.delay(260)}>
           <Card style={styles.section}>
             <View style={styles.sectionHead}>
-              <ThemedText type="headline">{t("Symptoms you reported")}</ThemedText>
+              <ThemedText type="headline">
+                {t("Symptoms you reported")}
+              </ThemedText>
               {reported.length > 0 ? (
-                <View style={[styles.countPill, { backgroundColor: colors.bg }]}>
+                <View
+                  style={[styles.countPill, { backgroundColor: colors.bg }]}
+                >
                   <ThemedText type="caption" style={{ color: colors.fg }}>
                     {reported.length} {t("of")} {QUESTIONS.length}
                   </ThemedText>
@@ -279,15 +350,35 @@ export default function ResultScreen() {
             </View>
 
             {reported.length === 0 ? (
-              <View style={[styles.noneRow, { backgroundColor: theme.riskLowBg }]}>
-                <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={20} />
-                <ThemedText type="subhead" themeColor="textSecondary" style={styles.noneText}>
-                  {t("You didn’t report any warning signs for this spot.")}</ThemedText>
+              <View
+                style={[styles.noneRow, { backgroundColor: theme.riskLowBg }]}
+              >
+                <Icon
+                  name="checkmark.circle.fill"
+                  tintColor={theme.riskLow}
+                  size={20}
+                />
+                <ThemedText
+                  type="subhead"
+                  themeColor="textSecondary"
+                  style={styles.noneText}
+                >
+                  {t("You didn’t report any warning signs for this spot.")}
+                </ThemedText>
               </View>
             ) : (
               <View style={styles.findingGroups}>
-                <FindingGroup title={t("Major warning signs")} items={majorFindings} accent={colors} />
-                <FindingGroup title={t("Additional signs")} items={minorFindings} accent={colors} muted />
+                <FindingGroup
+                  title={t("Major warning signs")}
+                  items={majorFindings}
+                  accent={colors}
+                />
+                <FindingGroup
+                  title={t("Additional signs")}
+                  items={minorFindings}
+                  accent={colors}
+                  muted
+                />
               </View>
             )}
           </Card>
@@ -301,15 +392,20 @@ export default function ResultScreen() {
               label={t("View screening summary")}
               variant="brand"
               icon="doc.text.fill"
-              onPress={() => router.push({ pathname: '/scan/report', params: { id: record.id } })}
+              onPress={() =>
+                router.push({
+                  pathname: "/scan/report",
+                  params: { id: record.id },
+                })
+              }
             />
           ) : null}
           {tier.showDirectory ? (
             <Button
               label={t("Find a clinic near you")}
-              variant={tier.showReport ? 'outline' : 'brand'}
+              variant={tier.showReport ? "outline" : "brand"}
               icon="mappin.circle.fill"
-              onPress={() => router.push('/(tabs)/directory')}
+              onPress={() => router.push("/(tabs)/directory")}
             />
           ) : null}
           {tier.showEducation ? (
@@ -317,20 +413,33 @@ export default function ResultScreen() {
               label={t("Learn more about skin cancer")}
               variant="brand"
               icon="book.fill"
-              onPress={() => router.push('/(tabs)/learn')}
+              onPress={() => router.push("/(tabs)/learn")}
             />
           ) : null}
           <Button
             label={t("See this spot over time")}
-            variant={tier.showReport || tier.showEducation ? 'outline' : 'brand'}
+            variant={
+              tier.showReport || tier.showEducation ? "outline" : "brand"
+            }
             icon="clock.arrow.circlepath"
-            onPress={() => router.push({ pathname: '/scan/lesion', params: { id: record.lesionId! } })}
+            onPress={() =>
+              router.push({
+                pathname: "/scan/lesion",
+                params: { id: record.lesionId! },
+              })
+            }
             disabled={!record.lesionId}
           />
-          {tier.offerReminder ? <ReminderRow lesionId={record.lesionId} /> : null}
+          {tier.offerReminder ? (
+            <ReminderRow lesionId={record.lesionId} />
+          ) : null}
         </Animated.View>
       </ScrollView>
-      <ImageViewer visible={viewerUri != null} uri={viewerUri ?? ''} onClose={() => setViewerUri(null)} />
+      <ImageViewer
+        visible={viewerUri != null}
+        uri={viewerUri ?? ""}
+        onClose={() => setViewerUri(null)}
+      />
     </Screen>
   );
 }
@@ -349,8 +458,13 @@ export default function ResultScreen() {
  * its timeline without reloading anything. A FIRST scan has no lesion screen underneath - it began
  * at the body picker from home - so home is where it goes, matching where the user started.
  */
-function exitFlow(lesionId: string | null | undefined, isFollowUp: boolean): void {
-  const lesionHref = lesionId ? ({ pathname: '/scan/lesion', params: { id: lesionId } } as const) : null;
+function exitFlow(
+  lesionId: string | null | undefined,
+  isFollowUp: boolean,
+): void {
+  const lesionHref = lesionId
+    ? ({ pathname: "/scan/lesion", params: { id: lesionId } } as const)
+    : null;
   if (isFollowUp && lesionHref) {
     try {
       // Guarded rather than assumed: dismissTo needs that route to still be in the stack, and a
@@ -365,7 +479,7 @@ function exitFlow(lesionId: string | null | undefined, isFollowUp: boolean): voi
     router.replace(lesionHref);
     return;
   }
-  router.replace('/(tabs)/home');
+  router.replace("/(tabs)/home");
 }
 
 function Header({ onBack }: { onBack?: () => void }) {
@@ -375,13 +489,21 @@ function Header({ onBack }: { onBack?: () => void }) {
     <View style={styles.header}>
       <Pressable
         hitSlop={12}
-        onPress={() => (onBack ? onBack() : router.canGoBack() ? router.back() : router.replace('/(tabs)/home'))}
+        onPress={() =>
+          onBack
+            ? onBack()
+            : router.canGoBack()
+              ? router.back()
+              : router.replace("/(tabs)/home")
+        }
         accessibilityRole="button"
-        accessibilityLabel={t("Back")}>
+        accessibilityLabel={t("Back")}
+      >
         <Icon name="chevron.left" tintColor={theme.brand} size={20} />
       </Pressable>
       <ThemedText type="headline" themeColor="textSecondary">
-        {t("Result")}</ThemedText>
+        {t("Result")}
+      </ThemedText>
       <View style={styles.headerSpacer} />
     </View>
   );
@@ -394,15 +516,23 @@ function WarningBanner() {
     <View
       style={[
         styles.warningBanner,
-        { backgroundColor: theme.riskModerateBg, borderColor: theme.riskModerate },
-      ]}>
-      <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={18} />
+        {
+          backgroundColor: theme.riskModerateBg,
+          borderColor: theme.riskModerate,
+        },
+      ]}
+    >
+      <Icon
+        name="exclamationmark.triangle.fill"
+        tintColor={theme.riskModerate}
+        size={18}
+      />
       <View style={styles.warningCopy}>
         <ThemedText type="subhead" style={{ color: theme.riskModerate }}>
-          {t('Avoid self-medication')}
+          {t("Avoid self-medication")}
         </ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
-          {t(AVOID_SELF_MEDICATION_WARNING).replace(/^[^.]*\.\s*/, '')}
+          {t(AVOID_SELF_MEDICATION_WARNING).replace(/^[^.]*\.\s*/, "")}
         </ThemedText>
       </View>
     </View>
@@ -419,9 +549,23 @@ function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
   const offset = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
   const mid = size / 2;
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{
+        width: size,
+        height: size,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
-        <Circle cx={mid} cy={mid} r={r} stroke={withAlpha(color, 0.22)} strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={mid}
+          cy={mid}
+          r={r}
+          stroke={withAlpha(color, 0.22)}
+          strokeWidth={stroke}
+          fill="none"
+        />
         <Circle
           cx={mid}
           cy={mid}
@@ -450,7 +594,9 @@ function AboutType({ record }: { record: ScreeningRecord }) {
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">{t('About {{name}}', { name: cls.full })}</ThemedText>
+      <ThemedText type="headline">
+        {t("About {{name}}", { name: cls.full })}
+      </ThemedText>
       <ThemedText type="body" themeColor="textSecondary">
         {cls.about}
       </ThemedText>
@@ -459,11 +605,16 @@ function AboutType({ record }: { record: ScreeningRecord }) {
           onPress={() => setOpen((v) => !v)}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
-          style={styles.expandRow}>
+          style={styles.expandRow}
+        >
           <ThemedText type="subhead" themeColor="brand">
-            {open ? t('Hide pattern breakdown') : t('See pattern breakdown')}
+            {open ? t("Hide pattern breakdown") : t("See pattern breakdown")}
           </ThemedText>
-          <Icon name={open ? 'chevron.up' : 'chevron.down'} tintColor={theme.brand} size={14} />
+          <Icon
+            name={open ? "chevron.up" : "chevron.down"}
+            tintColor={theme.brand}
+            size={14}
+          />
         </Pressable>
         {open ? (
           <Animated.View entering={FadeInDown} style={styles.bars}>
@@ -472,10 +623,19 @@ function AboutType({ record }: { record: ScreeningRecord }) {
               const top = c === classification.topClass;
               return (
                 <View key={c} style={styles.barRow}>
-                  <ThemedText type="footnote" themeColor={top ? 'text' : 'textSecondary'} style={styles.barLabel}>
+                  <ThemedText
+                    type="footnote"
+                    themeColor={top ? "text" : "textSecondary"}
+                    style={styles.barLabel}
+                  >
                     {CLASS_DISPLAY[c].name}
                   </ThemedText>
-                  <View style={[styles.barTrack, { backgroundColor: theme.elementBg }]}>
+                  <View
+                    style={[
+                      styles.barTrack,
+                      { backgroundColor: theme.elementBg },
+                    ]}
+                  >
                     <View
                       style={[
                         styles.barFill,
@@ -486,14 +646,21 @@ function AboutType({ record }: { record: ScreeningRecord }) {
                       ]}
                     />
                   </View>
-                  <ThemedText type="caption" themeColor="muted" style={styles.barPct}>
+                  <ThemedText
+                    type="caption"
+                    themeColor="muted"
+                    style={styles.barPct}
+                  >
                     {Math.round(p * 100)}%
                   </ThemedText>
                 </View>
               );
             })}
             <ThemedText type="caption" themeColor="muted">
-              {t("These are pattern similarities seen by the on-device model - not a diagnosis.")}</ThemedText>
+              {t(
+                "These are pattern similarities seen by the on-device model - not a diagnosis.",
+              )}
+            </ThemedText>
           </Animated.View>
         ) : null}
       </LayoutAnimationConfig>
@@ -522,13 +689,29 @@ function FindingGroup({
   const dot = muted ? theme.muted : accent.fg;
   return (
     <View style={styles.findingGroup}>
-      <ThemedText type="caption" themeColor="muted" style={styles.findingGroupTitle}>
+      <ThemedText
+        type="caption"
+        themeColor="muted"
+        style={styles.findingGroupTitle}
+      >
         {title.toUpperCase()}
       </ThemedText>
       {items.map((q) => (
         <View key={q.id} style={styles.findingRow}>
-          <View style={[styles.findingMarker, { backgroundColor: muted ? 'transparent' : dot, borderColor: dot }]}>
-            <Icon name="checkmark" tintColor={muted ? dot : theme.onBrand} size={11} />
+          <View
+            style={[
+              styles.findingMarker,
+              {
+                backgroundColor: muted ? "transparent" : dot,
+                borderColor: dot,
+              },
+            ]}
+          >
+            <Icon
+              name="checkmark"
+              tintColor={muted ? dot : theme.onBrand}
+              size={11}
+            />
           </View>
           <ThemedText type="subhead" style={styles.findingText}>
             {q.finding}
@@ -541,7 +724,10 @@ function FindingGroup({
 
 /** "October 3" - the reminder date, without a year the user doesn't need for a 30-day horizon. */
 function formatDue(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+  });
 }
 
 /**
@@ -552,7 +738,9 @@ function formatDue(iso: string): string {
 function ReminderRow({ lesionId }: { lesionId?: string | null }) {
   useLocale();
   const theme = useTheme();
-  const [state, setState] = useState<'idle' | 'working' | 'done' | 'denied' | 'unsupported'>('idle');
+  const [state, setState] = useState<
+    "idle" | "working" | "done" | "denied" | "unsupported"
+  >("idle");
   const [dueLabel, setDueLabel] = useState<string | null>(null);
 
   // Coming back to a result you already opted in on should say so, not offer the opt-in again.
@@ -560,9 +748,10 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
     let cancelled = false;
     getPendingSelfCheckReminder()
       .then((pending) => {
-        if (cancelled || !pending || pending.lesionId !== (lesionId ?? null)) return;
+        if (cancelled || !pending || pending.lesionId !== (lesionId ?? null))
+          return;
         setDueLabel(formatDue(pending.dueAt));
-        setState('done');
+        setState("done");
       })
       .catch(() => {});
     return () => {
@@ -571,27 +760,37 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
   }, [lesionId]);
 
   async function enable() {
-    setState('working');
+    setState("working");
     try {
-      const outcome = await scheduleSelfCheckReminder(REMINDER_DAYS, { lesionId });
-      if (outcome !== 'scheduled') {
-        setState(outcome === 'denied' ? 'denied' : 'unsupported');
+      const outcome = await scheduleSelfCheckReminder(REMINDER_DAYS, {
+        lesionId,
+      });
+      if (outcome !== "scheduled") {
+        setState(outcome === "denied" ? "denied" : "unsupported");
         return;
       }
       const due = await getSelfCheckReminderDueAt();
       setDueLabel(due ? formatDue(due) : null);
-      setState('done');
+      setState("done");
     } catch (e) {
-      console.warn('[result] reminder opt-in failed', e);
-      setState('idle');
+      console.warn("[result] reminder opt-in failed", e);
+      setState("idle");
     }
   }
 
-  if (state === 'done') {
+  if (state === "done") {
     return (
       <View style={[styles.reminderDone, { backgroundColor: theme.riskLowBg }]}>
-        <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={18} />
-        <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
+        <Icon
+          name="checkmark.circle.fill"
+          tintColor={theme.riskLow}
+          size={18}
+        />
+        <ThemedText
+          type="subhead"
+          themeColor="textSecondary"
+          style={styles.reminderText}
+        >
           {dueLabel
             ? `We’ll notify you on ${dueLabel} to re-check this spot.`
             : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`}
@@ -602,13 +801,25 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
 
   // Permission refused (or previously refused and no longer promptable) - the only way back is the
   // system settings screen, so say so instead of leaving a button that silently does nothing.
-  if (state === 'denied') {
+  if (state === "denied") {
     return (
       <View style={styles.reminderDenied}>
-        <View style={[styles.reminderDone, { backgroundColor: theme.riskModerateBg }]}>
+        <View
+          style={[
+            styles.reminderDone,
+            { backgroundColor: theme.riskModerateBg },
+          ]}
+        >
           <Icon name="bell.fill" tintColor={theme.riskModerate} size={18} />
-          <ThemedText type="subhead" themeColor="textSecondary" style={styles.reminderText}>
-            {t("Notifications are turned off for SpotOn, so we can’t remind you.")}</ThemedText>
+          <ThemedText
+            type="subhead"
+            themeColor="textSecondary"
+            style={styles.reminderText}
+          >
+            {t(
+              "Notifications are turned off for SpotOn, so we can’t remind you.",
+            )}
+          </ThemedText>
         </View>
         <Button
           label={t("Open notification settings")}
@@ -620,10 +831,11 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
     );
   }
 
-  if (state === 'unsupported') {
+  if (state === "unsupported") {
     return (
       <ThemedText type="footnote" themeColor="muted">
-        {t("Reminders aren’t available on this device.")}</ThemedText>
+        {t("Reminders aren’t available on this device.")}
+      </ThemedText>
     );
   }
 
@@ -632,7 +844,7 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
       label={`Remind me in ${REMINDER_DAYS} days`}
       variant="outline"
       icon="bell.fill"
-      loading={state === 'working'}
+      loading={state === "working"}
       onPress={enable}
     />
   );
@@ -642,14 +854,14 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
 function withAlpha(hex: string, alpha: number): string {
   const a = Math.round(Math.max(0, Math.min(1, alpha)) * 255)
     .toString(16)
-    .padStart(2, '0');
+    .padStart(2, "0");
   return `${hex}${a}`;
 }
 
 const styles = StyleSheet.create({
   storageNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: Space.sm,
     borderWidth: 1,
     marginBottom: Space.md,
@@ -658,15 +870,19 @@ const styles = StyleSheet.create({
   header: {
     height: 48,
     paddingHorizontal: Space.xl,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   headerSpacer: { width: 20 },
-  emptyBody: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyBody: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: Space.xl, paddingTop: Space.sm, gap: Space.base },
-  center: { textAlign: 'center' },
+  scrollContent: {
+    paddingHorizontal: Space.xl,
+    paddingTop: Space.sm,
+    gap: Space.base,
+  },
+  center: { textAlign: "center" },
   // Keep the hero card neutral so the tier color is reserved for status accents.
   hero: {
     borderRadius: Radius.xl,
@@ -674,54 +890,63 @@ const styles = StyleSheet.create({
     gap: Space.lg,
     ...Elevation.sm,
   },
-  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },
+  heroTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Space.md,
+  },
   heroTitle: { flex: 1 },
   tierBadge: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.pill,
   },
-  heroBottom: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
+  heroBottom: { flexDirection: "row", alignItems: "center", gap: Space.lg },
   heroConfText: { flex: 1, gap: 2 },
   // Keep the photo inset inside the white card so the media and details read as one framed
   // record, matching the tracked-spot card treatment.
   photoCard: {
-    overflow: 'hidden',
+    overflow: "hidden",
     paddingTop: Space.md,
     paddingHorizontal: Space.md,
     paddingBottom: Space.sm,
   },
-  photoMedia: { borderRadius: Radius.lg, overflow: 'hidden' },
+  photoMedia: { borderRadius: Radius.lg, overflow: "hidden" },
   pressed: { opacity: 0.9 },
-  photo: { width: '100%', height: 184 },
-  photoEmpty: { alignItems: 'center', justifyContent: 'center' },
+  photo: { width: "100%", height: 184 },
+  photoEmpty: { alignItems: "center", justifyContent: "center" },
   photoExpand: {
-    position: 'absolute',
+    position: "absolute",
     right: Space.md,
     top: Space.md,
     width: 28,
     height: 28,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(33,26,21,0.55)',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(33,26,21,0.55)",
   },
   photoCaption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     paddingHorizontal: Space.base,
     paddingTop: Space.md,
     paddingBottom: Space.sm,
   },
-  thumbStrip: { gap: Space.sm, paddingHorizontal: Space.md, paddingVertical: Space.md },
+  thumbStrip: {
+    gap: Space.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.md,
+  },
   thumbSmall: { width: 56, height: 56, borderRadius: Radius.sm },
   photoCaptionText: { flex: 1, gap: 2 },
   // Priority action, with the disclaimer as a footnote beneath.
   priorityBlock: { gap: Space.md },
   priority: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.md,
     paddingHorizontal: Space.base,
     paddingVertical: Space.base,
@@ -730,8 +955,8 @@ const styles = StyleSheet.create({
   priorityDot: { width: 8, height: 8, borderRadius: 4 },
   priorityText: { flex: 1 },
   warningBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: Space.sm,
     padding: Space.md,
     borderWidth: 1,
@@ -740,18 +965,37 @@ const styles = StyleSheet.create({
   warningCopy: { flex: 1, gap: 2 },
   // Cards
   section: { gap: Space.md },
-  sectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
-  countPill: { paddingHorizontal: Space.sm, paddingVertical: 2, borderRadius: Radius.pill },
-  expandRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingVertical: Space.xs },
+  sectionHead: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: Space.sm,
+  },
+  countPill: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+  },
+  expandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.xs,
+    paddingVertical: Space.xs,
+  },
   bars: { gap: Space.md },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  barRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
   barLabel: { width: 132 },
-  barTrack: { flex: 1, height: 8, borderRadius: Radius.pill, overflow: 'hidden' },
+  barTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: Radius.pill,
+    overflow: "hidden",
+  },
   barFill: { height: 8, borderRadius: Radius.pill },
-  barPct: { width: 36, textAlign: 'right' },
+  barPct: { width: 36, textAlign: "right" },
   noneRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.sm,
     padding: Space.base,
     borderRadius: Radius.md,
@@ -760,20 +1004,20 @@ const styles = StyleSheet.create({
   findingGroups: { gap: Space.base },
   findingGroup: { gap: Space.sm },
   findingGroupTitle: { letterSpacing: 0.8 },
-  findingRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  findingRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
   findingMarker: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   findingText: { flex: 1 },
   actions: { gap: Space.md, marginTop: Space.sm },
   reminderDone: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Space.sm,
     padding: Space.base,
     borderRadius: Radius.md,
