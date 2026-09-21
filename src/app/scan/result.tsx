@@ -165,7 +165,7 @@ export default function ResultScreen() {
         {/* 1 · Hero - classified type, tier, confidence ring. Keep the card neutral so the tier
             color stays focused on the badge and confidence ring. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: tierColor(tier).bg }]}>
+          <View style={[styles.hero, { backgroundColor: colors.bg }]}>
             <View style={styles.heroTop}>
               {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                   "% match to a pattern with features similar to…" line right below, and in the

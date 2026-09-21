@@ -50,7 +50,9 @@ try {
 }
 
 console.log('\n▸ Exporting web build…');
-run('npx', ['expo', 'export', '-p', 'web'], root);
+// --clear: Metro's transform cache keeps EXPO_PUBLIC_* values inlined from the previous build, so
+// changing .env (e.g. a new API URL) otherwise ships the OLD value. Seen 2026-09-21.
+run('npx', ['expo', 'export', '-p', 'web', '--clear'], root);
 
 // Restore the project link that the export just deleted.
 mkdirSync(join(dist, '.vercel'), { recursive: true });

@@ -8,19 +8,19 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-backend-3mpm.onrender.com"
       }
     },
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-backend-3mpm.onrender.com"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-api.onrender.com"
+        "EXPO_PUBLIC_API_BASE_URL": "https://spoton-backend-3mpm.onrender.com"
       }
     }
   },

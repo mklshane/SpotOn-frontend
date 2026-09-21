@@ -25,12 +25,12 @@ const PROJECT_END = "October 2026";
 const DB_REGION = "Singapore (AWS ap-southeast-1)";
 
 /**
- * Where the API service itself runs. render.yaml pins no `region:`, so the deploy took
- * Render's default - confirmed by the service's origin CNAME, which encodes the region:
- *   spoton-api.onrender.com -> gcp-us-west1-1.origin.onrender.com
- * Re-check that CNAME if the service is ever moved to another region.
+ * Where the API service itself runs. Moved 2026-09-21 from Oregon (spoton-api) to a Render
+ * service created in the Singapore region (spoton-backend-3mpm). The origin CNAME still reads
+ * gcp-us-west1-1 - that is Render's shared edge name, not the region: /health/db (a Singapore
+ * DB round trip) answers in ~0.2s from Manila, which Oregon cannot do. Trust the dashboard.
  */
-const API_REGION = "Oregon, USA (GCP us-west1)";
+const API_REGION = "Singapore";
 
 /**
  * Official DLSL Data Protection Officer address (section 19). Rendered only when set;
