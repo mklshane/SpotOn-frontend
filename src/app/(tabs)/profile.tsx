@@ -59,7 +59,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <Screen padded={false} edges={["bottom"]}>
+    <Screen padded={false} edges={[]}>
       <View style={styles.hero}>
         <LinearGradient
           colors={

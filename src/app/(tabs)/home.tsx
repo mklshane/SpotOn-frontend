@@ -13,12 +13,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { ConditionsCard } from '@/components/learn/ConditionsCard';
 import { LesionCard } from '@/components/scan/lesion-card';
 import { ScreeningThumbnail } from '@/components/scan/screening-thumbnail';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { Screen } from '@/components/ui/screen';
 import { Elevation, Radius, Space } from '@/constants/theme';
+import { useCurrentConditions } from '@/hooks/use-current-conditions';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { useScanHistory } from '@/lib/scan-history';
@@ -129,6 +131,7 @@ export default function HomeScreen() {
   const theme = useTheme();
   const { user } = useAuth();
   const { entries, lesions, loading, storageIsEphemeral } = useScanHistory();
+  const conditions = useCurrentConditions();
   const dashboardOpacity = useSharedValue(0);
   const dashboardTranslateY = useSharedValue(14);
   const firstName = user?.full_name?.trim().split(/\s+/)[0] || 'there';
@@ -177,7 +180,7 @@ export default function HomeScreen() {
   }));
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={['top']}>
       <Animated.ScrollView
         style={dashboardAnimatedStyle}
         contentContainerStyle={styles.content}
@@ -248,6 +251,19 @@ export default function HomeScreen() {
             <ThemedText type="footnote" themeColor="textSecondary" style={styles.storageNoticeText}>
               {t("Your saved screenings can't be opened here. They are not lost - close any other SpotOn tab and reload, or open SpotOn outside private browsing.")}
             </ThemedText>
+          </View>
+        ) : null}
+
+        {/* Live UV + temperature: online-only, so offline Home is unchanged. */}
+        {conditions.status !== 'hidden' ? (
+          <View style={styles.conditions}>
+            <ConditionsCard
+              variant="compact"
+              data={conditions.data}
+              placeName={conditions.placeName}
+              usingDefault={conditions.usingDefault}
+              onPress={() => router.push({ pathname: '/learn/article', params: { topicId: 'prevention' } })}
+            />
           </View>
         ) : null}
 
@@ -446,6 +462,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.base,
   },
   storageNoticeText: { flex: 1 },
+  conditions: { marginTop: Space.xl },
   content: {
     paddingHorizontal: Space.xl,
     // Keep the original Home spacing below the last card and above the tab bar.

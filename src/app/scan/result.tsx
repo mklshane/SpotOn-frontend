@@ -31,6 +31,7 @@ import {
   MALIGNANT_GATE,
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
+import { displayConfidence } from "@/lib/triage/display-confidence";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -107,7 +108,7 @@ export default function ResultScreen() {
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
   const cls = CLASS_DISPLAY[classification.topClass];
-  const pct = Math.round(classification.topConfidence * 100);
+  const pct = Math.round(displayConfidence(classification, triage) * 100);
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",

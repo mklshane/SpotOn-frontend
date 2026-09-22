@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { displayConfidence } from '@/lib/triage/display-confidence';
 import { CLASS_DISPLAY, TIER_CONTENT } from '@/lib/triage/recommendations';
 import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
 
@@ -35,7 +36,7 @@ export function ScreeningRow({ item }: { item: ScreeningRecord }) {
   const { fg, bg } = tierColor(theme, item.triage.tier);
   const cls = CLASS_DISPLAY[item.classification.topClass];
   const urgency = TIER_CONTENT[item.triage.tier].name;
-  const pct = Math.round(item.classification.topConfidence * 100);
+  const pct = Math.round(displayConfidence(item.classification, item.triage) * 100);
   const date = new Date(item.createdAt).toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
