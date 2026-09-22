@@ -7,8 +7,9 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_dfinal_fp32.tflite (interpreter inspection, 2026-09-14), and
- * matching the contract its own `model_meta_dfinal.json` states:
+ * Verified against the bundled spoton_dfe4tv_fp32.tflite (interpreter inspection, 2026-09-22 - same
+ * tensor names, shapes and raw-logit output as D_final), matching the contract
+ * `model_meta_dfe4tv.json` states:
  *   input  "serving_default_args_0"          [1, 3, 260, 260] float32 **NCHW** (EfficientNet-B2)
  *   output "serving_default_output_0_output" [1, 5]           float32     (raw LOGITS - no softmax
  *                                                   in the graph; classify.ts applies it on-device)
@@ -28,6 +29,45 @@ import type { LesionClass } from '../triage/types';
  */
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
+//
+// === dfe4tv RE-BUNDLED 2026-09-22 (late) at Shane's instruction, its own calibration. ===
+//
+// Replaces the D_final @0.4444 re-bundle below. Uses `model_meta_dfe4tv.json` verbatim:
+// MALIGNANT_THRESHOLD 0.4444 / CONFIDENCE_TEMPERATURE 0.9432. ISIC holdout at that point:
+// sens 0.817 / spec 0.787, AUROC 0.863 (D_final's curve is higher: 0.879).
+//
+// === D_final RE-BUNDLED 2026-09-22 at Shane's instruction, threshold refit to 0.4444. ===
+//
+// The same-day dfe3 / dfe4tv / dfe4 trials all ranked worse on the 200-image ISIC holdout
+// (shipped pipeline, y11n detector, each at its own T; per-image CSVs in that session's scratchpad):
+//     AUROC   D_final 0.879 | dfe4tv 0.863 | dfe3 0.860 | dfe4 0.848
+// Their sensitivity gains came from lower thresholds, not better models, so D_final is back with a
+// lower threshold instead - see MALIGNANT_THRESHOLD. T stays 0.6948 from `model_meta_dfinal.json`.
+//
+// === dfe4 / D_final_efficient_v3_curated_mm, bundled 2026-09-22, reverted the same day. ===
+//
+// Same data as dfe4tv but with the usual 70/15/15 split (`~/Downloads/D_final_efficient_v3.ipynb`),
+// so it trained on less. Calibration from `model_meta_dfe4.json`:
+//     MALIGNANT_THRESHOLD    0.3501   (90%-sens on its valid split @ deploy geometry; thrF1 0.5868)
+//     CONFIDENCE_TEMPERATURE 0.9151   (same fit)
+//
+// === dfe4tv / D_final_efficient_v3 (train/val only), bundled 2026-09-22, superseded the same day. ===
+//
+// Same recipe as D_final, but the lesion-level split is 85/15 train/valid with NO test partition
+// (`~/Downloads/D_final_efficient_v3_trainval.ipynb`). Calibration from `model_meta_dfe4tv.json`:
+//     MALIGNANT_THRESHOLD    0.4444   (90%-sens on the 15% valid split @ deploy geometry; thrF1 0.6838)
+//     CONFIDENCE_TEMPERATURE 0.9432   (same fit)
+// Trained after the 2026-09-22 hand-added batch, so those images cannot evaluate it.
+//
+// === dfe3 / D_final_efficient_v2_curated_mm, bundled 2026-09-22, superseded the same day. ===
+//
+// Same recipe as D_final, retrained fresh on stage3 after the 2026-09-21 hand-added batch (MEL +28,
+// BCC +51, BENIGN +9) - `~/Downloads/D_final_efficient_v2.ipynb` (train) +
+// `D_final_efficient_v2_export_download.ipynb` (export), calibration in `model_meta_dfe3.json`:
+//     MALIGNANT_THRESHOLD    0.7144   (90%-sens on the v2 valid split @ deploy geometry)
+//     CONFIDENCE_TEMPERATURE 0.7054   (same fit)
+// Its seed-42 split was recomputed over the grown stage3, so its own test numbers are not
+// comparable with D_final's. The D_final notes below are kept as history.
 //
 // === D_final / D_final_efficient_curated_mm, bundled 2026-09-14 at Shane's instruction. ===
 //
@@ -373,10 +413,10 @@ import type { LesionClass } from '../triage/types';
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-export const MODEL_ASSET = require('../../../assets/models/spoton_dfinal_fp32.tflite');
+export const MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_dfinal_fp32';
+export const MODEL_VERSION = 'spoton_dfe4tv_fp32';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -435,6 +475,29 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
 /**
  * Decision threshold on the malignant score (BCC+MEL+SCC softmax sum), consumed by the Malignant
  * Gate in tps-core.ts (`evaluateMalignantGate`), which floors the tier at Moderate when it fires.
+ *
+ * === dfe4tv re-bundled 2026-09-22 (late): 0.4444, verbatim from `model_meta_dfe4tv.json` (its
+ * own 90%-sens valid point - numerically the same value D_final was briefly given). Paired with
+ * CONFIDENCE_TEMPERATURE 0.9432. ===
+ *
+ * === D_final re-bundled 2026-09-22: 0.4444, A POLICY CHOICE (Shane), NOT an export value. ===
+ * The export's own 0.7712 measured sens 0.642 / spec 0.938 on the ISIC holdout (43/120 malignancies
+ * missed). At 0.4444 the same holdout gives sens 0.792 / spec 0.787 - dfe4tv's operating point on a
+ * better-ranking model. Chosen by looking at that holdout, so the holdout can no longer measure it
+ * without bias: confirm on a freshly held-out set before quoting these numbers in the thesis.
+ * Paired with CONFIDENCE_TEMPERATURE 0.6948 (the threshold is on T-scaled probabilities).
+ *
+ * === dfe4 / D_final_efficient_v3_curated_mm, 2026-09-22: 0.3501, TAKEN VERBATIM FROM
+ * `model_meta_dfe4.json`. === 90%-sens point on its valid split (thrF1 0.5868). Paired with
+ * CONFIDENCE_TEMPERATURE 0.9151. The lowest threshold this lineage has shipped.
+ *
+ * === dfe4tv / D_final_efficient_v3 train/val, 2026-09-22: 0.4444, TAKEN VERBATIM FROM
+ * `model_meta_dfe4tv.json`. === 90%-sens point on its 15% valid split (thrF1 0.6838). Paired with
+ * CONFIDENCE_TEMPERATURE 0.9432. Everything below is history.
+ *
+ * === dfe3 / D_final_efficient_v2_curated_mm, 2026-09-22: 0.7144, TAKEN VERBATIM FROM
+ * `model_meta_dfe3.json`. === 90%-sens point on the v2 valid split (thrF1 0.7303). Paired with
+ * CONFIDENCE_TEMPERATURE 0.7054. Everything below describes D_final and is kept as history.
  *
  * === D_final / D_final_efficient_curated_mm, 2026-09-14: 0.7712, TAKEN VERBATIM FROM
  * `model_meta_dfinal.json`. ===
@@ -711,7 +774,7 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.7712;
+export const MALIGNANT_THRESHOLD = 0.4444;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -751,6 +814,20 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * confidence honest so the <40% Safety Floor and Triage Priority Score behave correctly.
  *
  * COUPLED TO THE BUNDLED MODEL FILE - refit whenever the bundled .tflite changes.
+ *
+ * === dfe4tv re-bundled 2026-09-22 (late): 0.9432, from `model_meta_dfe4tv.json`. ===
+ *
+ * === D_final re-bundled 2026-09-22: 0.6948, back to `model_meta_dfinal.json`. ===
+ * Paired with the refit MALIGNANT_THRESHOLD 0.4444.
+ *
+ * === dfe4 / D_final_efficient_v3_curated_mm, 2026-09-22: 0.9151, from `model_meta_dfe4.json`. ===
+ * Same fit as MALIGNANT_THRESHOLD 0.3501.
+ *
+ * === dfe4tv / D_final_efficient_v3 train/val, 2026-09-22: 0.9432, from `model_meta_dfe4tv.json`. ===
+ * Same fit as MALIGNANT_THRESHOLD 0.4444. Far gentler than the <0.8 run of earlier exports.
+ *
+ * === dfe3 / D_final_efficient_v2_curated_mm, 2026-09-22: 0.7054, from `model_meta_dfe3.json`. ===
+ * Same fit as MALIGNANT_THRESHOLD 0.7144. The D_final notes below are kept as history.
  *
  * === D_final / D_final_efficient_curated_mm, 2026-09-14: 0.6948, from `model_meta_dfinal.json`. ===
  *
@@ -944,7 +1021,7 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 0.6948;
+export const CONFIDENCE_TEMPERATURE = 0.9432;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average

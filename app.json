@@ -112,7 +112,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow SpotOn to use your location to find clinics near you.",
+          "locationWhenInUsePermission": "Allow SpotOn to use your location to find clinics near you and show local UV levels.",
           "locationAlwaysAndWhenInUsePermission": false,
           "locationAlwaysPermission": false,
           "motionUsagePermission": false

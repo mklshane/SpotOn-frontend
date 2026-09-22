@@ -4,6 +4,7 @@ import { t, getLocale, type Locale } from '../i18n/core';
 // Relative, not `@/`-aliased: scripts/test-report-html.mjs compiles this module with the
 // project's tsc but without the tsconfig path map, the same way test-tps.mjs does.
 import { computeAge, formatLongDate, sexLabel } from '../profile-format';
+import { displayConfidence } from '../triage/display-confidence';
 import { QUESTIONS } from '../triage/questions';
 import {
   CLASS_DISPLAY,
@@ -156,7 +157,7 @@ export function buildReportModel(
 ): ReportModel {
   const tier = TIER_CONTENT[record.triage.tier];
   const topClass = record.classification.topClass;
-  const confidencePct = record.classification.topConfidence * 100;
+  const confidencePct = displayConfidence(record.classification, record.triage) * 100;
   const roundedPct = Math.round(confidencePct);
 
   const symptoms: ReportSymptom[] = QUESTIONS.map((q) => ({
