@@ -27,7 +27,11 @@ const {
   computeCoach, stepTrack, stepStability, isStable, applyDeadband, initialTrackState,
   modelCropToFullFrame, fullFrameToModelCrop, fullFrameToPreview, previewToFullFrame, padDrawnBox,
   roiFractionForZoom, searchRoiForZoom, modelRoiToFullFrame, fullFrameToModelRoi,
+  SEARCH_FRACTIONS, nextSearchCrop, focusedSearchRoi, sensorCropForRoi, localSkinRoi,
+  stepLocalSkin, acceptsSession,
+  allowsVisibleTarget,
   clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState,
+  isLocalized,
   uprightRotation, stepScene, initialSceneState, SCENE_CONFIRM,
   MAX_CLUSTERED_CANDIDATES,
   CREATE_SCORE, KEEP_SCORE, DETECT_SHOW, KEEP_GRACE, STABLE_EPS, STABLE_FRAMES, DEADBAND,
@@ -356,6 +360,74 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   const full = modelRoiToFullFrame(modelBox, portrait);
   check('ROI mapping round-trips exactly', boxNear(fullFrameToModelRoi(full, portrait), modelBox));
   check('mapped ROI box stays in the full frame', full.cx >= 0 && full.cx <= 1 && full.cy >= 0 && full.cy <= 1);
+}
+
+/* ------------------------------------------------------------------ candidate clustering */
+{
+  let index = -1;
+  const sequence = [];
+  for (let i = 0; i < 6; i++) {
+    index = nextSearchCrop(index, -1);
+    sequence.push(index);
+  }
+  check('unlocked search visits one wide, medium and tight crop per tick', sequence.join(',') === '0,1,2,0,1,2');
+  check('nomination pins its crop for confirmation and tracking', nextSearchCrop(0, 1) === 1);
+  check('losing a target resumes after the last crop', nextSearchCrop(1, -1) === 2);
+  check('search fractions match the requested scales', SEARCH_FRACTIONS.join(',') === '1,0.68,0.46');
+  const guideCenter = previewToFullFrame({ cx: 0.5, cy: 0.42, w: 0, h: 0 }, 1920, 1080, 390, 844);
+  const guideFocus = focusedSearchRoi(1920, 1080, 0.46, guideCenter);
+  const guidePreview = fullFrameToPreview(guideFocus, 1920, 1080, 390, 844);
+  check('focused crop is centred on the visible searching guide', near(guidePreview.cy, 0.42, 0.002));
+  const mirroredGuideCenter = previewToFullFrame({ cx: 0.5, cy: 0.42, w: 0, h: 0 }, 1920, 1080, 390, 844, true);
+  check('front-camera searching guide maps through mirror', near(mirroredGuideCenter.cy, guideCenter.cy));
+
+  const focus = { cx: 0.72, cy: 0.58, w: 0.08, h: 0.06 };
+  for (const [orientation, w, h] of [
+    ['portrait', 1080, 1920], ['portrait-upside-down', 1080, 1920],
+    ['landscape-left', 1920, 1080], ['landscape-right', 1920, 1080],
+  ]) {
+    const requested = focusedSearchRoi(w, h, 0.46, focus);
+    const sensor = sensorCropForRoi(w, h, orientation, requested);
+    check(`${orientation} crop has even sensor coordinates`, sensor.x % 2 === 0 && sensor.y % 2 === 0 && sensor.side % 2 === 0);
+    check(`${orientation} crop maps back to focused upright centre`,
+      near(sensor.roi.cx, requested.cx, 0.002) && near(sensor.roi.cy, requested.cy, 0.002));
+    const box = { cx: 0.42, cy: 0.64, w: 0.12, h: 0.09 };
+    const full = modelRoiToFullFrame(box, sensor.roi);
+    check(`${orientation} sensor crop mapping round-trips`, boxNear(fullFrameToModelRoi(full, sensor.roi), box));
+    const preview = fullFrameToPreview(full, w, h, 390, 844, true);
+    check(`${orientation} mirrored preview round-trips`, boxNear(previewToFullFrame(preview, w, h, 390, 844, true), full));
+  }
+  const edge = focusedSearchRoi(1080, 1920, 0.46, { cx: 0.98, cy: 0.03, w: 0, h: 0 });
+  check('focused crop clamps to sensor bounds', edge.cx + edge.w / 2 <= 1 && edge.cy - edge.h / 2 >= 0);
+  const local = localSkinRoi(1080, 1920, focus);
+  check('local skin crop surrounds the candidate', local.w >= focus.w * 3 && local.h >= focus.h * 3);
+  check('broad boxes cannot qualify for local recovery',
+    !isLocalized({ box: { cx: 0.5, cy: 0.5, w: 0.8, h: 0.8 }, score: 0.9 },
+      focusedSearchRoi(1080, 1920, 1, focus)));
+}
+
+{
+  const target = { cx: 0.59, cy: 0.49, w: 0.09, h: 0.07 };
+  const wide = sensorCropForRoi(1080, 1920, 'portrait', focusedSearchRoi(1080, 1920, 1, target)).roi;
+  const tight = sensorCropForRoi(1080, 1920, 'portrait', focusedSearchRoi(1080, 1920, 0.68, target)).roi;
+  const firstBox = modelRoiToFullFrame(fullFrameToModelRoi(target, wide), wide);
+  const secondBox = modelRoiToFullFrame(fullFrameToModelRoi(target, tight), tight);
+  const first = stepActiveTarget(initialActiveTargetState, [{ box: firstBox, score: 0.4 }], wide, 0, 1);
+  const second = stepActiveTarget(first.state, [{ box: secondBox, score: 0.26 }], tight, 0.6, 1);
+  check('the same target confirms across differently sized crops', second.kind === 'acquire');
+  check('first observation stays hidden across crop scheduling', first.kind === 'none');
+  check('local skin requires two agreeing checks', stepLocalSkin(stepLocalSkin(0, 'skin'), 'skin') === 2);
+  check('non-skin breaks local recovery', stepLocalSkin(stepLocalSkin(0, 'skin'), 'not_skin') === 0);
+  check('face breaks local recovery', stepLocalSkin(stepLocalSkin(0, 'skin'), 'face') === 0);
+  check('one local check does not reveal a box over a not-skin scene',
+    !allowsVisibleTarget('not_skin', true, true, 1));
+  check('two local skin checks recover a confirmed localized candidate',
+    allowsVisibleTarget('not_skin', true, true, 2));
+  check('unconfirmed and broad candidates cannot recover',
+    !allowsVisibleTarget('not_skin', false, true, 2) && !allowsVisibleTarget('not_skin', true, false, 2));
+  check('confirmed broad face still vetoes recovered local skin',
+    !allowsVisibleTarget('face', true, true, 2) && computeCoach(true, GATE_OK, M(), 'face') === 'face');
+  check('previous camera callbacks are rejected', !acceptsSession(3, 2) && acceptsSession(3, 3));
 }
 
 /* ------------------------------------------------------------------ candidate clustering */

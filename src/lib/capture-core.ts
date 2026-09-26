@@ -323,6 +323,79 @@ export type DetectionCandidate = { box: NormBox; score: number; imageBox?: NormB
 /** The square detector crop expressed in normalized upright-frame or preview coordinates. */
 export type SearchRoi = NormBox & { fraction: number; zoomProgress: number };
 
+/** One inference per tick: wide, medium, tight, then repeat until a target is nominated. */
+export const SEARCH_FRACTIONS = [1, 0.68, 0.46] as const;
+export function nextSearchCrop(index: number, pinned: number): number {
+  'worklet';
+  return pinned >= 0 ? pinned : (index + 1) % SEARCH_FRACTIONS.length;
+}
+
+/** A focused square in upright, unmirrored frame coordinates. */
+export function focusedSearchRoi(frameW: number, frameH: number, fraction: number, center: NormBox): SearchRoi {
+  'worklet';
+  const uprightW = Math.min(frameW, frameH);
+  const uprightH = Math.max(frameW, frameH);
+  const f = Math.max(0.1, Math.min(1, fraction));
+  const w = f;
+  const h = f * uprightW / uprightH;
+  return {
+    cx: Math.max(w / 2, Math.min(1 - w / 2, center.cx)),
+    cy: Math.max(h / 2, Math.min(1 - h / 2, center.cy)),
+    w, h, fraction: f,
+    zoomProgress: Math.max(0, Math.min(1, (1 - f) / (1 - 0.46))),
+  };
+}
+
+/** Even YUV crop in the sensor buffer, with its exact upright ROI for coordinate mapping. */
+export function sensorCropForRoi(
+  frameW: number, frameH: number, orientation: FrameOrientation, roi: SearchRoi,
+): { x: number; y: number; side: number; roi: SearchRoi } {
+  'worklet';
+  const uprightW = Math.min(frameW, frameH);
+  const uprightH = Math.max(frameW, frameH);
+  const side = Math.max(2, Math.floor(Math.min(roi.w * uprightW, roi.h * uprightH) / 2) * 2);
+  let rx = roi.cx;
+  let ry = roi.cy;
+  if (orientation === 'landscape-right') { rx = roi.cy; ry = 1 - roi.cx; }
+  else if (orientation === 'landscape-left') { rx = 1 - roi.cy; ry = roi.cx; }
+  else if (orientation === 'portrait-upside-down') { rx = 1 - roi.cx; ry = 1 - roi.cy; }
+  const x = Math.max(0, Math.min(frameW - side, Math.round((rx * frameW - side / 2) / 2) * 2));
+  const y = Math.max(0, Math.min(frameH - side, Math.round((ry * frameH - side / 2) / 2) * 2));
+  const sx = (x + side / 2) / frameW;
+  const sy = (y + side / 2) / frameH;
+  let cx = sx;
+  let cy = sy;
+  if (orientation === 'landscape-right') { cx = 1 - sy; cy = sx; }
+  else if (orientation === 'landscape-left') { cx = sy; cy = 1 - sx; }
+  else if (orientation === 'portrait-upside-down') { cx = 1 - sx; cy = 1 - sy; }
+  const fraction = side / uprightW;
+  return { x, y, side, roi: { cx, cy, w: fraction, h: side / uprightH, fraction,
+    zoomProgress: Math.max(0, Math.min(1, (1 - fraction) / (1 - 0.46))) } };
+}
+
+export function localSkinRoi(frameW: number, frameH: number, box: NormBox): SearchRoi {
+  'worklet';
+  const aspect = Math.max(frameW, frameH) / Math.min(frameW, frameH);
+  const fraction = Math.max(0.28, Math.min(0.68, Math.max(box.w, box.h * aspect) * 3));
+  return focusedSearchRoi(frameW, frameH, fraction, box);
+}
+
+export function acceptsSession(current: number, callback: number): boolean {
+  return current === callback;
+}
+
+/** A broad not-skin scene can recover only from two local skin reads for the same nominee. */
+export function stepLocalSkin(streak: number, read: LiveScene): number {
+  return read === 'skin' ? Math.min(2, streak + 1) : 0;
+}
+
+export function allowsVisibleTarget(
+  scene: LiveScene, confirmed: boolean, localized: boolean, localSkinStreak: number,
+): boolean {
+  if (!confirmed || scene === 'face') return false;
+  return scene !== 'not_skin' || (localized && localSkinStreak >= 2);
+}
+
 const ROI_AT_1X = 1;
 const ROI_AT_2X = 0.68;
 const ROI_AT_4X = 0.46;
@@ -473,6 +546,7 @@ export function previewToFullFrame(
   screenH: number,
   mirrored = false,
 ): NormBox {
+  'worklet';
   const Rw = Math.min(frameW, frameH);
   const Rh = Math.max(frameW, frameH);
   const sc = Math.max(screenW / Rw, screenH / Rh);
@@ -721,7 +795,7 @@ function associationValue(reference: NormBox, candidate: DetectionCandidate): nu
   return boxIou(reference, candidate.box) * 0.55 + proximity * 0.3 + candidate.score * 0.15;
 }
 
-function isLocalized(candidate: DetectionCandidate, roi: SearchRoi): boolean {
+export function isLocalized(candidate: DetectionCandidate, roi: SearchRoi): boolean {
   return (
     Math.max(
       candidate.box.w / Math.max(roi.w, 0.001),
