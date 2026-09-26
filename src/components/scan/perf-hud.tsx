@@ -41,6 +41,13 @@ export type PerfCounters = {
   inferenceMs: ISharedValue<number>;
   postprocessMs: ISharedValue<number>;
   selectionMs: ISharedValue<number>;
+  skinMs: ISharedValue<number>;
+  skinChecks: ISharedValue<number>;
+  searchCrop: ISharedValue<number>;
+  searchFraction: ISharedValue<number>;
+  candidateScore: ISharedValue<number>;
+  rejection: ISharedValue<number>;
+  firstBoxMs: ISharedValue<number>;
   /** Summed detector duration (ms) since the last drain. */
   totalMs: ISharedValue<number>;
   /** Worst single frame-processor duration (ms) since the last drain. */
@@ -57,13 +64,22 @@ export function usePerfCounters(): PerfCounters {
   const inferenceMs = useSharedValue(0);
   const postprocessMs = useSharedValue(0);
   const selectionMs = useSharedValue(0);
+  const skinMs = useSharedValue(0);
+  const skinChecks = useSharedValue(0);
+  const searchCrop = useSharedValue(-1);
+  const searchFraction = useSharedValue(1);
+  const candidateScore = useSharedValue(0);
+  const rejection = useSharedValue(0);
+  const firstBoxMs = useSharedValue(0);
   const totalMs = useSharedValue(0);
   const maxMs = useSharedValue(0);
   // Stable identity - this lands in the frame processor's dependency array, and a fresh object
   // each render would rebuild the worklet on every render.
   return useMemo(
-    () => ({ frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, totalMs, maxMs }),
-    [frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, totalMs, maxMs],
+    () => ({ frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
+      searchCrop, searchFraction, candidateScore, rejection, firstBoxMs, totalMs, maxMs }),
+    [frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
+      searchCrop, searchFraction, candidateScore, rejection, firstBoxMs, totalMs, maxMs],
   );
 }
 
@@ -80,6 +96,12 @@ type Snapshot = {
   inferenceMs: number;
   postprocessMs: number;
   selectionMs: number;
+  skinMs: number;
+  searchCrop: number;
+  searchFraction: number;
+  candidateScore: number;
+  rejection: number;
+  firstBoxMs: number;
   totalMs: number;
   maxMs: number;
   detFps: number;
@@ -92,6 +114,12 @@ const EMPTY: Snapshot = {
   inferenceMs: 0,
   postprocessMs: 0,
   selectionMs: 0,
+  skinMs: 0,
+  searchCrop: -1,
+  searchFraction: 1,
+  candidateScore: 0,
+  rejection: 0,
+  firstBoxMs: 0,
   totalMs: 0,
   maxMs: 0,
   detFps: 0,
@@ -103,16 +131,18 @@ export function PerfHud({
   counters,
   /** Resolved camera format, e.g. "1280x720 / 2048x1536". */
   formatLabel,
+  modelLabel,
 }: {
   counters: PerfCounters;
   formatLabel: string;
+  modelLabel: string;
 }) {
   if (!__DEV__) return null;
-  return <DevPerfHud counters={counters} formatLabel={formatLabel} />;
+  return <DevPerfHud counters={counters} formatLabel={formatLabel} modelLabel={modelLabel} />;
 }
 
 /** Kept separate so production never installs the JS or UI-runtime frame counters. */
-function DevPerfHud({ counters, formatLabel }: { counters: PerfCounters; formatLabel: string }) {
+function DevPerfHud({ counters, formatLabel, modelLabel }: { counters: PerfCounters; formatLabel: string; modelLabel: string }) {
   const insets = useSafeAreaInsets();
   const tier = useDeviceTier();
   const [snap, setSnap] = useState<Snapshot>(EMPTY);
@@ -147,6 +177,13 @@ function DevPerfHud({ counters, formatLabel }: { counters: PerfCounters; formatL
       const inference = counters.inferenceMs.value;
       const postprocess = counters.postprocessMs.value;
       const selection = counters.selectionMs.value;
+      const skin = counters.skinMs.value;
+      const skinChecks = counters.skinChecks.value;
+      const searchCrop = counters.searchCrop.value;
+      const searchFraction = counters.searchFraction.value;
+      const candidateScore = counters.candidateScore.value;
+      const rejection = counters.rejection.value;
+      const firstBoxMs = counters.firstBoxMs.value;
       const total = counters.totalMs.value;
       const max = counters.maxMs.value;
       counters.frames.value = 0;
@@ -154,6 +191,8 @@ function DevPerfHud({ counters, formatLabel }: { counters: PerfCounters; formatL
       counters.inferenceMs.value = 0;
       counters.postprocessMs.value = 0;
       counters.selectionMs.value = 0;
+      counters.skinMs.value = 0;
+      counters.skinChecks.value = 0;
       counters.totalMs.value = 0;
       counters.maxMs.value = 0;
 
@@ -167,6 +206,12 @@ function DevPerfHud({ counters, formatLabel }: { counters: PerfCounters; formatL
         inferenceMs: n > 0 ? inference / n : 0,
         postprocessMs: n > 0 ? postprocess / n : 0,
         selectionMs: n > 0 ? selection / n : 0,
+        skinMs: skinChecks > 0 ? skin / skinChecks : 0,
+        searchCrop,
+        searchFraction,
+        candidateScore,
+        rejection,
+        firstBoxMs,
         totalMs: n > 0 ? total / n : 0,
         maxMs: max,
         detFps: (n * 1000) / DRAIN_MS,
@@ -207,6 +252,12 @@ function DevPerfHud({ counters, formatLabel }: { counters: PerfCounters; formatL
         </Text>
         <Text style={styles.line}>
           det {snap.detFps.toFixed(1)}fps · js {snap.jsFps.toFixed(0)} · ui {snap.uiFps.toFixed(0)}
+        </Text>
+        <Text style={styles.line}>
+          {modelLabel} · crop {snap.searchCrop < 0 ? '—' : `${Math.round(snap.searchFraction * 100)}%`} · score {snap.candidateScore.toFixed(2)}
+        </Text>
+        <Text style={styles.line}>
+          reject {['none', 'confirming', 'local skin', 'face'][snap.rejection] ?? 'unknown'} · skin {snap.skinMs.toFixed(1)}ms · box {snap.firstBoxMs || '—'}ms
         </Text>
         <Text style={styles.line}>{formatLabel}</Text>
       </Pressable>

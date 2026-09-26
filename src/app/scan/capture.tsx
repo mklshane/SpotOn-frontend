@@ -37,7 +37,17 @@ import {
   type SceneState,
   fullFrameToPreview,
   initialActiveTargetState,
+  isLocalized,
+  allowsVisibleTarget,
   modelRoiToFullFrame,
+  previewToFullFrame,
+  focusedSearchRoi,
+  sensorCropForRoi,
+  localSkinRoi,
+  nextSearchCrop,
+  stepLocalSkin,
+  acceptsSession,
+  SEARCH_FRACTIONS,
   padDrawnBox,
   searchRoiForZoom,
   stepStability,
@@ -146,8 +156,11 @@ const DEBUG = false; // flip to true only while actively tuning best/sharp/lume
 // missing the budget costs far more (dropped preview frames, a janky JS thread) than a slower box.
 const TARGET_FPS_HIGH = 12;
 const TARGET_FPS_LOW = 6;
-/** Run the live skin gate on every Nth detector tick: ~3/s on high-tier devices, ~1.5/s on low. */
-const SKIN_EVERY = 4;
+const SEARCH_SKIN_MS_HIGH = 200;
+const SEARCH_SKIN_MS_LOW = 333;
+/** Keep the former 3/s or 1.5/s cadence while tracking. */
+const TRACK_SKIN_MS_HIGH = 333;
+const TRACK_SKIN_MS_LOW = 667;
 /** Maximum time the shutter waits for an already-running detector pass to release the camera frame. */
 const CAPTURE_INFERENCE_WAIT_MS = 500;
 /** Keep capture paused until the navigation transition has removed this screen's camera output. */
@@ -160,6 +173,9 @@ type DetectorBatch = {
   roi: SearchRoi;
   zoomRatio: number;
   postprocessFinishedAt: number;
+  startedAt: number;
+  sessionId: number;
+  cropIndex: number;
 };
 
 // The camera is deliberately UNCONSTRAINED: no `format`, no device preference, no quality or
@@ -314,11 +330,15 @@ export default function CaptureScreen() {
    * quality screen still blocks.
    */
   const [skinModel, setSkinModel] = useState<SkinGateModel | null>(null);
+  const [skinFailed, setSkinFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     loadSkinGateForCamera()
       .then((m) => alive && setSkinModel(m))
-      .catch((e) => console.warn('[tflite] live skin gate load failed', e));
+      .catch((e) => {
+        console.warn('[tflite] live skin gate load failed', e);
+        if (alive) setSkinFailed(true);
+      });
     return () => {
       alive = false;
     };
@@ -343,13 +363,36 @@ export default function CaptureScreen() {
   >(null);
   const guideRef = useRef(guide);
   const sceneRef = useRef<SceneState>(initialSceneState);
+  const localSkinStreakRef = useRef(0);
+  const localSkinGenerationRef = useRef(0);
+  // Anchor local skin approval to one lesion, so a slowly drifting track cannot carry it away.
+  const localSkinBoxRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  const visibleRef = useRef(false);
+  const sessionRef = useRef(0);
+  const firstSearchAtRef = useRef(0);
 
   const boxValues = useDetectionBoxValues();
   const perf = usePerfCounters();
+  /* eslint-disable react-hooks/immutability -- the HUD counter is a native-backed worklet value. */
+  const onFirstVisibleBox = useCallback(() => {
+    if (visibleRef.current && firstSearchAtRef.current > 0 && perf.firstBoxMs.value === 0) {
+      perf.firstBoxMs.value = Date.now() - firstSearchAtRef.current;
+    }
+  }, [perf.firstBoxMs]);
+  /* eslint-enable react-hooks/immutability */
+  useAnimatedReaction(
+    () => boxValues.active.value >= 0.05,
+    (visible, previous) => {
+      if (PERF_ENABLED && visible && !previous) runOnJS(onFirstVisibleBox)();
+    },
+    [onFirstVisibleBox],
+  );
 
   /** Recompute the single coaching message from the latest gate + framing, and render only on change. */
   const applyCoach = useCallback(() => {
-    const next = computeCoach(guideRef.current, gateRef.current, metricsRef.current, sceneRef.current.scene);
+    const scene = sceneRef.current.scene === 'not_skin' && localSkinStreakRef.current >= 2
+      ? 'skin' : sceneRef.current.scene;
+    const next = computeCoach(guideRef.current, gateRef.current, metricsRef.current, scene);
     if (next === coachRef.current) return;
     coachRef.current = next;
     setCoach(next);
@@ -435,8 +478,40 @@ export default function CaptureScreen() {
     }),
     [],
   );
+  // Worklet-side gate state, so the blur streak survives between frames and the emit can be
+  // change-gated without a JS round trip. `-1` forces the next frame to re-emit.
+  const blurStreakSV = useWorkletValue(0);
+  const lastGateSV = useWorkletValue(-1);
+  // Shutter coordination crosses JS and the camera worklet. Pausing first prevents a new detector
+  // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
+  const capturePausedSV = useWorkletValue(false);
+  const inferenceBusySV = useWorkletValue(false);
+  const lastSkinAtSV = useWorkletValue(0);
+  const lastLocalSkinAtSV = useWorkletValue(0);
+  const localSkinAttemptsSV = useWorkletValue(0);
+  const cropIndexSV = useWorkletValue(-1);
+  const pinnedCropSV = useWorkletValue(-1);
+  const trackingSV = useWorkletValue(false);
+  const sessionSV = useWorkletValue(0);
+  const localSkinRequestedSV = useWorkletValue(0);
+  const localSkinNeededSV = useWorkletValue(false);
+  const localSkinCxSV = useWorkletValue(0.5);
+  const localSkinCySV = useWorkletValue(0.5);
+  const localSkinWSV = useWorkletValue(0);
+  const localSkinHSV = useWorkletValue(0);
+
+  /* eslint-disable react-hooks/immutability -- native worklet shared values are mutable handles. */
   const clearTrack = () => {
     targetRef.current = initialActiveTargetState;
+    pinnedCropSV.value = -1;
+    trackingSV.value = false;
+    localSkinRequestedSV.value = 0;
+    localSkinNeededSV.value = false;
+    localSkinAttemptsSV.value = 0;
+    localSkinBoxRef.current = null;
+    localSkinGenerationRef.current += 1;
+    localSkinStreakRef.current = 0;
+    visibleRef.current = false;
     stableStreakRef.current = 0;
     resetDetectionBox(boxValues);
     metricsRef.current = null;
@@ -451,14 +526,22 @@ export default function CaptureScreen() {
      and transient refs after render; none of those values participate in React rendering. */
   const onDetections = useRunOnJS(
     (batch: DetectorBatch) => {
+      if (!acceptsSession(sessionRef.current, batch.sessionId) || !guideRef.current) return;
+      if (firstSearchAtRef.current === 0) firstSearchAtRef.current = batch.startedAt;
+      if (PERF_ENABLED) {
+        perf.searchCrop.value = batch.cropIndex;
+        perf.searchFraction.value = batch.roi.fraction;
+        perf.candidateScore.value = batch.candidates[0]?.score ?? 0;
+      }
       // The timestamp originates immediately before the worklet schedules this callback, so this
       // number includes the native/worklet -> JS bridge as well as mapping, selection and smoothing.
       const recordSelection = () => {
         if (PERF_ENABLED) perf.selectionMs.value += Date.now() - batch.postprocessFinishedAt;
       };
-      // No box on a face or a scene - see skinModel. onScene already cleared any box on the switch.
-      const scene = sceneRef.current.scene;
-      if (scene === 'face' || scene === 'not_skin') {
+      // A confirmed face remains a veto. A broad not-skin verdict still permits a localized
+      // nominee to earn two independent skin reads around the spot.
+      if (sceneRef.current.scene === 'face') {
+        if (PERF_ENABLED) perf.rejection.value = 3;
         recordSelection();
         return;
       }
@@ -487,6 +570,44 @@ export default function CaptureScreen() {
         batch.zoomRatio,
       );
       targetRef.current = decision.state;
+      trackingSV.value = decision.state.active != null;
+
+      const nominee = decision.state.acquisition?.candidate ?? decision.state.active;
+      if (PERF_ENABLED) perf.candidateScore.value = nominee?.score ?? 0;
+      if (nominee?.imageBox) {
+        pinnedCropSV.value = batch.cropIndex;
+        if (isLocalized(nominee, previewRoi)) {
+          const box = nominee.imageBox;
+          const previous = localSkinBoxRef.current;
+          if (!previous || decision.kind === 'handover' ||
+              Math.hypot(previous.cx - box.cx, previous.cy - box.cy) > 0.12) {
+            localSkinGenerationRef.current += 1;
+            localSkinStreakRef.current = 0;
+            localSkinNeededSV.value = true;
+            localSkinAttemptsSV.value = 0;
+            lastLocalSkinAtSV.value = 0;
+            localSkinBoxRef.current = box;
+          }
+          localSkinCxSV.value = box.cx;
+          localSkinCySV.value = box.cy;
+          localSkinWSV.value = box.w;
+          localSkinHSV.value = box.h;
+          localSkinRequestedSV.value = localSkinGenerationRef.current;
+        } else {
+          localSkinGenerationRef.current += 1;
+          localSkinRequestedSV.value = 0;
+          localSkinNeededSV.value = false;
+          localSkinBoxRef.current = null;
+          localSkinStreakRef.current = 0;
+        }
+      } else {
+        pinnedCropSV.value = -1;
+        localSkinGenerationRef.current += 1;
+        localSkinRequestedSV.value = 0;
+        localSkinNeededSV.value = false;
+        localSkinBoxRef.current = null;
+        localSkinStreakRef.current = 0;
+      }
 
       if (decision.kind === 'clear') {
         clearTrack();
@@ -494,6 +615,7 @@ export default function CaptureScreen() {
         return;
       }
       if (!decision.target || decision.kind === 'none' || decision.kind === 'hold') {
+        if (PERF_ENABLED) perf.rejection.value = decision.state.acquisition ? 1 : 0;
         recordSelection();
         return;
       }
@@ -504,7 +626,19 @@ export default function CaptureScreen() {
         recordSelection();
         return;
       }
+      if (!allowsVisibleTarget(
+        sceneRef.current.scene, true, isLocalized(target, previewRoi), localSkinStreakRef.current,
+      )) {
+        if (PERF_ENABLED) perf.rejection.value = 2;
+        visibleRef.current = false;
+        metricsRef.current = null;
+        resetDetectionBox(boxValues, { immediate: true });
+        applyCoach();
+        recordSelection();
+        return;
+      }
       const t = Date.now();
+      if (PERF_ENABLED) perf.rejection.value = 0;
       const handover = decision.kind === 'handover';
       const acquired = decision.kind === 'acquire';
       if (handover) {
@@ -535,8 +669,10 @@ export default function CaptureScreen() {
       lastSize.current = { w: fw, h: fh };
 
       const displayBox = { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh };
+      const wasVisible = visibleRef.current;
+      visibleRef.current = true;
       if (handover) handoverDetectionBox(boxValues, displayBox);
-      else trackDetectionBox(boxValues, displayBox, { snap: acquired });
+      else trackDetectionBox(boxValues, displayBox, { snap: acquired || !wasVisible });
 
       const icx = euro.ix.filter(imageBox.cx, t);
       const icy = euro.iy.filter(imageBox.cy, t);
@@ -560,32 +696,38 @@ export default function CaptureScreen() {
     [SW, SH, mirrored],
   );
   /* eslint-enable react-hooks/immutability */
+  /* eslint-disable react-hooks/immutability -- native worklet shared values are mutable handles. */
   // Quality gates arrive as a single code, already debounced in the worklet, and only when the
   // verdict actually changes - instead of three unconditional JS hops per frame.
-  const onGate = useRunOnJS((code: number) => {
+  const onGate = useRunOnJS((code: number, callbackSession: number) => {
+    if (!acceptsSession(sessionRef.current, callbackSession)) return;
     gateRef.current = code;
     applyCoach();
   }, []);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
   // Live skin-gate reads arrive as 0 skin / 1 not skin / 2 face, debounced here by stepScene.
-  const onScene = useRunOnJS((code: number) => {
+  const onScene = useRunOnJS((code: number, callbackSession: number) => {
+    if (!acceptsSession(sessionRef.current, callbackSession)) return;
     const before = sceneRef.current.scene;
     sceneRef.current = stepScene(sceneRef.current, code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin');
     const after = sceneRef.current.scene;
     if (after === before) return;
-    if (after === 'face' || after === 'not_skin') clearTrack(); // also re-runs applyCoach
-    else applyCoach();
+    if (after === 'face') clearTrack();
+    else if (after === 'not_skin' && localSkinStreakRef.current < 2) {
+      visibleRef.current = false;
+      metricsRef.current = null;
+      resetDetectionBox(boxValues, { immediate: true });
+      applyCoach();
+    } else applyCoach();
   }, []);
-
-  // Worklet-side gate state, so the blur streak survives between frames and the emit can be
-  // change-gated without a JS round trip. `-1` forces the next frame to re-emit.
-  const blurStreakSV = useWorkletValue(0);
-  const lastGateSV = useWorkletValue(-1);
-  // Shutter coordination crosses JS and the camera worklet. Pausing first prevents a new detector
-  // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
-  const capturePausedSV = useWorkletValue(false);
-  const inferenceBusySV = useWorkletValue(false);
-  const skinTickSV = useWorkletValue(0);
+  const onLocalScene = useRunOnJS((code: number, callbackSession: number, generation: number) => {
+    if (!acceptsSession(sessionRef.current, callbackSession) || generation !== localSkinGenerationRef.current) return;
+    const read = code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin';
+    localSkinStreakRef.current = stepLocalSkin(localSkinStreakRef.current, read);
+    if (localSkinStreakRef.current >= 2) localSkinNeededSV.value = false;
+    applyCoach();
+  }, []);
+  /* eslint-enable react-hooks/immutability */
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
   // model (unbox inside the worklet) and read the output/input shapes here on the JS thread.
@@ -595,32 +737,57 @@ export default function CaptureScreen() {
   const skinSize = useMemo(() => (skinModel == null ? 0 : readSkinGateLayout(skinModel)), [skinModel]);
 
   const targetFps = tier === 'low' ? TARGET_FPS_LOW : TARGET_FPS_HIGH;
+  const searchSkinMs = tier === 'low' ? SEARCH_SKIN_MS_LOW : SEARCH_SKIN_MS_HIGH;
+  const trackSkinMs = tier === 'low' ? TRACK_SKIN_MS_LOW : TRACK_SKIN_MS_HIGH;
 
   // Re-arm the gate whenever the detector stops or starts, so a stale "too dark" overlay can't
   // outlive the frames that produced it.
   /* eslint-disable react-hooks/immutability -- worklet shared values are native-backed handles,
      not React state; the compiler flags every write to one (same false positive the Reanimated
      shared-value writes elsewhere in this file trip). */
-  useEffect(() => {
+  const restartSession = useCallback(() => {
+    const next = sessionRef.current + 1;
+    sessionRef.current = next;
+    sessionSV.value = next;
+    sceneRef.current = initialSceneState;
+    localSkinStreakRef.current = 0;
+    localSkinGenerationRef.current += 1;
+    localSkinBoxRef.current = null;
+    localSkinRequestedSV.value = 0;
+    localSkinNeededSV.value = false;
+    localSkinAttemptsSV.value = 0;
+    lastLocalSkinAtSV.value = 0;
+    pinnedCropSV.value = -1;
+    trackingSV.value = false;
+    cropIndexSV.value = -1;
+    lastSkinAtSV.value = 0;
+    firstSearchAtRef.current = 0;
+    perf.firstBoxMs.value = 0;
+    perf.searchCrop.value = -1;
+    perf.searchFraction.value = 1;
+    perf.candidateScore.value = 0;
+    perf.rejection.value = 0;
+    visibleRef.current = false;
+    targetRef.current = initialActiveTargetState;
+    stableStreakRef.current = 0;
+    lastCenter.current = null;
+    lastSize.current = null;
+    lastImgBox.current = null;
+    metricsRef.current = null;
+    Object.values(euro).forEach((filter) => filter.reset());
+    resetDetectionBox(boxValues, { immediate: true });
     guideRef.current = guide;
     lastGateSV.value = -1;
     blurStreakSV.value = 0;
     gateRef.current = GATE_OK;
-    if (!guide || !isFocused) {
-      targetRef.current = initialActiveTargetState;
-      stableStreakRef.current = 0;
-      lastCenter.current = null;
-      lastSize.current = null;
-      lastImgBox.current = null;
-      Object.values(euro).forEach((filter) => filter.reset());
-      metricsRef.current = null;
-      // Teardown, not detection loss: the guide was switched off or the screen left, so there
-      // is nothing to fade for - reset the pose immediately rather than animating a box the user
-      // is no longer looking at (and which would otherwise fade in again on return).
-      resetDetectionBox(boxValues, { immediate: true });
-    }
     applyCoach();
-  }, [guide, isFocused, applyCoach, boxValues, blurStreakSV, lastGateSV, euro]);
+  }, [guide, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
+    lastSkinAtSV, lastLocalSkinAtSV, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
+    perf.firstBoxMs, perf.searchCrop, perf.searchFraction, perf.candidateScore, perf.rejection,
+    pinnedCropSV, sessionSV, trackingSV]);
+  useEffect(() => {
+    restartSession();
+  }, [deviceId, guide, isFocused, appActive, model, restartSession]);
   /* eslint-enable react-hooks/immutability */
 
   const frameProcessor = useFrameProcessor(
@@ -637,28 +804,35 @@ export default function CaptureScreen() {
           // context caused physical iOS builds to stop completing inference. This runtime remains
           // separate from React/UI, and the 12/6 FPS limiter bounds how often it can block analysis.
           const t0 = Date.now();
+          const callbackSession = sessionSV.value;
           const zoom = detectorZoomSV.value;
           const zoomRatio = Math.max(1, zoom / Math.max(0.001, neutralZoom));
-          const roi = searchRoiForZoom(frame.width, frame.height, zoom, neutralZoom);
-          // Keep YUV crop origins and dimensions even for device compatibility.
-          const side = Math.max(
-            2,
-            Math.floor((Math.min(frame.width, frame.height) * roi.fraction) / 2) * 2,
+          const cropIndex = nextSearchCrop(cropIndexSV.value, pinnedCropSV.value);
+          cropIndexSV.value = cropIndex;
+          const zoomRoi = searchRoiForZoom(frame.width, frame.height, zoom, neutralZoom);
+          const guideCenter = previewToFullFrame(
+            { cx: 0.5, cy: 0.42, w: 0, h: 0 },
+            frame.width, frame.height, SW, SH, mirrored,
           );
-          const cropX = Math.max(0, Math.floor((frame.width - side) / 4) * 2);
-          const cropY = Math.max(0, Math.floor((frame.height - side) / 4) * 2);
+          const requestedRoi = focusedSearchRoi(
+            frame.width, frame.height,
+            Math.min(zoomRoi.fraction, SEARCH_FRACTIONS[cropIndex]),
+            cropIndex === 0 ? { cx: 0.5, cy: 0.5, w: 0, h: 0 } : guideCenter,
+          );
+          const crop = sensorCropForRoi(frame.width, frame.height, frame.orientation, requestedRoi);
+          const roi = crop.roi;
           const tflite = boxedModel.unbox();
           // Derived, not hard-coded. '90deg' is right for a portrait-held BACK camera and wrong for
           // an Android front camera (sensorOrientation 270), which would hand the detector a
           // 180-degree-rotated input - a box that lands point-reflected rather than an obvious
           // failure. See uprightRotation in capture-core for the measurement of that invariant.
           //
-          // The crop above is a CENTRED SQUARE, which is invariant under any 90-degree rotation, so
-          // it needs no matching correction. `mirror` is deliberately left unset: the frames are
+          // The crop is expressed in sensor coordinates for this frame's rotation. `mirror` is
+          // deliberately left unset: the frames are
           // already unmirrored (isMirrored={false}), and mirroring the model input here would only
           // force an un-flip when mapping the box back out.
           const input = resize(frame, {
-            crop: { x: cropX, y: cropY, width: side, height: side },
+            crop: { x: crop.x, y: crop.y, width: crop.side, height: crop.side },
             scale: { width: layout.inputSize, height: layout.inputSize },
             pixelFormat: 'rgb',
             dataType: 'float32',
@@ -696,7 +870,7 @@ export default function CaptureScreen() {
           }
           if (gate !== lastGateSV.value) {
             lastGateSV.value = gate;
-            onGate(gate);
+            onGate(gate, callbackSession);
           }
           const tPreprocessed = Date.now();
 
@@ -751,16 +925,31 @@ export default function CaptureScreen() {
             roi,
             zoomRatio,
             postprocessFinishedAt: tPostprocessed,
+            startedAt: t0,
+            sessionId: callbackSession,
+            cropIndex,
           });
 
-          // Live skin gate: every SKIN_EVERY-th detector tick (~3/s at 12 fps), on the SAME centred
-          // square, upright. Cheap (MobileNetV3-small at 160²) but not free, and a verdict about
-          // the whole scene does not need 12 answers a second.
+          // Check nominated skin on the next two ticks. Otherwise sample the broad scene by
+          // elapsed time, so a slow inference rate cannot stretch recovery by whole tick groups.
           if (boxedSkin != null && skinSize > 0) {
-            skinTickSV.value = (skinTickSV.value + 1) % SKIN_EVERY;
-            if (skinTickSV.value === 0) {
+            const localGeneration = localSkinRequestedSV.value;
+            const searching = !trackingSV.value;
+            const interval = searching ? searchSkinMs : trackSkinMs;
+            const checkScene = t0 - lastSkinAtSV.value >= interval;
+            const checkLocal = !checkScene && localGeneration > 0 && localSkinNeededSV.value &&
+              (localSkinAttemptsSV.value < 2 || t0 - lastLocalSkinAtSV.value >= interval);
+            if (checkLocal || checkScene) {
+              const skinRoi = checkLocal
+                ? localSkinRoi(frame.width, frame.height, {
+                    cx: localSkinCxSV.value, cy: localSkinCySV.value,
+                    w: localSkinWSV.value, h: localSkinHSV.value,
+                  })
+                : focusedSearchRoi(frame.width, frame.height, 1, { cx: 0.5, cy: 0.5, w: 0, h: 0 });
+              const skinCrop = sensorCropForRoi(frame.width, frame.height, frame.orientation, skinRoi);
+              const skinStarted = Date.now();
               const skinIn = resize(frame, {
-                crop: { x: cropX, y: cropY, width: side, height: side },
+                crop: { x: skinCrop.x, y: skinCrop.y, width: skinCrop.side, height: skinCrop.side },
                 scale: { width: skinSize, height: skinSize },
                 pixelFormat: 'rgb',
                 dataType: 'float32',
@@ -772,12 +961,22 @@ export default function CaptureScreen() {
                   : skinIn.buffer.slice(skinIn.byteOffset, skinIn.byteOffset + skinIn.byteLength);
               const pr = new Float32Array(boxedSkin.unbox().runSync([skinBuf as ArrayBuffer])[0]);
               // Same rule as skinGateVerdict (scan-flow.ts), inlined: a worklet can't call it.
-              onScene(pr[2] >= SKIN_GATE_FACE_MAX ? 2 : pr[0] < SKIN_GATE_MIN ? 1 : 0);
+              const code = pr[2] >= SKIN_GATE_FACE_MAX ? 2 : pr[0] < SKIN_GATE_MIN ? 1 : 0;
+              if (checkLocal) {
+                onLocalScene(code, callbackSession, localGeneration);
+                localSkinAttemptsSV.value += 1;
+                lastLocalSkinAtSV.value = t0;
+              }
+              else { onScene(code, callbackSession); lastSkinAtSV.value = t0; }
+              if (PERF_ENABLED) {
+                perf.skinMs.value += Date.now() - skinStarted;
+                perf.skinChecks.value += 1;
+              }
             }
           }
 
           if (PERF_ENABLED) {
-            const total = tPostprocessed - t0;
+            const total = Date.now() - t0;
             perf.frames.value += 1;
             perf.preprocessMs.value += tPreprocessed - t0;
             perf.inferenceMs.value += tInferred - tPreprocessed;
@@ -795,11 +994,29 @@ export default function CaptureScreen() {
       layout,
       boxedSkin,
       skinSize,
-      skinTickSV,
+      lastSkinAtSV,
+      lastLocalSkinAtSV,
+      localSkinAttemptsSV,
+      cropIndexSV,
+      pinnedCropSV,
+      trackingSV,
+      sessionSV,
+      localSkinRequestedSV,
+      localSkinNeededSV,
+      localSkinCxSV,
+      localSkinCySV,
+      localSkinWSV,
+      localSkinHSV,
+      onLocalScene,
+      searchSkinMs,
+      trackSkinMs,
       onScene,
       resize,
       targetFps,
       neutralZoom,
+      SW,
+      SH,
+      mirrored,
       detectorZoomSV,
       onDetections,
       onGate,
@@ -923,7 +1140,7 @@ export default function CaptureScreen() {
   function flipCamera() {
     if (busy || captureInFlightRef.current) return;
     setTorch(false);
-    clearTrack();
+    restartSession();
     setPosition((p) => (p === 'back' ? 'front' : 'back'));
   }
 
@@ -1053,6 +1270,7 @@ export default function CaptureScreen() {
             style={StyleSheet.absoluteFill}
             device={device}
             isActive={isFocused && appActive}
+            onStarted={restartSession}
             photo
             animatedProps={animatedProps}
             /**
@@ -1136,6 +1354,7 @@ export default function CaptureScreen() {
       {canFlip ? (
         <Pressable
           hitSlop={12}
+          // eslint-disable-next-line react-hooks/immutability -- restarting the camera session updates native-backed worklet values
           onPress={flipCamera}
           disabled={busy}
           style={[styles.flip, { top: insets.top + Space.sm }]}
@@ -1218,6 +1437,7 @@ export default function CaptureScreen() {
 
       <PerfHud
         counters={perf}
+        modelLabel={`detector ${model ? 'ready' : detectorFailed ? 'failed' : 'loading'} · skin ${skinModel ? 'ready' : skinFailed ? 'failed' : 'loading'}`}
         // No explicit format any more - the OS picks per device, so there is nothing to print here
         // beyond the fact that we are not constraining it.
         formatLabel="device default (unconstrained)"
