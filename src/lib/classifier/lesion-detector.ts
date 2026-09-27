@@ -2,7 +2,7 @@
 import { transformToRgba } from '@/lib/image-ops';
 
 import { getLesionModel, readLayout } from '../lesion-model';
-import type { CropBox } from './preprocess';
+import { DET_CONF, type LesionBox, selectLesionBox } from './detector-core';
 
 /**
  * Still-image lesion localization with the app's YOLO detector - the same model, at the same
@@ -16,17 +16,8 @@ import type { CropBox } from './preprocess';
  * capture-then-analyse and gallery upload) runs after the camera is gone, so it is safe here.
  */
 
-const DET_CONF = 0.2; // matches LesionCropper.det_conf - the confidence the training crops used
-const FULL_FRAME = 0.95; // reject a box spanning ~the whole frame: that's not a localized lesion
-const TOP_K = 3; // among the most-confident boxes, prefer the most central (training cropper's rule)
-
-// crop_rect geometry from synth/framing.py, as used by LesionCropper (crop_pad 0.45). Reproducing
-// it here makes the on-device crop the classifier sees identical to the one it was trained on.
-const CROP_PAD = 0.45;
-const CROP_MIN_FRAC = 0.2;
-const ZOOM_CAP = 4.0;
-
-export type LesionBox = { cx: number; cy: number; bw: number; bh: number; conf: number };
+export type { LesionBox } from './detector-core';
+export { lesionBoxToCrop } from './detector-core';
 
 /**
  * Serializes calls onto the one cached interpreter (`getLesionModel` returns a single shared
@@ -95,33 +86,5 @@ async function runDetector(uri: string): Promise<LesionBox | null> {
       conf: score,
     });
   }
-  if (cands.length === 0) return null;
-
-  let keep = cands.filter((c) => c.bw < FULL_FRAME || c.bh < FULL_FRAME);
-  if (keep.length === 0) keep = cands;
-  keep.sort((a, b) => b.conf - a.conf);
-  const top = keep.slice(0, TOP_K);
-  top.sort(
-    (a, b) =>
-      (a.cx - 0.5) ** 2 + (a.cy - 0.5) ** 2 - ((b.cx - 0.5) ** 2 + (b.cy - 0.5) ** 2),
-  );
-  return top[0];
-}
-
-/**
- * Expand a detector box to the classifier crop, reproducing synth crop_rect for a square image.
- * Returns a square CropBox (centre + half-side, normalized to the short edge) for
- * preprocessForClassifier. Because the image is square, frame-fraction == short-edge-fraction.
- */
-export function lesionBoxToCrop(box: LesionBox): CropBox {
-  const lesion = Math.max(box.bw, box.bh); // fraction of frame
-  const desired = Math.min(1, Math.max(CROP_MIN_FRAC, lesion * (1 + CROP_PAD)));
-  const scv = Math.min(ZOOM_CAP, 1 / desired);
-  const side = Math.min(1, 1 / scv);
-  const half = side / 2;
-  return {
-    cx: Math.min(1 - half, Math.max(half, box.cx)),
-    cy: Math.min(1 - half, Math.max(half, box.cy)),
-    half,
-  };
+  return selectLesionBox(cands);
 }

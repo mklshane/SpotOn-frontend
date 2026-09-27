@@ -38,22 +38,29 @@ export default function DirectoryScreen() {
   const debouncedQuery = useDebouncedValue(query, 250);
   const [overlayH, setOverlayH] = useState(0);
 
+  // Bumped whenever a sync settles, so the lists re-read SQLite. They query once on mount, and the
+  // first-ever sync starts at that same moment: without this a fresh install showed "No clinics
+  // found" until the tab was reopened, and later syncs never reached an open list. A failed sync
+  // bumps it too - the pages it did apply are valid rows.
+  const [syncVersion, setSyncVersion] = useState(0);
+  const synced = () => setSyncVersion((v) => v + 1);
+
   useEffect(() => {
     (async () => {
       if (await needsInitialSync()) {
         // First-ever sync - if this fails offline-first screens fall back to an
         // empty local DB with no distinct "sync failed" signal, so at least log it.
-        await runSync({ full: true }).catch((err) =>
-          console.warn("[directory] initial sync failed", err),
-        );
+        await runSync({ full: true })
+          .catch((err) => console.warn("[directory] initial sync failed", err))
+          .finally(synced);
       } else if (await needsReconcile()) {
         // One-off full pass so an install that predates delete-sweeping drops
         // rows removed server-side (deleted pathology labs were still listed).
-        runSync({ full: true }).catch((err) =>
-          console.warn("[directory] reconcile sync failed", err),
-        );
+        runSync({ full: true })
+          .catch((err) => console.warn("[directory] reconcile sync failed", err))
+          .finally(synced);
       } else {
-        runSync().catch(() => {});
+        runSync().catch(() => {}).finally(synced);
       }
     })();
   }, []);
@@ -118,6 +125,7 @@ export default function DirectoryScreen() {
       >
         <ClinicsView
           query={debouncedQuery}
+          syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
         />
@@ -130,6 +138,7 @@ export default function DirectoryScreen() {
       >
         <DoctorsView
           query={debouncedQuery}
+          syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
         />

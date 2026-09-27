@@ -48,8 +48,13 @@ export type DetectionBoxValues = {
 };
 
 /** The centered "searching" guide the overlay rests in when nothing is detected. */
-function searchingRect() {
-  const { width, height } = Dimensions.get('window');
+/** The camera view's measured size. Dimensions.get('window') is only a fallback: on Android
+ *  edge-to-edge it can omit the system bars the preview runs under, and scaling by it drew every
+ *  box ~50 px above the lesion on a Galaxy A42 (2026-09-27). */
+export type ViewSize = { width: number; height: number };
+
+function searchingRect(size?: ViewSize) {
+  const { width, height } = size ?? Dimensions.get('window');
   const side = width * 0.42;
   return { x: (width - side) / 2, y: height * 0.42 - side / 2, w: side, h: side };
 }
@@ -84,9 +89,9 @@ export function useDetectionBoxValues(): DetectionBoxValues {
 export function trackDetectionBox(
   v: DetectionBoxValues,
   bbox: DetectionBBox,
-  opts?: { snap?: boolean },
+  opts?: { snap?: boolean; size?: ViewSize },
 ): void {
-  const { width, height } = Dimensions.get('window');
+  const { width, height } = opts?.size ?? Dimensions.get('window');
   const px = bbox.x * width;
   const py = bbox.y * height;
   const pw = bbox.w * width;
@@ -111,8 +116,8 @@ export function trackDetectionBox(
  * showing two boxes. The old target fades down, the pose changes while transparent, and the same
  * view fades back up at the new target.
  */
-export function handoverDetectionBox(v: DetectionBoxValues, bbox: DetectionBBox): void {
-  const { width, height } = Dimensions.get('window');
+export function handoverDetectionBox(v: DetectionBoxValues, bbox: DetectionBBox, size?: ViewSize): void {
+  const { width, height } = size ?? Dimensions.get('window');
   // Finish before the next 12 Hz detector update can cancel the delayed pose change.
   const delay = 50;
   v.searching.value = 0;
@@ -157,8 +162,8 @@ export function resetDetectionBox(v: DetectionBoxValues, opts?: { immediate?: bo
  * Corner radius and stroke width are constants on both views, so they never scale with the box -
  * that is what keeps a resizing box reading as movement rather than deformation.
  */
-export function DetectionBox({ values }: { values: DetectionBoxValues }) {
-  const rest = useMemo(() => searchingRect(), []);
+export function DetectionBox({ values, size }: { values: DetectionBoxValues; size?: ViewSize }) {
+  const rest = useMemo(() => searchingRect(size), [size]);
 
   const guideStyle = useAnimatedStyle(() => ({
     left: rest.x,

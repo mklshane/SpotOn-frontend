@@ -147,6 +147,25 @@ export function decideQuality(input: {
 }
 
 /** Where the user goes after accepting a photo. */
+/**
+ * The quality screen's read of the first classification pass. Only a Safety Floor PROMPT makes a
+ * photo "unreadable" here: on the rescan (attempt 2) the verdict is 'apply-floor', which analysis
+ * resolves to a Moderate floor without asking again. Treating that as unreadable showed the retake
+ * prompt a second time, so the two-strike rule never reached its second strike.
+ */
+export function readStateFromVerdict(verdict: Readability): 'ok' | 'unreadable' {
+  return verdict === 'prompt-rescan' ? 'unreadable' : 'ok';
+}
+
+/**
+ * Does "Retake" on the quality screen start the Safety Floor rescan (attempt 1 → 2)? Only when it
+ * answers the low-confidence prompt on the first attempt. A retake for lighting or focus is not a
+ * strike: the model never judged that photo.
+ */
+export function retakeStartsRescan(read: ReadState, attempt: 1 | 2): boolean {
+  return read === 'unreadable' && attempt === 1;
+}
+
 export type ScanStep = { kind: 'questionnaire' } | { kind: 'analysis' };
 
 /**

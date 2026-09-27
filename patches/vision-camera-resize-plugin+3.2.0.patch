@@ -1,0 +1,276 @@
+diff --git a/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.cpp b/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.cpp
+index a547d27..510d589 100644
+--- a/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.cpp
++++ b/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.cpp
+@@ -73,12 +73,25 @@ uint8_t* FrameBuffer::data() const {
+ }
+ 
+ global_ref<JByteBuffer> ResizePlugin::allocateBuffer(size_t size, std::string debugName) {
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Allocating %s Buffer with size %zu...", debugName.c_str(), size);
++#endif
+   local_ref<JByteBuffer> buffer = JByteBuffer::allocateDirect(size);
+   buffer->order(JByteOrder::nativeOrder());
+   return make_global(buffer);
+ }
+ 
++global_ref<JByteBuffer> ResizePlugin::cachedBuffer(BufferCache& cache, size_t size, std::string debugName) {
++  for (auto& entry : cache) {
++    if (entry.first == size) return entry.second;
++  }
++  // A handful of sizes per stage in practice (skin + detector, a few search crops). Bound it anyway
++  // so a continuous pinch-zoom cannot grow it without limit.
++  if (cache.size() >= 6) cache.erase(cache.begin());
++  cache.emplace_back(size, allocateBuffer(size, debugName));
++  return cache.back().second;
++}
++
+ FrameBuffer ResizePlugin::imageToFrameBuffer(alias_ref<vision::JImage> image) {
+   jni::local_ref<JArrayClass<JImagePlane>> planes = image->getPlanes();
+ 
+@@ -105,7 +118,9 @@ FrameBuffer ResizePlugin::imageToFrameBuffer(alias_ref<vision::JImage> image) {
+ 
+   switch (sourceImageFormat) {
+     case SourceImageFormat::RGBA_8888: {
++#ifndef NDEBUG
+       __android_log_write(ANDROID_LOG_INFO, TAG, "Converting RGBA 8888 -> ARGB 8888...");
++#endif
+       jni::local_ref<JImagePlane> rgbaPlane = planes->getElement(0);
+       jni::local_ref<JByteBuffer> rgbaBuffer = rgbaPlane->getBuffer();
+       // 1. Convert from RGBA -> ARGB
+@@ -120,7 +135,9 @@ FrameBuffer ResizePlugin::imageToFrameBuffer(alias_ref<vision::JImage> image) {
+     }
+     default: /* SourceImageFormat.YUV_420_888 */
+     {
++#ifndef NDEBUG
+       __android_log_write(ANDROID_LOG_INFO, TAG, "Converting YUV 4:2:0 -> ARGB 8888...");
++#endif
+       jni::local_ref<JImagePlane> yPlane = planes->getElement(0);
+       jni::local_ref<JByteBuffer> yBuffer = yPlane->getBuffer();
+       jni::local_ref<JImagePlane> uPlane = planes->getElement(1);
+@@ -160,15 +177,21 @@ FrameBuffer ResizePlugin::cropARGBBuffer(const FrameBuffer& frameBuffer, int x,
+     return frameBuffer;
+   }
+ 
++#ifndef NDEBUG
+   auto rectString = rectToString(0, 0, frameBuffer.width, frameBuffer.height);
++#endif
++#ifndef NDEBUG
+   auto targetString = rectToString(x, y, width, height);
++#endif
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Cropping [%s] ARGB buffer to [%s]...", rectString.c_str(), targetString.c_str());
++#endif
+ 
+   size_t channels = getChannelCount(PixelFormat::ARGB);
+   size_t channelSize = getBytesPerChannel(DataType::UINT8);
+   size_t argbSize = width * height * channels * channelSize;
+   if (_cropBuffer == nullptr || _cropBuffer->getDirectSize() != argbSize) {
+-    _cropBuffer = allocateBuffer(argbSize, "_cropBuffer");
++    _cropBuffer = cachedBuffer(_cropCache, argbSize, "_cropBuffer");
+   }
+   FrameBuffer destination = {
+       .width = width,
+@@ -194,13 +217,15 @@ FrameBuffer ResizePlugin::mirrorARGBBuffer(const FrameBuffer& frameBuffer, bool
+     return frameBuffer;
+   }
+ 
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Mirroring ARGB buffer...");
++#endif
+ 
+   size_t channels = getChannelCount(PixelFormat::ARGB);
+   size_t channelSize = getBytesPerChannel(DataType::UINT8);
+   size_t argbSize = frameBuffer.width * frameBuffer.height * channels * channelSize;
+   if (_mirrorBuffer == nullptr || _mirrorBuffer->getDirectSize() != argbSize) {
+-    _mirrorBuffer = allocateBuffer(argbSize, "_mirrorBuffer");
++    _mirrorBuffer = cachedBuffer(_mirrorCache, argbSize, "_mirrorBuffer");
+   }
+   FrameBuffer destination = {
+       .width = frameBuffer.width,
+@@ -225,7 +250,9 @@ FrameBuffer ResizePlugin::rotateARGBBuffer(const FrameBuffer& frameBuffer, Rotat
+     return frameBuffer;
+   }
+ 
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Rotating ARGB buffer by %zu degrees...", static_cast<int>(rotation));
++#endif
+ 
+   int rotatedWidth, rotatedHeight;
+   if (rotation == Rotation90 || rotation == Rotation270) {
+@@ -244,7 +271,7 @@ FrameBuffer ResizePlugin::rotateARGBBuffer(const FrameBuffer& frameBuffer, Rotat
+   size_t rotateSize = frameBuffer.buffer->getDirectSize();
+ 
+   if (_rotatedBuffer == nullptr || _rotatedBuffer->getDirectSize() != rotateSize) {
+-    _rotatedBuffer = allocateBuffer(rotateSize, "_rotatedBuffer");
++    _rotatedBuffer = cachedBuffer(_rotatedCache, rotateSize, "_rotatedBuffer");
+   }
+ 
+   FrameBuffer destination = {
+@@ -271,15 +298,21 @@ FrameBuffer ResizePlugin::scaleARGBBuffer(const FrameBuffer& frameBuffer, int wi
+     // already in correct size.
+     return frameBuffer;
+   }
++#ifndef NDEBUG
+   auto rectString = rectToString(0, 0, frameBuffer.width, frameBuffer.height);
++#endif
++#ifndef NDEBUG
+   auto targetString = rectToString(0, 0, width, height);
++#endif
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Scaling [%s] ARGB buffer to [%s]...", rectString.c_str(), targetString.c_str());
++#endif
+ 
+   size_t channels = getChannelCount(PixelFormat::ARGB);
+   size_t channelSize = getBytesPerChannel(DataType::UINT8);
+   size_t argbSize = width * height * channels * channelSize;
+   if (_scaleBuffer == nullptr || _scaleBuffer->getDirectSize() != argbSize) {
+-    _scaleBuffer = allocateBuffer(argbSize, "_scaleBuffer");
++    _scaleBuffer = cachedBuffer(_scaleCache, argbSize, "_scaleBuffer");
+   }
+   FrameBuffer destination = {
+       .width = width,
+@@ -305,12 +338,14 @@ FrameBuffer ResizePlugin::convertARGBBufferTo(const FrameBuffer& frameBuffer, Pi
+     return frameBuffer;
+   }
+ 
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Converting ARGB Buffer to Pixel Format %zu...", pixelFormat);
++#endif
+ 
+   size_t bytesPerPixel = getBytesPerPixel(pixelFormat, frameBuffer.dataType);
+   size_t targetBufferSize = frameBuffer.width * frameBuffer.height * bytesPerPixel;
+   if (_customFormatBuffer == nullptr || _customFormatBuffer->getDirectSize() != targetBufferSize) {
+-    _customFormatBuffer = allocateBuffer(targetBufferSize, "_customFormatBuffer");
++    _customFormatBuffer = cachedBuffer(_customFormatCache, targetBufferSize, "_customFormatBuffer");
+   }
+   FrameBuffer destination = {
+       .width = frameBuffer.width,
+@@ -363,11 +398,13 @@ FrameBuffer ResizePlugin::convertBufferToDataType(const FrameBuffer& frameBuffer
+     return frameBuffer;
+   }
+ 
++#ifndef NDEBUG
+   __android_log_print(ANDROID_LOG_INFO, TAG, "Converting ARGB Buffer to Data Type %zu...", dataType);
++#endif
+ 
+   size_t targetSize = frameBuffer.width * frameBuffer.height * getBytesPerPixel(frameBuffer.pixelFormat, dataType);
+   if (_customTypeBuffer == nullptr || _customTypeBuffer->getDirectSize() != targetSize) {
+-    _customTypeBuffer = allocateBuffer(targetSize, "_customTypeBuffer");
++    _customTypeBuffer = cachedBuffer(_customTypeCache, targetSize, "_customTypeBuffer");
+   }
+   size_t size = frameBuffer.buffer->getDirectSize();
+   FrameBuffer destination = {
+diff --git a/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.h b/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.h
+index fd49db6..6bfd587 100644
+--- a/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.h
++++ b/node_modules/vision-camera-resize-plugin/android/src/main/cpp/ResizePlugin.h
+@@ -4,6 +4,9 @@
+ 
+ #pragma once
+ 
++#include <utility>
++#include <vector>
++
+ #include <fbjni/ByteBuffer.h>
+ #include <fbjni/fbjni.h>
+ #include <jni.h>
+@@ -74,6 +77,15 @@ private:
+   // Custom Data Type (e.g. float32)
+   global_ref<JByteBuffer> _customTypeBuffer;
+ 
++  // SpotOn patch: one small cache PER STAGE, keyed by byte size. A frame processor that alternates
++  // target sizes (a 160² skin crop, then a 768² float detector input) otherwise reallocated every
++  // stage's buffer on every call. On ART, allocateDirect is backed by the Java heap, so that was
++  // ~10 MB of garbage per pass - constant GC, and an OutOfMemoryError once 12 MP stills were in
++  // memory too. Per-stage caches keep chained stages from ever sharing a buffer.
++  using BufferCache = std::vector<std::pair<size_t, global_ref<JByteBuffer>>>;
++  BufferCache _cropCache, _mirrorCache, _rotatedCache, _scaleCache, _customFormatCache, _customTypeCache;
++  global_ref<JByteBuffer> cachedBuffer(BufferCache& cache, size_t size, std::string debugName);
++
+   static local_ref<jhybriddata> initHybrid(alias_ref<jhybridobject> javaThis);
+ };
+ 
+diff --git a/node_modules/vision-camera-resize-plugin/android/src/main/java/com/visioncameraresizeplugin/ResizePlugin.kt b/node_modules/vision-camera-resize-plugin/android/src/main/java/com/visioncameraresizeplugin/ResizePlugin.kt
+index f4098e9..70dcee3 100644
+--- a/node_modules/vision-camera-resize-plugin/android/src/main/java/com/visioncameraresizeplugin/ResizePlugin.kt
++++ b/node_modules/vision-camera-resize-plugin/android/src/main/java/com/visioncameraresizeplugin/ResizePlugin.kt
+@@ -20,6 +20,8 @@ class ResizePlugin(private val proxy: VisionCameraProxy) : FrameProcessorPlugin(
+   private val mHybridData: HybridData
+ 
+   companion object {
++    // SpotOn patch: these fired 6-7 times per frame-processor call in release builds.
++    private val VERBOSE = Log.isLoggable("ResizePlugin", Log.DEBUG)
+     private const val TAG = "ResizePlugin"
+ 
+     init {
+@@ -64,20 +66,20 @@ class ResizePlugin(private val proxy: VisionCameraProxy) : FrameProcessorPlugin(
+     val rotation: Rotation
+     if (rotationParam is String) {
+       rotation = Rotation.fromString(rotationParam)
+-      Log.i(TAG, "Rotation: ${rotation.degrees}")
++      if (VERBOSE) Log.i(TAG, "Rotation: ${rotation.degrees}")
+     } else {
+       rotation = Rotation.Rotation0
+-      Log.i(TAG, "Rotation not specified, defaulting to: ${rotation.degrees}")
++      if (VERBOSE) Log.i(TAG, "Rotation not specified, defaulting to: ${rotation.degrees}")
+     }
+ 
+     val mirrorParam = params["mirror"]
+     val mirror: Boolean
+     if (mirrorParam is Boolean) {
+       mirror = mirrorParam
+-      Log.i(TAG, "Mirror: $mirror")
++      if (VERBOSE) Log.i(TAG, "Mirror: $mirror")
+     } else {
+       mirror = false
+-      Log.i(TAG, "Mirror not specified, defaulting to: $mirror")
++      if (VERBOSE) Log.i(TAG, "Mirror not specified, defaulting to: $mirror")
+     }
+ 
+     val scale = params["scale"] as? Map<*, *>
+@@ -90,7 +92,7 @@ class ResizePlugin(private val proxy: VisionCameraProxy) : FrameProcessorPlugin(
+       } else {
+         throw Error("Failed to parse values in scale dictionary!")
+       }
+-      Log.i(TAG, "Target scale: $scaleWidth x $scaleHeight")
++      if (VERBOSE) Log.i(TAG, "Target scale: $scaleWidth x $scaleHeight")
+     }
+ 
+     val crop = params["crop"] as? Map<*, *>
+@@ -104,7 +106,7 @@ class ResizePlugin(private val proxy: VisionCameraProxy) : FrameProcessorPlugin(
+         cropHeight = cropHeightDouble.toInt()
+         cropX = cropXDouble.toInt()
+         cropY = cropYDouble.toInt()
+-        Log.i(TAG, "Target size: $cropWidth x $cropHeight")
++        if (VERBOSE) Log.i(TAG, "Target size: $cropWidth x $cropHeight")
+       } else {
+         throw Error("Failed to parse values in crop dictionary!")
+       }
+@@ -122,22 +124,22 @@ class ResizePlugin(private val proxy: VisionCameraProxy) : FrameProcessorPlugin(
+         }
+         cropX = (frame.width / 2) - (cropWidth / 2)
+         cropY = (frame.height / 2) - (cropHeight / 2)
+-        Log.i(TAG, "Cropping to $cropWidth x $cropHeight at ($cropX, $cropY)")
++        if (VERBOSE) Log.i(TAG, "Cropping to $cropWidth x $cropHeight at ($cropX, $cropY)")
+       } else {
+-        Log.i(TAG, "Both scale and crop are null, using Frame's original dimensions.")
++        if (VERBOSE) Log.i(TAG, "Both scale and crop are null, using Frame's original dimensions.")
+       }
+     }
+ 
+     val formatString = params["pixelFormat"] as? String
+     if (formatString != null) {
+       targetFormat = PixelFormat.fromString(formatString)
+-      Log.i(TAG, "Target Format: $targetFormat")
++      if (VERBOSE) Log.i(TAG, "Target Format: $targetFormat")
+     }
+ 
+     val dataTypeString = params["dataType"] as? String
+     if (dataTypeString != null) {
+       targetType = DataType.fromString(dataTypeString)
+-      Log.i(TAG, "Target DataType: $targetType")
++      if (VERBOSE) Log.i(TAG, "Target DataType: $targetType")
+     }
+ 
+     val image = frame.image

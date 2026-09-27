@@ -251,7 +251,19 @@ export interface SyncResult {
  * that dies halfway therefore leaves the old data intact instead of wiping the
  * directory and leaving the user with a blank screen offline.
  */
-export async function runSync(opts: { full?: boolean } = {}): Promise<SyncResult> {
+export function runSync(opts: { full?: boolean } = {}): Promise<SyncResult> {
+  // Single-flight: the tabs layout seeds the directory at sign-in and the Clinics tab syncs on
+  // mount, so the two can overlap. A second caller joins the pass already running instead of
+  // downloading the directory twice. A full pass requested during an incremental one is not lost:
+  // RECONCILE_KEY is only stamped by a completed full pass, so it is retried on the next launch.
+  inFlight ??= runSyncOnce(opts).finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+let inFlight: Promise<SyncResult> | null = null;
+
+async function runSyncOnce(opts: { full?: boolean }): Promise<SyncResult> {
   const full = opts.full ?? false;
   let cursor = full ? null : await getMeta(CURSOR_KEY);
   const counts = {

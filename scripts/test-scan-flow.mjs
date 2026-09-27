@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion } = await import(
+const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -153,6 +153,21 @@ for (const v of ['prompt-rescan', 'apply-floor']) {
     check(`never finalizes ${v} unfloored (accepted=${accepted})`, r.kind === 'prompt-retake' || r.applyFloor === true);
   }
 }
+
+/* ------------------------------------------------------- Safety Floor two-strike on the quality screen */
+// Attempt 1 below the floor prompts; attempt 2 is floored in analysis and must NOT prompt again.
+check('read: prompt-rescan is unreadable', readStateFromVerdict('prompt-rescan') === 'unreadable');
+check('read: apply-floor proceeds (floored in analysis, no second prompt)', readStateFromVerdict('apply-floor') === 'ok');
+check('read: ok is ok', readStateFromVerdict('ok') === 'ok');
+check('retake from the low-confidence prompt on attempt 1 starts the rescan', retakeStartsRescan('unreadable', 1));
+check('retake on attempt 2 is not another strike', !retakeStartsRescan('unreadable', 2));
+for (const r of ['pending', 'ok', 'timeout']) {
+  check(`retake for a non-confidence reason (${r}) is not a strike`, !retakeStartsRescan(r, 1));
+}
+// End to end over the two screens: strike 1 prompts, the retake moves to attempt 2, and a second
+// low-confidence photo reaches analysis, which applies the floor.
+const strike2 = decideAnalysis({ verdict: 'apply-floor', acceptedLowConfidence: false });
+check('second low-confidence attempt finalizes with the floor', strike2.kind === 'finalize' && strike2.applyFloor === true);
 
 if (fails.length) {
   console.error(`\nscan flow: ${pass} passed, ${fails.length} FAILED`);
