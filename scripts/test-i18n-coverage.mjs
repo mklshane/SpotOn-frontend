@@ -50,7 +50,8 @@ for (const file of walk('src')) {
   const src = readFileSync(join(ROOT, file), 'utf8');
   for (const m of src.matchAll(/\bt\(\s*(["'])((?:\\.|(?!\1).)*)\1/g)) {
     const key = m[2].replace(/\\"/g, '"').replace(/\\'/g, "'");
-    if (!/[a-z]/.test(key) || has(key)) continue;
+    // Skip single-token codes (MEL, BCC); an all-caps phrase is display copy and still needs one.
+    if ((!/[a-z]/.test(key) && !/\s/.test(key)) || has(key)) continue;
     if (!missing.has(key)) missing.set(key, file);
   }
 }

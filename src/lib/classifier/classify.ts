@@ -41,6 +41,7 @@ import {
 } from './preprocess';
 
 import { isDebug } from '@/lib/debug-flag';
+import { perfLog } from '@/lib/perf-log';
 
 // Was `__DEV__`, which meant every per-image failure was swallowed silently in the deployed
 // web build - classifyImageAt() converts a throw into an excluded result and logs nothing.
@@ -131,7 +132,7 @@ export async function classifyOne(
     // 4-view dihedral TTA (the configuration D4's operating point was selected under), or a
     // single pass when disabled. Views run sequentially so only one buffer is live at a time.
     const views = TTA_ENABLED ? ttaViews(input, inputSize) : [input];
-    let logitSum: Float64Array | null = null;
+    const viewLogitsAll: number[][] = [];
     try {
       for (const view of views) {
         // Repack to the layout the graph declares, AFTER the flips (which are written against
@@ -164,15 +165,14 @@ export async function classifyOne(
         // compresses confidence and rescales the malignant score against a threshold fitted on
         // logit-mean output. See aggregate-core `toLogitSpace` for why the log makes it exact.
         const viewLogits = MODEL_OUTPUTS_PROBABILITIES ? toLogitSpace(raw) : raw;
-        logitSum ??= new Float64Array(viewLogits.length);
-        for (let i = 0; i < viewLogits.length; i++) logitSum[i] += viewLogits[i];
+        viewLogitsAll.push(viewLogits);
       }
     } catch (e) {
       throw asClassifierError(e, 'inference');
     }
 
     // Averaging in logit space is what the threshold was calibrated on - never average softmaxes.
-    const values = Array.from(logitSum ?? []).map((v) => v / views.length);
+    const values = viewLogitsAll.length ? meanLogitsCore(viewLogitsAll) : [];
     if (values.length !== CLASS_ORDER.length || values.some((v) => !Number.isFinite(v))) {
       throw new ClassifierError('invalid-output', `bad output tensor (${values.length} values)`);
     }
@@ -200,10 +200,12 @@ export async function classifyOne(
   let result: Prediction | null = null;
   let detectorUsed = false;
   if (DETECTOR_CROP_ENABLED) {
+    const tDetect = Date.now();
     const detBox = await detectLesionBox(uri).catch((e) => {
       if (DEBUG) console.warn('[classifier] detector failed', e);
       return null;
     });
+    perfLog('classify.detector', Date.now() - tDetect, detBox ? 'hit' : 'miss');
     if (detBox) {
       result = await predictAt(1, lesionBoxToCrop(detBox));
       detectorUsed = true;
@@ -282,6 +284,8 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
   const run = (async () => {
     const { model, inputSize } = await prepareModel();
     const r = await classifyOne(uri, model, inputSize);
+    perfLog('classify.total', r.inferenceMs,
+      `detector=${r.detectorUsed} refined=${r.refined} scaleUnstable=${r.scaleUnstable}`);
 
     if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt}`);
 
@@ -369,11 +373,12 @@ export async function classifyImageAt(
   model: ClassifierModel,
   inputSize: number,
   attempt: 1 | 2,
-  total = 1,
+  /** Set size when known up front; the live session classifies each photo as it is added. */
+  total?: number,
 ): Promise<SetPart> {
   try {
     const r = await withTimeout(classifyOne(uri, model, inputSize), INFERENCE_TIMEOUT_MS);
-    if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt} image=${index + 1}/${total}`);
+    if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt} image=${index + 1}${total ? `/${total}` : ''}`);
     return {
       result: r,
       entry: {

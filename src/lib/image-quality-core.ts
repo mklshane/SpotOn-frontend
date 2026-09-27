@@ -420,14 +420,19 @@ function slideExtreme(line: Float32Array, len: number, r: number, isMax: boolean
   // Monotonic deque of indices: O(len) whatever r is.
   let head = 0;
   let tail = 0;
-  const better = (a: number, b: number) => (isMax ? a >= b : a <= b);
   // Clamped borders repeat the end samples, which never beat themselves, so a window can simply be
   // truncated at the ends - same result as OpenCV BORDER_REPLICATE / scipy mode='nearest'.
+  // The max/min test is inlined: a closure call per comparison is expensive on Hermes (no JIT).
   let next = 0;
   for (let i = 0; i < len; i++) {
     const hi = Math.min(len - 1, i + r);
     while (next <= hi) {
-      while (tail > head && better(line[next], line[q[tail - 1]])) tail--;
+      const v = line[next];
+      if (isMax) {
+        while (tail > head && v >= line[q[tail - 1]]) tail--;
+      } else {
+        while (tail > head && v <= line[q[tail - 1]]) tail--;
+      }
       q[tail++] = next++;
     }
     while (q[head] < i - r) head++;
@@ -698,27 +703,37 @@ function grayBlackhat(
   out: Float32Array,
   tmp: Float32Array,
 ): Float32Array {
-  const clamp = (v: number, hi: number) => (v < 0 ? 0 : v > hi ? hi : v);
+  // A clamped (replicate-border) window only ever repeats its end samples, so truncating it at the
+  // borders selects the same extreme. Bounds are computed once per pixel and max/min are separate
+  // loops: a function call or a branch per comparison is what made this the costliest step on
+  // Hermes (no JIT) - ~12 s of IQA on a mid-range Android. Same comparisons, identical output.
   const sweep = (src: Float32Array, dst: Float32Array, scratch: Float32Array, wantMax: boolean) => {
     for (let y = 0; y < H; y++) {
       const row = y * W;
       for (let x = 0; x < W; x++) {
+        const lo = row + (x - r < 0 ? 0 : x - r);
+        const hi = row + (x + r > W - 1 ? W - 1 : x + r);
         let acc = src[row + x];
-        for (let k = -r; k <= r; k++) {
-          const v = src[row + clamp(x + k, W - 1)];
-          if (wantMax ? v > acc : v < acc) acc = v;
+        if (wantMax) {
+          for (let i = lo; i <= hi; i++) if (src[i] > acc) acc = src[i];
+        } else {
+          for (let i = lo; i <= hi; i++) if (src[i] < acc) acc = src[i];
         }
         scratch[row + x] = acc;
       }
     }
-    for (let x = 0; x < W; x++) {
-      for (let y = 0; y < H; y++) {
-        let acc = scratch[y * W + x];
-        for (let k = -r; k <= r; k++) {
-          const v = scratch[clamp(y + k, H - 1) * W + x];
-          if (wantMax ? v > acc : v < acc) acc = v;
+    for (let y = 0; y < H; y++) {
+      const lo = (y - r < 0 ? 0 : y - r) * W;
+      const hi = (y + r > H - 1 ? H - 1 : y + r) * W;
+      const row = y * W;
+      for (let x = 0; x < W; x++) {
+        let acc = scratch[row + x];
+        if (wantMax) {
+          for (let i = lo + x; i <= hi + x; i += W) if (scratch[i] > acc) acc = scratch[i];
+        } else {
+          for (let i = lo + x; i <= hi + x; i += W) if (scratch[i] < acc) acc = scratch[i];
         }
-        dst[y * W + x] = acc;
+        dst[row + x] = acc;
       }
     }
   };

@@ -68,8 +68,8 @@ core.applyLocale('fil');
 assert.equal(core.t(error), 'Ilagay ang buong pangalan mo.');
 assert.equal(identity.id,'Yes'); assert.equal(identity.value,'No'); assert.equal(identity.kind,'Other');
 assert.equal(identity.title,'Oo'); assert.equal(identity.labels[0],'Oo');
-assert.ok(core.t(recommendations.DISCLAIMER).startsWith('Tulong ang SpotOn'));
-assert.ok(core.t(recommendations.REPORT_DISCLAIMER).startsWith('Ang buod'));
+assert.ok(core.t(recommendations.DISCLAIMER).startsWith('Pantulong sa screening ang SpotOn'));
+assert.ok(core.t(recommendations.REPORT_DISCLAIMER).startsWith('Ang Screening Summary Report na ito'));
 assert.equal(core.t('  1. Introduction '), '  1. Panimula ');
 assert.equal(core.t('Missing message'), 'Missing message');
 assert.equal(core.t('{{age}} y/o', {age: 30}), '30 taong gulang');
@@ -85,8 +85,9 @@ assert.ok(!lead.includes('{{') && !lead.includes('urgency level'));
 // A report's language must survive an async asset load while the app changes language.
 core.applyLocale('en');
 const html = buildReportHtml(filipino, {photo:null,wordmark:null});
-assert.ok(html.includes('lang="fil"') && html.includes('Buod ng screening') && html.includes('Hindi sigurado'));
-assert.ok(!html.includes('Screening Summary Report'));
+assert.ok(html.includes('lang="fil"') && html.includes('<h1>Buod ng Screening</h1>') && html.includes('Hindi sigurado'));
+// The Filipino disclaimer keeps the product name, so check the title and heading, not the whole page.
+assert.ok(!html.includes('<title>Screening Summary Report') && !html.includes('<h1>Screening Summary Report'));
 assert.equal(core.t(error), error);
 assert.equal(core.t(recommendations.DISCLAIMER), recommendations.DISCLAIMER);
 assert.equal(identity.title, 'Yes');

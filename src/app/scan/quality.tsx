@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   FadeIn,
@@ -31,6 +31,8 @@ import {
   decideQuality,
   isHeadRegion,
   nextStepAfterQuality,
+  readStateFromVerdict,
+  retakeStartsRescan,
   skinGateVerdict,
   type SkinGateVerdict,
 } from '@/lib/triage/scan-flow';
@@ -39,6 +41,7 @@ import {
   evaluateSafetyFloor,
   evaluateScaleConsistency,
 } from '@/lib/triage/tps-core';
+import { perfLog } from '@/lib/perf-log';
 
 const STEP_MS = 1300; // per-check reveal cadence
 /**
@@ -120,11 +123,6 @@ export default function QualityScreen() {
   // is the one addImage() will assign in proceed(); enqueueImage is keyed on (index, uri), so a
   // retake replaces this run rather than inheriting it.
   const pendingIndex = session.images.length;
-  useEffect(() => {
-    if (!uri) return;
-    session.enqueueImage(uri, pendingIndex);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uri, upscale]);
 
   // Join the first pass as soon as it settles and apply the same Safety Floor rule analysis.tsx
   // uses, so the two screens can never disagree about whether a photo is readable.
@@ -139,7 +137,7 @@ export default function QualityScreen() {
           evaluateSafetyFloor(out.topConfidence, session.attempt),
           evaluateScaleConsistency(out.scaleUnstable, session.attempt),
         );
-        setReadability(verdict === 'ok' ? 'ok' : 'unreadable');
+        setReadability(readStateFromVerdict(verdict));
       })
       // A hard classifier failure is analysis.tsx's error state to own, not a retake prompt here.
       .catch(() => alive && setReadability('ok'));
@@ -149,15 +147,6 @@ export default function QualityScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.classificationState]);
 
-  // Bound the wait: once the rows have revealed, give inference a short grace, then move on.
-  useEffect(() => {
-    if (readability !== 'pending') return;
-    const t = setTimeout(
-      () => setReadability((r) => (r === 'pending' ? 'timeout' : r)),
-      ROW_META.length * STEP_MS + READABILITY_GRACE_MS,
-    );
-    return () => clearTimeout(t);
-  }, [readability]);
 
   /**
    * Run the skin gate on the STILL. Lazy import keeps TFLite off the app-startup path.
@@ -168,6 +157,7 @@ export default function QualityScreen() {
     let alive = true;
     // One retry: a failed model load clears skin-gate.ts's cached promise, so a second call genuinely
     // reloads - a transient error (a flaky asset fetch on the web build) should not be the answer.
+    const tSkin = Date.now();
     const run = () => import('@/lib/skin-gate').then((m) => m.classifySkin(uri));
     run()
       .catch((e) => {
@@ -176,6 +166,7 @@ export default function QualityScreen() {
       })
       .then((p) => {
         if (__DEV__) console.log('[iqa] skin gate', JSON.stringify(p));
+        perfLog('quality.skinGate', Date.now() - tSkin);
         if (alive) setSkinGate(skinGateVerdict(p));
       })
       .catch((e) => {
@@ -201,8 +192,13 @@ export default function QualityScreen() {
       return;
     }
     // How far crop.tsx had to enlarge the capture - logged under ?debug=1, not used by the gate.
+    const tIqa = Date.now();
     assessImage(uri, Number(upscale) || 1)
-      .then((c) => alive && setChecks(c))
+      .then((c) => {
+        perfLog('quality.iqa', Date.now() - tIqa,
+          `sharp=${c.sharpness.value.toExponential(2)} edge=${c.sharpness.edgeWidth.toFixed(1)} ok=${c.sharpness.ok}`);
+        if (alive) setChecks(c);
+      })
       .catch((e) => {
         console.warn('[iqa] failed', e);
         if (alive) setError(true);
@@ -236,6 +232,50 @@ export default function QualityScreen() {
   // The row must not be judged before the skin gate lands, or a slow device would show a verdict
   // the model then contradicts. Bounded by SKIN_GATE_TIMEOUT_MS.
   const settled = (checks != null || error) && skinGate !== 'pending';
+
+  // Rows also reveal one STEP_MS apart counted from when the analysis settled, not only from mount.
+  // iOS settles inside the first step, so the mount clock governs and nothing changes there; a slow
+  // Android device (skin gate + classifier warm-up on one CPU budget) settled after every mount step
+  // had elapsed, and all three rows landed at once instead of lighting -> focus -> lesion.
+  const [stepsSinceSettled, setStepsSinceSettled] = useState(0);
+  useEffect(() => {
+    if (!settled) return;
+    const id = setInterval(
+      () => setStepsSinceSettled((s) => Math.min(ROW_META.length, s + 1)),
+      STEP_MS,
+    );
+    return () => clearInterval(id);
+  }, [settled]);
+  // The first row is due the moment analysis settles, then one more per step.
+  const revealed = settled ? Math.min(step, stepsSinceSettled + 1) : 0;
+
+  // Android: the classifier, skin gate and IQA share one JS thread (jpeg-js decodes) and CPU budget,
+  // and running all three at once is what held the visible checks back. Classify once the checks
+  // have settled, and start the readability grace from that point so the later start does not turn
+  // into a timeout. iOS keeps its parallel start.
+  const classifyGate = Platform.OS !== 'android' || settled;
+  useEffect(() => {
+    if (!uri || !classifyGate) return;
+    session.enqueueImage(uri, pendingIndex);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri, upscale, classifyGate]);
+
+  // Bound the wait: once the rows have revealed, give inference a short grace, then move on.
+  useEffect(() => {
+    if (readability !== 'pending' || !classifyGate) return;
+    const t = setTimeout(
+      () => setReadability((r) => (r === 'pending' ? 'timeout' : r)),
+      ROW_META.length * STEP_MS + READABILITY_GRACE_MS,
+    );
+    return () => clearTimeout(t);
+  }, [readability, classifyGate]);
+  const mountedAtRef = useRef(0);
+  useEffect(() => {
+    mountedAtRef.current = Date.now();
+  }, []);
+  useEffect(() => {
+    if (settled) perfLog('quality.settled', Date.now() - mountedAtRef.current, 'since mount');
+  }, [settled]);
 
   const brightnessOk = checks?.brightness.ok ?? false;
   const sharpOk = checks?.sharpness.ok ?? false;
@@ -279,7 +319,7 @@ export default function QualityScreen() {
   const { pass, analyzing } = decideQuality({
     iqaPass,
     read: readability,
-    checksSettled: step >= ROW_META.length && settled,
+    checksSettled: revealed >= ROW_META.length && settled,
   });
 
   // Offer a second angle only where it makes sense: a clean camera photo, still under the cap, with
@@ -415,14 +455,20 @@ export default function QualityScreen() {
   }
 
   function retake() {
-    // Drop this photo's pending/settled run so the retake is classified fresh. (enqueueImage is
-    // keyed on (index, uri) as a second guard, but not leaving orphans is cheaper than relying on it.)
-    if (uri) session.removeImage(uri);
+    // Answering the low-confidence prompt is the Safety Floor's first strike: move to attempt 2 the
+    // same way analysis.tsx does, or every retake re-prompts and the floor is never reached.
+    if (retakeStartsRescan(readability, session.attempt)) {
+      session.beginRescan();
+    } else if (uri) {
+      // Drop this photo's pending/settled run so the retake is classified fresh. (enqueueImage is
+      // keyed on (index, uri) as a second guard, but not leaving orphans is cheaper than relying on it.)
+      session.removeImage(uri);
+    }
     router.back();
   }
 
   function statusFor(i: number): RowStatus {
-    const ready = step > i && settled;
+    const ready = revealed > i && settled;
     if (!ready) return 'pending';
     if (error) return 'warn';
     const ok = i === 0 ? brightnessOk : i === 1 ? sharpOk : lesionOk;
@@ -441,7 +487,7 @@ export default function QualityScreen() {
 
   const rows = useMemo(
     () => ROW_META.map((r, i) => ({ ...r, status: statusFor(i) })),
-    [step, settled, error, brightnessOk, sharpOk, lesionOk], // eslint-disable-line react-hooks/exhaustive-deps
+    [revealed, settled, error, brightnessOk, sharpOk, lesionOk], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const frameColor = analyzing ? 'rgba(255,255,255,0.9)' : pass ? theme.riskLow : theme.riskModerate;

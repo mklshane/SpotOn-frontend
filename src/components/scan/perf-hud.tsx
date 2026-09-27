@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   useFrameCallback,
   useSharedValue as useReanimatedSharedValue,
@@ -16,7 +16,7 @@ import {
 } from '@/lib/device-tier';
 
 /**
- * `__DEV__`-only performance HUD for the capture screen.
+ * Development/internal-build performance HUD for the capture screen.
  *
  * Exists because the device that actually lags (a low-end Android) isn't the device we develop on.
  * Rather than guess, the frame processor writes its own timings into worklet shared values and
@@ -26,7 +26,7 @@ import {
  * Timings split preprocessing, TFLite, postprocessing and bridge/JS selection so a slow stage cannot
  * hide inside one aggregate. `ui` is counted by a Reanimated frame callback on the actual UI runtime.
  *   total  - wall time of one detector pass. At 12 fps anything over ~80 ms means the
- *            detector cannot achieve its requested cadence (the preview remains independent).
+ *            detector cannot achieve its requested cadence (preview delivery must be measured separately).
  *   det    - detector passes actually completed per second (what `runAtTargetFps` achieved).
  *   js     - JS-thread frame rate. Drops below ~50 mean React work is starving the UI, which is
  *            the symptom the per-frame `setState` used to cause.
@@ -37,6 +37,10 @@ import {
 export type PerfCounters = {
   /** Completed detector passes since the last drain. */
   frames: ISharedValue<number>;
+  /** Current scheduling interval, not the preview frame interval. */
+  intervalMs: ISharedValue<number>;
+  /** Age of the last delivered detection, including processing and JS delivery. */
+  resultAgeMs: ISharedValue<number>;
   preprocessMs: ISharedValue<number>;
   inferenceMs: ISharedValue<number>;
   postprocessMs: ISharedValue<number>;
@@ -56,10 +60,12 @@ export type PerfCounters = {
 
 /**
  * Allocate the counters. Safe (and cheap) to call in production builds - the frame processor only
- * writes to them when `PERF_ENABLED` is set, and `PerfHud` renders nothing outside `__DEV__`.
+ * writes to them when `PERF_ENABLED` is set. Normal production builds do not render the HUD.
  */
 export function usePerfCounters(): PerfCounters {
   const frames = useSharedValue(0);
+  const intervalMs = useSharedValue(0);
+  const resultAgeMs = useSharedValue(0);
   const preprocessMs = useSharedValue(0);
   const inferenceMs = useSharedValue(0);
   const postprocessMs = useSharedValue(0);
@@ -76,9 +82,9 @@ export function usePerfCounters(): PerfCounters {
   // Stable identity - this lands in the frame processor's dependency array, and a fresh object
   // each render would rebuild the worklet on every render.
   return useMemo(
-    () => ({ frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
+    () => ({ frames, intervalMs, resultAgeMs, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
       searchCrop, searchFraction, candidateScore, rejection, firstBoxMs, totalMs, maxMs }),
-    [frames, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
+    [frames, intervalMs, resultAgeMs, preprocessMs, inferenceMs, postprocessMs, selectionMs, skinMs, skinChecks,
       searchCrop, searchFraction, candidateScore, rejection, firstBoxMs, totalMs, maxMs],
   );
 }
@@ -87,11 +93,14 @@ export function usePerfCounters(): PerfCounters {
  * Captured into the frame-processor worklet by value. `__DEV__` is a JS-runtime global and isn't
  * guaranteed to exist in the worklet runtime, so the check has to happen on this side.
  */
-export const PERF_ENABLED = __DEV__;
+export const PERF_ENABLED = __DEV__ ||
+  (Platform.OS === 'android' && process.env.EXPO_PUBLIC_CAPTURE_PERF === '1');
 
 const DRAIN_MS = 500;
 
 type Snapshot = {
+  intervalMs: number;
+  resultAgeMs: number;
   preprocessMs: number;
   inferenceMs: number;
   postprocessMs: number;
@@ -110,6 +119,8 @@ type Snapshot = {
 };
 
 const EMPTY: Snapshot = {
+  intervalMs: 0,
+  resultAgeMs: 0,
   preprocessMs: 0,
   inferenceMs: 0,
   postprocessMs: 0,
@@ -137,7 +148,7 @@ export function PerfHud({
   formatLabel: string;
   modelLabel: string;
 }) {
-  if (!__DEV__) return null;
+  if (!PERF_ENABLED) return null;
   return <DevPerfHud counters={counters} formatLabel={formatLabel} modelLabel={modelLabel} />;
 }
 
@@ -202,6 +213,8 @@ function DevPerfHud({ counters, formatLabel, modelLabel }: { counters: PerfCount
       uiTicks.value = 0;
 
       setSnap({
+        intervalMs: counters.intervalMs.value,
+        resultAgeMs: counters.resultAgeMs.value,
         preprocessMs: n > 0 ? preprocess / n : 0,
         inferenceMs: n > 0 ? inference / n : 0,
         postprocessMs: n > 0 ? postprocess / n : 0,
@@ -252,6 +265,9 @@ function DevPerfHud({ counters, formatLabel, modelLabel }: { counters: PerfCount
         </Text>
         <Text style={styles.line}>
           det {snap.detFps.toFixed(1)}fps · js {snap.jsFps.toFixed(0)} · ui {snap.uiFps.toFixed(0)}
+        </Text>
+        <Text style={styles.line}>
+          interval {snap.intervalMs.toFixed(0)}ms · result age {snap.resultAgeMs.toFixed(0)}ms
         </Text>
         <Text style={styles.line}>
           {modelLabel} · crop {snap.searchCrop < 0 ? '—' : `${Math.round(snap.searchFraction * 100)}%`} · score {snap.candidateScore.toFixed(2)}

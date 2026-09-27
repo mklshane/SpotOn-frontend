@@ -15,6 +15,8 @@ import { DoctorCard } from "./DoctorCard";
 
 export type DoctorsViewProps = {
   query: string;
+  /** Changes when a directory sync completes; the lists re-read the local DB on it. */
+  syncVersion?: number;
   topInset: number;
   /**
    * The search bar / segmented-control overlay, rendered by the parent
@@ -33,7 +35,7 @@ type BookingMode = "doctors" | "clinics";
  * A Doctors/Clinics toggle switches between doctors with an active booking
  * link and clinics with their own online-booking page (facilities.booking_url).
  */
-export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
+export function DoctorsView({ query, syncVersion = 0, topInset, header }: DoctorsViewProps) {
   useLocale();
   const [mode, setMode] = useState<BookingMode>("doctors");
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
@@ -55,7 +57,7 @@ export function DoctorsView({ query, topInset, header }: DoctorsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [mode, query]);
+  }, [mode, query, syncVersion]);
 
   const loading = mode === "doctors" ? doctors === null : clinics === null;
   const empty =

@@ -2,7 +2,7 @@ import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Image as RNImage, Pressable, StyleSheet, View } from 'react-native';
+import { Image as RNImage, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { releaseBlobUri } from '@/lib/blob-uri';
 import { isDebug } from '@/lib/debug-flag';
 import { transformToUri } from '@/lib/image-ops';
+import { perfLog, perfSince } from '@/lib/perf-log';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,8 @@ import { discardScratch } from '@/lib/scratch-files';
 import { StatusBar } from 'expo-status-bar';
 
 const OUTPUT = 1024;
+/** Same long-edge cap capture.tsx bakes camera stills to (PHOTO_LONG_EDGE). */
+const GALLERY_LONG_EDGE = 2048;
 const CROP_PAD = 0.3; // padding around the detected lesion when auto-framing the crop
 const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the image's short side
 // The guide circle's diameter as a fraction of the crop frame, and the fill the upload auto-frame
@@ -32,8 +35,10 @@ const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {
   useLocale();
-  const { uri, detected, source, lx, ly, lw, lh } = useLocalSearchParams<{
+  const { uri: paramUri, detected, source, lx, ly, lw, lh, w: pw, h: ph } = useLocalSearchParams<{
     uri: string;
+    w?: string;
+    h?: string;
     detected?: string;
     source?: string;
     lx?: string;
@@ -42,6 +47,16 @@ export default function CropScreen() {
     lh?: string;
   }>();
   const fromGallery = source === 'gallery';
+
+  // Android gallery photos: Image.getSize measures a DOWNSCALED decode of a large file (a 3000x4000
+  // Samsung photo reports 1500x2000), while expo-image-manipulator crops the full-size pixels. Every
+  // crop coordinate was therefore computed at half scale and the export landed up-and-left of the
+  // lesion framed in the ring - on bare skin (2026-09-27, Galaxy A42). Normalize the upload through
+  // the manipulator to the camera path's long edge and take the dimensions from ITS output, so the
+  // numbers the crop maths uses and the pixels it cuts are the same by construction.
+  const normalizeGallery = Platform.OS === 'android' && fromGallery;
+  const [prepared, setPrepared] = useState<{ uri: string; w: number; h: number } | null>(null);
+  const uri = normalizeGallery ? prepared?.uri ?? null : paramUri;
   const width = useSurfaceWidth();
   const insets = useSafeAreaInsets();
 
@@ -58,10 +73,60 @@ export default function CropScreen() {
   const startY = useSharedValue(0);
   const startScale = useSharedValue(1);
 
+  // Pixel dimensions: the sender's (capture.tsx passes the manipulator's) when given, since
+  // Image.getSize measures a downscaled decode of large files on Android.
+  const givenW = Number(pw);
+  const givenH = Number(ph);
+  const hasGivenSize = givenW > 0 && givenH > 0;
   useEffect(() => {
-    if (!uri) return;
+    if (!uri || normalizeGallery) return;
+    if (hasGivenSize) {
+      setImg({ w: givenW, h: givenH }); // eslint-disable-line react-hooks/set-state-in-effect
+      return;
+    }
     RNImage.getSize(uri, (w, h) => setImg({ w, h }));
-  }, [uri]);
+  }, [uri, normalizeGallery, hasGivenSize, givenW, givenH]);
+
+  useEffect(() => {
+    if (!normalizeGallery || !paramUri) return;
+    let alive = true;
+    const prepare = (actions: Parameters<typeof transformToUri>[1]) =>
+      transformToUri(paramUri, actions).then((out) => {
+        if (!alive) {
+          void discardScratch(out.uri);
+          return;
+        }
+        setPrepared({ uri: out.uri, w: out.width, h: out.height });
+        setImg({ w: out.width, h: out.height });
+      });
+    // getSize is only trusted for the aspect ratio here, never for pixel coordinates.
+    RNImage.getSize(
+      paramUri,
+      (w, h) => {
+        const resize = Math.max(w, h) >= GALLERY_LONG_EDGE / 2
+          ? [{ resize: w >= h ? { width: GALLERY_LONG_EDGE } : { height: GALLERY_LONG_EDGE } }]
+          : [];
+        prepare(resize).catch((e) => console.warn('[crop] gallery normalize failed', e));
+      },
+      () => prepare([]).catch((e) => console.warn('[crop] gallery normalize failed', e)),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [normalizeGallery, paramUri]);
+
+  // Android: load the quality screen's models while the user is framing the crop, so that screen's
+  // checks are not queued behind a 1-3 s model load. Both getters cache, so quality.tsx's own
+  // warm-up becomes a no-op. iOS loads fast enough that its timing is left as it was.
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    import('@/lib/skin-gate')
+      .then((m) => m.getSkinGateModel())
+      .catch((e) => console.warn('[crop] skin gate warm-up failed', e));
+    import('@/lib/classifier/classifier-model')
+      .then((m) => m.getClassifierModel())
+      .catch((e) => console.warn('[crop] classifier warm-up failed', e));
+  }, []);
 
   // Cover scale: shorter side fills the frame.
   const s0 = img ? frame / Math.min(img.w, img.h) : 1;
@@ -195,15 +260,18 @@ export default function CropScreen() {
           'scale=' + (OUTPUT / cropSize).toFixed(2) + 'x',
         );
       }
+      const tExport = Date.now();
       const result = await transformToUri(uri, [
         { crop: { originX, originY, width: cropSize, height: cropSize } },
         { resize: { width: OUTPUT, height: OUTPUT } },
       ]);
+      perfLog('crop.export', Date.now() - tExport, `${result.width}x${result.height}`);
       // The source is dead once the crop exists: every route in here arrives by push/replace and
       // leaves by the replace below, so this screen is off the stack and no back-nav can want it
       // again. Camera sources are the upright temp from capture; gallery sources are ImagePicker's
       // own cache copy, not the library original. discardScratch ignores anything that is neither.
       await discardScratch(uri);
+      if (paramUri && paramUri !== uri) await discardScratch(paramUri);
       // On web the source is a blob: URL (ImagePicker, or the canvas capture) that discardScratch
       // cannot touch. The crop supersedes it, so release it rather than holding the decoded frame
       // for the life of the page.
@@ -246,7 +314,8 @@ export default function CropScreen() {
           {img ? (
             <GestureDetector gesture={Gesture.Simultaneous(pan, pinch)}>
               <Animated.View style={[styles.imgWrap, imgStyle]}>
-                <Image source={{ uri }} style={{ width: displayW, height: displayH }} contentFit="cover" />
+                <Image source={{ uri: uri ?? undefined }} style={{ width: displayW, height: displayH }} contentFit="cover"
+                  onDisplay={() => perfLog('crop.visible', perfSince('shutter'), 'since shutter')} />
               </Animated.View>
             </GestureDetector>
           ) : null}

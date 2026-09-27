@@ -31,6 +31,8 @@ import { ClinicMap } from "./ClinicMap";
 
 export type ClinicsViewProps = {
   query: string;
+  /** Changes when a directory sync completes; the lists re-read the local DB on it. */
+  syncVersion?: number;
   topInset: number;
   /**
    * The search bar / segmented-control overlay, rendered by the parent
@@ -56,6 +58,7 @@ const OPEN_CHIP = "Open Now";
 // see the snapPoints/topInset comments below for why the sheet stopped using it.
 export function ClinicsView({
   query,
+  syncVersion = 0,
   topInset: _topInset,
   header,
 }: ClinicsViewProps) {
@@ -91,7 +94,7 @@ export function ClinicsView({
         ),
       )
       .catch(() => {});
-  }, []);
+  }, [syncVersion]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +131,7 @@ export function ClinicsView({
     return () => {
       cancelled = true;
     };
-  }, [query, service, coords]);
+  }, [query, service, coords, syncVersion]);
 
   useEffect(() => {
     if (coords && isOnline) downloadAreaPack(coords).catch(() => {});
