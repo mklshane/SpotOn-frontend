@@ -33,7 +33,15 @@ function isNetworkError(e: unknown): boolean {
 }
 
 function messageFor(e: unknown): string {
-  if (e instanceof ApiError) return e.detail;
+  if (e instanceof ApiError) {
+    // A 5xx that isn't our JSON came from the host, not the API (Render's "Service Suspended"
+    // page, a gateway error) - the raw body used to be rendered as the form error.
+    if (e.status >= 500 && e.isHtml) {
+      console.warn('[auth] host error page:', e.message);
+      return t('The server is unavailable right now. Please try again later.');
+    }
+    return e.detail;
+  }
   // The friendly message hides the cause; keep the real one in the console for debugging.
   console.warn('[auth] request failed:', e);
   // A timeout on a free-tier host usually means the server is waking, not that the user's
