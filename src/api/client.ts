@@ -9,6 +9,15 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 
+  /**
+   * True when the body is a proxy/host page rather than our API's JSON - e.g. Render's
+   * "Service Suspended" HTML (503) for a build still pointing at a retired host. Such a body
+   * must never be shown to the user verbatim.
+   */
+  get isHtml(): boolean {
+    return /^\s*</.test(this.body);
+  }
+
   /** Best-effort human message from a FastAPI `{ "detail": ... }` body. */
   get detail(): string {
     try {
@@ -26,6 +35,7 @@ export class ApiError extends Error {
     } catch {
       // not JSON
     }
+    if (this.isHtml) return `Request failed (${this.status}).`;
     return this.body || `Request failed (${this.status}).`;
   }
 }
