@@ -49,7 +49,11 @@ check('iqa: blur blocks', !iqa({ sharpOk: false }).pass);
 // The lesion ROW is a conjunction: a lesion cannot be in a frame that is not skin, and a green
 // tick on a photo of a street is a false statement rather than a mis-tuned threshold.
 check('iqa: not skin fails the lesion ROW, not just the pass', !iqa({ skinOk: false }).lesionRowOk);
-check('iqa: no presence fails the lesion row', !iqa({ presenceOk: false }).lesionRowOk);
+// Lesion OR skin passes (2026-09-29): a faint spot the presence check misses is still allowed.
+check('iqa: no presence still passes on skin', iqa({ presenceOk: false }).pass && iqa({ presenceOk: false }).lesionRowOk);
+check('iqa: no presence is not recorded as a seen lesion', !iqa({ presenceOk: false }).lesionSeen);
+check('iqa: presence on skin is a seen lesion', iqa().lesionSeen);
+check('iqa: presence on non-skin is NOT a seen lesion', !iqa({ skinGate: 'not_skin' }).lesionSeen);
 // The learned skin gate replaced the detector veto (2026-09-19). Every non-'skin' verdict blocks the
 // row - including 'failed', because could-not-check is not a pass (2026-09-17).
 check('iqa: skin gate says not skin -> lesion row fails', !iqa({ skinGate: 'not_skin' }).lesionRowOk);
@@ -75,8 +79,8 @@ check(
   !iqa({ presenceOk: true, skinGate: 'face' }).pass,
 );
 check(
-  'iqa: the skin gate does NOT waive presence (bare skin still needs a spot)',
-  !iqa({ presenceOk: false, skinGate: 'skin' }).pass,
+  'iqa: presence does NOT waive the colour skin check',
+  !iqa({ presenceOk: true, skinOk: false }).pass,
 );
 
 // Head regions get the "part the hair" tip. Stored as display text, so both languages must match.

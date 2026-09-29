@@ -81,7 +81,7 @@ type RowStatus = 'pending' | 'ok' | 'warn';
 const ROW_META: { label: string; icon: IconName }[] = localizedCopy([
   { label: 'Lighting', icon: 'sun.max' },
   { label: 'Focus', icon: 'camera.viewfinder' },
-  { label: 'Lesion in frame', icon: 'sparkles' },
+  { label: 'Skin in frame', icon: 'sparkles' },
 ]);
 
 export default function QualityScreen() {
@@ -305,7 +305,7 @@ export default function QualityScreen() {
    * owns this decision so that no term can waive another without a test failing.
    */
   const presenceOk = checks?.lesion.ok ?? false;
-  const { pass: iqaPass, lesionRowOk: lesionOk } = decideIqa({
+  const { pass: iqaPass, lesionRowOk: lesionOk, lesionSeen } = decideIqa({
     error,
     brightnessOk,
     sharpOk,
@@ -362,7 +362,8 @@ export default function QualityScreen() {
     if (skinGate === 'failed') {
       out.push('We couldn’t check this photo for a spot - please try again.');
     } else if (!presenceOk) {
-      out.push('We couldn’t find a clear lesion - center the spot in the frame.');
+      // Advisory since 2026-09-29 (see decideIqa): a faint spot is still allowed through.
+      out.push('Tip: if the spot is hard to see, center it in the frame.');
     }
     // Confidence is a readability signal like blur is - surfaced here rather than after the
     // questionnaire, so a retake costs the user a photo and not eight answers.
@@ -412,7 +413,7 @@ export default function QualityScreen() {
       uri,
       source: session.source,
       qualityPassed: pass,
-      detected: checks ? lesionOk : undefined,
+      detected: checks ? lesionSeen : undefined,
     });
     if (index === 0) setImageUri(uri);
     // Inference starts HERE, not at the analysis screen: by the time the user has cropped the next
@@ -435,7 +436,7 @@ export default function QualityScreen() {
       uri,
       source: session.source,
       qualityPassed: pass,
-      detected: checks ? lesionOk : undefined,
+      detected: checks ? lesionSeen : undefined,
     });
     if (index === 0) setImageUri(uri);
     session.enqueueImage(uri, index);

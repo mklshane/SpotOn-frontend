@@ -64,8 +64,10 @@ export function skinGateVerdict(p: { skin: number; notSkin: number; face: number
 export type IqaVerdict = {
   /** True when every blocking image check passed. */
   pass: boolean;
-  /** What the third row ("Lesion in frame") reports. */
+  /** What the third row ("Skin in frame") reports: skin, with or without a visible spot. */
   lesionRowOk: boolean;
+  /** Skin AND the presence check found a spot - what `detected` records on the stored image. */
+  lesionSeen: boolean;
 };
 
 /**
@@ -103,11 +105,21 @@ export type IqaVerdict = {
  * SpotOn-synthetic/synth/skin_gate/SKIN_GATE.md. The detector still owns the classifier's CROP
  * (classify.ts); it just no longer vetoes. The hand-built terms stay: `skin` is a cheap backstop,
  * and `presence` still answers the question the model does not - is there a spot on this skin.
+ *
+ * LESION *OR* SKIN PASSES (2026-09-29). `presence` no longer vetoes: a faint or flat lesion (a
+ * pale macule, an early BCC) often has too little centre-surround contrast to register, and users
+ * were blocked from uploading a genuine photo of the spot they were worried about. A lesion can
+ * only be in a skin frame, so "lesion or skin" is just "skin" - the two skin terms still block
+ * streets, t-shirts and selfies exactly as before. What this gives up: bare skin with no spot now
+ * passes (presence used to stop ~82% of those). The classifier's Safety Floor still catches a
+ * photo it cannot read, and a missing spot is surfaced as a tip rather than a block. Presence is
+ * still recorded (`lesionSeen`), just not enforced.
  */
 export function decideIqa(input: IqaTerms): IqaVerdict {
-  const lesionRowOk = input.skinOk && input.presenceOk && input.skinGate === 'skin';
+  const lesionRowOk = input.skinOk && input.skinGate === 'skin';
   return {
     lesionRowOk,
+    lesionSeen: lesionRowOk && input.presenceOk,
     pass: !input.error && input.brightnessOk && input.sharpOk && lesionRowOk,
   };
 }
