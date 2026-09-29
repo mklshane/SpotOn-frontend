@@ -15,22 +15,27 @@
 ### Task 1: `Accordion` component
 
 **Files:**
+
 - Create: `src/components/ui/accordion.tsx`
 - Modify: `src/components/ui/index.ts`
 
 - [ ] **Step 1: Write the complete `accordion.tsx` file**
 
 ```tsx
-import { useState } from 'react';
-import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { useState } from "react";
+import { Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
-import { Radius, Space } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import { Radius, Space } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 
-import { ThemedText } from '../themed-text';
-import { Icon } from './icon';
-import { SelectCard } from './select-card';
+import { ThemedText } from "../themed-text";
+import { Icon } from "./icon";
+import { SelectCard } from "./select-card";
 
 export type AccordionOption<T extends string> = {
   value: T;
@@ -55,7 +60,7 @@ const ROW_HEIGHT = 80;
 
 export function Accordion<T extends string>({
   label,
-  placeholder = 'Select',
+  placeholder = "Select",
   value,
   options,
   onChange,
@@ -67,7 +72,11 @@ export function Accordion<T extends string>({
   const progress = useSharedValue(0);
 
   const selected = options.find((o) => o.value === value);
-  const borderColor = error ? theme.riskCritical : open ? theme.brand : 'transparent';
+  const borderColor = error
+    ? theme.riskCritical
+    : open
+      ? theme.brand
+      : "transparent";
   const maxHeight = options.length * ROW_HEIGHT + Space.base;
 
   function setOpenAnimated(next: boolean) {
@@ -83,7 +92,11 @@ export function Accordion<T extends string>({
   return (
     <View style={containerStyle}>
       {label ? (
-        <ThemedText type="subhead" themeColor="textSecondary" style={styles.label}>
+        <ThemedText
+          type="subhead"
+          themeColor="textSecondary"
+          style={styles.label}
+        >
           {label}
         </ThemedText>
       ) : null}
@@ -91,11 +104,19 @@ export function Accordion<T extends string>({
       <Pressable
         accessibilityRole="button"
         onPress={() => setOpenAnimated(!open)}
-        style={[styles.field, { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 }]}>
-        <ThemedText type="body" themeColor={selected ? 'text' : 'muted'}>
+        style={[
+          styles.field,
+          { backgroundColor: theme.elementBg, borderColor, borderWidth: 1.5 },
+        ]}
+      >
+        <ThemedText type="body" themeColor={selected ? "text" : "muted"}>
           {selected ? selected.label : placeholder}
         </ThemedText>
-        <Icon name={open ? 'chevron.up' : 'chevron.down'} tintColor={theme.muted} size={16} />
+        <Icon
+          name={open ? "chevron.up" : "chevron.down"}
+          tintColor={theme.muted}
+          size={16}
+        />
       </Pressable>
 
       <Animated.View style={[styles.options, animatedStyle]}>
@@ -115,7 +136,11 @@ export function Accordion<T extends string>({
       </Animated.View>
 
       {error ? (
-        <ThemedText type="footnote" themeColor="riskCritical" style={styles.error}>
+        <ThemedText
+          type="footnote"
+          themeColor="riskCritical"
+          style={styles.error}
+        >
           {error}
         </ThemedText>
       ) : null}
@@ -129,11 +154,11 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: Radius.md,
     paddingHorizontal: Space.base,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  options: { overflow: 'hidden' },
+  options: { overflow: "hidden" },
   card: { marginTop: Space.sm },
   error: { marginTop: Space.xs },
 });
@@ -144,8 +169,8 @@ const styles = StyleSheet.create({
 In `src/components/ui/index.ts`, add the export alphabetically as the first line (before `Button`):
 
 ```ts
-export { Accordion } from './accordion';
-export { Button } from './button';
+export { Accordion } from "./accordion";
+export { Button } from "./button";
 ```
 
 (Leave the existing `export { Select } from './select';` line in place for now - Task 3 removes it, after Task 2 has migrated every caller off of it.)
@@ -167,6 +192,7 @@ git commit -m "feat(ui): add Accordion primitive"
 ### Task 2: Wire `Accordion` into the Sex and Skin type fields
 
 **Files:**
+
 - Modify: `src/app/profile/edit.tsx`
 - Modify: `src/app/(auth)/complete-profile.tsx`
 
@@ -237,8 +263,9 @@ export default function EditProfileScreen() {
     if (!dob) next.dob = 'Enter a valid date of birth.';
     if (!sex) next.sex = 'Please select one.';
     const trimmedPhone = phone.trim();
-    if (trimmedPhone && !/^(\+63|0)9\d{9}$/.test(trimmedPhone)) {
-      next.phone = 'Enter a valid PH mobile number (e.g. 09xx xxx xxxx).';
+    if (trimmedPhone && !/^(\+63|0)[1-9]\d{9}$/.test(trimmedPhone)) {
+      next.phone = 'Enter a valid phone number (e.g. 09xx xxx xxxx).';
+    }
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -344,27 +371,33 @@ const styles = StyleSheet.create({
 Full resulting file (only the import and the `Sex` field's tag change):
 
 ```tsx
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { router } from "expo-router";
+import { useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
-import type { Sex } from '@/api/types';
-import { ThemedText } from '@/components/themed-text';
-import { Accordion } from '@/components/ui/accordion';
-import { Button } from '@/components/ui/button';
-import { DateField } from '@/components/ui/date-field';
-import { Screen } from '@/components/ui/screen';
-import { TextField } from '@/components/ui/text-field';
-import { Space } from '@/constants/theme';
-import { useAuth } from '@/lib/auth';
-import { saveProfile } from '@/lib/profile';
+import type { Sex } from "@/api/types";
+import { ThemedText } from "@/components/themed-text";
+import { Accordion } from "@/components/ui/accordion";
+import { Button } from "@/components/ui/button";
+import { DateField } from "@/components/ui/date-field";
+import { Screen } from "@/components/ui/screen";
+import { TextField } from "@/components/ui/text-field";
+import { Space } from "@/constants/theme";
+import { useAuth } from "@/lib/auth";
+import { saveProfile } from "@/lib/profile";
 
 const SEX_OPTIONS: { value: Sex; label: string }[] = [
-  { value: 'female', label: 'Female' },
-  { value: 'male', label: 'Male' },
-  { value: 'intersex', label: 'Intersex' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+  { value: "female", label: "Female" },
+  { value: "male", label: "Male" },
+  { value: "intersex", label: "Intersex" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
 export default function CompleteProfileScreen() {
@@ -373,15 +406,15 @@ export default function CompleteProfileScreen() {
   const hasPhone = Boolean(user?.phone);
   const [dob, setDob] = useState<string | null>(null);
   const [sex, setSex] = useState<Sex | null>(null);
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ dob?: string; sex?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   function validate() {
     const next: typeof errors = {};
-    if (!dob) next.dob = 'Enter a valid date of birth.';
-    if (!sex) next.sex = 'Please select one.';
+    if (!dob) next.dob = "Enter a valid date of birth.";
+    if (!sex) next.sex = "Please select one.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -391,10 +424,16 @@ export default function CompleteProfileScreen() {
     if (!validate() || !dob || !sex) return;
     setSubmitting(true);
     try {
-      await saveProfile({ dateOfBirth: dob, sex, phone: hasPhone ? undefined : phone });
-      router.replace('/home');
+      await saveProfile({
+        dateOfBirth: dob,
+        sex,
+        phone: hasPhone ? undefined : phone,
+      });
+      router.replace("/home");
     } catch {
-      setFormError("Couldn't save your details. Check your connection and try again.");
+      setFormError(
+        "Couldn't save your details. Check your connection and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -404,20 +443,27 @@ export default function CompleteProfileScreen() {
     <Screen variant="gradient" gradient="dawnSoft">
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}>
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.header}>
             <ThemedText type="title1">Tell us about you</ThemedText>
             <ThemedText type="body" themeColor="textSecondary">
-              A few details to personalize your screening. This stays private to you.
+              A few details to personalize your screening. This stays private to
+              you.
             </ThemedText>
           </View>
 
           <View style={styles.form}>
-            <DateField label="Date of birth" onChange={setDob} error={errors.dob} />
+            <DateField
+              label="Date of birth"
+              onChange={setDob}
+              error={errors.dob}
+            />
 
             <Accordion
               label="Sex"
@@ -442,15 +488,24 @@ export default function CompleteProfileScreen() {
 
           <View style={styles.actions}>
             {formError ? (
-              <ThemedText type="footnote" themeColor="riskCritical" style={styles.center}>
+              <ThemedText
+                type="footnote"
+                themeColor="riskCritical"
+                style={styles.center}
+              >
                 {formError}
               </ThemedText>
             ) : null}
-            <Button label="Continue" variant="brand" loading={submitting} onPress={handleSubmit} />
+            <Button
+              label="Continue"
+              variant="brand"
+              loading={submitting}
+              onPress={handleSubmit}
+            />
             <Button
               label="Skip for now"
               variant="ghost"
-              onPress={() => router.replace('/home')}
+              onPress={() => router.replace("/home")}
             />
           </View>
         </ScrollView>
@@ -461,11 +516,16 @@ export default function CompleteProfileScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  content: { flexGrow: 1, paddingTop: Space.xxl, paddingBottom: Space.xl, gap: Space.xxl },
+  content: {
+    flexGrow: 1,
+    paddingTop: Space.xxl,
+    paddingBottom: Space.xl,
+    gap: Space.xxl,
+  },
   header: { gap: Space.md },
   form: { gap: Space.xl },
-  actions: { marginTop: 'auto', gap: Space.sm },
-  center: { textAlign: 'center' },
+  actions: { marginTop: "auto", gap: Space.sm },
+  center: { textAlign: "center" },
 });
 ```
 
@@ -487,6 +547,7 @@ git commit -m "refactor(profile): use Accordion for Sex and Skin type fields"
 ### Task 3: Remove the now-unused `Select` component
 
 **Files:**
+
 - Delete: `src/components/ui/select.tsx`
 - Modify: `src/components/ui/index.ts`
 
@@ -504,7 +565,7 @@ Delete `src/components/ui/select.tsx`.
 In `src/components/ui/index.ts`, delete this line:
 
 ```ts
-export { Select } from './select';
+export { Select } from "./select";
 ```
 
 - [ ] **Step 4: Type-check**
@@ -534,6 +595,7 @@ shake/`Ctrl+M` → Reload in the emulator).
 - [ ] **Step 2: Walk through the checklist from the design spec**
 
 On `profile/edit.tsx`:
+
 - Tap "Sex" - it expands in place (pushes "Phone number" and "Skin type" down, doesn't overlay
   them). Options show as brand-tint/checkmark cards when selected.
 - Pick a Sex option - it selects, closes the accordion, and the following fields settle back up.
@@ -544,6 +606,7 @@ On `profile/edit.tsx`:
   message below it (same as before).
 
 On `(auth)/complete-profile.tsx`:
+
 - Tap "Sex" - same expand-in-place behavior, pushes phone number field (if shown) down.
 - Leave it unset and tap "Continue" - same error-state check as above.
 
