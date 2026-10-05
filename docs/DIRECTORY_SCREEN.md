@@ -49,9 +49,9 @@ Added deps: `@maplibre/maplibre-react-native` (map), `expo-location` (GPS),
 `@react-native-community/netinfo` (connectivity), `@gorhom/bottom-sheet` (draggable sheet).
 
 Config (`src/config.ts`):
-- `MAPTILER_KEY` = `process.env.EXPO_PUBLIC_MAPTILER_KEY` (set in `.env`, gitignored;
-  placeholder in `.env.example`). Client-safe; restrict by bundle id in MapTiler.
-- `MAP_STYLE_URL` = MapTiler `streets-v2` style built from the key (empty string when no key).
+- `MAP_STYLE_URL` = OpenFreeMap `liberty` style (`https://tiles.openfreemap.org/styles/liberty`).
+  Keyless, so there is no map env var. Includes a `building-3d` extrusion layer (zoom 14+, shows
+  when pitched); no terrain/DEM source.
 - `MAP_DEFAULT` = Metro Manila fallback center/zoom.
 
 `app.json` registers the `expo-location` (with permission copy) and
@@ -109,7 +109,7 @@ Layout (`ClinicsView.tsx`): a full-screen `ClinicMap` with a `@gorhom/bottom-she
 - Offline chip (brand tint) when `!isOnline`.
 
 **Map** (`ClinicMap.tsx`):
-- `MapView` (MapTiler style), `Camera` initial center = user coords or `MAP_DEFAULT`,
+- `MapView` (OpenFreeMap style), `Camera` initial center = user coords or `MAP_DEFAULT`,
   `UserLocation` dot.
 - Pins: one `GeoJSONSource` + two circle layers - **plain orange dots** (`circleRadius 9`,
   brand, white stroke); the selected pin is a larger darker dot (`circleRadius 13`,
@@ -152,7 +152,7 @@ type**, top service), info rows (address / Mon–Fri hours / phone), and actions
 (filled) · **Call** (icon) · **Details** (outline). Card tap and Details both open the detail.
 
 **Offline map packs** (`map-offline.ts`): on first location + connection, `downloadAreaPack`
-caches a bounded MapTiler pack (~25 km, zoom 10–15) so tiles render offline. Gated on
+caches a bounded OpenFreeMap pack (~25 km, zoom 10–15) so tiles render offline. Gated on
 `isOnline` + `MAP_AVAILABLE`.
 
 ---
@@ -178,10 +178,9 @@ header like `scan/history.tsx`.
 ## 7. Guarded map (offline / no-native-build safety)
 
 `src/lib/maplibre.ts` defensively `require`s the native module and exports the pieces plus
-`MAP_AVAILABLE` (true only when the module is linked **and** `MAP_STYLE_URL` is set). Every map
-render and offline-pack call checks it. When false - native module not linked yet, or no
-MapTiler key - the app still runs; add the key and run one dev build and the map lights up with
-no code change. `showZoom` and the attached `Marker` are likewise guarded.
+`MAP_AVAILABLE` (true only when the module is linked). Every map render and offline-pack call
+checks it. When false - native module not linked yet - the app still runs; run one dev build and
+the map lights up with no code change. `showZoom` and the attached `Marker` are likewise guarded.
 
 ---
 
@@ -201,7 +200,7 @@ no code change. `showZoom` and the attached `Marker` are likewise guarded.
 
 1. `npx tsc --noEmit` and `expo lint` clean; `npx expo export --platform ios` bundles (JS-level
    proof the guarded map, routes, and imports resolve).
-2. After a dev build with a MapTiler key: map renders; **tap a pin → attached preview card that
+2. After a dev build: map renders; **tap a pin → attached preview card that
    pans with the map → Details** opens the clinic screen; tapping empty map dismisses it.
 3. Drag the bottom sheet between its snap points; filters (Open Now / PhilHealth / service) and
    the sort cycle update the list; distance labels show when location is granted.

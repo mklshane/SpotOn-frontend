@@ -16,15 +16,12 @@ export const SYNC_PAGE_LIMIT = 1000;
 export const DB_NAME = "spoton.db";
 
 /**
- * MapTiler key for the MapLibre style URL. Client-safe (restrict by bundle id in
- * MapTiler's dashboard) - set in `.env`, gitignored. Empty string when unset, which
- * `MAP_AVAILABLE` (src/lib/maplibre.ts) treats as "map not ready".
+ * OpenFreeMap "liberty" style for MapLibre (native and web). Free, keyless, no usage limits -
+ * https://openfreemap.org/quick_start/. Its OpenMapTiles vector source includes building
+ * heights and a `building-3d` fill-extrusion layer (zoom 14+) that shows once the map is
+ * pitched. It ships no terrain/DEM source; 3D terrain would need a separate raster-dem source.
  */
-export const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY ?? "";
-
-export const MAP_STYLE_URL = MAPTILER_KEY
-  ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
-  : "";
+export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 
 /** Fallback map center/zoom when location is denied or unavailable - Metro Manila. */
 export const MAP_DEFAULT = {
