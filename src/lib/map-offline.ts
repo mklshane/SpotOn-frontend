@@ -10,7 +10,7 @@ const RADIUS_M = 25_000;
 let inFlight: Promise<void> | null = null;
 
 /**
- * Downloads a bounded MapTiler tile pack (~25km, zoom 10-15) around `coords` so
+ * Downloads a bounded OpenFreeMap tile pack (~25km, zoom 10-15) around `coords` so
  * the map renders offline afterwards. No-op if the native map isn't linked yet,
  * or if a pack has already been cached once (best-effort, not re-validated,
  * and not scoped to `coords` - only the first call in the app's lifetime ever

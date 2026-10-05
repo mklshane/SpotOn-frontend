@@ -91,7 +91,7 @@ npx eas deploy
   remote testers, and the backend needs CORS for the `.expo.app` origin.
 - Serve **COOP `same-origin` + COEP `credentialless`** - `require-corp` blocks the Supabase
   clinic photos (see trap 4 above).
-- `EXPO_PUBLIC_MAPTILER_KEY` must be set or the map falls back to the list.
+- The map uses the keyless OpenFreeMap style; no env var is needed for it.
 - The API's `CORS_ORIGINS` must include the deployed web origin, or every request fails and the
   app shows "Can't reach the server". It lives in the Render dashboard, not the repo.
 - `scripts/copy-litert-wasm.mjs` stages the LiteRT runtime into `public/litert/` (wired into

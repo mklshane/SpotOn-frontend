@@ -298,10 +298,10 @@ export default function PrivacyPolicyScreen() {
           <Paragraph>{t("Because these providers operate outside the Philippines, account information processed through SpotOn is stored and processed abroad. The research team remains accountable for that information under the Data Privacy Act, and these providers act as processors on SpotOn's behalf.")}</Paragraph>
 
           <SubHeading>{t("Map Services")}</SubHeading>
-          <Paragraph>{t("When map functionality is used, SpotOn requests map tiles and related map resources from MapTiler. Providing a map requires sending the information necessary to identify the requested map area, which is derived from your approximate location, together with your device's network address. SpotOn does not send your precise coordinates to the map provider, and clinic distances are calculated on your device rather than on a server. See")}{" "}
+          <Paragraph>{t("When map functionality is used, SpotOn requests map tiles and related map resources from OpenFreeMap. Providing a map requires sending the information necessary to identify the requested map area, which is derived from your approximate location, together with your device's network address. SpotOn does not send your precise coordinates to the map provider, and clinic distances are calculated on your device rather than on a server. See")}{" "}
             <ExternalLink
-              url="https://www.maptiler.com/privacy-policy/"
-              label="maptiler.com/privacy-policy"
+              url="https://openfreemap.org/privacy/"
+              label="openfreemap.org/privacy"
             />
             .
           </Paragraph>
