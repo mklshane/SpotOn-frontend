@@ -26,8 +26,8 @@ import { createPortal } from 'react-dom';
 
 import { MAP_STYLE_URL } from '@/config';
 
-/** The style URL is the real gate on web - no native module to be missing. */
-export const MAP_AVAILABLE = MAP_STYLE_URL.length > 0;
+/** Always on: no native module to be missing, and the OpenFreeMap style needs no key. */
+export const MAP_AVAILABLE = true;
 
 /**
  * maplibre-gl is loaded as a prebuilt UMD script at runtime, NOT imported.
@@ -98,16 +98,21 @@ function loadMapLibre(): Promise<MapLibreModule> {
 export type LngLat = [number, number];
 export type LngLatBounds = [number, number, number, number];
 
+type Padding = number | MapLibre.PaddingOptions;
+
+/** Mirrors the native Camera's viewport options; pitch/bearing are there for 3D views. */
+type CameraOptions = { zoom?: number; pitch?: number; bearing?: number; padding?: Padding };
+type AnimationOptions = { duration?: number };
+
+/** Same signatures as the native CameraRef, so ClinicMap's calls behave alike on both. */
 export type CameraRef = {
-  zoomTo: (zoom: number, opts?: { duration?: number }) => void;
-  easeTo: (opts: { center?: LngLat; zoom?: number; duration?: number }) => void;
-  fitBounds: (
-    ne: LngLat | LngLatBounds,
-    sw?: LngLat,
-    padding?: number | number[],
-    duration?: number,
-  ) => void;
+  zoomTo: (zoom: number, opts?: CameraOptions & AnimationOptions) => void;
+  easeTo: (opts: { center?: LngLat } & CameraOptions & AnimationOptions) => void;
+  /** `bounds` is [west, south, east, north]. */
+  fitBounds: (bounds: LngLatBounds, opts?: CameraOptions & AnimationOptions) => void;
 };
+
+type ViewState = { center: LngLat; zoom: number; pitch?: number; bearing?: number };
 
 const MapCtx = createContext<MapLibre.Map | null>(null);
 /** Layers declared inside a <GeoJSONSource> need to know which source to bind to. */
@@ -147,7 +152,9 @@ export function MapLibreMap({
           style: mapStyle || MAP_STYLE_URL,
           center: [0, 0],
           zoom: 2,
-          attributionControl: false,
+          // OpenFreeMap requires crediting OpenMapTiles and OpenStreetMap; the compact control
+          // reads that text from the tile source and collapses to an (i) button.
+          attributionControl: { compact: true },
         });
         if (compass) m.addControl(new maplibregl.NavigationControl({ showZoom: false }), 'top-right');
         // Style/tile failures are silent otherwise - a blank map with no clue why.
@@ -194,7 +201,7 @@ export function MapLibreMap({
   );
 }
 
-export const Camera = forwardRef<CameraRef, { initialViewState?: { center: LngLat; zoom: number } }>(
+export const Camera = forwardRef<CameraRef, { initialViewState?: ViewState }>(
   function Camera({ initialViewState }, ref) {
     const map = useContext(MapCtx);
     const applied = useRef(false);
@@ -202,23 +209,20 @@ export const Camera = forwardRef<CameraRef, { initialViewState?: { center: LngLa
     useEffect(() => {
       if (!map || !initialViewState || applied.current) return;
       applied.current = true; // "initial" - later prop changes must not yank the user's view
-      map.jumpTo({ center: initialViewState.center, zoom: initialViewState.zoom });
+      map.jumpTo(initialViewState);
     }, [map, initialViewState]);
 
     useImperativeHandle(
       ref,
       (): CameraRef => ({
-        zoomTo: (zoom, opts) => map?.easeTo({ zoom, duration: opts?.duration ?? 300 }),
-        easeTo: (opts) =>
-          map?.easeTo({ center: opts.center, zoom: opts.zoom, duration: opts.duration ?? 300 }),
-        fitBounds: (ne, sw, padding, duration) => {
-          if (!map) return;
-          // Native takes (ne, sw); a 4-tuple [w,s,e,n] is also accepted here for convenience.
-          const bounds = Array.isArray(ne) && ne.length === 4
-            ? new (ml().LngLatBounds)([ne[0], ne[1]], [ne[2], ne[3]])
-            : new (ml().LngLatBounds)(sw as LngLat, ne as LngLat);
-          const pad = typeof padding === 'number' ? padding : 40;
-          map.fitBounds(bounds, { padding: pad, duration: duration ?? 400 });
+        zoomTo: (zoom, opts) => map?.easeTo({ ...opts, zoom, duration: opts?.duration ?? 300 }),
+        easeTo: (opts) => map?.easeTo({ ...opts, duration: opts.duration ?? 300 }),
+        fitBounds: ([w, s, e, n], opts) => {
+          map?.fitBounds(new (ml().LngLatBounds)([w, s], [e, n]), {
+            ...opts,
+            padding: opts?.padding ?? 40,
+            duration: opts?.duration ?? 400,
+          });
         },
       }),
       [map],

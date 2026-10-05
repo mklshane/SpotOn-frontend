@@ -10,11 +10,11 @@ native dependency was added - that's what `prebuild --clean` fixes.
 
 ```bash
 npm install
-cp .env.example .env         # optional: add EXPO_PUBLIC_MAPTILER_KEY to light up the map
+cp .env.example .env
 npm run prebuild:clean       # regenerate ios/ + android/ from app.json (applies MapLibre etc.)
 ```
 
-Without a MapTiler key or a native build, the map safely **degrades to a clinic list** - the app
+Without a native build, the map safely **degrades to a clinic list** - the app
 never crashes (see `src/lib/maplibre.ts`).
 
 ## Android
