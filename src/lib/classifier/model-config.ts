@@ -7,9 +7,8 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_dfe4tv_fp32.tflite (interpreter inspection, 2026-09-22 - same
- * tensor names, shapes and raw-logit output as D_final), matching the contract
- * `model_meta_dfe4tv.json` states:
+ * Verified against the bundled spoton_milk_s1_fp32.tflite (interpreter inspection, 2026-10-03 - same
+ * tensor names, shapes and raw-logit output as dfe4tv / D_final):
  *   input  "serving_default_args_0"          [1, 3, 260, 260] float32 **NCHW** (EfficientNet-B2)
  *   output "serving_default_output_0_output" [1, 5]           float32     (raw LOGITS - no softmax
  *                                                   in the graph; classify.ts applies it on-device)
@@ -29,6 +28,25 @@ import type { LesionClass } from '../triage/types';
  */
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
+//
+// === milk_s1 BUNDLED 2026-10-03 at Shane's instruction. ===
+//
+// From the D_next retrain (`~/Downloads/D_next.ipynb`, run `milk_s1`): EfficientNet-B2 trained on the
+// FROZEN split `SpotOn/stage3/manifest_v1.csv` (patient/case-grouped, deduplicated, OTHER-cancers
+// excluded) + recipe fixes + stability training (detector-box jitter, photometric aug, two-view
+// consistency) + synthetic marker ink + Asan "Mix A" (6,021 Asian-skin close-ups) + SCIN lookalikes +
+// capped, visually-cleaned MILK10k (2,073). Same I/O contract as dfe4tv (NCHW, raw logits).
+// Calibration fitted on valid_calib (741 images, never trained on) at deploy geometry:
+// T 0.595 (NLL) and MALIGNANT_THRESHOLD 0.4147 (90% malignant sensitivity).
+// Held-out results at that point (synth.eval.manifest_eval / seed_summary):
+//   stage3 test (1,434)   acc 0.842  macro-F1 0.725  AUROC 0.952  sens 0.879 / spec 0.900
+//   Asan test (1,276, Asian skin)  AUROC 0.914 (dfe4tv 0.824)  spec 0.683 (dfe4tv 0.486)
+//   MILK10k test (894, visible lesions)  AUROC 0.789;  Hallym BCC (152) recall 0.78
+//   re-shot cancer-flag flips 0.10 (control 0.17);  Shane's 85 acne/boil/mole photos 21/85 flagged
+//   (dfe4tv 43/85; milk_s1 trained on them).
+// KNOWN WEAKNESS: stage3 SCC recall ~0.54 and MEL ~0.81 (stability-only runs reached 0.64 / 0.89);
+// inflamed cystic acne and boils are still flagged ~60% of the time.
+// The old ISIC 200 holdout is NOT a valid benchmark any more: 125/200 of its images are in stage3.
 //
 // === dfe4tv RE-BUNDLED 2026-09-22 (late) at Shane's instruction, its own calibration. ===
 //
@@ -413,10 +431,10 @@ import type { LesionClass } from '../triage/types';
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-export const MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
+export const MODEL_ASSET = require('../../../assets/models/spoton_milk_s1_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_dfe4tv_fp32';
+export const MODEL_VERSION = 'spoton_milk_s1_fp32';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -774,7 +792,8 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.4444;
+// milk_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-03). Was 0.4444 for dfe4tv.
+export const MALIGNANT_THRESHOLD = 0.4147;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -1021,7 +1040,8 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 0.9432;
+// milk_s1: NLL-fitted on valid_calib (2026-10-03). Was 0.9432 for dfe4tv.
+export const CONFIDENCE_TEMPERATURE = 0.595;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average
