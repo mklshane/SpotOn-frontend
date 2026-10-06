@@ -221,7 +221,8 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
         label: lesionId ? undefined : (lesionLabel ?? null),
         userId: accountId,
       });
-      setEntries((prev) => [full, ...prev]);
+      // A retried save reuses the id (INSERT OR REPLACE) - replace the cached entry, don't add a twin.
+      setEntries((prev) => [full, ...prev.filter((e) => e.id !== full.id)]);
       mergeLesion(lesion);
       return full;
     },

@@ -165,7 +165,7 @@ export default function FollowUpConfirmScreen() {
         <Button
           label={t("Update these answers")}
           variant="ghost"
-          onPress={() => router.push('/scan/questionnaire')}
+          onPress={() => router.push({ pathname: '/scan/questionnaire', params: { mode: 'all' } })}
         />
       </View>
 

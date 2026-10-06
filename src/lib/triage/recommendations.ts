@@ -97,6 +97,21 @@ export const MALIGNANT_GATE = localizedCopy({
     'The closest single match for your photo was not a cancer type, but a meaningful share of the assessment still pointed toward one. When that happens we raise the recommendation rather than rely on the closest match alone. This is a precaution, not a detection.',
 });
 
+/**
+ * Shown instead of MALIGNANT_GATE when the floor was raised and the closest match itself IS a
+ * cancer type (MEL/SCC/BCC) - the gate copy's "was not a cancer type" would be false there.
+ */
+export const MALIGNANT_TOP = localizedCopy({
+  title: 'Worth having checked',
+  body:
+    'The closest match for your photo was a pattern doctors prefer to examine, even though the overall score was low. We raise the recommendation in that case rather than rely on the score alone. This is a precaution, not a detection.',
+});
+
+/** Picks the explanation for a gate-raised result: the copy depends on what the argmax was. */
+export function malignantGateCopy(topClass: string): { title: string; body: string } {
+  return ['MEL', 'SCC', 'BCC'].includes(topClass) ? MALIGNANT_TOP : MALIGNANT_GATE;
+}
+
 /** Non-alarming retake prompt for a first low-confidence pass. */
 export const RESCAN_PROMPT = localizedCopy({
   title: 'Let’s try a clearer photo',

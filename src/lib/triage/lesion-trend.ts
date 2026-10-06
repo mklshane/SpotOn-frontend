@@ -16,7 +16,12 @@ export type TrendAnswer = 'yes' | 'no' | 'unsure';
 export type TrendScreening = {
   id: string;
   createdAt: string;
-  classification: { topClass: string; topConfidence: number; probs: Record<string, number> };
+  classification: {
+    topClass: string;
+    topConfidence: number;
+    probs: Record<string, number>;
+    modelVersion?: string;
+  };
   triage: { tier: TrendTier; tps: number; malignantScore: number };
   questionnaire: { answers: Record<string, TrendAnswer> };
 };
@@ -25,7 +30,7 @@ export type AnswerFlip = {
   id: string;
   from: TrendAnswer;
   to: TrendAnswer;
-  /** True when the change is toward the more concerning answer ("no"/"unsure" → "yes"). */
+  /** True when the change is toward the more concerning answer (no → unsure → yes). */
   worsened: boolean;
 };
 
@@ -50,6 +55,12 @@ export type LesionTrend = {
   malignantDelta: number | null;
   /** True when the predicted class is not the same across every screening. */
   classChanged: boolean;
+  /**
+   * True when the screenings were scored by different classifier versions. Each model ships its
+   * own temperature and threshold, so tier/TPS/class deltas across a swap can be the model's
+   * doing rather than the spot's - the UI must say so instead of presenting it as change.
+   */
+  modelChanged: boolean;
   /** Answers that differ between the two most recent screenings. */
   answerFlips: AnswerFlip[];
   /** The TPS series, oldest first - the sparkline's input. */
@@ -64,6 +75,8 @@ export function tierRank(tier: TrendTier): number {
 }
 
 const DAY_MS = 86_400_000;
+
+const ANSWER_RANK: Record<TrendAnswer, number> = { no: 0, unsure: 1, yes: 2 };
 
 /** Whole days between two ISO timestamps. Negative results clamp to 0. */
 export function daysBetween(fromIso: string, toIso: string): number {
@@ -105,7 +118,9 @@ export function summarizeLesionTrend(
       const to = latest.questionnaire.answers[id];
       const from = previous.questionnaire.answers[id];
       if (from !== undefined && to !== undefined && from !== to) {
-        answerFlips.push({ id, from, to, worsened: to === 'yes' });
+        // Ordered no < unsure < yes: no→unsure gains +0.5 on a Major question, so it is a
+        // worsening too, and yes→unsure an improvement - not just "anything that isn't yes".
+        answerFlips.push({ id, from, to, worsened: ANSWER_RANK[to] > ANSWER_RANK[from] });
       }
     }
   }
@@ -128,6 +143,8 @@ export function summarizeLesionTrend(
         ? latest.triage.malignantScore - first.triage.malignantScore
         : null,
     classChanged: new Set(sorted.map((s) => s.classification.topClass)).size > 1,
+    modelChanged:
+      new Set(sorted.map((s) => s.classification.modelVersion).filter((v) => v != null)).size > 1,
     answerFlips,
     tpsSeries: sorted.map((s) => ({ at: s.createdAt, tps: s.triage.tps, tier: s.triage.tier })),
   };

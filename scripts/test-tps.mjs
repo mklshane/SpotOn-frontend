@@ -103,8 +103,15 @@ check('high conf → ok on attempt 2', evaluateSafetyFloor(0.9, 2) === 'ok');
 const before = computeTriage('MEL', 0.38, allYes); // CS 1.9 + SS 3 = 4.9 → high
 check('pre-floor: computed high', before.tier === 'high' && close(before.tps, 4.9));
 const floored = applySafetyFloor(before);
-check('floor: tier moderate', floored.tier === 'moderate');
+// The floor only ever raises: a computed High on an unreadable photo stays High, and the
+// "photo uncertainty - not a detected risk" qualifier is withheld because the risk WAS scored.
+check('floor: never lowers a computed high', floored.tier === 'high');
+check('floor: no qualifier when TPS already ≥ moderate', !floored.safetyFloorApplied && !floored.confidenceQualifier);
 check('floor: components unchanged', close(floored.tps, 4.9) && close(floored.cs, 1.9));
+r = computeTriage('MEL', 0.38, allYes, { applyFloor: true });
+check('floor via computeTriage: high stays high', r.tier === 'high' && !r.safetyFloorApplied);
+r = applySafetyFloor(computeTriage('BENIGN', 0.38, allNo));
+check('floor: low → moderate with qualifier', r.tier === 'moderate' && r.safetyFloorApplied && r.confidenceQualifier);
 
 // ---- Symptom scoring ----
 r = computeSymptomScore(allYes);
@@ -260,6 +267,12 @@ r = computeTriage('MEL', 0.95, allYes, { malignantScore: 0.95, malignantThreshol
 check('gate never lowers a critical', r.tier === 'critical' && r.malignantGateApplied === false);
 r = computeTriage('OTHER', 0.9, allNo, { malignantScore: 0.5, malignantThreshold: THR }); // CS 1.8 → low
 check('gate floors OTHER-argmax low → moderate', r.tier === 'moderate' && r.malignantGateApplied === true);
+
+// A malignant argmax never reads as Low, even below the gate threshold (narrow 0.40-THR band).
+r = computeTriage('BCC', 0.33, allNo, { malignantScore: 0.33, malignantThreshold: THR }); // CS 0.99 → low
+check('malignant argmax floors low → moderate', r.tier === 'moderate' && r.malignantGateApplied === true);
+r = computeTriage('SCC', 0.99, allNo, { malignantScore: 0.99, malignantThreshold: THR }); // CS 3.96 → moderate
+check('malignant argmax moderate untouched', r.tier === 'moderate' && r.malignantGateApplied === false);
 
 // Omitting the gate inputs must leave the physician-validated path bit-for-bit unchanged.
 const ungated = computeTriage('BENIGN', 0.45, allNo);

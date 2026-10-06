@@ -111,7 +111,16 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   const [followUp, setFollowUp] = useState<ScreeningSessionValue['followUp']>(null);
   const [mustAsk, setMustAsk] = useState<readonly QuestionId[]>(ALL_QUESTIONS);
   const [acceptedLowConfidence, setAcceptedLowConfidence] = useState(false);
-  const [images, setImages] = useState<ScreeningImage[]>([]);
+  const [images, setImagesState] = useState<ScreeningImage[]>([]);
+  // Synchronous mirror of `images`. addImage must RETURN the new photo's index, and a functional
+  // setState updater is not guaranteed to run before the call returns (React defers it whenever the
+  // provider already has a pending update - e.g. acceptLowConfidence() queued just before), which
+  // made addImage return 0 and the second photo's run overwrite the first's.
+  const imagesRef = useRef<ScreeningImage[]>([]);
+  const setImages = useCallback((next: ScreeningImage[]) => {
+    imagesRef.current = next;
+    setImagesState(next);
+  }, []);
 
   // Per-image inference, chained so only one runs at a time (a single native interpreter, and the
   // TTA loop's "one buffer live at a time" invariant). Refs: settling must not re-render the
@@ -218,22 +227,19 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   }, [images, imageUri, attempt, enqueueImage]);
 
   const addImage = useCallback<ScreeningSessionValue['addImage']>((img) => {
-    let index = 0;
-    setImages((prev) => {
-      const existing = prev.findIndex((p) => p.uri === img.uri);
-      if (existing !== -1) {
-        index = prev[existing].index;
-        return prev;
-      }
-      index = prev.length;
-      return [...prev, { ...img, index }];
-    });
+    const prev = imagesRef.current;
+    const existing = prev.find((p) => p.uri === img.uri);
+    if (existing) return existing.index;
+    // quality.tsx starts this photo's inference on arrival under `images.length`; reuse that key.
+    const run = [...partsRef.current.runs.entries()].find(([, r]) => r.uri === img.uri);
+    const index = run ? run[0] : prev.length;
+    setImages([...prev, { ...img, index }]);
     return index;
-  }, []);
+  }, [setImages]);
 
   const removeImage = useCallback((uri: string) => {
     // Re-index so images[0] is always the primary and indices stay contiguous.
-    setImages((prev) => prev.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i })));
+    setImages(imagesRef.current.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i })));
     // Drop ONLY this photo's run.
     //
     // This used to reset the whole map, which silently destroyed every other photo's completed
@@ -250,7 +256,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     const runs = new Map([...store.runs.entries()].filter(([, r]) => r.uri !== uri));
     partsRef.current = { attempt: store.attempt, runs };
     if (runs.size === 0) setClassificationState('idle');
-  }, []);
+  }, [setImages]);
 
   const acceptLowConfidence = useCallback(() => setAcceptedLowConfidence(true), []);
 
@@ -265,7 +271,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setClassificationState('idle');
     partsRef.current = { attempt: 2, runs: new Map() };
     lastOutputRef.current = null;
-  }, []);
+  }, [setImages]);
 
   const reset = useCallback(() => {
     setBodyMark(null);
@@ -281,7 +287,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setAcceptedLowConfidence(false);
     partsRef.current = { attempt: 1, runs: new Map() };
     lastOutputRef.current = null;
-  }, []);
+  }, [setImages]);
 
   useEffect(() => {
     if (previousAccountId.current !== accountId) {
@@ -317,7 +323,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setBodyMark(lesion.mark);
     setAnswers(prefilled);
     setMustAsk(ask);
-  }, []);
+  }, [setImages]);
 
   const questionnaireComplete = useMemo(
     () => ALL_QUESTIONS.every((q) => answers[q] !== undefined),

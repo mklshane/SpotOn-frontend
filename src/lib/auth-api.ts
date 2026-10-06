@@ -1,6 +1,6 @@
 import * as SecureStore from './secure-store';
 
-import { api, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
+import { api, ApiError, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
 import { setMeta } from '@/data/db';
 
@@ -189,9 +189,16 @@ export async function refresh(): Promise<string | null> {
     const tokens = await api.post<TokenOut>('/auth/refresh', { refresh_token: refreshToken }, false);
     await persist(tokens);
     return tokens.access_token;
-  } catch {
-    await cancelSelfCheckReminder().catch(() => {});
-    await clearTokens();
+  } catch (e) {
+    // Only a definitive rejection of the refresh token ends the session. A network blip, a
+    // timeout or a cold-starting free-tier host (5xx / proxy page) used to clear the tokens too,
+    // silently signing the user out on a flaky connection while the UI still showed them signed in.
+    const rejected =
+      e instanceof ApiError && !e.isHtml && [400, 401, 403].includes(e.status);
+    if (rejected) {
+      await cancelSelfCheckReminder().catch(() => {});
+      await clearTokens();
+    }
     return null;
   }
 }

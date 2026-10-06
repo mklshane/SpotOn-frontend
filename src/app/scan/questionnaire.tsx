@@ -1,7 +1,7 @@
 import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -88,9 +88,17 @@ export default function QuestionnaireScreen() {
   // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers - the carried ones
   // are already in `answers`, so computeSymptomScore keeps scoring a complete questionnaire and the
   // TPS engine is untouched. Only the asked subset changes.
+  //
+  // `?mode=all` comes from the follow-up screen's "Update these answers": the user wants to correct
+  // a CARRIED answer (e.g. the border is now irregular), so every question is shown, pre-filled
+  // with the carried answers. Without it the carried items were unreachable and a stale "no" on a
+  // Major question kept scoring.
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const reviewAll = mode === 'all';
   const questions = useMemo(
-    () => (followUp ? QUESTIONS.filter((q) => questionsToReask.includes(q.id)) : QUESTIONS),
-    [followUp, questionsToReask],
+    () =>
+      followUp && !reviewAll ? QUESTIONS.filter((q) => questionsToReask.includes(q.id)) : QUESTIONS,
+    [followUp, questionsToReask, reviewAll],
   );
 
   const listRef = useRef<FlatList<QuestionDef>>(null);

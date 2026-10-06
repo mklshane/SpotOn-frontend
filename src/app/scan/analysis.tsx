@@ -240,7 +240,9 @@ export default function AnalysisScreen() {
         // user having to opt in at scan time.
         lesionId: s.followUp?.lesion.id ?? null,
         followUpOf: s.followUp?.priorScreening.id,
-        answersCarried: s.followUp != null,
+        // Only true when at least one answer was actually reused - a follow-up that re-asked all 8
+        // questions carried nothing.
+        answersCarried: s.followUp != null && s.questionsToReask.length < 8,
         answersSourceId: s.followUp?.priorScreening.id,
       };
     } catch (e) {

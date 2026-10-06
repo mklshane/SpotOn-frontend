@@ -362,6 +362,27 @@ export default function LesionDetailScreen() {
                   </ThemedText>
                 </View>
 
+                {trend.modelChanged ? (
+                  <View
+                    style={[styles.note, { backgroundColor: theme.elementBg }]}
+                  >
+                    <Icon
+                      name="info.circle"
+                      tintColor={theme.textSecondary}
+                      size={14}
+                    />
+                    <ThemedText
+                      type="footnote"
+                      themeColor="textSecondary"
+                      style={styles.noteText}
+                    >
+                      {t(
+                        "These scans were checked by different versions of SpotOn, so part of this change may come from the app update rather than the spot itself.",
+                      )}
+                    </ThemedText>
+                  </View>
+                ) : null}
+
                 {trend.classChanged && latest ? (
                   <View
                     style={[styles.note, { backgroundColor: theme.elementBg }]}

@@ -103,5 +103,10 @@ async function runSkinGate(uri: string): Promise<SkinGateProbs> {
   }
   const [out] = await model.run([tensor.buffer as ArrayBuffer]);
   const p = new Float32Array(out as ArrayBuffer);
+  // A short or NaN output would fail both comparisons in skinGateVerdict and read as 'skin' - a
+  // broken model must block the row ('failed'), never pass it.
+  if (p.length < 3 || ![p[0], p[1], p[2]].every(Number.isFinite)) {
+    throw new Error(`skin gate: invalid output (${p.length} values)`);
+  }
   return { skin: p[0], notSkin: p[1], face: p[2] };
 }

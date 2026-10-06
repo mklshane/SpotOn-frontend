@@ -24,7 +24,7 @@ import { Space, Radius } from '@/constants/theme';
 import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
 import { assessImage, type IqaChecks } from '@/lib/image-quality';
-import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
+import { MAX_IMAGES_PER_SCREENING, MULTI_IMAGE_AGGREGATION_ENABLED } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
 import {
   decideIqa,
@@ -109,7 +109,7 @@ export default function QualityScreen() {
   const [step, setStep] = useState(0);
   const [checks, setChecks] = useState<IqaChecks | null>(null);
   const [error, setError] = useState(false);
-  const [readability, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
+  const [readabilityState, setReadability] = useState<'pending' | 'ok' | 'unreadable' | 'timeout'>('pending');
   /**
    * The learned skin gate's verdict: a close-up of skin, not skin, or a whole face (skin-gate.ts).
    * It replaced the still detector here on 2026-09-19 as the term that rejects photos of scenes -
@@ -123,11 +123,17 @@ export default function QualityScreen() {
   // is the one addImage() will assign in proceed(); enqueueImage is keyed on (index, uri), so a
   // retake replaces this run rather than inheriting it.
   const pendingIndex = session.images.length;
+  // Unpooled, an extra angle never feeds the result (composeSetResult reports the primary photo),
+  // and getClassification() would hand back PHOTO 1's verdict - re-prompting about a photo the user
+  // already accepted, and a retake here would beginRescan() and wipe the whole set.
+  const extraAngle = pendingIndex > 0 && !MULTI_IMAGE_AGGREGATION_ENABLED;
+  const readability = extraAngle ? 'ok' : readabilityState;
 
   // Join the first pass as soon as it settles and apply the same Safety Floor rule analysis.tsx
   // uses, so the two screens can never disagree about whether a photo is readable.
   useEffect(() => {
     if (session.classificationState !== 'done' && session.classificationState !== 'error') return;
+    if (extraAngle) return;
     let alive = true;
     session
       .getClassification()

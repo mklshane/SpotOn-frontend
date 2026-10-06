@@ -265,12 +265,20 @@ export function combineReadability(
 }
 
 /**
- * Override a computed result to the Moderate floor. Only `tier` and the flags change -
- * the arithmetic components are preserved so the audit trail records both the computed
- * truth and the override.
+ * Raise a computed result to the Moderate floor. Purely a floor, like applyMalignantFloor: a
+ * computed High or Critical is never pulled down. Only `tier` and the flags change - the
+ * arithmetic components are preserved so the audit trail records both the computed truth and
+ * the override.
+ *
+ * The flags (and with them the "reflects photo uncertainty - not a detected risk" copy) are set
+ * only when the TPS arithmetic itself sat below Moderate, i.e. when the floor - not the score -
+ * is what makes this a check-up recommendation. A Moderate+ TPS on an unreadable photo is still
+ * a scored risk, and telling the user otherwise would be false reassurance.
  */
 export function applySafetyFloor(result: TriageResult): TriageResult {
-  return { ...result, tier: 'moderate', safetyFloorApplied: true, confidenceQualifier: true };
+  if (TIER_ORDER.indexOf(assignTier(result.tps)) >= TIER_ORDER.indexOf('moderate')) return result;
+  const tier = TIER_ORDER.indexOf(result.tier) >= TIER_ORDER.indexOf('moderate') ? result.tier : 'moderate';
+  return { ...result, tier, safetyFloorApplied: true, confidenceQualifier: true };
 }
 
 /**
@@ -304,10 +312,14 @@ export function computeTriage(
     malignantScore: opts.malignantScore ?? 0,
     malignantGateApplied: false,
   };
+  // A malignant argmax (MEL/SCC/BCC) never reads as Low: showing "Basal Cell Carcinoma" next to
+  // "No strong signs of concern" is contradictory. Only reachable in the narrow band where the top
+  // class clears the Safety Floor but the summed malignant mass sits just under the gate threshold.
   if (
-    opts.malignantScore !== undefined &&
-    opts.malignantThreshold !== undefined &&
-    evaluateMalignantGate(opts.malignantScore, opts.malignantThreshold)
+    (MALIGNANT_CLASSES.includes(topClass) && opts.malignantThreshold !== undefined) ||
+    (opts.malignantScore !== undefined &&
+      opts.malignantThreshold !== undefined &&
+      evaluateMalignantGate(opts.malignantScore, opts.malignantThreshold))
   ) {
     result = applyMalignantFloor(result);
   }

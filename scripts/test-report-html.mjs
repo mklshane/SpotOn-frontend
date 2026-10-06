@@ -333,13 +333,22 @@ for (const c of CASES) {
     );
 
     const gatedHtml = buildReportHtml(
-      buildReportModel(record({ tier: 'moderate', malignantGateApplied: true }), PROFILE),
+      buildReportModel(record({ topClass: 'BENIGN', tier: 'moderate', malignantGateApplied: true }), PROFILE),
       PHOTO,
     );
     check('gated report prints the caveat', gatedHtml.includes('Note on this assessment:'));
     check(
       'gated caveat explains the closest match was not a cancer type',
       gatedHtml.includes('closest single match'),
+    );
+    // A malignant argmax raised by the gate must not claim the closest match "was not a cancer type".
+    const gatedMalignant = buildReportHtml(
+      buildReportModel(record({ topClass: 'MEL', tier: 'moderate', malignantGateApplied: true }), PROFILE),
+      PHOTO,
+    );
+    check(
+      'gated malignant-top caveat does not deny a cancer-type match',
+      !gatedMalignant.includes('was not a cancer type') && gatedMalignant.includes('pattern doctors prefer to examine'),
     );
 
     // The floor is the whole explanation when both fire - the gate's reasoning about spread-out

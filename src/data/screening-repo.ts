@@ -148,9 +148,7 @@ function toRecord(row: Row): ScreeningRecord {
     source: row.source as "camera" | "gallery",
     questionnaire,
     classification,
-    firstAttempt: row.first_attempt_json
-      ? (JSON.parse(row.first_attempt_json) as ClassificationOutput)
-      : undefined,
+    firstAttempt: safeParse<ClassificationOutput | undefined>(row.first_attempt_json, undefined),
     triage,
     lesionId: row.lesion_id ?? null,
     followUpOf: row.followup_of ?? undefined,

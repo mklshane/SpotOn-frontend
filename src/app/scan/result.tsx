@@ -28,7 +28,7 @@ import {
   CLASS_DISPLAY,
   CONFIDENCE_QUALIFIER,
   AVOID_SELF_MEDICATION_WARNING,
-  MALIGNANT_GATE,
+  malignantGateCopy,
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
 import { displayConfidence } from "@/lib/triage/display-confidence";
@@ -308,7 +308,7 @@ export default function ResultScreen() {
               </ThemedText>
             ) : gated ? (
               <ThemedText type="body" themeColor="textSecondary">
-                {MALIGNANT_GATE.body} {tier.recommendation}
+                {malignantGateCopy(classification.topClass).body} {tier.recommendation}
               </ThemedText>
             ) : (
               <ThemedText type="body" themeColor="textSecondary">

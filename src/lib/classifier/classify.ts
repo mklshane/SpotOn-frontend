@@ -308,6 +308,32 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
   return withTimeout(run, INFERENCE_TIMEOUT_MS);
 }
 
+/**
+ * Serializes classifier runs on the one native interpreter, like detectorQueue in
+ * lesion-detector.ts - but the slot is released when the UNDERLYING run settles, not when the
+ * caller's timeout fires. A timed-out run keeps executing `model.run` (a race cannot cancel it), so
+ * releasing on timeout let the next photo or a "Try again" start a second concurrent run on the
+ * same interpreter. The timeout clock starts once this run actually begins.
+ */
+let classifierQueue: Promise<void> = Promise.resolve();
+async function runExclusive<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
+  const previous = classifierQueue;
+  let release!: () => void;
+  classifierQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  let run: Promise<T>;
+  try {
+    run = fn();
+  } catch (e) {
+    release();
+    throw e;
+  }
+  run.then(release, release);
+  return withTimeout(run, timeoutMs);
+}
+
 /** Race a run against a ClassifierError('timeout'), without leaking an unhandled late rejection. */
 async function withTimeout<T>(run: Promise<T>, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -377,7 +403,7 @@ export async function classifyImageAt(
   total?: number,
 ): Promise<SetPart> {
   try {
-    const r = await withTimeout(classifyOne(uri, model, inputSize), INFERENCE_TIMEOUT_MS);
+    const r = await runExclusive(() => classifyOne(uri, model, inputSize), INFERENCE_TIMEOUT_MS);
     if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt} image=${index + 1}${total ? `/${total}` : ''}`);
     return {
       result: r,
@@ -435,6 +461,13 @@ export function composeSetResult(
     throw asClassifierError(ordered.find((p) => p.error)?.error, 'inference');
   }
 
+  // Unpooled, the answer must come from the PRIMARY photo: the hero image, the history thumbnail and
+  // the report ("additional views - not used for classification") all show images[0]. Falling
+  // through to the next photo that happened to succeed paired photo 1 with photo 2's verdict, so a
+  // failed primary fails the run and analysis's "Try again" re-runs the whole set.
+  if (!MULTI_IMAGE_AGGREGATION_ENABLED && !ordered[0].result) {
+    throw asClassifierError(ordered[0].error, 'inference');
+  }
   const shouldPool = MULTI_IMAGE_AGGREGATION_ENABLED && usable.length > 1;
   let probs: Record<LesionClass, number>;
   let topClass: LesionClass;

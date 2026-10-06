@@ -12,7 +12,7 @@ import {
   confidenceBand,
   CONFIDENCE_QUALIFIER,
   DISCLAIMER,
-  MALIGNANT_GATE,
+  malignantGateCopy,
   REPORT_DISCLAIMER,
   symptomBurden,
   TIER_CONTENT,
@@ -227,7 +227,7 @@ export function buildReportModel(
     assessmentNote: record.triage.safetyFloorApplied
       ? CONFIDENCE_QUALIFIER.body
       : record.triage.malignantGateApplied
-        ? MALIGNANT_GATE.body
+        ? malignantGateCopy(record.classification.topClass).body
         : null,
     malignantPct: Math.round(record.triage.malignantScore * 100),
     malignantGateApplied: record.triage.malignantGateApplied,
