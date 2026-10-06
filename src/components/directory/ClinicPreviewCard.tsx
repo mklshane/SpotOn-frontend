@@ -48,7 +48,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         <ThemedText type="headline" style={styles.name} numberOfLines={1}>
           {facilityDisplayName(facility)}
         </ThemedText>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel={t("Close")}>
+        <Pressable onPress={onClose} hitSlop={14} accessibilityRole="button" accessibilityLabel={t("Close")}>
           <Icon name="xmark" size={16} tintColor={theme.muted} />
         </Pressable>
       </View>
@@ -72,7 +72,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
           accessibilityState={{ expanded }}>
           <Icon name="clock.fill" size={14} tintColor={open ? theme.riskLow : theme.riskHigh} />
           <ThemedText type="footnote" themeColor={open ? 'riskLow' : 'riskHigh'} style={styles.hoursLabel}>
-            {open ? 'Open Now' : 'Closed Now'}
+            {open ? t('Open now') : t('Closed')}
           </ThemedText>
           <Icon name={expanded ? 'chevron.up' : 'chevron.down'} size={12} tintColor={theme.muted} />
         </Pressable>
@@ -89,7 +89,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
       ) : null}
 
       <ThemedText type="footnote" themeColor="muted" numberOfLines={1}>
-        {distance != null ? `${formatDistance(distance)} (Near You) · ` : ''}
+        {distance != null ? `${t('{{distance}} from you', { distance: formatDistance(distance) })} · ` : ''}
         {facility.address}
       </ThemedText>
 

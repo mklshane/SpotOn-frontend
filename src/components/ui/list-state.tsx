@@ -4,6 +4,7 @@ import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
+import { Button } from './button';
 import { Icon, type IconName } from './icon';
 
 export type ListStateProps = {
@@ -11,6 +12,8 @@ export type ListStateProps = {
   title: string;
   subtitle?: string;
   icon?: IconName;
+  /** Optional recovery action (e.g. Retry) - an error with no way forward is a dead end. */
+  action?: { label: string; onPress: () => void };
 };
 
 const DEFAULT_ICON: Record<ListStateProps['kind'], IconName> = {
@@ -20,7 +23,7 @@ const DEFAULT_ICON: Record<ListStateProps['kind'], IconName> = {
   offline: 'wifi.slash',
 };
 
-export function ListState({ kind, title, subtitle, icon }: ListStateProps) {
+export function ListState({ kind, title, subtitle, icon, action }: ListStateProps) {
   const theme = useTheme();
 
   return (
@@ -38,6 +41,9 @@ export function ListState({ kind, title, subtitle, icon }: ListStateProps) {
           {subtitle}
         </ThemedText>
       ) : null}
+      {action ? (
+        <Button label={action.label} variant="outline" onPress={action.onPress} style={styles.action} />
+      ) : null}
     </View>
   );
 }
@@ -52,4 +58,5 @@ const styles = StyleSheet.create({
   },
   title: { textAlign: 'center' },
   subtitle: { textAlign: 'center' },
+  action: { marginTop: Space.sm, alignSelf: 'center', paddingHorizontal: Space.xl },
 });

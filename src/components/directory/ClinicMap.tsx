@@ -18,7 +18,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
 import { MAP_DEFAULT, MAP_STYLE_URL } from "@/config";
 import { Elevation, Radius, Space } from "@/constants/theme";
-import type { FacilityWithDistance } from "@/data/repositories";
+import { distanceMeters, type FacilityWithDistance } from "@/data/repositories";
 import { useTheme } from "@/hooks/use-theme";
 import {
   Camera,
@@ -219,10 +219,20 @@ export function ClinicMap({
     [facilities],
   );
 
+  // The NEAREST clinic's area, not whatever happens to be first in the list - under rating or
+  // name sort that could be the other end of the country, labelled as "near you".
   const nearestArea = useMemo(() => {
-    const first = facilities[0];
-    return first ? `${first.city}, ${first.province}` : null;
-  }, [facilities]);
+    let best: { f: (typeof facilities)[number]; d: number } | null = null;
+    for (const f of facilities) {
+      const d = coords
+        ? distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude)
+        : "distance_m" in f
+          ? (f as { distance_m: number }).distance_m
+          : Infinity;
+      if (!best || d < best.d) best = { f, d };
+    }
+    return best && Number.isFinite(best.d) ? `${best.f.city}, ${best.f.province}` : null;
+  }, [facilities, coords]);
 
   const applyZoom = (delta: number) => {
     const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));

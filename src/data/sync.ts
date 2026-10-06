@@ -32,7 +32,13 @@ const LAST_SYNC_KEY = "last_synced_at";
 // before a row was removed server-side kept showing it forever, and no
 // incremental sync could ever clear it.
 const RECONCILE_KEY = "sync_reconcile_version";
-const RECONCILE_VERSION = "1";
+//
+// "2" (2026-10-05): /sync used to end a page inside a group of rows sharing one updated_at, and
+// the next page's `> since` skipped the rest - 663 of 1921 doctors never reached any install.
+// Incremental syncs can't recover them (their timestamp is older than every stored cursor), and
+// installs migrated past columns added by ALTER (booking_url, facility_type, department_info,
+// doctors.status) still hold NULLs for rows the server never re-stamped. One full pass fixes both.
+const RECONCILE_VERSION = "2";
 
 const bit = (v: boolean | null | undefined): number | null =>
   v === null || v === undefined ? null : v ? 1 : 0;
@@ -334,14 +340,20 @@ async function runSyncOnce(opts: { full?: boolean }): Promise<SyncResult> {
       for (const p of plat.live) seen.telemedicine_platforms.add(p.id);
     }
 
-    const more = [
+    const collections = [
       resp.facilities,
       resp.doctors,
       resp.doctor_facilities,
       resp.booking_links,
       resp.telemedicine_platforms,
-    ]
-      .filter((c) => c.has_more && c.next_cursor)
+    ];
+    // `has_more` without a cursor means paging cannot continue, NOT that it finished. Treating it
+    // as drained would let the full-sync sweep below delete every row the server never got to send.
+    if (collections.some((c) => c.has_more && !c.next_cursor)) {
+      throw new Error("sync: server reported more rows but no cursor to continue from");
+    }
+    const more = collections
+      .filter((c) => c.has_more)
       .map((c) => c.next_cursor as string);
 
     if (more.length === 0) {

@@ -75,3 +75,15 @@ export function humanizeTag(tag: string): string {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' '));
 }
+
+/**
+ * Scraped doctor schedules arrive pipe-delimited ("Monday | 04:00 PM - 07:00 PM | (Walk-In) |
+ * Wednesday | …"). Render them as a readable dot-separated line instead of raw separators.
+ */
+export function formatSchedule(raw: string): string {
+  return raw
+    .split('|')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' · ');
+}

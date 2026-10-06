@@ -12,7 +12,9 @@ import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHoursLine, isOpenNow } from '@/lib/hours';
-import { callNumber, openDirections } from '@/lib/links';
+import { normalizeUrl, openDirections, openWebsite } from '@/lib/links';
+
+import { hasPhone, usePhoneCall } from './use-phone-call';
 
 export type ClinicCardProps = {
   facility: FacilitySync | FacilityWithDistance;
@@ -25,6 +27,8 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
   const distance = 'distance_m' in facility ? facility.distance_m : null;
   const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
   const topService = facility.services[0];
+  const phone = usePhoneCall();
+  const bookingUrl = normalizeUrl(facility.booking_url);
 
   return (
     <Pressable onPress={onPress} accessible={false}>
@@ -55,14 +59,14 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                   style={styles.thumb}
                   contentFit="cover"
                   cachePolicy="disk"
-                  accessibilityLabel={`Photo of ${facility.name}`}
+                  accessibilityLabel={t('Photo of {{name}}', { name: facility.name })}
                 />
               ) : null}
             </View>
 
             <View style={styles.badges}>
               {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
-              {open != null ? <Badge label={open ? 'Open Now' : 'Closed'} tone={open ? 'brand' : 'neutral'} /> : null}
+              {open != null ? <Badge label={open ? t('Open now') : t('Closed')} tone={open ? 'brand' : 'neutral'} /> : null}
               <Badge label={humanizeTag(facility.type)} />
               {topService ? <Badge label={humanizeTag(topService)} /> : null}
             </View>
@@ -101,9 +105,20 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
                   numberOfLines={1}>
                   {t("Directions")}</ThemedText>
               </Pressable>
-              {facility.phone ? (
+              {bookingUrl ? (
                 <Pressable
-                  onPress={() => callNumber(facility.phone as string)}
+                  onPress={() => openWebsite(bookingUrl)}
+                  style={[styles.actionIcon, { backgroundColor: theme.elementBg }]}
+                  hitSlop={4}
+                  accessibilityRole="link"
+                  accessibilityLabel={t("Book online")}
+                  accessibilityHint={t("Opens the booking page in your browser")}>
+                  <Icon name="calendar" size={16} tintColor={theme.brand} />
+                </Pressable>
+              ) : null}
+              {hasPhone(facility.phone) ? (
+                <Pressable
+                  onPress={() => phone.call(facility.phone)}
                   style={[styles.actionIcon, { backgroundColor: theme.elementBg }]}
                   hitSlop={4}
                   accessibilityRole="button"
@@ -123,6 +138,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
           </View>
         </View>
       </Card>
+      {phone.sheet}
     </Pressable>
   );
 }

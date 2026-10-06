@@ -15,8 +15,8 @@ import { Icon } from "@/components/ui/icon";
 import { ListState } from "@/components/ui/list-state";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import {
+  distanceMeters,
   listFacilities,
-  nearbyFacilities,
   type FacilityWithDistance,
 } from "@/data/repositories";
 import { useConnectivity } from "@/hooks/use-connectivity";
@@ -25,6 +25,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { humanizeTag } from "@/lib/format";
 import { isOpenNow } from "@/lib/hours";
 import { downloadAreaPack } from "@/lib/map-offline";
+import NetInfo from "@react-native-community/netinfo";
 
 import { ClinicCard } from "./ClinicCard";
 import { ClinicMap } from "./ClinicMap";
@@ -44,6 +45,11 @@ export type ClinicsViewProps = {
    * same parent, and the sheet lives one level deeper than that.
    */
   header?: ReactNode;
+  /** The last directory sync failed - with an empty local DB that means "not downloaded yet". */
+  syncFailed?: boolean;
+  /** A directory download is in flight - an empty DB means "downloading", not "no results". */
+  syncing?: boolean;
+  onRetrySync?: () => void;
 };
 
 type SortMode = "distance" | "rating" | "name";
@@ -61,6 +67,9 @@ export function ClinicsView({
   syncVersion = 0,
   topInset: _topInset,
   header,
+  syncFailed = false,
+  syncing = false,
+  onRetrySync,
 }: ClinicsViewProps) {
   useLocale();
   const theme = useTheme();
@@ -104,20 +113,22 @@ export function ClinicsView({
       limit: 200,
     };
     /**
-     * Proximity first, whole directory as the floor.
-     *
-     * `nearbyFacilities` defaults to a 15 km box (`repositories.ts` `radiusM`), and passing no
-     * override meant a user outside a metro area got an empty list and "No clinics found. Try a
-     * different search or filter." - while the local DB held the full national directory. Granting
-     * location made the app strictly worse than denying it. An empty proximity result now falls
-     * back to the unfiltered list rather than being reported as "none exist".
+     * With a location, every row gets a distance - search results included - and the cap keeps
+     * the NEAREST 200 rather than a radius box. The old path skipped distances whenever a query
+     * was typed (all rows sorted as Infinity, i.e. by name, under a "sorted by distance" label),
+     * and outside a 15 km box fell back to the alphabetically first 200 clinics nationwide.
+     * The whole directory is ~1.6k rows, so a JS haversine pass is cheap.
      */
-    const fetcher = (async () => {
-      if (coords && !query.trim()) {
-        const near = await nearbyFacilities(coords.latitude, coords.longitude, params);
-        if (near.length) return near;
-      }
-      return listFacilities(params);
+    const fetcher = (async (): Promise<Facility[]> => {
+      if (!coords) return listFacilities(params);
+      const all = await listFacilities({ ...params, limit: 5000 });
+      return all
+        .map((f) => ({
+          ...f,
+          distance_m: distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude),
+        }))
+        .sort((a, b) => a.distance_m - b.distance_m)
+        .slice(0, params.limit);
     })();
     fetcher
       .then((rows) => {
@@ -133,8 +144,13 @@ export function ClinicsView({
     };
   }, [query, service, coords, syncVersion]);
 
+  // Offline map tiles (~25 km pack) only on Wi-Fi: on PH prepaid data a silent background
+  // download is a real cost the user never agreed to.
   useEffect(() => {
-    if (coords && isOnline) downloadAreaPack(coords).catch(() => {});
+    if (!coords || !isOnline) return;
+    NetInfo.fetch()
+      .then((state) => (state.type === "wifi" ? downloadAreaPack(coords) : undefined))
+      .catch(() => {});
   }, [coords, isOnline]);
 
   const filtered = useMemo(() => {
@@ -167,6 +183,10 @@ export function ClinicsView({
       return coords ? "distance" : "rating";
     });
   }, [coords]);
+
+  // Nothing local AND the download failed or can't run: "not downloaded yet", not "0 results".
+  const notDownloaded =
+    facilities?.length === 0 && !query && !service && !openOnly && (syncFailed || !isOnline) && !syncing;
 
   const sortLabel =
     sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
@@ -239,14 +259,16 @@ export function ClinicsView({
                 adjustsFontSizeToFit
                 minimumFontScale={0.8}
               >
-                {t(filtered.length === 1 ? "clinic · sorted by {{sort}}" : "clinics · sorted by {{sort}}", { sort: t(sortLabel) })}
+                {notDownloaded
+                  ? t("Directory not downloaded yet")
+                  : t(filtered.length === 1 ? "clinic · sorted by {{sort}}" : "clinics · sorted by {{sort}}", { sort: t(sortLabel) })}
               </ThemedText>
             </View>
 
             <Pressable
-              onPress={cycleSort}
+              onPress={notDownloaded && onRetrySync ? onRetrySync : cycleSort}
               accessibilityRole="button"
-              accessibilityLabel={t("Change sort order")}
+              accessibilityLabel={notDownloaded ? t("Try again") : t("Change sort order")}
               hitSlop={8}
               style={({ pressed }) => [
                 styles.sortButton,
@@ -255,7 +277,7 @@ export function ClinicsView({
               ]}
             >
               <Icon
-                name="arrow.up.arrow.down"
+                name={notDownloaded ? "arrow.clockwise" : "arrow.up.arrow.down"}
                 size={15}
                 tintColor={theme.brand}
               />
@@ -319,7 +341,18 @@ export function ClinicsView({
           )}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            !isOnline && facilities === null ? (
+            facilities?.length === 0 && syncing && !query && !service && !openOnly ? (
+              <ListState kind="loading" title={t("Downloading the clinic directory…")} />
+            ) : notDownloaded ? (
+              // Nothing local AND the download failed or can't run: this is "not downloaded yet",
+              // not "no clinics match" - the old copy told the user to change a filter they never set.
+              <ListState
+                kind="offline"
+                title={t("Clinic directory not downloaded yet")}
+                subtitle={t("Connect to the internet to download it. After that it works offline.")}
+                action={onRetrySync && isOnline ? { label: t("Try again"), onPress: onRetrySync } : undefined}
+              />
+            ) : !isOnline && facilities === null ? (
               <ListState
                 kind="offline"
                 title={t("You're offline")}
@@ -330,7 +363,8 @@ export function ClinicsView({
                 <ListState
                   kind="error"
                   title={t("Couldn't load clinics")}
-                  subtitle={t("Check your connection and try again.")}
+                  subtitle={t("Something went wrong reading the saved directory.")}
+                  action={onRetrySync ? { label: t("Try again"), onPress: onRetrySync } : undefined}
                 />
               ) : (
                 <ListState kind="loading" title={t("Finding clinics…")} />

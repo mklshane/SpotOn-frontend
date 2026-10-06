@@ -104,7 +104,8 @@
     "test:orbit": "node scripts/test-orbit-camera.mjs",
     "test:scratch": "node scripts/test-scratch-files.mjs",
     "prepare:web": "node scripts/copy-litert-wasm.mjs",
-    "deploy:web": "node scripts/deploy-web.mjs"
+    "deploy:web": "node scripts/deploy-web.mjs",
+    "test:directory": "node scripts/test-directory-core.mjs"
   },
   "private": true
 }

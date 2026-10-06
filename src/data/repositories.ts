@@ -316,6 +316,42 @@ export async function getDoctorPractices(doctorId: string): Promise<DoctorPracti
   }));
 }
 
+/** A doctor practising at a facility, with that edge's own schedule. */
+export interface FacilityDoctor {
+  doctor: DoctorSync;
+  is_primary: boolean;
+  schedule: string | null;
+  /** True when the doctor has at least one active booking link on an active platform. */
+  bookable: boolean;
+}
+
+/**
+ * Doctors at a clinic - the reverse of getDoctorPractices over the same synced doctor_facility
+ * edge, which the clinic page never used. Primary-practice doctors first, then bookable, then name.
+ */
+export async function getFacilityDoctors(facilityId: string): Promise<FacilityDoctor[]> {
+  const db = await getDb();
+  type Row = DoctorRow & { df_is_primary: number | null; df_schedule: string | null; bookable: number };
+  const rows = await db.getAllAsync<Row>(
+    `SELECT d.*, df.is_primary AS df_is_primary, df.schedule AS df_schedule,
+            EXISTS (SELECT 1 FROM booking_links bl
+                      JOIN telemedicine_platforms p ON p.id = bl.platform_id AND p.is_active = 1
+                     WHERE bl.doctor_id = d.id AND bl.is_active = 1) AS bookable
+       FROM doctor_facility df
+       JOIN doctors d ON d.id = df.doctor_id
+      WHERE df.facility_id = ?
+        AND (d.status IS NULL OR d.status != 'excluded')
+      ORDER BY (df.is_primary IS NULL OR df.is_primary = 0), bookable DESC, d.name`,
+    facilityId,
+  );
+  return rows.map((r) => ({
+    doctor: toDoctor(r),
+    is_primary: toBool(r.df_is_primary) === true,
+    schedule: r.df_schedule ?? null,
+    bookable: r.bookable === 1,
+  }));
+}
+
 export interface BookingLinkWithPlatform extends BookingLinkSync {
   platform: PlatformSync | null;
 }
@@ -334,7 +370,11 @@ export async function getDoctorBookingLinks(
     "SELECT * FROM telemedicine_platforms",
   );
   const byId = new Map(platforms.map((p) => [p.id as string, toPlatform(p)]));
-  return links.map((l) => ({
+  // A link on a deactivated (or unsynced) platform rendered as an anonymous "Booking platform"
+  // card pointing at a service SpotOn no longer vouches for - leave those out.
+  return links
+    .filter((l) => byId.get(l.platform_id as string)?.is_active === true)
+    .map((l) => ({
     id: l.id as string,
     doctor_id: l.doctor_id as string,
     platform_id: l.platform_id as string,

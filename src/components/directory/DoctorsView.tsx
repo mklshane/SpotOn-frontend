@@ -26,6 +26,11 @@ export type DoctorsViewProps = {
    * segment is active.
    */
   header?: ReactNode;
+  /** The last directory sync failed - with an empty local DB that means "not downloaded yet". */
+  syncFailed?: boolean;
+  /** A directory download is in flight - an empty DB means "downloading", not "no results". */
+  syncing?: boolean;
+  onRetrySync?: () => void;
 };
 
 type BookingMode = "doctors" | "clinics";
@@ -35,7 +40,15 @@ type BookingMode = "doctors" | "clinics";
  * A Doctors/Clinics toggle switches between doctors with an active booking
  * link and clinics with their own online-booking page (facilities.booking_url).
  */
-export function DoctorsView({ query, syncVersion = 0, topInset, header }: DoctorsViewProps) {
+export function DoctorsView({
+  query,
+  syncVersion = 0,
+  topInset,
+  header,
+  syncFailed = false,
+  syncing = false,
+  onRetrySync,
+}: DoctorsViewProps) {
   useLocale();
   const [mode, setMode] = useState<BookingMode>("doctors");
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
@@ -44,14 +57,24 @@ export function DoctorsView({ query, syncVersion = 0, topInset, header }: Doctor
 
   useEffect(() => {
     let cancelled = false;
-    setError(false);
+    // Error is cleared on the next SUCCESS (not up front in the effect body): a later failed
+    // query used to leave stale rows on screen with no message, since the error only rendered
+    // while the list was still loading.
     if (mode === "doctors") {
       listDoctors({ q: query || undefined, hasBookingLink: true, limit: 100 })
-        .then((rows) => !cancelled && setDoctors(rows))
+        .then((rows) => {
+          if (cancelled) return;
+          setError(false);
+          setDoctors(rows);
+        })
         .catch(() => !cancelled && setError(true));
     } else {
       listFacilities({ q: query || undefined, hasBookingUrl: true, limit: 100 })
-        .then((rows) => !cancelled && setClinics(rows))
+        .then((rows) => {
+          if (cancelled) return;
+          setError(false);
+          setClinics(rows);
+        })
         .catch(() => !cancelled && setError(true));
     }
     return () => {
@@ -78,16 +101,22 @@ export function DoctorsView({ query, syncVersion = 0, topInset, header }: Doctor
     </View>
   );
 
-  const emptyState = loading ? (
-    error ? (
-      <ListState
-        kind="error"
-        title={t("Couldn't load")}
-        subtitle={t("Check your connection and try again.")}
-      />
-    ) : (
-      <ListState kind="loading" title={t("Loading…")} />
-    )
+  const emptyState = error ? (
+    <ListState
+      kind="error"
+      title={t("Couldn't load")}
+      subtitle={t("Something went wrong reading the saved directory.")}
+      action={onRetrySync ? { label: t("Try again"), onPress: onRetrySync } : undefined}
+    />
+  ) : loading || (syncing && !query) ? (
+    <ListState kind="loading" title={t("Loading…")} />
+  ) : syncFailed && !query ? (
+    <ListState
+      kind="offline"
+      title={t("Directory not downloaded yet")}
+      subtitle={t("Connect to the internet to download it. After that it works offline.")}
+      action={onRetrySync ? { label: t("Try again"), onPress: onRetrySync } : undefined}
+    />
   ) : (
     <ListState
       kind="empty"
@@ -116,7 +145,7 @@ export function DoctorsView({ query, syncVersion = 0, topInset, header }: Doctor
             )}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={modeToggle}
-            ListEmptyComponent={empty || loading ? emptyState : null}
+            ListEmptyComponent={empty || loading || error ? emptyState : null}
           />
         ) : (
           <FlatList
@@ -135,7 +164,7 @@ export function DoctorsView({ query, syncVersion = 0, topInset, header }: Doctor
             )}
             contentContainerStyle={styles.listContent}
             ListHeaderComponent={modeToggle}
-            ListEmptyComponent={empty || loading ? emptyState : null}
+            ListEmptyComponent={empty || loading || error ? emptyState : null}
           />
         )}
       </View>
