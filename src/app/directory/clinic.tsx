@@ -1,38 +1,76 @@
 import { t, useLocale } from '@/lib/i18n';
 import { Image } from "expo-image";
+import * as Linking from "expo-linking";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { FacilitySync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
+import { hasPhone, usePhoneCall } from "@/components/directory/use-phone-call";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { IconCircle } from "@/components/ui/icon-circle";
 import { ListState } from "@/components/ui/list-state";
 import { Screen } from "@/components/ui/screen";
 import { Radius, Space } from "@/constants/theme";
-import { getFacility } from "@/data/repositories";
+import {
+  distanceMeters,
+  getFacility,
+  getFacilityDoctors,
+  type FacilityDoctor,
+} from "@/data/repositories";
+import { useConnectivity } from "@/hooks/use-connectivity";
+import { useKnownLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
-import { facilityNameParts, formatFeeRange, humanizeTag } from "@/lib/format";
-import { formatHours, isOpenNow } from "@/lib/hours";
-import { callNumber, openDirections, openWebsite } from "@/lib/links";
+import { zonedDayMinutes } from "@/lib/directory-core";
+import {
+  facilityNameParts,
+  formatDistance,
+  formatFeeRange,
+  formatSchedule,
+  formatShortDate,
+  humanizeTag,
+} from "@/lib/format";
+import { formatHours, openChangeLabel, openStatus } from "@/lib/hours";
+import { normalizeUrl, openDirections, openWebsite } from "@/lib/links";
 
+const SUPPORT_EMAIL = "help.spoton@gmail.com";
+
+/** facility_type is advisory; only the values a patient can act on get a badge. */
+const CARE_TYPE_LABEL: Record<string, string> = {
+  medical: "Medical",
+  aesthetic: "Aesthetic only",
+  mixed: "Medical & aesthetic",
+};
+
+/**
+ * Clinic details. Ordered by what a patient deciding where to go needs, top to bottom:
+ * who/what it is → is it open and how far → act (book, call, directions, website) → hours →
+ * where → skin services → which doctors → fee and the rest. The actions used to sit below the
+ * fold under the services list, and Directions had no button at all.
+ */
 export default function ClinicDetailScreen() {
   useLocale();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { isOnline } = useConnectivity();
+  const coords = useKnownLocation();
+  const phone = usePhoneCall();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [facility, setFacility] = useState<FacilitySync | null>(null);
+  const [doctors, setDoctors] = useState<FacilityDoctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   // Reset loading/error during render when `id` changes (not synchronously in
   // the effect body below, which trips react-hooks/set-state-in-effect).
-  const [loadedId, setLoadedId] = useState(id);
-  if (id !== loadedId) {
-    setLoadedId(id);
+  const [loadedKey, setLoadedKey] = useState(`${id}:${attempt}`);
+  if (`${id}:${attempt}` !== loadedKey) {
+    setLoadedKey(`${id}:${attempt}`);
     setLoading(true);
     setError(false);
   }
@@ -40,53 +78,37 @@ export default function ClinicDetailScreen() {
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
-    getFacility(id)
-      .then((f) => {
+    Promise.all([getFacility(id), getFacilityDoctors(id)])
+      .then(([f, d]) => {
         if (cancelled) return;
         setFacility(f);
+        setDoctors(d);
       })
       .catch(() => !cancelled && setError(true))
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, attempt]);
 
-  const open = facility
-    ? isOpenNow(facility.weekday_hours, facility.weekend_hours)
-    : null;
-  const feeRange = facility
-    ? formatFeeRange(facility.fee_min, facility.fee_max)
-    : null;
-  const nameParts = facility ? facilityNameParts(facility) : null;
-  const hasHours = !!(
-    facility &&
-    (facility.weekday_hours || facility.weekend_hours)
-  );
-  const onlyStatus =
-    facility != null &&
-    facility.google_rating == null &&
-    !feeRange &&
-    open != null;
-  const dept = facility?.department_info ?? null;
-  const hasDeptInfo = !!(
-    dept &&
-    (dept.has_derm_department || dept.department_name || dept.opd_notes)
-  );
+  const retry = useCallback(() => setAttempt((a) => a + 1), []);
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/directory");
+  }, []);
 
-  // Full-bleed hero only once we actually have a facility with a photo - otherwise
-  // fall back to the plain header so Back always works during loading/error states.
   const showHero = !loading && !error && !!facility?.photo_url;
 
   return (
-    <Screen padded={false}>
+    <Screen padded={false} edges={showHero ? ["bottom"] : ["top", "bottom"]}>
       {!showHero ? (
         <View style={styles.header}>
           <Pressable
             hitSlop={12}
-            onPress={() => router.back()}
+            onPress={goBack}
             accessibilityRole="button"
             accessibilityLabel={t("Back")}
+            style={styles.headerBack}
           >
             <Icon name="chevron.left" tintColor={theme.brand} size={20} />
           </Pressable>
@@ -102,151 +124,263 @@ export default function ClinicDetailScreen() {
         <ListState
           kind="error"
           title={t("Couldn't load clinic")}
-          subtitle={t("Check your connection and try again.")}
+          subtitle={t("Something went wrong reading the saved directory.")}
+          action={{ label: t("Try again"), onPress: retry }}
         />
       ) : !facility ? (
-        <ListState kind="error" title={t("Clinic not found")} />
+        <ListState
+          kind="error"
+          title={t("Clinic not found")}
+          subtitle={t("It may have been removed from the directory.")}
+          action={{ label: t("Back to directory"), onPress: goBack }}
+        />
       ) : (
-        <ScrollView contentContainerStyle={styles.body}>
-          {showHero ? (
-            <View style={styles.heroWrap}>
-              <Image
-                source={{ uri: facility.photo_url as string }}
-                style={styles.heroPhoto}
-                contentFit="cover"
-                cachePolicy="disk"
-                transition={200}
-                accessibilityLabel={`Photo of ${facility.name}`}
-              />
-              <LinearGradient
-                colors={["rgba(0,0,0,0.5)", "rgba(0,0,0,0)"]}
-                style={styles.heroScrim}
-                pointerEvents="none"
-              />
-              <Pressable
-                hitSlop={12}
-                onPress={() => router.back()}
-                accessibilityRole="button"
-                accessibilityLabel={t("Back")}
-                style={styles.heroBackBtn}
-              >
-                <Icon name="chevron.left" tintColor="#FFFFFF" size={20} />
-              </Pressable>
-              {facility.photo_attribution ? (
-                <View style={styles.attributionWrap}>
-                  <ThemedText type="caption" style={styles.attributionText}>
-                    {t("Photo:")} {facility.photo_attribution}
-                  </ThemedText>
-                </View>
-              ) : null}
+        <ClinicBody
+          facility={facility}
+          doctors={doctors}
+          showHero={showHero}
+          topInset={insets.top}
+          isOnline={isOnline}
+          distance={
+            coords
+              ? distanceMeters(coords.latitude, coords.longitude, facility.latitude, facility.longitude)
+              : null
+          }
+          onCall={() => phone.call(facility.phone)}
+        />
+      )}
+
+      {/* Sticky over the hero: the back button used to scroll away with the photo. */}
+      {showHero ? (
+        <Pressable
+          hitSlop={12}
+          onPress={goBack}
+          accessibilityRole="button"
+          accessibilityLabel={t("Back")}
+          style={[styles.heroBackBtn, { top: insets.top + Space.sm }]}
+        >
+          <Icon name="chevron.left" tintColor="#FFFFFF" size={20} />
+        </Pressable>
+      ) : null}
+      {phone.sheet}
+    </Screen>
+  );
+}
+
+function ClinicBody({
+  facility,
+  doctors,
+  showHero,
+  topInset,
+  isOnline,
+  distance,
+  onCall,
+}: {
+  facility: FacilitySync;
+  doctors: FacilityDoctor[];
+  showHero: boolean;
+  topInset: number;
+  isOnline: boolean;
+  distance: number | null;
+  onCall: () => void;
+}) {
+  const theme = useTheme();
+  const status = openStatus(facility.weekday_hours, facility.weekend_hours);
+  const change = openChangeLabel(status);
+  const feeRange = formatFeeRange(facility.fee_min, facility.fee_max);
+  const nameParts = facilityNameParts(facility);
+  const bookingUrl = normalizeUrl(facility.booking_url);
+  const websiteUrl = normalizeUrl(facility.website);
+  const careType = facility.facility_type ? CARE_TYPE_LABEL[facility.facility_type] : undefined;
+  const hasHours = !!(facility.weekday_hours || facility.weekend_hours);
+  const { day } = zonedDayMinutes(new Date());
+  const weekendToday = day === 0 || day === 6;
+  const dept = facility.department_info;
+  const hasDeptInfo = !!(dept && (dept.has_derm_department || dept.department_name || dept.opd_notes));
+  // Derm-relevant services first: this is a skin-check app, and "Dermatology" buried after
+  // "Dental" and "Diagnostics" in an alphabetical facet list is the wrong emphasis.
+  const services = [...facility.services].sort(
+    (a, b) => Number(!/derm|skin/i.test(a)) - Number(!/derm|skin/i.test(b)),
+  );
+
+  const summary: string[] = [];
+  if (status.open != null) summary.push(change ? `${status.open ? t("Open") : t("Closed")} · ${change}` : status.open ? t("Open now") : t("Closed"));
+  if (distance != null) summary.push(formatDistance(distance));
+  if (facility.google_rating != null) summary.push(`★ ${facility.google_rating.toFixed(1)} ${t("on Google")}`);
+
+  const reportIssue = () => {
+    const subject = encodeURIComponent(`Incorrect clinic info: ${facility.name}`);
+    const body = encodeURIComponent(`Clinic ID: ${facility.id}\n\nWhat is wrong:\n`);
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => {});
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.body}>
+      {showHero ? (
+        <View style={styles.heroWrap}>
+          <Image
+            source={{ uri: facility.photo_url as string }}
+            style={styles.heroPhoto}
+            contentFit="cover"
+            cachePolicy="disk"
+            transition={200}
+            accessibilityLabel={t("Photo of {{name}}", { name: facility.name })}
+          />
+          <LinearGradient
+            colors={["rgba(0,0,0,0.5)", "rgba(0,0,0,0)"]}
+            style={[styles.heroScrim, { height: topInset + 96 }]}
+            pointerEvents="none"
+          />
+          {facility.photo_attribution ? (
+            <View style={styles.attributionWrap}>
+              <ThemedText type="caption" style={styles.attributionText}>
+                {t("Photo:")} {facility.photo_attribution}
+              </ThemedText>
             </View>
           ) : null}
+        </View>
+      ) : null}
 
-          <View style={styles.bodyPadded}>
-            <View style={styles.identity}>
-              <ThemedText type="title1">
-                {nameParts?.title ?? facility.name}
-              </ThemedText>
-              {nameParts?.affiliation ? (
-                <ThemedText type="callout" themeColor="textSecondary">
-                  {t("at")} {nameParts.affiliation}
-                </ThemedText>
+      <View style={styles.bodyPadded}>
+        {/* 1 · Identity */}
+        <View style={styles.identity}>
+          <ThemedText type="title1">{nameParts.title ?? facility.name}</ThemedText>
+          {nameParts.affiliation ? (
+            <ThemedText type="callout" themeColor="textSecondary">
+              {t("Part of {{name}}", { name: nameParts.affiliation })}
+            </ThemedText>
+          ) : null}
+          <View style={styles.badges}>
+            <Badge label={humanizeTag(facility.type)} tone="brand" />
+            {careType ? <Badge label={t(careType)} /> : null}
+            {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
+          </View>
+          {summary.length ? (
+            <View style={styles.summaryRow}>
+              {status.open != null ? (
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: status.open ? theme.riskLow : theme.riskHigh },
+                  ]}
+                />
               ) : null}
-              <View style={styles.badges}>
-                <Badge label={humanizeTag(facility.type)} tone="brand" />
-                {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
-                {onlyStatus ? (
-                  <View
-                    style={[
-                      styles.statusChip,
-                      {
-                        backgroundColor: open
-                          ? theme.riskLowBg
-                          : theme.riskHighBg,
-                      },
-                    ]}
-                  >
-                    <Icon
-                      name={open ? "checkmark.circle.fill" : "clock.fill"}
-                      size={12}
-                      tintColor={open ? theme.riskLow : theme.riskHigh}
-                    />
-                    <ThemedText
-                      type="caption"
-                      themeColor={open ? "riskLow" : "riskHigh"}
-                      style={styles.statusChipLabel}
-                    >
-                      {open ? "Open Now" : "Closed"}
-                    </ThemedText>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-
-            {!onlyStatus &&
-            (facility.google_rating != null || feeRange || open != null) ? (
-              <View style={styles.statsRow}>
-                {facility.google_rating != null ? (
-                  <Card padded={false} style={styles.statTile} elevation="sm">
-                    <IconCircle icon="star.fill" variant="tint" size={32} />
-                    <ThemedText type="headline">
-                      {facility.google_rating.toFixed(1)}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {t("Rating")}</ThemedText>
-                  </Card>
-                ) : null}
-                {feeRange ? (
-                  <Card padded={false} style={styles.statTile} elevation="sm">
-                    <IconCircle icon="banknote" variant="tint" size={32} />
-                    <ThemedText type="headline" numberOfLines={1}>
-                      {feeRange}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {t("Consult fee")}</ThemedText>
-                  </Card>
-                ) : null}
-                {open != null ? (
-                  <Card padded={false} style={styles.statTile} elevation="sm">
-                    <IconCircle
-                      icon={open ? "checkmark.circle.fill" : "clock.fill"}
-                      variant="tint"
-                      tintBg={open ? theme.riskLowBg : theme.riskHighBg}
-                      iconColor={open ? theme.riskLow : theme.riskHigh}
-                      size={32}
-                    />
-                    <ThemedText type="headline">
-                      {open ? "Open" : "Closed"}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {t("Status")}</ThemedText>
-                  </Card>
-                ) : null}
-              </View>
-            ) : null}
-
-            {facility.description ? (
-              <ThemedText type="callout" themeColor="textSecondary">
-                {facility.description}
+              <ThemedText type="subhead" themeColor="textSecondary" style={styles.summaryText}>
+                {summary.join("  ·  ")}
               </ThemedText>
-            ) : null}
+            </View>
+          ) : null}
+        </View>
 
+        {/* 2 · Actions, right under the title */}
+        <View style={styles.actionRow}>
+          {bookingUrl ? (
+            <ActionTile
+              icon="calendar"
+              label={t("Book")}
+              primary
+              disabled={!isOnline}
+              hint={t("Opens the booking page in your browser")}
+              onPress={() => openWebsite(bookingUrl)}
+            />
+          ) : null}
+          {hasPhone(facility.phone) ? (
+            <ActionTile icon="phone.fill" label={t("Call")} primary={!bookingUrl} onPress={onCall} />
+          ) : null}
+          <ActionTile
+            icon="arrow.triangle.turn.up.right.diamond.fill"
+            label={t("Directions")}
+            onPress={() =>
+              openDirections({
+                googleMapsUrl: facility.google_maps_url,
+                latitude: facility.latitude,
+                longitude: facility.longitude,
+              })
+            }
+          />
+          {websiteUrl ? (
+            <ActionTile
+              icon="globe"
+              label={t("Website")}
+              disabled={!isOnline}
+              hint={t("Opens the clinic's website in your browser")}
+              onPress={() => openWebsite(websiteUrl)}
+            />
+          ) : null}
+        </View>
+        {!isOnline && (bookingUrl || websiteUrl) ? (
+          <View style={styles.offlineNote}>
+            <Icon name="wifi.slash" size={12} tintColor={theme.textSecondary} />
+            <ThemedText type="footnote" themeColor="textSecondary">
+              {t("You're offline. Booking and websites need a connection; calling still works.")}
+            </ThemedText>
+          </View>
+        ) : null}
+
+        {/* 3 · Hours */}
+        {hasHours ? (
+          <Card style={styles.infoCard} elevation="sm">
+            <View style={styles.cardHead}>
+              <IconCircle icon="clock.fill" variant="tint" size={32} />
+              <ThemedText type="headline">{t("Hours")}</ThemedText>
+            </View>
+            <HoursLine
+              label={t("Mon–Fri")}
+              value={formatHours(facility.weekday_hours)}
+              today={!weekendToday}
+            />
+            <HoursLine
+              label={t("Sat–Sun")}
+              value={facility.weekend_hours ? formatHours(facility.weekend_hours) : t("Not listed")}
+              today={weekendToday}
+            />
+            <ThemedText type="footnote" themeColor="textSecondary">
+              {t("Hours can change on holidays - call ahead to confirm.")}
+            </ThemedText>
+          </Card>
+        ) : null}
+
+        {/* 4 · Location */}
+        <Card style={styles.infoCard} elevation="sm">
+          <Pressable
+            onPress={() =>
+              openDirections({
+                googleMapsUrl: facility.google_maps_url,
+                latitude: facility.latitude,
+                longitude: facility.longitude,
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={t("Get directions to {{address}}", { address: facility.address })}
+          >
+            <View style={styles.infoRow}>
+              <IconCircle icon="mappin.circle.fill" variant="tint" size={36} />
+              <View style={styles.infoText}>
+                <ThemedText type="callout" numberOfLines={3}>
+                  {facility.address}
+                </ThemedText>
+                {distance != null ? (
+                  <ThemedText type="footnote" themeColor="textSecondary">
+                    {t("{{distance}} from you", { distance: formatDistance(distance) })}
+                  </ThemedText>
+                ) : null}
+              </View>
+              <Icon name="chevron.right" size={14} tintColor={theme.textSecondary} />
+            </View>
+          </Pressable>
+        </Card>
+
+        {/* 5 · Skin services (dermatology department merged in) */}
+        {hasDeptInfo || services.length ? (
+          <View style={styles.section}>
+            <ThemedText type="title2">{t("Skin services")}</ThemedText>
             {hasDeptInfo ? (
-              <Card
-                style={[styles.deptCard, { backgroundColor: theme.brandTint }]}
-                elevation="sm"
-              >
-                <View style={styles.deptHeader}>
-                  <IconCircle
-                    icon="cross.case.fill"
-                    variant="gradient"
-                    size={40}
-                  />
-                  <ThemedText type="headline" style={styles.deptTitle}>
+              <Card style={[styles.deptCard, { backgroundColor: theme.brandTint }]} elevation="sm">
+                <View style={styles.cardHead}>
+                  <IconCircle icon="cross.case.fill" variant="gradient" size={36} />
+                  <ThemedText type="headline" style={styles.flex}>
                     {t("Dermatology Department")}</ThemedText>
-                  {dept?.has_derm_department ? (
-                    <Badge label={t("Confirmed")} tone="brand" />
-                  ) : null}
+                  {dept?.has_derm_department ? <Badge label={t("Confirmed")} tone="brand" /> : null}
                 </View>
                 {dept?.department_name ? (
                   <ThemedText type="callout" themeColor="textSecondary">
@@ -260,236 +394,245 @@ export default function ClinicDetailScreen() {
                 ) : null}
               </Card>
             ) : null}
-
-            <Card style={styles.infoCard} elevation="sm">
-              <Pressable
-                onPress={() =>
-                  openDirections({
-                    googleMapsUrl: facility.google_maps_url,
-                    latitude: facility.latitude,
-                    longitude: facility.longitude,
-                  })
-                }
-                accessibilityRole="button"
-                accessibilityLabel={t("Get directions")}
-              >
-                <View style={styles.infoRow}>
-                  <IconCircle
-                    icon="mappin.circle.fill"
-                    variant="tint"
-                    size={36}
-                  />
-                  <ThemedText
-                    type="callout"
-                    style={styles.infoText}
-                    numberOfLines={3}
-                  >
-                    {facility.address}
-                  </ThemedText>
-                  <Icon
-                    name="chevron.right"
-                    size={14}
-                    tintColor={theme.muted}
-                  />
-                </View>
-              </Pressable>
-
-              {hasHours ? (
-                <>
-                  <View
-                    style={[
-                      styles.infoDivider,
-                      { backgroundColor: theme.hairline },
-                    ]}
-                  />
-                  <View style={styles.infoRow}>
-                    <IconCircle icon="clock.fill" variant="tint" size={36} />
-                    <View style={styles.infoText}>
-                      {facility.weekday_hours ? (
-                        <View style={styles.hoursLine}>
-                          <ThemedText
-                            type="footnote"
-                            themeColor="textSecondary"
-                          >
-                            {t("Mon–Fri")}</ThemedText>
-                          <ThemedText type="footnote">
-                            {formatHours(facility.weekday_hours)}
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                      {facility.weekend_hours ? (
-                        <View style={styles.hoursLine}>
-                          <ThemedText
-                            type="footnote"
-                            themeColor="textSecondary"
-                          >
-                            {t("Sat–Sun")}</ThemedText>
-                          <ThemedText type="footnote">
-                            {formatHours(facility.weekend_hours)}
-                          </ThemedText>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                </>
-              ) : null}
-
-              {feeRange ? (
-                <>
-                  <View
-                    style={[
-                      styles.infoDivider,
-                      { backgroundColor: theme.hairline },
-                    ]}
-                  />
-                  <View style={styles.infoRow}>
-                    <IconCircle icon="banknote" variant="tint" size={36} />
-                    <ThemedText type="footnote" style={styles.infoText}>
-                      {t("Consultation fee")} {feeRange}
-                    </ThemedText>
-                  </View>
-                </>
-              ) : null}
-            </Card>
-
-            {facility.services.length ? (
-              <View>
-                <ThemedText type="headline" style={styles.sectionTitle}>
-                  {t("Services")}</ThemedText>
-                <View style={styles.badges}>
-                  {facility.services.map((s) => (
-                    <Badge key={s} label={humanizeTag(s)} />
-                  ))}
-                </View>
+            {services.length ? (
+              <View style={styles.badges}>
+                {services.map((s) => (
+                  <Badge key={s} label={humanizeTag(s)} />
+                ))}
               </View>
             ) : null}
-
-            {facility.booking_url ? (
-              <Button
-                label={t("Book online")}
-                icon="calendar"
-                onPress={() => openWebsite(facility.booking_url as string)}
-                style={styles.bookButton}
-              />
-            ) : null}
-
-            <View
-              style={[
-                styles.actions,
-                facility.booking_url ? styles.actionsTight : null,
-              ]}
-            >
-              {facility.phone ? (
-                <Button
-                  label={facility.phone}
-                  variant="outline"
-                  icon="phone.fill"
-                  onPress={() => callNumber(facility.phone as string)}
-                  style={styles.actionButton}
-                />
-              ) : null}
-              {facility.website ? (
-                <Button
-                  label={t("Website")}
-                  variant="outline"
-                  icon="globe"
-                  onPress={() => openWebsite(facility.website as string)}
-                  style={styles.actionButton}
-                />
-              ) : null}
-            </View>
           </View>
-        </ScrollView>
-      )}
-    </Screen>
+        ) : null}
+
+        {/* 6 · Doctors at this clinic */}
+        {doctors.length ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <ThemedText type="title2">{t("Doctors here")}</ThemedText>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {doctors.length === 1 ? t("1 doctor") : t("{{count}} doctors", { count: doctors.length })}
+              </ThemedText>
+            </View>
+            {doctors.map((d) => (
+              <Pressable
+                key={d.doctor.id}
+                onPress={() => router.push({ pathname: "/directory/doctor", params: { id: d.doctor.id } })}
+                accessibilityRole="button"
+                accessibilityLabel={[d.doctor.name, d.schedule, d.bookable ? t("Books online") : null]
+                  .filter(Boolean)
+                  .join(", ")}
+              >
+                <Card style={styles.doctorRow} elevation="sm">
+                  <IconCircle icon="stethoscope" size={40} variant="tint" />
+                  <View style={styles.infoText}>
+                    <ThemedText type="headline" numberOfLines={2}>
+                      {d.doctor.name}
+                    </ThemedText>
+                    {d.schedule ? (
+                      <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
+                        {formatSchedule(d.schedule)}
+                      </ThemedText>
+                    ) : null}
+                    {d.bookable ? (
+                      <View style={styles.bookableTag}>
+                        <Icon name="calendar" size={12} tintColor={theme.brandPressed} />
+                        <ThemedText type="caption" style={{ color: theme.brandPressed }}>
+                          {t("Books online")}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Icon name="chevron.right" size={14} tintColor={theme.textSecondary} />
+                </Card>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* 7 · Fee + about */}
+        {feeRange || facility.description ? (
+          <View style={styles.section}>
+            <ThemedText type="title2">{t("About")}</ThemedText>
+            {feeRange ? (
+              <View style={styles.infoRow}>
+                <IconCircle icon="banknote" variant="tint" size={32} />
+                <ThemedText type="callout" style={styles.flex}>
+                  {t("Consultation fee")} {feeRange}
+                </ThemedText>
+              </View>
+            ) : null}
+            {facility.description ? (
+              <ThemedText type="callout" themeColor="textSecondary">
+                {facility.description}
+              </ThemedText>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* 8 · Provenance + feedback loop for the directory's known data-quality gaps */}
+        <View style={[styles.footer, { borderTopColor: theme.hairline }]}>
+          <ThemedText type="footnote" themeColor="textSecondary">
+            {t("Directory info updated {{date}}", { date: formatShortDate(facility.updated_at) })}
+          </ThemedText>
+          <Pressable onPress={reportIssue} accessibilityRole="link" hitSlop={8}>
+            <ThemedText type="footnote" style={[styles.reportLink, { color: theme.brandPressed }]}>
+              {t("Report incorrect info")}
+            </ThemedText>
+          </Pressable>
+        </View>
+      </View>
+    </ScrollView>
+  );
+}
+
+function ActionTile({
+  icon,
+  label,
+  primary,
+  disabled,
+  hint,
+  onPress,
+}: {
+  icon: IconName;
+  label: string;
+  primary?: boolean;
+  disabled?: boolean;
+  hint?: string;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const fg = primary ? theme.onBrand : theme.brandPressed;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [
+        styles.tile,
+        { backgroundColor: primary ? theme.brandPressed : theme.elementBg },
+        disabled && styles.tileDisabled,
+        pressed && !disabled && styles.tilePressed,
+      ]}
+    >
+      <Icon name={icon} size={20} tintColor={fg} />
+      <ThemedText type="footnote" style={[styles.tileLabel, { color: primary ? theme.onBrand : theme.text }]} numberOfLines={1}>
+        {label}
+      </ThemedText>
+    </Pressable>
+  );
+}
+
+function HoursLine({ label, value, today }: { label: string; value: string; today: boolean }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.hoursLine}>
+      <View style={styles.hoursLabel}>
+        <ThemedText type="callout" style={today ? styles.bold : undefined}>
+          {label}
+        </ThemedText>
+        {today ? (
+          <View style={[styles.todayPill, { backgroundColor: theme.brandTint }]}>
+            <ThemedText type="caption" style={{ color: theme.brandPressed }}>
+              {t("Today")}
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
+      <ThemedText type="callout" themeColor={today ? "text" : "textSecondary"} style={today ? styles.bold : undefined}>
+        {value}
+      </ThemedText>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
     height: 48,
-    paddingHorizontal: Space.xl,
+    paddingHorizontal: Space.base,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerSpacer: { width: 20 },
+  headerBack: { width: 44, height: 44, justifyContent: "center" },
+  headerSpacer: { width: 44 },
   body: {
     paddingBottom: Space.xxxl,
-    gap: Space.md,
+    gap: Space.lg,
   },
   bodyPadded: {
     paddingHorizontal: Space.xl,
-    gap: Space.md,
+    gap: Space.lg,
   },
   heroWrap: {
     width: "100%",
-    height: 260,
-    position: "relative",
+    height: 240,
     overflow: "hidden",
     borderBottomLeftRadius: Radius.xl,
     borderBottomRightRadius: Radius.xl,
   },
   heroPhoto: { width: "100%", height: "100%" },
-  heroScrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 110,
-  },
+  heroScrim: { position: "absolute", top: 0, left: 0, right: 0 },
   heroBackBtn: {
     position: "absolute",
-    top: Space.md,
-    left: Space.xl,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    left: Space.base,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   attributionWrap: {
     position: "absolute",
     bottom: Space.sm,
-    left: Space.md,
+    right: Space.md,
     backgroundColor: "rgba(0,0,0,0.45)",
     paddingHorizontal: Space.sm,
     paddingVertical: 2,
     borderRadius: Radius.pill,
   },
   attributionText: { color: "#FFFFFF", opacity: 0.9 },
-  identity: { gap: Space.xs },
+  identity: { gap: Space.sm },
   badges: { flexDirection: "row", flexWrap: "wrap", gap: Space.xs },
-  statsRow: { flexDirection: "row", gap: Space.sm },
-  statusChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Space.xs,
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.pill,
-  },
-  statusChipLabel: { fontWeight: "600" },
-  statTile: {
+  summaryRow: { flexDirection: "row", alignItems: "center", gap: Space.sm },
+  summaryText: { flex: 1 },
+  statusDot: { width: 8, height: 8, borderRadius: 4 },
+  actionRow: { flexDirection: "row", gap: Space.sm },
+  tile: {
     flex: 1,
+    minHeight: 64,
+    borderRadius: Radius.md,
     alignItems: "center",
-    gap: 2,
-    paddingVertical: Space.md,
+    justifyContent: "center",
+    gap: Space.xs,
     paddingHorizontal: Space.xs,
-    borderRadius: Radius.lg,
   },
-  deptCard: { gap: Space.xs },
-  deptHeader: { flexDirection: "row", alignItems: "center", gap: Space.sm },
-  deptTitle: { flex: 1 },
+  tilePressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  tileDisabled: { opacity: 0.45 },
+  tileLabel: { fontWeight: "600" },
+  offlineNote: { flexDirection: "row", alignItems: "center", gap: Space.xs, marginTop: -Space.sm },
   infoCard: { gap: Space.md },
+  cardHead: { flexDirection: "row", alignItems: "center", gap: Space.sm },
   infoRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
-  infoText: { flex: 1, gap: Space.xs },
-  infoDivider: { height: StyleSheet.hairlineWidth },
-  hoursLine: { flexDirection: "row", justifyContent: "space-between" },
-  sectionTitle: { marginBottom: Space.xs },
-  bookButton: { marginTop: Space.md },
-  actions: { flexDirection: "row", gap: Space.md, marginTop: Space.md },
-  actionsTight: { marginTop: 0 },
-  actionButton: { flex: 1 },
+  infoText: { flex: 1, gap: 2 },
+  flex: { flex: 1 },
+  hoursLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: Space.md },
+  hoursLabel: { flexDirection: "row", alignItems: "center", gap: Space.sm },
+  todayPill: { paddingHorizontal: Space.sm, paddingVertical: 2, borderRadius: Radius.pill },
+  bold: { fontWeight: "600" },
+  section: { gap: Space.md },
+  sectionHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
+  deptCard: { gap: Space.sm },
+  doctorRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
+  bookableTag: { flexDirection: "row", alignItems: "center", gap: Space.xs, marginTop: 2 },
+  footer: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: Space.base,
+    marginTop: Space.sm,
+    gap: Space.sm,
+  },
+  reportLink: { fontWeight: "600" },
 });
