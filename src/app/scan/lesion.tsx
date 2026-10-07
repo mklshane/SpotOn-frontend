@@ -213,7 +213,7 @@ export default function LesionDetailScreen() {
               urgent is this" signal, so the two screens should read as one visual language
               rather than the plain white block this used to be. */}
             <View
-              style={[styles.hero, { backgroundColor: bg, shadowColor: fg }]}
+              style={[styles.hero, { backgroundColor: bg }]}
             >
               <View style={styles.heroTop}>
                 {editing ? (
@@ -611,9 +611,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     padding: Space.xl,
     gap: Space.md,
-    shadowOpacity: 0.3,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
   },
   heroTop: {
     flexDirection: "row",
