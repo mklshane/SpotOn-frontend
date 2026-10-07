@@ -894,6 +894,13 @@ export function stepActiveTarget(
   roi: SearchRoi,
   zoomProgress: number,
   zoomRatio: number,
+  /**
+   * When set, a nominee scoring at least this acquires on its first frame instead of waiting for
+   * ACQUIRE_FRAMES. For slow-inference devices (Android CPU: ~0.3-1.2 s per pass), where the
+   * second confirming frame alone delayed the first box by a full pass. Only strong candidates
+   * qualify; weaker ones still need the two-frame confirmation that filters one-off false hits.
+   */
+  fastAcquireScore?: number,
 ): TrackerDecision {
   if (!previous.active) {
     // Once the first CREATE-qualified frame nominates a lesion, look for that same lesion first on
@@ -907,7 +914,8 @@ export function stepActiveTarget(
       return { state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio }, kind: 'none', target: null };
     }
     const acquisition = nextPending(previous.acquisition, candidate);
-    if (acquisition.streak < ACQUIRE_FRAMES) {
+    const fast = fastAcquireScore !== undefined && candidate.score >= fastAcquireScore;
+    if (acquisition.streak < ACQUIRE_FRAMES && !fast) {
       return {
         state: { ...previous, acquisition, lastZoomRatio: zoomRatio },
         kind: 'none',

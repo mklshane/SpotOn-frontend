@@ -468,6 +468,11 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   check('target is hidden for the first acquisition cycle',
     stepActiveTarget(initialActiveTargetState, [centered], roi, 0, 1).kind === 'none');
   check('matching second acquisition cycle shows one target', acquired.kind === 'acquire' && acquired.target === centered);
+  // Android fast acquire: a confident nominee shows on its first pass; a weak one still waits.
+  check('fast acquire shows a confident nominee on the first pass',
+    stepActiveTarget(initialActiveTargetState, [centered], roi, 0, 1, 0.38).kind === 'acquire');
+  check('fast acquire still holds a weak nominee for confirmation',
+    stepActiveTarget(initialActiveTargetState, [C(0.5, 0.5, 0.3)], roi, 0, 1, 0.38).kind === 'none');
 
   const initialNominee = C(0.42, 0.5, 0.6);
   const firstNomination = stepActiveTarget(initialActiveTargetState, [initialNominee], roi, 0, 1);

@@ -79,7 +79,7 @@ import {
   isFreshAndroidResult,
   waitForCaptureIdle,
 } from '@/lib/android-capture-policy';
-import { perfLog, perfMark, perfSince } from '@/lib/perf-log';
+import { PERF_LOG, perfLog, perfMark, perfSince } from '@/lib/perf-log';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { discardScratch } from '@/lib/scratch-files';
 import { useScreeningSession } from '@/lib/screening-session';
@@ -264,7 +264,10 @@ const frameHintBottom = (windowH: number) =>
 // Cap applied when baking in the EXIF orientation. Android keeps its full still (8 MP on a Galaxy
 // A42: a 2448 short edge instead of 1536), so the crop screen cuts the lesion from real pixels
 // rather than enlarging a 2048 copy - the main reason its close crops looked soft.
-const PHOTO_LONG_EDGE = Platform.OS === 'android' ? 4096 : 2048;
+// Capped at 3264 (2026-10-07): a vivo V2248 picks a 3060x4080 still unconstrained, and baking that
+// full 12.5 MP re-encode took seconds and drove the Java heap to 0% free. 3264 keeps the A42's
+// 3264x2448 untouched and still leaves a 2448 short edge for the crop.
+const PHOTO_LONG_EDGE = Platform.OS === 'android' ? 3264 : 2048;
 
 
 export default function CaptureScreen() {
@@ -460,6 +463,8 @@ export default function CaptureScreen() {
   const hasTorch = device?.hasTorch === true;
 
   const zoomSV = useSharedValue(1);
+  const shutterFlash = useSharedValue(0);
+  const shutterFlashStyle = useAnimatedStyle(() => ({ opacity: shutterFlash.value }));
   const startZoom = useSharedValue(1);
   // The detector's copy of the zoom. `zoomSV` is a Reanimated value living on Reanimated's UI
   // runtime; the frame processor runs on VisionCamera's separate react-native-worklets-core
@@ -503,6 +508,7 @@ export default function CaptureScreen() {
   // Candidate association, handover hysteresis and miss retention live in a pure tested state
   // machine. Only its single active target is ever allowed to reach the drawing layer.
   const targetRef = useRef(initialActiveTargetState);
+  const decisionTallyRef = useRef<Record<string, number>>({});
   const stableStreakRef = useRef(0);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
   const lastSize = useRef<{ w: number; h: number } | null>(null);
@@ -531,6 +537,9 @@ export default function CaptureScreen() {
   // Shutter coordination crosses JS and the camera worklet. Pausing first prevents a new detector
   // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
   const capturePausedSV = useWorkletValue(false);
+  const detectMsSV = useWorkletValue(-1);
+  // Android keeps the frame processor attached and gates on this instead (see the Camera prop).
+  const guideSV = useWorkletValue(true);
   const inferenceBusySV = useWorkletValue(false);
   const lastSkinAtSV = useWorkletValue(0);
   const lastLocalSkinAtSV = useWorkletValue(0);
@@ -641,8 +650,19 @@ export default function CaptureScreen() {
         previewRoi,
         batch.roi.zoomProgress,
         batch.zoomRatio,
+        // Android passes are 3-10x slower than iOS; a confident nominee shows on its first pass.
+        ANDROID_CAPTURE ? LOCK_SCORE : undefined,
       );
       targetRef.current = decision.state;
+      if (PERF_LOG) {
+        const tally = decisionTallyRef.current;
+        tally[decision.kind] = (tally[decision.kind] ?? 0) + 1;
+        tally.n = (tally.n ?? 0) + 1;
+        if (tally.n % 10 === 0) {
+          perfLog('live.decisions', 0, `last10=${JSON.stringify(tally)} top=${(batch.candidates[0]?.score ?? 0).toFixed(2)}`);
+          decisionTallyRef.current = {};
+        }
+      }
       trackingSV.value = decision.state.active != null;
 
       const nominee = decision.state.acquisition?.candidate ?? decision.state.active;
@@ -792,6 +812,10 @@ export default function CaptureScreen() {
     applyCoach();
   }, []);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
+  const livePassCountSV = useWorkletValue(0);
+  const onLivePass = useRunOnJS((detMs: number, totalMs: number, intervalMs: number) => {
+    perfLog('live.pass', totalMs, `detector=${detMs}ms interval=${Math.round(intervalMs)}ms`);
+  }, []);
   // Live skin-gate reads arrive as 0 skin / 1 not skin / 2 face, debounced here by stepScene.
   const onScene = useRunOnJS((code: number, callbackSession: number, startedAt: number) => {
     if (!acceptsSession(sessionRef.current, callbackSession)) return;
@@ -874,11 +898,12 @@ export default function CaptureScreen() {
     Object.values(euro).forEach((filter) => filter.reset());
     resetDetectionBox(boxValues, { immediate: true });
     guideRef.current = guide;
+    guideSV.value = guide;
     lastGateSV.value = -1;
     blurStreakSV.value = 0;
     gateRef.current = GATE_OK;
     applyCoach();
-  }, [guide, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
+  }, [guide, guideSV, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
     lastSkinAtSV, lastLocalSkinAtSV, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
     perf.firstBoxMs, perf.searchCrop, perf.searchFraction, perf.candidateScore, perf.rejection,
     pinnedCropSV, sessionSV, trackingSV, androidScheduleSV, targetFps, perf.intervalMs, perf.resultAgeMs]);
@@ -892,7 +917,7 @@ export default function CaptureScreen() {
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
-      if (boxedModel == null || layout == null || capturePausedSV.value) return;
+      if (boxedModel == null || layout == null || capturePausedSV.value || !guideSV.value) return;
       const detect = () => {
         'worklet';
         if (capturePausedSV.value) return;
@@ -980,6 +1005,7 @@ export default function CaptureScreen() {
               : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
           const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
           const tInferred = Date.now();
+          detectMsSV.value = tInferred - tPreprocessed;
           const out = new Float32Array(outputs[0]);
           const { chMajor, channels, anchors, numClasses } = layout;
 
@@ -1089,6 +1115,13 @@ export default function CaptureScreen() {
             androidScheduleSV.value = completeAndroidDetection(
               androidScheduleSV.value, callbackSession, Date.now() - t0,
             );
+            // Release-safe stage timing (EXPO_PUBLIC_PERF_LOG); every 10th pass to keep the hop cheap.
+            if (PERF_LOG && detectMsSV.value >= 0) {
+              livePassCountSV.value += 1;
+              if (livePassCountSV.value % 10 === 1) {
+                onLivePass(detectMsSV.value, Date.now() - t0, androidScheduleSV.value.intervalMs);
+              }
+            }
             if (PERF_ENABLED) perf.intervalMs.value = androidScheduleSV.value.intervalMs;
           }
           inferenceBusySV.value = false;
@@ -1109,6 +1142,10 @@ export default function CaptureScreen() {
       layout,
       boxedSkin,
       skinSize,
+      guideSV,
+      detectMsSV,
+      livePassCountSV,
+      onLivePass,
       lastSkinAtSV,
       lastLocalSkinAtSV,
       localSkinAttemptsSV,
@@ -1270,6 +1307,10 @@ export default function CaptureScreen() {
     captureInFlightRef.current = true;
     capturePausedSV.value = true;
     perfMark('shutter');
+    // Instant acknowledgement: the still can take a second or two to save on Android, and a
+    // spinner alone read as "the tap did not register".
+    Vibration.vibrate(15);
+    shutterFlash.value = withSequence(withTiming(0.7, { duration: 40 }), withTiming(0, { duration: 220 }));
     if (ANDROID_CAPTURE) setBusy(true);
     let navigated = false;
     try {
@@ -1406,11 +1447,11 @@ export default function CaptureScreen() {
             isActive={isFocused && appActive}
             onStarted={restartSession}
             photo
-            // Android's default ('balanced') is zero-shutter-lag: a frame lifted from the preview
-            // ring buffer with no pre-capture AF/AE, soft at macro distance. 'quality' runs the
-            // capture sequence and full ISP processing - a sharper still for the classifier at a
-            // few hundred ms more shutter time. iOS's 'balanced' is already right.
-            photoQualityBalance={ANDROID_CAPTURE ? 'quality' : 'balanced'}
+            // 'balanced' on both platforms. Android's 'quality' (MAXIMIZE_QUALITY) re-ran AF/AE and
+            // full ISP processing after the tap: 1.8-2.5 s of spinner on a vivo V2248 (2026-10-07).
+            // Lesion auto-focus (nextAutoFocus) already focuses on the spot before the tap, so the
+            // zero-shutter-lag frame is the focused one.
+            photoQualityBalance="balanced"
             animatedProps={animatedProps}
             /**
              * Load-bearing; do NOT delete this as a redundant default.
@@ -1429,11 +1470,15 @@ export default function CaptureScreen() {
              */
             isMirrored={false}
             torch={torch && hasTorch ? 'on' : 'off'}
-            frameProcessor={guide && isFocused ? frameProcessor : undefined}
+            // Android: attaching/detaching a frame processor adds/removes the CameraX analysis use
+            // case and rebinds the whole session - a ~0.6 s black preview on every Guide toggle
+            // (vivo V2248, 2026-10-07). Keep it attached while focused and gate on guideSV.
+            frameProcessor={(ANDROID_CAPTURE || guide) && isFocused ? frameProcessor : undefined}
           />
         </View>
       </GestureDetector>
 
+      <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.shutterFlash, shutterFlashStyle]} />
       {focusPt ? <FocusReticle key={focusPt.id} x={focusPt.x} y={focusPt.y} /> : null}
 
       {/* Framing brackets */}
@@ -1705,6 +1750,7 @@ const BRACKET = 36;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
+  shutterFlash: { backgroundColor: '#FFFFFF' },
   black: { flex: 1, backgroundColor: '#000' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   bracket: { position: 'absolute', width: BRACKET, height: BRACKET, borderColor: 'rgba(255,255,255,0.95)' },

@@ -39,7 +39,8 @@ export type IqaChecks = {
   // ok = the lesion is not buried under hair. ADVISORY, non-blocking - like `shadow`. This is a
   // DETECTION, deliberately not a removal: see synth/eval/HAIR_REMOVAL.md for the measured reason
   // digital hair removal is not in the pipeline.
-  hair: { ok: boolean; coverage: number };
+  // null when the caller deferred it (analyzeRgba `{ hair: false }`, then hairCoverageRgba).
+  hair: { ok: boolean; coverage: number } | null;
 };
 
 /**
@@ -804,7 +805,9 @@ export function hairCoverage(gray: Float32Array, W: number, H: number): number {
  * Compute the six quality checks over a decoded RGBA image (Uint8-like, length W*H*4).
  * Assessed on a centered ROI ≈ the lesion (our crop step centers it), per Stanford TrueImage.
  */
-export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaChecks {
+export function analyzeRgba(
+  data: ArrayLike<number>, W: number, H: number, opts: { hair?: boolean } = {},
+): IqaChecks {
   const n = W * H;
   const gray = new Float32Array(n);
   let sumLuma = 0;
@@ -891,7 +894,7 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
   const brightness = sumLuma / n / 255;
   const skinCov = skinCount / n;
   const { score: lesionScore, sided: lesionSided, hue: lesionHue } = lesionPresence(data, W, H);
-  const hairCov = hairCoverage(gray, W, H);
+  const hairCov = opts.hair === false ? null : hairCoverage(gray, W, H);
   const edgeWidth = edgeWidthOf(gray, W, H);
   // Pick the single most relevant exposure problem for the message (shadow is advisory, not here).
   let issue: 'ok' | 'dark' | 'glare' = 'ok';
@@ -926,6 +929,22 @@ export function analyzeRgba(data: ArrayLike<number>, W: number, H: number): IqaC
       sided: lesionSided,
       hue: lesionHue,
     },
-    hair: { ok: hairCov <= HAIR_ROI_MAX, coverage: hairCov },
+    hair: hairCov === null ? null : { ok: hairCov <= HAIR_ROI_MAX, coverage: hairCov },
   };
+}
+
+/**
+ * The advisory hair check on its own, for callers that deferred it out of analyzeRgba. Builds the
+ * same luma plane analyzeRgba does (identical formula and Float32 storage), so the result is
+ * bit-identical to the inline path - it is only moved, not changed.
+ */
+export function hairCoverageRgba(data: ArrayLike<number>, W: number, H: number): { ok: boolean; coverage: number } {
+  const n = W * H;
+  const gray = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    const i = k * 4;
+    gray[k] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  }
+  const coverage = hairCoverage(gray, W, H);
+  return { ok: coverage <= HAIR_ROI_MAX, coverage };
 }

@@ -1,6 +1,8 @@
 /** Android-only timing policy. No camera/model dependencies so it can be tested with a fake clock. */
 export const ANDROID_RESULT_MAX_AGE_MS = 1000;
 export const ANDROID_CAPTURE_WAIT_MS = 2000;
+/** Pass interval as a multiple of pass cost (see completeAndroidDetection). */
+export const ANDROID_DUTY_FACTOR = 1.25;
 
 export type AndroidDetectionSchedule = {
   sessionId: number;
@@ -31,7 +33,13 @@ export function completeAndroidDetection(
   const meanMs = state.meanMs * 0.8 + durationMs * 0.2;
   // A sudden slow pass backs off immediately. Recovery is limited to 10% per completed pass.
   // No minimum FPS: forcing one on very slow hardware would exceed the processing budget.
-  const intervalMs = Math.max(1000 / 12, 2 * meanMs, 2 * durationMs, state.intervalMs * 0.9);
+  // Duty factor 1.25 (was 2, i.e. a 50% duty cycle): inference already runs off the preview path
+  // (KEEP_ONLY_LATEST analysis), so idling half the time bought nothing and doubled box latency -
+  // a 1.2 s pass became a 2.4 s cadence on a Dimensity 700 (2026-10-07). 20% idle still leaves
+  // the JS/UI threads headroom between passes.
+  const intervalMs = Math.max(
+    1000 / 12, ANDROID_DUTY_FACTOR * meanMs, ANDROID_DUTY_FACTOR * durationMs, state.intervalMs * 0.9,
+  );
   return { ...state, meanMs, intervalMs };
 }
 

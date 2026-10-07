@@ -1,9 +1,11 @@
 import { Redirect, Tabs } from 'expo-router';
 import { useEffect } from 'react';
+import { InteractionManager, Platform } from 'react-native';
 
 import { CustomTabBar } from '@/components/ui/tab-bar';
 import { needsInitialSync, runSync } from '@/data/sync';
 import { useAuth } from '@/lib/auth';
+import { prewarmBody } from '@/lib/body-variant';
 
 export default function TabsLayout() {
   const { user, loading } = useAuth();
@@ -16,6 +18,13 @@ export default function TabsLayout() {
     needsInitialSync()
       .then((needed) => (needed ? runSync({ full: true }) : undefined))
       .catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || Platform.OS !== 'android') return;
+    // After the first screens have rendered, not during: the mesh build is JS-thread work.
+    const task = InteractionManager.runAfterInteractions(() => prewarmBody(user.sex));
+    return () => task.cancel();
   }, [user]);
 
   if (loading) return null;

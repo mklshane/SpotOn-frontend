@@ -23,7 +23,7 @@ import { Icon, type IconName } from '@/components/ui/icon';
 import { Space, Radius } from '@/constants/theme';
 import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { useTheme } from '@/hooks/use-theme';
-import { assessImage, type IqaChecks } from '@/lib/image-quality';
+import { assessHair, assessImage, type IqaChecks } from '@/lib/image-quality';
 import { MAX_IMAGES_PER_SCREENING, MULTI_IMAGE_AGGREGATION_ENABLED } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
 import {
@@ -254,6 +254,24 @@ export default function QualityScreen() {
   }, [settled]);
   // The first row is due the moment analysis settles, then one more per step.
   const revealed = settled ? Math.min(step, stepsSinceSettled + 1) : 0;
+
+  // Android defers the advisory hair check out of assessImage (it is ~half the IQA cost on Hermes).
+  // Run it once every row has revealed, so the JS-thread work cannot stall the row animations; it
+  // only ever adds the hair tip, never changes pass/fail. No-op (null) where it ran inline.
+  const rowsDone = revealed >= ROW_META.length;
+  const hairPending = checks != null && checks.hair == null;
+  useEffect(() => {
+    if (!uri || !rowsDone || !hairPending) return;
+    let alive = true;
+    assessHair(uri)
+      .then((hair) => {
+        if (alive && hair) setChecks((prev) => (prev ? { ...prev, hair } : prev));
+      })
+      .catch((e) => console.warn('[iqa] hair check failed', e));
+    return () => {
+      alive = false;
+    };
+  }, [uri, rowsDone, hairPending]);
 
   // Android: the classifier, skin gate and IQA share one JS thread (jpeg-js decodes) and CPU budget,
   // and running all three at once is what held the visible checks back. Classify once the checks

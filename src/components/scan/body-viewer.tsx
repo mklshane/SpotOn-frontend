@@ -94,6 +94,9 @@ function Rig({
   return null;
 }
 
+/** Grace before the loading label appears. */
+const LOADING_LABEL_DELAY_MS = 500;
+
 export function BodyViewer({ mark, onPick }: BodyViewerProps) {
   useLocale();
   // `ready` gates the mesh: rendering before the stored override is read would build the profile
@@ -129,6 +132,14 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
 
   const [status, setStatus] = useState<BodyModelStatus>('loading');
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  // Only announce loading if it is actually slow. A sub-half-second GL start-up flashing "Loading
+  // 3D model…" read as a hitch on Android; iOS was always ready before the label could show.
+  const [slowLoad, setSlowLoad] = useState(false);
+  useEffect(() => {
+    if (status !== 'loading') return;
+    const t = setTimeout(() => setSlowLoad(true), LOADING_LABEL_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [status]);
 
   const handleReady = useCallback(
     (box: Box3) => {
@@ -275,7 +286,7 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
         />
       </GestureDetector>
 
-      {status !== 'ready' ? (
+      {status === 'error' || (status === 'loading' && slowLoad) ? (
         <View style={styles.status} pointerEvents="none">
           <ThemedText type="footnote" themeColor={status === 'error' ? 'riskCritical' : 'muted'}>
             {status === 'error' ? `Model failed - ${errMsg ?? 'unknown'}` : t("Loading 3D model…")}

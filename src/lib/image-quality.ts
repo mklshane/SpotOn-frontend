@@ -5,7 +5,7 @@ import { decodeRgbaFromBase64, transformToRgba } from '@/lib/image-ops';
 
 import { isDebug } from '@/lib/debug-flag';
 
-import { analyzeRgba, SIZE, type IqaChecks } from './image-quality-core';
+import { analyzeRgba, hairCoverageRgba, SIZE, type IqaChecks } from './image-quality-core';
 
 /**
  * Still-image quality gate. Decodes a SIZE×SIZE JPEG and runs the pure checks in
@@ -67,9 +67,18 @@ async function loadRgba(uri: string) {
  * @param sourceUpscale How much crop.tsx enlarged the capture to reach OUTPUT (1 = never
  *   enlarged). Diagnostics only: the gate no longer uses it - see LESION_EDGE_WIDTH.
  */
+/**
+ * Android defers the advisory hair check (~half of analyzeRgba's cost on Hermes) so the gating
+ * verdict reaches the screen first; quality.tsx then calls assessHair. iOS keeps it inline.
+ */
+const DEFER_HAIR = Platform.OS === 'android';
+/** The decode assessImage just made, reused by assessHair so the photo is not decoded twice. */
+let lastDecoded: { uri: string; raw: Awaited<ReturnType<typeof loadRgba>> } | null = null;
+
 export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaChecks> {
   const raw = await loadRgba(uri);
-  const checks = analyzeRgba(raw.data, raw.width, raw.height);
+  const checks = analyzeRgba(raw.data, raw.width, raw.height, { hair: !DEFER_HAIR });
+  lastDecoded = DEFER_HAIR ? { uri, raw } : null;
 
   if (DEBUG) {
     console.log(
@@ -84,8 +93,20 @@ export async function assessImage(uri: string, sourceUpscale = 1): Promise<IqaCh
       'sharpOk=' + checks.sharpness.ok,
       'shadow=' + checks.shadow.value.toFixed(3),
       'skin=' + checks.skin.coverage.toFixed(2),
+      'hair=' + (checks.hair ? checks.hair.coverage.toFixed(3) : 'deferred'),
     );
   }
 
   return checks;
+}
+
+/**
+ * The deferred hair check (see DEFER_HAIR). Null when hair was already computed inline, so callers
+ * can call it unconditionally. Identical result to the inline path (hairCoverageRgba).
+ */
+export async function assessHair(uri: string): Promise<IqaChecks['hair']> {
+  if (!DEFER_HAIR) return null;
+  const raw = lastDecoded?.uri === uri ? lastDecoded.raw : await loadRgba(uri);
+  lastDecoded = null;
+  return hairCoverageRgba(raw.data, raw.width, raw.height);
 }

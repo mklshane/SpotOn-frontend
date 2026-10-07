@@ -45,18 +45,20 @@ try {
       state = p.completeAndroidDetection(state, 1, 20);
       assert.ok(state.intervalMs >= 1000 / 12);
       assert.ok(state.intervalMs >= previous.intervalMs * 0.9);
-      assert.ok(state.intervalMs >= 2 * state.meanMs);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * state.meanMs);
     }
     assert.equal(state.intervalMs, 1000 / 12);
   });
 
   await test('slow inference and skin processing back off immediately without a forced minimum FPS', () => {
     const state = p.completeAndroidDetection(p.initialAndroidSchedule(1), 1, 350);
-    assert.equal(state.intervalMs, 700);
+    assert.equal(state.intervalMs, 350 * p.ANDROID_DUTY_FACTOR);
     const slower = p.completeAndroidDetection(state, 1, 1400);
-    assert.equal(slower.intervalMs, 2800);
+    assert.equal(slower.intervalMs, 1400 * p.ANDROID_DUTY_FACTOR);
     const recovered = p.completeAndroidDetection(slower, 1, 20);
-    assert.equal(recovered.intervalMs, 2520);
+    assert.equal(recovered.intervalMs, 1400 * p.ANDROID_DUTY_FACTOR * 0.9);
+    // Vivo V2248 regression: a 1.2 s pass must not idle another 1.2 s before the next one.
+    assert.ok(p.completeAndroidDetection(p.initialAndroidSchedule(1), 1, 1200).intervalMs <= 1500);
   });
 
   await test('thermal slowdown then recovery respects average cost and gradual recovery', () => {
@@ -66,8 +68,8 @@ try {
       assert.ok(p.androidDetectionDue(state, now, false, false));
       state = { ...state, lastStartedAt: now };
       state = p.completeAndroidDetection(state, 4, cost);
-      assert.ok(state.intervalMs >= 2 * cost);
-      assert.ok(state.intervalMs >= 2 * state.meanMs);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * cost);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * state.meanMs);
       assert.equal(p.androidDetectionDue(state, now + state.intervalMs - 1, false, false), false);
       now += Math.ceil(state.intervalMs);
     }
@@ -183,9 +185,13 @@ try {
     assert.ok(platformBranch);
     assert.ok(measuredFinally);
     // Full-quality stills on Android only; iOS keeps the 'balanced' it shipped with.
-    assert.ok(source.includes("photoQualityBalance={ANDROID_CAPTURE ? 'quality' : 'balanced'}"));
+    // Zero-shutter-lag on both platforms; 'quality' cost 1.8-2.5 s per tap on Android.
+    assert.ok(source.includes('photoQualityBalance="balanced"'));
     // No format: 12 MP forces CameraX stream sharing on LIMITED devices and misaligns the box.
     assert.ok(!/\bformat=\{/.test(source), 'capture must stay format-unconstrained');
+    // Guide toggle must not detach the Android frame processor (that rebinds CameraX: black flash).
+    assert.ok(source.includes('frameProcessor={(ANDROID_CAPTURE || guide) && isFocused ? frameProcessor : undefined}'));
+    assert.ok(source.includes('capturePausedSV.value || !guideSV.value) return;'));
     // Auto-focus is Android-gated and never fires while a capture owns the camera.
     assert.ok(source.includes('if (ANDROID_CAPTURE && canFocusRef.current && !captureInFlightRef.current)'));
     // Capture must pause new work before waiting, and cannot bypass the idle check.

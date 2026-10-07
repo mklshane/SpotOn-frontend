@@ -1,0 +1,17 @@
+diff --git a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
+index 38c82d1..9ed2dd4 100644
+--- a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
++++ b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
+@@ -40,6 +40,12 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+ 
+   // Configure interpreter via options
+   TfLiteInterpreterOptions* options = TfLiteInterpreterOptionsCreate();
++#ifdef __ANDROID__
++  // SpotOn patch: the C API default leaves the CPU path (XNNPACK) effectively single-threaded.
++  // On a Dimensity 700 the 768x768 lesion detector took ~1.2 s per pass that way. Four threads
++  // covers the big cores plus two little ones on common 2+6 / 4+4 mid-range layouts.
++  TfLiteInterpreterOptionsSetNumThreads(options, 4);
++#endif
+ 
+   // Add all hardware accelerated delegates (e.g. GPU, NPU, ...)
+   // if any. The default CPU delegate will always be available.
