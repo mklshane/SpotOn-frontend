@@ -83,6 +83,7 @@ import { PERF_LOG, perfLog, perfMark, perfSince } from '@/lib/perf-log';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { discardScratch } from '@/lib/scratch-files';
 import { useScreeningSession } from '@/lib/screening-session';
+import { ReviewChip } from '@/components/scan/review-chip';
 import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
@@ -1304,6 +1305,11 @@ export default function CaptureScreen() {
   async function shoot() {
     const cam = camera.current;
     if (!cam || busy || captureInFlightRef.current) return;
+    // The set is full: a fourth photo has nowhere to go. Show the set instead of discarding a shot.
+    if (session.images.length >= MAX_IMAGES_PER_SCREENING) {
+      router.push('/scan/review');
+      return;
+    }
     captureInFlightRef.current = true;
     capturePausedSV.value = true;
     perfMark('shutter');
@@ -1594,13 +1600,7 @@ export default function CaptureScreen() {
           <View style={styles.sideBtn} />
         )}
 
-        {session.images.length > 0 ? (
-          <View style={styles.shotCount} pointerEvents="none">
-            <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
-            </ThemedText>
-          </View>
-        ) : null}
+        <ReviewChip style={styles.shotCount} />
         {/* eslint-disable-next-line react-hooks/immutability -- event handler coordinates a
             native-backed worklet signal after render */}
         <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")} accessibilityState={{ busy, disabled: busy }}>
@@ -1846,16 +1846,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
   },
   shutterFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  shotCount: {
-    position: 'absolute',
-    top: -34,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(20,16,13,0.55)',
-  },
-  shotCountText: { color: '#FFFFFF' },
+  shotCount: { position: 'absolute', top: -Space.huge, alignSelf: 'center' },
   toggle: { width: 42, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)', padding: 3, justifyContent: 'center' },
   toggleOn: { backgroundColor: '#FF8A4C' },
   knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFFFFF' },

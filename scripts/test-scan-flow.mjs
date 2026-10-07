@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
+const { decideIqa, decideQuality, decideSetQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -121,6 +121,29 @@ check('timeout stops waiting', !q(true, 'timeout').analyzing);
 // Nothing is decided before the image checks have settled.
 check('unsettled checks keep analyzing', q(true, 'ok', false).analyzing);
 check('unsettled checks keep analyzing even on failure', q(false, 'ok', false).analyzing);
+
+/* ------------------------------------------------------------------ decideSetQuality */
+// IQA runs once over the 1-3 photo set (2026-10-07); this decides what the quality screen offers.
+const P = { pass: true };
+const F = { pass: false };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+{
+  const one = decideSetQuality([P]);
+  check('set: a single passing photo is all-pass', one.allPass && !one.nonePass && eq(one.passing, [0]));
+  const oneBad = decideSetQuality([F]);
+  check('set: a single failing photo is none-pass', !oneBad.allPass && oneBad.nonePass && eq(oneBad.failing, [0]));
+  const all = decideSetQuality([P, P, P]);
+  check('set: three passing photos are all-pass', all.allPass && eq(all.passing, [0, 1, 2]) && all.failing.length === 0);
+  const mixed = decideSetQuality([P, F, P]);
+  check('set: a mixed set is neither all- nor none-pass', !mixed.allPass && !mixed.nonePass);
+  check('set: a mixed set keeps the passing photos in order', eq(mixed.passing, [0, 2]) && eq(mixed.failing, [1]));
+  // Dropping a failed primary leaves the first passing photo first, so it becomes images[0].
+  const badPrimary = decideSetQuality([F, P]);
+  check('set: failed primary -> the first passing photo leads', eq(badPrimary.passing, [1]) && eq(badPrimary.failing, [0]));
+  const none = decideSetQuality([F, F]);
+  check('set: nothing passing is none-pass', none.nonePass && !none.allPass);
+  check('set: an empty set is never all-pass', !decideSetQuality([]).allPass);
+}
 
 /* ------------------------------------------------------------------ nextStepAfterQuality */
 const step = (questionnaireComplete) => nextStepAfterQuality({ questionnaireComplete });

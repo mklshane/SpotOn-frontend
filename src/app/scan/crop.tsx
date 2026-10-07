@@ -19,6 +19,7 @@ import { Icon } from '@/components/ui/icon';
 import { Colors, Space } from '@/constants/theme';
 import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 import { locateLesionInImage } from '@/lib/classifier/preprocess';
+import { rememberUpscale } from '@/lib/capture-upscale';
 import { discardScratch } from '@/lib/scratch-files';
 import { StatusBar } from 'expo-status-bar';
 
@@ -35,7 +36,7 @@ const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 
 export default function CropScreen() {
   useLocale();
-  const { uri: paramUri, detected, source, lx, ly, lw, lh, w: pw, h: ph } = useLocalSearchParams<{
+  const { uri: paramUri, source, lx, ly, lw, lh, w: pw, h: ph } = useLocalSearchParams<{
     uri: string;
     w?: string;
     h?: string;
@@ -276,17 +277,12 @@ export default function CropScreen() {
       // cannot touch. The crop supersedes it, so release it rather than holding the decoded frame
       // for the life of the page.
       releaseBlobUri(uri);
-      // Hand off to the image-quality gate; it records the entry on pass / "use anyway".
-      router.replace({
-        pathname: '/scan/quality',
-        params: {
-          uri: result.uri,
-          detected,
-          // >1 when the auto-zoom had to enlarge to reach OUTPUT. Diagnostics only (the [iqa]
-          // debug line) - the blur gate stopped dividing by it 2026-09-19.
-          upscale: String(Math.max(1, OUTPUT / cropSize)),
-        },
-      });
+      // >1 when the auto-zoom had to enlarge to reach OUTPUT. Diagnostics only (the [iqa] debug
+      // line) - the blur gate stopped dividing by it 2026-09-19.
+      rememberUpscale(result.uri, Math.max(1, OUTPUT / cropSize));
+      // Hand off to the review screen, which adds the photo to the set. The image checks run once,
+      // on the whole set, when the user taps Proceed there - not after every capture.
+      router.replace({ pathname: '/scan/review', params: { uri: result.uri } });
     } finally {
       setBusy(false);
     }

@@ -85,6 +85,8 @@ type ScreeningSessionValue = {
   /** Accept a photo and return its index. Also starts its inference (see enqueueImage). */
   addImage: (img: Omit<ScreeningImage, 'index'>) => number;
   removeImage: (uri: string) => void;
+  /** Record the quality screen's verdict on a photo already in the set (see quality.tsx). */
+  updateImage: (uri: string, patch: Partial<Pick<ScreeningImage, 'qualityPassed' | 'detected'>>) => void;
   /**
    * Start inference for one accepted photo. Runs chained (never concurrent - one interpreter), so
    * by the time the user finishes capturing and answering, earlier photos are already done.
@@ -177,7 +179,15 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       }
       // Keyed on (index, uri): a retake reuses the index with a different photo, and joining the
       // previous photo's promise there would classify the image the user just rejected.
-      if (store.runs.get(index)?.uri === uri) return; // already running/settled for this exact photo
+      if ([...store.runs.values()].some((r) => r.uri === uri)) return; // already running/settled
+      // removeImage keeps surviving runs under their original keys, so after deleting photo 1 on the
+      // review screen the next photo's array index can be a key a KEPT photo still holds. Replacing
+      // that run would silently drop a photo the user kept; take the next free key instead (keys only
+      // order the set and label the audit trail).
+      const holder = store.runs.get(index);
+      if (holder && imagesRef.current.some((p) => p.uri === holder.uri)) {
+        index = Math.max(...store.runs.keys()) + 1;
+      }
       setClassificationState('running');
 
       // Chain onto the previous image so runs never overlap; a failure upstream must not block us.
@@ -239,7 +249,12 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
 
   const removeImage = useCallback((uri: string) => {
     // Re-index so images[0] is always the primary and indices stay contiguous.
-    setImages(imagesRef.current.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i })));
+    const next = imagesRef.current.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i }));
+    setImages(next);
+    // `imageUri` is the primary's mirror (analysis shows it). Photos are now added on the review
+    // screen and dropped from it or from quality's "Continue with N photos", so a removed primary
+    // must hand the role to whatever is first now.
+    setImageUri(next[0]?.uri ?? null);
     // Drop ONLY this photo's run.
     //
     // This used to reset the whole map, which silently destroyed every other photo's completed
@@ -256,6 +271,12 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     const runs = new Map([...store.runs.entries()].filter(([, r]) => r.uri !== uri));
     partsRef.current = { attempt: store.attempt, runs };
     if (runs.size === 0) setClassificationState('idle');
+  }, [setImages]);
+
+  const updateImage = useCallback<ScreeningSessionValue['updateImage']>((uri, patch) => {
+    const prev = imagesRef.current;
+    if (!prev.some((p) => p.uri === uri)) return;
+    setImages(prev.map((p) => (p.uri === uri ? { ...p, ...patch } : p)));
   }, [setImages]);
 
   const acceptLowConfidence = useCallback(() => setAcceptedLowConfidence(true), []);
@@ -358,6 +379,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       images,
       addImage,
       removeImage,
+      updateImage,
       enqueueImage,
     }),
     [
@@ -384,6 +406,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       images,
       addImage,
       removeImage,
+      updateImage,
       enqueueImage,
     ],
   );

@@ -112,6 +112,9 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'square.stack.3d.up.fill': { set: 'ionicons', name: 'layers' },
   'list.bullet': { set: 'ionicons', name: 'list' },
   'arrow.clockwise': { set: 'ionicons', name: 'refresh' },
+  // multi-photo review + set quality check
+  exclamationmark: { set: 'ionicons', name: 'alert' },
+  'plus.viewfinder': { set: 'ionicons', name: 'add-circle-outline' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

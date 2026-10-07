@@ -6,6 +6,8 @@ export default function ScanLayout() {
       <Stack.Screen name="body" />
       <Stack.Screen name="capture" options={{ animation: 'fade' }} />
       <Stack.Screen name="crop" options={{ animation: 'fade' }} />
+      {/* No transition: review draws the photo where crop framed it, so it reads as one screen. */}
+      <Stack.Screen name="review" options={{ animation: 'none' }} />
       <Stack.Screen name="quality" options={{ animation: 'fade' }} />
       <Stack.Screen name="questionnaire" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="analysis" options={{ animation: 'fade', gestureEnabled: false }} />

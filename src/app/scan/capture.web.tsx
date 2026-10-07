@@ -31,6 +31,7 @@ import * as FileSystem from '@/lib/fs';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { prewarmLesionModel } from '@/lib/lesion-model';
 import { useScreeningSession } from '@/lib/screening-session';
+import { ReviewChip } from '@/components/scan/review-chip';
 
 /** Same cap capture.tsx applies when baking in EXIF orientation. */
 const PHOTO_LONG_EDGE = 2048;
@@ -248,6 +249,11 @@ export default function CaptureWebScreen() {
   async function shoot() {
     const video = videoRef.current;
     if (!video || busy || status !== 'live') return;
+    // The set is full: a fourth photo has nowhere to go. Show the set instead of discarding a shot.
+    if (session.images.length >= MAX_IMAGES_PER_SCREENING) {
+      router.push('/scan/review');
+      return;
+    }
     setBusy(true);
     try {
       const vw = video.videoWidth;
@@ -458,13 +464,7 @@ export default function CaptureWebScreen() {
           <Icon name="photo.on.rectangle" tintColor="#FFFFFF" size={26} />
         </Pressable>
 
-        {session.images.length > 0 ? (
-          <View style={styles.shotCount} pointerEvents="none">
-            <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
-            </ThemedText>
-          </View>
-        ) : null}
+        <ReviewChip style={styles.shotCount} />
 
         <Pressable
           onPress={shoot}
@@ -557,8 +557,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   zoomLabel: { color: '#FFFFFF', minWidth: 38 },
-  shotCount: { position: 'absolute', top: -Space.xs, alignSelf: 'center' },
-  shotCountText: { color: '#FFFFFF' },
+  shotCount: { position: 'absolute', top: -Space.huge, alignSelf: 'center' },
   toggle: { width: 34, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.3)', padding: 2 },
   toggleOn: { backgroundColor: Colors.light.brand },
   knob: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#FFFFFF' },
