@@ -7,7 +7,7 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_milk_s1_fp32.tflite (interpreter inspection, 2026-10-03 - same
+ * Verified against the bundled spoton_acne_s1_fp32.tflite (interpreter inspection, 2026-10-09 - same
  * tensor names, shapes and raw-logit output as dfe4tv / D_final):
  *   input  "serving_default_args_0"          [1, 3, 260, 260] float32 **NCHW** (EfficientNet-B2)
  *   output "serving_default_output_0_output" [1, 5]           float32     (raw LOGITS - no softmax
@@ -29,6 +29,21 @@ import type { LesionClass } from '../triage/types';
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
 //
+// === acne_s1 BUNDLED 2026-10-09 at Shane's instruction (replaces milk_s1). ===
+//
+// D_next run `acne_s1`: the milk_s1 recipe below + 1,320 single-pimple close-ups as BENIGN
+// (`SpotOn/extra/acne_closeup`: Pimples-detection crops, CC BY 4.0, + 34 Wikimedia Commons close-ups).
+// Same I/O contract as milk_s1 (NCHW [1,3,260,260] float32 in, 5 raw logits out; checked 2026-10-09).
+// Calibration on valid_calib: T 0.595 (NLL), MALIGNANT_THRESHOLD 0.4326 (90% malignant sensitivity).
+// Held-out, vs milk_s1:
+//   stage3 test   acc 0.837 (0.842)  macro-F1 0.724 (0.725)  AUROC 0.952 (0.952)  sens/spec 0.88/0.90
+//   MEL recall 0.85 (0.81); held-out melanomas called MEL 137/179 (132)
+//   acne flagged as cancer: Shane's 19 close-ups 3 (9); pimple crops 46/728 (157); ACNE04 19/400 (36)
+//   Shane's 85 acne/boil/mole photos 15/85 (21)
+// COST: BCC recall stage3 0.72 (0.76), Hallym 0.74 (0.78), MILK10k 0.58 (0.67);
+//   Asan benign specificity 0.64 (0.68). Later runs (hard_*, best_*) did not beat it.
+//
+// --- milk_s1 (bundled 2026-10-03, superseded 2026-10-09), kept as history: ---
 // === milk_s1 BUNDLED 2026-10-03 at Shane's instruction. ===
 //
 // From the D_next retrain (`~/Downloads/D_next.ipynb`, run `milk_s1`): EfficientNet-B2 trained on the
@@ -431,10 +446,10 @@ import type { LesionClass } from '../triage/types';
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-export const MODEL_ASSET = require('../../../assets/models/spoton_milk_s1_fp32.tflite');
+export const MODEL_ASSET = require('../../../assets/models/spoton_acne_s1_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_milk_s1_fp32';
+export const MODEL_VERSION = 'spoton_acne_s1_fp32';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -792,8 +807,8 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-// milk_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-03). Was 0.4444 for dfe4tv.
-export const MALIGNANT_THRESHOLD = 0.4147;
+// acne_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-09). Was 0.4147 for milk_s1, 0.4444 for dfe4tv.
+export const MALIGNANT_THRESHOLD = 0.4326;
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -1040,7 +1055,7 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-// milk_s1: NLL-fitted on valid_calib (2026-10-03). Was 0.9432 for dfe4tv.
+// acne_s1: NLL-fitted on valid_calib (2026-10-09); same as milk_s1. Was 0.9432 for dfe4tv.
 export const CONFIDENCE_TEMPERATURE = 0.595;
 
 /**
