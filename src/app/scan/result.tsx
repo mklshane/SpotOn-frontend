@@ -2,7 +2,15 @@ import { t, useLocale } from "@/lib/i18n";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import Animated, {
   FadeInDown,
   LayoutAnimationConfig,
@@ -11,8 +19,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
 import { ThemedText } from "@/components/themed-text";
-import { Button, Card, ConfirmDialog, ImageViewer, Screen } from "@/components/ui";
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  ImageViewer,
+  Screen,
+} from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
+import { SettingsRow } from "@/components/ui/settings-row";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useAndroidBack } from "@/hooks/use-android-back";
 import { useTheme } from "@/hooks/use-theme";
@@ -58,7 +73,8 @@ export default function ResultScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  const { getById, loading, storageIsEphemeral, deleteEntry } = useScanHistory();
+  const { getById, loading, storageIsEphemeral, deleteEntry } =
+    useScanHistory();
   const record = id ? getById(id) : undefined;
   // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
   // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
@@ -334,7 +350,8 @@ export default function ResultScreen() {
               </ThemedText>
             ) : gated ? (
               <ThemedText type="body" themeColor="textSecondary">
-                {malignantGateCopy(classification.topClass).body} {tier.recommendation}
+                {malignantGateCopy(classification.topClass).body}{" "}
+                {tier.recommendation}
               </ThemedText>
             ) : (
               <ThemedText type="body" themeColor="textSecondary">
@@ -414,6 +431,8 @@ export default function ResultScreen() {
         {/* 7 · Next steps */}
         <Animated.View entering={FadeInDown.delay(310)} style={styles.actions}>
           <ThemedText type="title2">{t("Next steps")}</ThemedText>
+          {/* One filled CTA so the main next step is unmistakable; everything else is a quieter
+              list of options below it. */}
           {tier.showReport ? (
             <Button
               label={t("View screening summary")}
@@ -427,45 +446,73 @@ export default function ResultScreen() {
               }
             />
           ) : null}
-          {tier.showDirectory ? (
-            <Button
-              label={t("Find a clinic near you")}
-              variant={tier.showReport ? "outline" : "brand"}
-              icon="mappin.circle.fill"
-              onPress={() => router.push("/(tabs)/directory")}
-            />
-          ) : null}
-          {tier.showEducation ? (
-            <Button
-              label={t("Learn more about skin cancer")}
-              variant="brand"
-              icon="book.fill"
-              onPress={() => router.push("/(tabs)/learn")}
-            />
-          ) : null}
-          <Button
-            label={t("See this spot over time")}
-            variant={
-              tier.showReport || tier.showEducation ? "outline" : "brand"
-            }
-            icon="clock.arrow.circlepath"
-            onPress={() =>
-              router.push({
-                pathname: "/scan/lesion",
-                params: { id: record.lesionId! },
-              })
-            }
-            disabled={!record.lesionId}
-          />
-          {tier.offerReminder ? (
-            <ReminderRow lesionId={record.lesionId} />
-          ) : null}
-          <Button
-            label={t("Delete this scan")}
-            variant="ghost"
-            icon="trash.fill"
+          <Card padded={false} style={styles.actionList}>
+            {[
+              tier.showDirectory ? (
+                <SettingsRow
+                  key="clinic"
+                  icon="mappin.circle.fill"
+                  label={t("Find a clinic near you")}
+                  sublabel={t("Show your summary to a dermatologist")}
+                  onPress={() => router.push("/(tabs)/directory")}
+                />
+              ) : null,
+              tier.showEducation ? (
+                <SettingsRow
+                  key="learn"
+                  icon="book.fill"
+                  label={t("Learn more about skin cancer")}
+                  sublabel={t("Warning signs and how to check your skin")}
+                  onPress={() => router.push("/(tabs)/learn")}
+                />
+              ) : null,
+              record.lesionId ? (
+                <SettingsRow
+                  key="timeline"
+                  icon="clock.arrow.circlepath"
+                  label={t("See this spot over time")}
+                  sublabel={t("Compare with your earlier scans")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/scan/lesion",
+                      params: { id: record.lesionId! },
+                    })
+                  }
+                />
+              ) : null,
+              tier.offerReminder ? (
+                <ReminderRow key="reminder" lesionId={record.lesionId} />
+              ) : null,
+            ]
+              .filter(Boolean)
+              .map((row, i) => (
+                <View key={(row as { key: string }).key}>
+                  {i > 0 ? (
+                    <View
+                      style={[
+                        styles.actionDivider,
+                        { backgroundColor: theme.hairline },
+                      ]}
+                    />
+                  ) : null}
+                  {row}
+                </View>
+              ))}
+          </Card>
+          <Pressable
             onPress={() => setConfirmDeleteVisible(true)}
-          />
+            accessibilityRole="button"
+            hitSlop={Space.md}
+            style={({ pressed }) => [
+              styles.deleteLink,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="trash.fill" tintColor={theme.muted} size={14} />
+            <ThemedText type="footnote" themeColor="muted">
+              {t("Delete this scan")}
+            </ThemedText>
+          </Pressable>
         </Animated.View>
       </ScrollView>
       <ConfirmDialog
@@ -827,72 +874,64 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
 
   if (state === "done") {
     return (
-      <View style={[styles.reminderDone, { backgroundColor: theme.riskLowBg }]}>
-        <Icon
-          name="checkmark.circle.fill"
-          tintColor={theme.riskLow}
-          size={18}
-        />
-        <ThemedText
-          type="subhead"
-          themeColor="textSecondary"
-          style={styles.reminderText}
-        >
-          {dueLabel
+      <SettingsRow
+        icon="bell.fill"
+        label={t("Reminder set")}
+        sublabel={
+          dueLabel
             ? `We’ll notify you on ${dueLabel} to re-check this spot.`
-            : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`}
-        </ThemedText>
-      </View>
+            : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`
+        }
+        accessory={
+          <Icon
+            name="checkmark.circle.fill"
+            tintColor={theme.riskLow}
+            size={22}
+          />
+        }
+      />
     );
   }
 
   // Permission refused (or previously refused and no longer promptable) - the only way back is the
-  // system settings screen, so say so instead of leaving a button that silently does nothing.
+  // system settings screen, so say so instead of leaving a row that silently does nothing.
   if (state === "denied") {
     return (
-      <View style={styles.reminderDenied}>
-        <View
-          style={[
-            styles.reminderDone,
-            { backgroundColor: theme.riskModerateBg },
-          ]}
-        >
-          <Icon name="bell.fill" tintColor={theme.riskModerate} size={18} />
-          <ThemedText
-            type="subhead"
-            themeColor="textSecondary"
-            style={styles.reminderText}
-          >
-            {t(
-              "Notifications are turned off for SpotOn, so we can’t remind you.",
-            )}
-          </ThemedText>
-        </View>
-        <Button
-          label={t("Open notification settings")}
-          variant="outline"
-          icon="gearshape.fill"
-          onPress={() => Linking.openSettings()}
-        />
-      </View>
+      <SettingsRow
+        icon="gearshape.fill"
+        label={t("Open notification settings")}
+        sublabel={t(
+          "Notifications are turned off for SpotOn, so we can’t remind you.",
+        )}
+        onPress={() => Linking.openSettings()}
+      />
     );
   }
 
   if (state === "unsupported") {
     return (
-      <ThemedText type="footnote" themeColor="muted">
-        {t("Reminders aren’t available on this device.")}
-      </ThemedText>
+      <SettingsRow
+        icon="bell.fill"
+        label={`Remind me in ${REMINDER_DAYS} days`}
+        sublabel={t("Reminders aren’t available on this device.")}
+        accessory={null}
+      />
     );
   }
 
   return (
-    <Button
-      label={`Remind me in ${REMINDER_DAYS} days`}
-      variant="outline"
+    <SettingsRow
       icon="bell.fill"
-      loading={state === "working"}
-      onPress={enable}
+      label={`Remind me in ${REMINDER_DAYS} days`}
+      sublabel={t("We’ll nudge you to re-check this spot")}
+      onPress={state === "working" ? undefined : enable}
+      accessory={
+        state === "working" ? (
+          <ActivityIndicator color={theme.brand} />
+        ) : (
+          "chevron"
+        )
+      }
     />
   );
 }
@@ -1062,13 +1101,17 @@ const styles = StyleSheet.create({
   },
   findingText: { flex: 1 },
   actions: { gap: Space.md, marginTop: Space.sm },
-  reminderDone: {
+  actionList: { paddingHorizontal: Space.base, paddingVertical: Space.xs },
+  // Inset to the label column (44pt icon + row gap), like an iOS grouped list.
+  actionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 44 + Space.base,
+  },
+  deleteLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Space.sm,
-    padding: Space.base,
-    borderRadius: Radius.md,
+    alignSelf: "center",
+    gap: Space.xs,
+    paddingVertical: Space.sm,
   },
-  reminderText: { flex: 1 },
-  reminderDenied: { gap: Space.sm },
 });

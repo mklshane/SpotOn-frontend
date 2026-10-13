@@ -514,5 +514,10 @@
   "Delete scan": "I-delete ang scan",
   "Keep scan": "Itago ang scan",
   "Could not delete this scan": "Hindi ma-delete ang scan na ito",
-  "Too many attempts. Please wait a few minutes and try again.": "Masyadong maraming pagsubok. Maghintay ng ilang minuto at subukan ulit."
+  "Too many attempts. Please wait a few minutes and try again.": "Masyadong maraming pagsubok. Maghintay ng ilang minuto at subukan ulit.",
+  "Show your summary to a dermatologist": "Ipakita ang iyong buod sa isang dermatologist",
+  "Warning signs and how to check your skin": "Mga senyales na dapat bantayan at paano suriin ang iyong balat",
+  "Compare with your earlier scans": "Ikumpara sa mga nauna mong scan",
+  "Reminder set": "Naka-set na ang paalala",
+  "We’ll nudge you to re-check this spot": "Paaalalahanan ka naming suriin ulit ang spot na ito"
 }
