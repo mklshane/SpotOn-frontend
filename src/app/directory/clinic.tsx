@@ -21,8 +21,10 @@ import {
   distanceMeters,
   getFacility,
   getFacilityDoctors,
+  HOSPITAL_TYPES,
   type FacilityDoctor,
 } from "@/data/repositories";
+import { formatScheduleDays } from "@/lib/concerns";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useKnownLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
@@ -254,6 +256,9 @@ function ClinicBody({
             <Badge label={humanizeTag(facility.type)} tone="brand" />
             {careType ? <Badge label={t(careType)} /> : null}
             {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
+            {facility.pds_skin_cancer_center ? (
+              <Badge label={t("PDS dermatology training hospital")} tone="brand" />
+            ) : null}
           </View>
           {summary.length ? (
             <View style={styles.summaryRow}>
@@ -404,6 +409,16 @@ function ClinicBody({
           </View>
         ) : null}
 
+        {/* A hospital with no listed dermatologist stays visible - it may still run a skin clinic -
+            but says so plainly instead of implying a derm is on site. */}
+        {!doctors.length && (HOSPITAL_TYPES as readonly string[]).includes(facility.type) ? (
+          <Card style={styles.section} elevation="sm">
+            <ThemedText type="footnote" themeColor="textSecondary">
+              {t("No dermatologist listed here yet. Call the hospital's OPD to ask about a skin clinic schedule.")}
+            </ThemedText>
+          </Card>
+        ) : null}
+
         {/* 6 · Doctors at this clinic */}
         {doctors.length ? (
           <View style={styles.section}>
@@ -428,9 +443,16 @@ function ClinicBody({
                     <ThemedText type="headline" numberOfLines={2}>
                       {d.doctor.name}
                     </ThemedText>
-                    {d.schedule ? (
+                    {d.schedule || d.schedule_days ? (
                       <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
-                        {formatSchedule(d.schedule)}
+                        {d.schedule ? formatSchedule(d.schedule) : t(formatScheduleDays(d.schedule_days) ?? "")}
+                      </ThemedText>
+                    ) : null}
+                    {d.room || hasPhone(d.phone) ? (
+                      <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
+                        {[d.room ? t("Room {{room}}", { room: d.room }) : null, hasPhone(d.phone) ? d.phone : null]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </ThemedText>
                     ) : null}
                     {d.bookable ? (

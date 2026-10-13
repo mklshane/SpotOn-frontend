@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import { Entrance, EntranceProvider } from "@/components/ui/entrance";
 import { Icon } from "@/components/ui/icon";
-import { Radius, Space } from "@/constants/theme";
+import { Elevation, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useScanHistory } from "@/lib/scan-history";
 import { useScreeningSession } from "@/lib/screening-session";
@@ -209,13 +209,17 @@ export default function LesionDetailScreen() {
             being monitored does not slide around while it is being read. */}
         <EntranceProvider screen={`lesion-${lesion.id}`} replay>
           <Entrance index={0}>
-            {/* Tier-tinted gradient, matching the result screen's hero - this is the same "how
-              urgent is this" signal, so the two screens should read as one visual language
-              rather than the plain white block this used to be. */}
-            <View
-              style={[styles.hero, { backgroundColor: bg }]}
-            >
-              <View style={styles.heroTop}>
+            {/* White card, tier in a pill - the same hero as the result screen, so "how urgent is
+                this" reads in one visual language across both. With 2+ scans the card's footer
+                band answers the question this screen exists for: is it getting worse? */}
+            <View style={[styles.hero, { backgroundColor: theme.surface }]}>
+              <View style={styles.heroBody}>
+                <View style={[styles.tierBadge, { backgroundColor: bg }]}>
+                  <View style={[styles.tierDot, { backgroundColor: fg }]} />
+                  <ThemedText type="footnote" style={styles.tierBadgeText}>
+                    {TIER_LABEL[tier]}
+                  </ThemedText>
+                </View>
                 {editing ? (
                   <TextField
                     value={draft}
@@ -230,7 +234,7 @@ export default function LesionDetailScreen() {
                     returnKeyType="done"
                     containerStyle={styles.titleField}
                     fieldBackgroundColor={theme.surface}
-                    fieldBorderColor={fg}
+                    fieldBorderColor={theme.brand}
                   />
                 ) : (
                   <Pressable
@@ -249,13 +253,12 @@ export default function LesionDetailScreen() {
                     >
                       {title}
                     </ThemedText>
-                    {/* The bare glyph read as a stray mark next to the title; a tinted chip reads as
-                      the button it is, and gives the rename a real 32pt target inside the 44pt
-                      hitSlop. */}
+                    {/* A tinted chip reads as the button it is, and gives the rename a real 32pt
+                        target inside the 44pt hitSlop. */}
                     <View
                       style={[
                         styles.editChip,
-                        { backgroundColor: theme.surface },
+                        { backgroundColor: theme.elementBg },
                       ]}
                     >
                       <Icon
@@ -266,38 +269,76 @@ export default function LesionDetailScreen() {
                     </View>
                   </Pressable>
                 )}
-                <View
-                  style={[
-                    styles.tierBadge,
-                    { backgroundColor: fg, shadowColor: fg },
-                  ]}
-                >
-                  <ThemedText type="subhead" style={{ color: theme.onBrand }}>
-                    {TIER_LABEL[tier]}
+                {/* One meta line. The region only shows when the user has named the spot - an
+                    unnamed spot is already titled "Chest spot", so "Chest" under it was an echo. */}
+                <View style={styles.heroMeta}>
+                  <Icon
+                    name="mappin.circle.fill"
+                    tintColor={theme.brand}
+                    size={16}
+                  />
+                  <ThemedText
+                    type="subhead"
+                    themeColor="textSecondary"
+                    style={styles.heroMetaText}
+                  >
+                    {[
+                      lesion.label?.trim()
+                        ? lesion.mark?.region
+                          ? t(lesion.mark.region)
+                          : t("Location not marked")
+                        : null,
+                      trend.count
+                        ? `${trend.count} ${trend.count === 1 ? "scan" : "scans"}`
+                        : null,
+                      trend.firstAt
+                        ? `${trend.count === 1 ? "Started" : "Since"} ${fmtDate(trend.firstAt)}`
+                        : null,
+                      lesion.archived ? "not tracked" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </ThemedText>
                 </View>
               </View>
 
-              {/* `textSecondary`/`muted` are calibrated for the plain cream screen background,
-                not this tier-tinted gradient - measured against it, `muted` drops as low as
-                1.3:1 for the high/critical tiers (illegible; WCAG AA needs 4.5:1). `theme.text`
-                and this fixed dark warm gray hold 5:1+ across every tier. */}
-              <View style={styles.heroMeta}>
-                <ThemedText type="subhead" style={{ color: theme.text }}>
-                  {lesion.mark?.region
-                    ? t(lesion.mark.region)
-                    : t("Location not marked")}
-                  {lesion.archived ? " · not tracked" : ""}
-                </ThemedText>
-                {trend.count ? (
-                  <ThemedText type="caption" style={styles.heroCaption}>
-                    {trend.count} {trend.count === 1 ? "scan" : "scans"}
-                    {trend.firstAt
-                      ? ` · ${trend.count === 1 ? "Started" : "Tracking since"} ${fmtDate(trend.firstAt)}`
-                      : ""}
-                  </ThemedText>
-                ) : null}
-              </View>
+              {/* The verdict leads, in the tier's own colour. Most spots hold steady, so "Held
+                  steady" is the fallback that also catches a null direction - never an invented
+                  move in either direction. */}
+              {trend.count > 1 && trend.tierTo ? (
+                <View
+                  style={[
+                    styles.trendBand,
+                    { backgroundColor: tierColor(theme, trend.tierTo).bg },
+                  ]}
+                >
+                  <Icon
+                    name={
+                      trend.tierDirection === 1
+                        ? "arrow.up.circle.fill"
+                        : trend.tierDirection === -1
+                          ? "arrow.down.circle.fill"
+                          : "equal.circle.fill"
+                    }
+                    tintColor={tierColor(theme, trend.tierTo).fg}
+                    size={22}
+                  />
+                  <View style={styles.trendText}>
+                    <ThemedText type="headline">
+                      {trend.tierDirection === 1
+                        ? `Moved up to ${TIER_LABEL[trend.tierTo]}`
+                        : trend.tierDirection === -1
+                          ? `Eased to ${TIER_LABEL[trend.tierTo]}`
+                          : `Held steady at ${TIER_LABEL[trend.tierTo]}`}
+                    </ThemedText>
+                    <ThemedText type="footnote" themeColor="textSecondary">
+                      {trend.spanDays === 0
+                        ? `${trend.count === 2 ? "Both" : `All ${trend.count}`} scans on ${fmtDate(trend.firstAt!)}`
+                        : `Over ${trend.spanDays} ${trend.spanDays === 1 ? "day" : "days"} · ${fmtDate(trend.firstAt!)} → ${fmtDate(trend.lastAt!)}`}
+                    </ThemedText>
+                  </View>
+                </View>
+              ) : null}
             </View>
           </Entrance>
 
@@ -307,6 +348,9 @@ export default function LesionDetailScreen() {
               <SectionHeader title={t("Over time")} variant="label" />
               <ScanTimeline
                 screenings={screenings}
+                onAddScan={
+                  latest && !lesion.archived ? startFollowUp : undefined
+                }
                 onOpen={(s) =>
                   router.push({
                     pathname: "/scan/result",
@@ -321,9 +365,19 @@ export default function LesionDetailScreen() {
           {trend.tpsSeries.length >= 3 ? (
             <Entrance index={2} style={styles.section}>
               <SectionHeader title={t("Priority score")} variant="label" />
-              {/* Tinted with the *current* tier rather than left flat white - the card echoes the
-                hero above instead of reading as an unrelated chart bolted onto the screen. */}
-              <Card style={[styles.sparkCard, { backgroundColor: bg }]}>
+              <Card style={styles.sparkCard}>
+                <View style={styles.scoreRow}>
+                  <ThemedText type="title1">
+                    {trend.tpsSeries[trend.tpsSeries.length - 1].tps.toFixed(1)}
+                  </ThemedText>
+                  <ThemedText type="subhead" themeColor="muted">
+                    / 8
+                  </ThemedText>
+                  <View style={styles.scoreSpacer} />
+                  <ThemedText type="footnote" themeColor="textSecondary">
+                    {t("Latest Scan")}
+                  </ThemedText>
+                </View>
                 <TpsSparkline series={trend.tpsSeries} />
                 <ThemedText type="caption" themeColor="muted">
                   {t(
@@ -339,29 +393,6 @@ export default function LesionDetailScreen() {
             <Entrance index={3} style={styles.section}>
               <SectionHeader title={t("What changed")} variant="label" />
               <Card style={styles.changeCard}>
-                {/* The verdict leads, at headline weight, in the tier's own colour. The old paragraph
-                  buried it mid-sentence and - because most spots hold steady - routinely rendered
-                  "went from Low to Low", which reads as a bug rather than as reassurance. */}
-                <View style={styles.verdict}>
-                  <ThemedText
-                    type="headline"
-                    style={{ color: tierColor(theme, trend.tierTo).fg }}
-                  >
-                    {/* "Held steady" is last so it also catches a null direction: an unchanged
-                      reading is the honest fallback, never an invented move in either direction. */}
-                    {trend.tierDirection === 1
-                      ? `Moved up to ${TIER_LABEL[trend.tierTo]}`
-                      : trend.tierDirection === -1
-                        ? `Eased to ${TIER_LABEL[trend.tierTo]}`
-                        : `Held steady at ${TIER_LABEL[trend.tierTo]}`}
-                  </ThemedText>
-                  <ThemedText type="footnote" themeColor="muted">
-                    {trend.spanDays === 0
-                      ? `Both scans on ${fmtDate(trend.firstAt!)}`
-                      : `Over ${trend.spanDays} ${trend.spanDays === 1 ? "day" : "days"} · ${fmtDate(trend.firstAt!)} → ${fmtDate(trend.lastAt!)}`}
-                  </ThemedText>
-                </View>
-
                 {trend.modelChanged ? (
                   <View
                     style={[styles.note, { backgroundColor: theme.elementBg }]}
@@ -407,12 +438,9 @@ export default function LesionDetailScreen() {
 
                 {trend.answerFlips.length ? (
                   <View style={styles.flips}>
-                    <View
-                      style={[
-                        styles.divider,
-                        { backgroundColor: theme.hairline },
-                      ]}
-                    />
+                    <ThemedText type="footnote" themeColor="textSecondary">
+                      {t("Since your last scan")}
+                    </ThemedText>
                     {trend.answerFlips.map((f) => {
                       const q = QUESTIONS.find((x) => x.id === f.id);
                       if (!q) return null;
@@ -474,7 +502,8 @@ export default function LesionDetailScreen() {
               onPress={startFollowUp}
               disabled={!latest}
             />
-            {latest ? (
+            {/* A single scan's card already opens its result, so only offer this from two up. */}
+            {latest && trend.count > 1 ? (
               <Button
                 label={t("View latest result")}
                 variant="ghost"
@@ -606,18 +635,31 @@ const styles = StyleSheet.create({
     paddingTop: Space.sm,
     gap: Space.xxl,
   },
-  // Hero - gradient set inline from the tier color, matching result.tsx's treatment.
   hero: {
     borderRadius: Radius.xl,
-    padding: Space.xl,
-    gap: Space.md,
+    overflow: "hidden",
+    ...Elevation.sm,
   },
-  heroTop: {
+  heroBody: { padding: Space.xl, gap: Space.md },
+  tierBadge: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: Space.md,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: Space.xs + 2,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.xs,
+    borderRadius: Radius.pill,
   },
+  tierDot: { width: 8, height: 8, borderRadius: 4 },
+  tierBadgeText: { fontWeight: "600" },
+  trendBand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.md,
+    paddingHorizontal: Space.xl,
+    paddingVertical: Space.base,
+  },
+  trendText: { flex: 1, gap: 2 },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -633,23 +675,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tierBadge: {
-    paddingHorizontal: Space.md,
-    paddingVertical: Space.xs,
-    borderRadius: Radius.pill,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  heroMeta: { gap: 2 },
-  heroCaption: { color: "#4A3F38" },
+  heroMeta: { flexDirection: "row", alignItems: "center", gap: Space.xs },
+  heroMetaText: { flex: 1 },
   section: { gap: Space.md },
 
   pressed: { opacity: 0.85 },
   sparkCard: { gap: Space.md },
+  scoreRow: { flexDirection: "row", alignItems: "baseline", gap: Space.xs },
+  scoreSpacer: { flex: 1 },
   changeCard: { gap: Space.base },
-  verdict: { gap: Space.xs },
   note: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -658,7 +692,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   noteText: { flex: 1 },
-  divider: { height: StyleSheet.hairlineWidth },
   flips: { gap: Space.base },
   flipRow: { flexDirection: "row", alignItems: "flex-start", gap: Space.md },
   flipChip: {

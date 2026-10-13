@@ -22,6 +22,7 @@ import {
   type BookingLinkWithPlatform,
   type DoctorPractice,
 } from "@/data/repositories";
+import { formatScheduleDays } from "@/lib/concerns";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -257,13 +258,18 @@ export default function DoctorDetailScreen() {
                             {place}
                           </ThemedText>
                         ) : null}
-                        {p.schedule ? (
+                        {p.schedule || p.schedule_days ? (
                           <View style={styles.metaRow}>
                             <Icon name="clock.fill" size={12} tintColor={theme.textSecondary} />
                             <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2} style={styles.availText}>
-                              {formatSchedule(p.schedule)}
+                              {p.schedule ? formatSchedule(p.schedule) : t(formatScheduleDays(p.schedule_days) ?? "")}
                             </ThemedText>
                           </View>
+                        ) : null}
+                        {p.room ? (
+                          <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
+                            {t("Room {{room}}", { room: p.room })}
+                          </ThemedText>
                         ) : null}
                         {open != null ? (
                           <ThemedText type="caption" style={{ color: open ? theme.riskLow : theme.textSecondary }}>
@@ -273,12 +279,13 @@ export default function DoctorDetailScreen() {
                       </View>
                       <Icon name="chevron.right" size={16} tintColor={theme.textSecondary} />
                     </Pressable>
-                    {hasPhone(p.facility.phone) ? (
+                    {hasPhone(p.phone) || hasPhone(p.facility.phone) ? (
                       <Button
                         label={t("Call clinic")}
                         variant="outline"
                         icon="phone.fill"
-                        onPress={() => phone.call(p.facility.phone)}
+                        // The doctor's own clinic line beats the hospital trunk line.
+                        onPress={() => phone.call(hasPhone(p.phone) ? p.phone : p.facility.phone)}
                       />
                     ) : null}
                   </Card>

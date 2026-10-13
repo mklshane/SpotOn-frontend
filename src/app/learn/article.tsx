@@ -7,6 +7,7 @@ import Animated from 'react-native-reanimated';
 import {
   BodyAreasBlock,
   CompareBlock,
+  GalleryBlock,
   ImageCreditsBlock,
   ListBlock,
   NoticeBlock,
@@ -16,12 +17,15 @@ import {
   StepsBlock,
   VisualBlock,
 } from '@/components/learn/article-blocks';
+import { EducationCard } from '@/components/learn/EducationCard';
 import { LearnArticleHero } from '@/components/learn/LearnArticleHero';
+import { openTopic, topicLengthLabel } from '@/components/learn/topic-nav';
 import { LearnDetailHeader, learnDetailContent } from '@/components/learn/LearnDetailHeader';
 import { ThemedText } from '@/components/themed-text';
 import { Icon } from '@/components/ui/icon';
 import { ListState } from '@/components/ui/list-state';
 import { Screen } from '@/components/ui/screen';
+import { SectionHeader } from '@/components/ui/section-header';
 import { Reveal, ScrollRevealProvider, useScrollReveal } from '@/components/ui/scroll-reveal';
 import { MaxContentWidth, Radius, Space } from '@/constants/theme';
 import {
@@ -30,6 +34,7 @@ import {
   getCategoryLabel,
   getTopic,
   type ArticleBlock,
+  type Topic,
 } from '@/data/learn-content';
 import type { ClinicalImageId } from '@/data/learn-images';
 import { useTheme } from '@/hooks/use-theme';
@@ -76,6 +81,8 @@ function renderBlock(block: ArticleBlock, key: number) {
       return <BodyAreasBlock key={key} block={block} />;
     case 'subtypes':
       return <SubtypesBlock key={key} block={block} />;
+    case 'gallery':
+      return <GalleryBlock key={key} block={block} />;
     case 'notice':
       return <NoticeBlock key={key} block={block} />;
     case 'sources':
@@ -97,13 +104,16 @@ export default function LearnArticleScreen() {
 
   const groups = useMemo(() => (article ? groupBlocks(article.blocks) : []), [article]);
   const { value: reveal, onScroll } = useScrollReveal();
+  const related = (article?.related ?? [])
+    .map(getTopic)
+    .filter((entry): entry is Topic => entry !== undefined);
 
   // A nested article belongs to its parent topic (a skin cancer type); a
   // top-level one is labelled by the category its browse chip uses.
   const eyebrow = !topic
-    ? 'Education guide'
+    ? t('Education guide')
     : topic.kind === 'subtopics'
-      ? 'Skin cancer type'
+      ? t('Skin cancer type')
       : getCategoryLabel(topic.category);
 
   // Articles that end on their own notice already close with a takeaway, so the
@@ -121,6 +131,9 @@ export default function LearnArticleScreen() {
         return block.items.flatMap((item) => [item.photos.typical, item.photos.concern]);
       }
       if (block.kind === 'visual' && block.photo) return [block.photo];
+      if (block.kind === 'subtypes' || block.kind === 'gallery') {
+        return block.items.map((item) => item.photo);
+      }
       return [];
     });
   }, [article]);
@@ -145,7 +158,7 @@ export default function LearnArticleScreen() {
                 icon={article.icon}
                 eyebrow={eyebrow}
                 title={article.title}
-                meta={`${getArticleReadMinutes(article)} min read`}
+                meta={t('{{count}} min read', { count: getArticleReadMinutes(article) })}
               />
 
               {groups.map((group, index) => (
@@ -159,6 +172,24 @@ export default function LearnArticleScreen() {
               ))}
 
               <ImageCreditsBlock imageIds={imageIds} />
+
+              {related.length > 0 ? (
+                <Reveal>
+                  <View style={styles.related}>
+                    <SectionHeader title={t('Keep reading')} />
+                    {related.map((entry) => (
+                      <EducationCard
+                        key={entry.id}
+                        icon={entry.icon}
+                        tag={`${getCategoryLabel(entry.category)} · ${topicLengthLabel(entry)}`}
+                        title={entry.title}
+                        description={entry.subtitle}
+                        onPress={() => openTopic(entry)}
+                      />
+                    ))}
+                  </View>
+                </Reveal>
+              ) : null}
 
               {!hasNotice ? (
                 <View style={[styles.educationNote, { backgroundColor: theme.brandTint }]}>
@@ -187,4 +218,5 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   educationNoteText: { flex: 1 },
+  related: { gap: Space.md, marginTop: Space.md },
 });

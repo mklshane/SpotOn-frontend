@@ -91,15 +91,18 @@ async function upsertFacilities(items: FacilitySync[]): Promise<void> {
          (id,name,type,facility_type,address,city,province,region,latitude,longitude,
           services,has_philhealth,fee_min,fee_max,status,phone,website,booking_url,
           google_maps_url,google_rating,weekday_hours,weekend_hours,description,
-          photo_url,photo_attribution,department_info,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          photo_url,photo_attribution,department_info,derm_status,concerns,
+          pds_skin_cancer_center,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           f.id, f.name, f.type, f.facility_type, f.address, f.city, f.province,
           f.region, f.latitude, f.longitude, json(f.services), bit(f.has_philhealth),
           f.fee_min, f.fee_max, f.status, f.phone, f.website, f.booking_url,
           f.google_maps_url, f.google_rating, json(f.weekday_hours),
           json(f.weekend_hours), f.description, f.photo_url, f.photo_attribution,
-          json(f.department_info), f.updated_at,
+          json(f.department_info), f.derm_status ?? null,
+          // `?? []`: a server from before migration 016 omits these, and the column is NOT NULL.
+          json(f.concerns ?? []), bit(f.pds_skin_cancer_center ?? null), f.updated_at,
         ],
       );
     }
@@ -114,12 +117,12 @@ async function upsertDoctors(items: DoctorSync[]): Promise<void> {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctors
          (id,name,title,pds_certified,specialties,specialties_display,status,city,region,
-          phone,website,google_maps_url,photo_url,description,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          phone,website,google_maps_url,photo_url,description,concerns,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           d.id, d.name, d.title, bit(d.pds_certified), json(d.specialties),
           d.specialties_display, d.status, d.city, d.region, d.phone, d.website,
-          d.google_maps_url, d.photo_url, d.description, d.updated_at,
+          d.google_maps_url, d.photo_url, d.description, json(d.concerns ?? []), d.updated_at,
         ],
       );
     }
@@ -155,9 +158,14 @@ async function upsertDoctorFacilities(items: DoctorFacilitySync[]): Promise<void
     for (const l of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctor_facility
-         (id,doctor_id,facility_id,is_primary,schedule,updated_at)
-         VALUES (?,?,?,?,?,?)`,
-        [l.id, l.doctor_id, l.facility_id, bit(l.is_primary), l.schedule, l.updated_at],
+         (id,doctor_id,facility_id,is_primary,schedule,schedule_days,room,phone,
+          source_url,verified_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          l.id, l.doctor_id, l.facility_id, bit(l.is_primary), l.schedule,
+          l.schedule_days ?? null, l.room ?? null, l.phone ?? null, l.source_url ?? null,
+          l.verified_at ?? null, l.updated_at,
+        ],
       );
     }
   });

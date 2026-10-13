@@ -17,12 +17,13 @@ import { Elevation, Radius, Space } from "@/constants/theme";
 import {
   distanceMeters,
   listFacilities,
+  type FacilityKind,
   type FacilityWithDistance,
 } from "@/data/repositories";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
-import { humanizeTag } from "@/lib/format";
+import { CONCERNS, WEEKEND_MASK, type ConcernId } from "@/lib/concerns";
 import { isOpenNow } from "@/lib/hours";
 import { downloadAreaPack } from "@/lib/map-offline";
 import NetInfo from "@react-native-community/netinfo";
@@ -50,6 +51,8 @@ export type ClinicsViewProps = {
   /** A directory download is in flight - an empty DB means "downloading", not "no results". */
   syncing?: boolean;
   onRetrySync?: () => void;
+  /** Pre-select a concern, e.g. `skin_cancer_mole_check` when arriving from a scan result. */
+  initialConcern?: ConcernId | null;
 };
 
 type SortMode = "distance" | "rating" | "name";
@@ -58,6 +61,9 @@ type Facility = FacilitySync | FacilityWithDistance;
 const SCREEN_H = Dimensions.get("window").height;
 const ALL_CHIP = "All Clinics";
 const OPEN_CHIP = "Open Now";
+const HOSPITALS_CHIP = "Hospitals";
+const CLINICS_CHIP = "Clinics";
+const WEEKEND_CHIP = "Weekend clinic";
 
 // `topInset` stays part of the props contract (the parent screen still needs it
 // to size/position the search header itself) but is no longer consumed here -
@@ -70,6 +76,7 @@ export function ClinicsView({
   syncFailed = false,
   syncing = false,
   onRetrySync,
+  initialConcern = null,
 }: ClinicsViewProps) {
   useLocale();
   const theme = useTheme();
@@ -78,11 +85,12 @@ export function ClinicsView({
 
   const [facilities, setFacilities] = useState<Facility[] | null>(null);
   const [error, setError] = useState(false);
-  const [service, setService] = useState<string | null>(null);
+  const [concern, setConcern] = useState<ConcernId | null>(initialConcern);
+  const [kind, setKind] = useState<FacilityKind | null>(null);
+  const [weekendOnly, setWeekendOnly] = useState(false);
   const [openOnly, setOpenOnly] = useState(false);
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [serviceFacets, setServiceFacets] = useState<string[]>([]);
   // Live top-edge Y position of the bottom sheet, in screen space - kept in
   // sync by BottomSheet itself as it's dragged/snapped. Drives the floating
   // map controls (zoom buttons, location chip) so they track the sheet's
@@ -95,21 +103,18 @@ export function ClinicsView({
     if (sort === "name") setSort("distance");
   }
 
+  // A new deep link (another scan result) must re-apply its concern; the screen stays mounted.
   useEffect(() => {
-    listFacilities({ limit: 1000 })
-      .then((all) =>
-        setServiceFacets(
-          Array.from(new Set(all.flatMap((f) => f.services))).sort(),
-        ),
-      )
-      .catch(() => {});
-  }, [syncVersion]);
+    if (initialConcern) setConcern(initialConcern);
+  }, [initialConcern]);
 
   useEffect(() => {
     let cancelled = false;
     const params = {
       q: query || undefined,
-      service: service ?? undefined,
+      concern: concern ?? undefined,
+      kind: kind ?? undefined,
+      dayMask: weekendOnly ? WEEKEND_MASK : undefined,
       limit: 200,
     };
     /**
@@ -142,7 +147,7 @@ export function ClinicsView({
     return () => {
       cancelled = true;
     };
-  }, [query, service, coords, syncVersion]);
+  }, [query, concern, kind, weekendOnly, coords, syncVersion]);
 
   // Offline map tiles (~25 km pack) only on Wi-Fi: on PH prepaid data a silent background
   // download is a real cost the user never agreed to.
@@ -186,11 +191,18 @@ export function ClinicsView({
 
   // Nothing local AND the download failed or can't run: "not downloaded yet", not "0 results".
   const notDownloaded =
-    facilities?.length === 0 && !query && !service && !openOnly && (syncFailed || !isOnline) && !syncing;
+    facilities?.length === 0 && !query && !concern && !kind && !weekendOnly && !openOnly &&
+    (syncFailed || !isOnline) && !syncing;
 
   const sortLabel =
     sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
-  const chips = [ALL_CHIP, OPEN_CHIP, ...serviceFacets];
+  // Concern chips come right after the place filters; the active concern is moved to the front so
+  // a pre-selected one (from a scan result) is visible without scrolling.
+  const concernIds = CONCERNS.map((c) => c.id as string);
+  const chips = [
+    ALL_CHIP, OPEN_CHIP, HOSPITALS_CHIP, CLINICS_CHIP, WEEKEND_CHIP,
+    ...(concern ? [concern, ...concernIds.filter((c) => c !== concern)] : concernIds),
+  ];
 
   // OVERHERE FOR SNAP CHANGE: If you want to change the snap points, do it here, top snap is the initial when you open the page
   // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
@@ -295,9 +307,11 @@ export function ClinicsView({
                   <Chip
                     key={item}
                     label={t(item)}
-                    active={!service && !openOnly}
+                    active={!concern && !kind && !weekendOnly && !openOnly}
                     onPress={() => {
-                      setService(null);
+                      setConcern(null);
+                      setKind(null);
+                      setWeekendOnly(false);
                       setOpenOnly(false);
                     }}
                   />
@@ -313,12 +327,35 @@ export function ClinicsView({
                   />
                 );
               }
+              if (item === HOSPITALS_CHIP || item === CLINICS_CHIP) {
+                const value: FacilityKind = item === HOSPITALS_CHIP ? "hospital" : "clinic";
+                return (
+                  <Chip
+                    key={item}
+                    label={t(item)}
+                    active={kind === value}
+                    onPress={() => setKind((v) => (v === value ? null : value))}
+                  />
+                );
+              }
+              if (item === WEEKEND_CHIP) {
+                return (
+                  <Chip
+                    key={item}
+                    label={t(item)}
+                    active={weekendOnly}
+                    onPress={() => setWeekendOnly((v) => !v)}
+                  />
+                );
+              }
+              const c = CONCERNS.find((x) => x.id === item);
+              if (!c) return null;
               return (
                 <Chip
                   key={item}
-                  label={humanizeTag(item)}
-                  active={service === item}
-                  onPress={() => setService((v) => (v === item ? null : item))}
+                  label={t(c.label)}
+                  active={concern === c.id}
+                  onPress={() => setConcern((v) => (v === c.id ? null : c.id))}
                 />
               );
             })}
@@ -341,7 +378,7 @@ export function ClinicsView({
           )}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            facilities?.length === 0 && syncing && !query && !service && !openOnly ? (
+            facilities?.length === 0 && syncing && !query && !concern && !kind && !weekendOnly && !openOnly ? (
               <ListState kind="loading" title={t("Downloading the clinic directory…")} />
             ) : notDownloaded ? (
               // Nothing local AND the download failed or can't run: this is "not downloaded yet",

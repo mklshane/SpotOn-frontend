@@ -8,7 +8,13 @@ export interface DepartmentInfo {
   has_derm_department?: boolean | null;
   department_name?: string | null;
   opd_notes?: string | null;
+  phone?: string | null; // derm OPD direct line (cited research, 36_)
+  source_url?: string | null;
+  checked_at?: string | null;
 }
+
+/** What we know about dermatology at a hospital (016). */
+export type DermStatus = "has_derm_doctors" | "derm_dept_no_names" | "no_derm_found" | "unchecked";
 
 export interface FacilitySync {
   id: string;
@@ -39,6 +45,9 @@ export interface FacilitySync {
   photo_url: string | null;
   photo_attribution: string | null; // must be displayed with the photo (Google policy)
   department_info: DepartmentInfo | null;
+  derm_status?: DermStatus | null; // hospitals (016); absent on servers before 016
+  concerns?: string[]; // patient-facing concerns (016)
+  pds_skin_cancer_center?: boolean | null; // (016)
   updated_at: string; // ISO 8601
   deleted_at?: string | null; // tombstone: purge locally (014)
 }
@@ -58,6 +67,7 @@ export interface DoctorSync {
   google_maps_url: string | null;
   photo_url: string | null;
   description: string | null; // short professional bio
+  concerns?: string[]; // patient-facing concerns (016)
   updated_at: string;
   deleted_at?: string | null; // tombstone: purge locally (014)
 }
@@ -69,6 +79,11 @@ export interface DoctorFacilitySync {
   facility_id: string;
   is_primary: boolean | null;
   schedule: string | null; // free text, e.g. "Monday to Saturday | 10:00 AM - 07:00 PM"
+  schedule_days?: number | null; // bitmask Mon=1 .. Sun=64 (016)
+  room?: string | null;
+  phone?: string | null; // clinic direct line
+  source_url?: string | null;
+  verified_at?: string | null;
   updated_at: string;
   deleted_at?: string | null; // tombstone: purge locally (014)
 }

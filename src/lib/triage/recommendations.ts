@@ -27,7 +27,12 @@ export type TierContent = {
   offerReminder: boolean;
 };
 
-export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
+/**
+ * Untranslated source copy. The Learn hub's result explainer reads this so its
+ * description of each level is word for word what the result screen shows;
+ * display code uses TIER_CONTENT, whose fields translate on read.
+ */
+export const TIER_SOURCE: Record<TriageTier, TierContent> = {
   low: {
     name: 'Low',
     headline: 'No strong signs of concern right now',
@@ -76,7 +81,9 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
     showEducation: false,
     offerReminder: false,
   },
-});
+};
+
+export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy(TIER_SOURCE);
 
 /** Shown instead of the standard headline when the Safety Floor Rule was applied. */
 export const CONFIDENCE_QUALIFIER = localizedCopy({

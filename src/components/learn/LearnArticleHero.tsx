@@ -32,7 +32,8 @@ const SELF_CHECK_IMAGE = require("@/assets/images/learn/article-self-check.jpg")
 const SUN_PROTECTION_IMAGE = require("@/assets/images/learn/recommended-sun-protection.jpg");
 const CONSULTATION_IMAGE = require("@/assets/images/learn/article-consultation.jpg");
 
-const ARTICLE_PHOTOS: Record<string, PhotoVisual> = {
+/** Also used by the Learn hub's daily tip, so a tip's photo matches its article. */
+export const ARTICLE_PHOTOS: Record<string, PhotoVisual> = {
   "what-is-skin-cancer": {
     source: SELF_CHECK_IMAGE,
     accessibilityLabel:

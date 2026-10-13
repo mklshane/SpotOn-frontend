@@ -1,4 +1,4 @@
-import { t, localizedCopy, useLocale } from '@/lib/i18n';
+import { t, localizedCopy, useLocale } from "@/lib/i18n";
 import { StyleSheet, View } from "react-native";
 
 import { tierColor } from "@/components/scan/screening-row";
@@ -27,13 +27,6 @@ function fmtDate(iso: string) {
   });
 }
 
-function fmtShort(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 /** Split for the rail's stacked day/month, e.g. { day: "13", month: "Aug" }. */
 function fmtDayMonth(iso: string) {
   const d = new Date(iso);
@@ -47,6 +40,8 @@ export type ScanTimelineProps = {
   /** Oldest first. The last entry is treated as the latest scan. */
   screenings: ScreeningRecord[];
   onOpen: (screening: ScreeningRecord) => void;
+  /** Starts a follow-up scan. When set, a single scan is followed by an empty "next scan" slot. */
+  onAddScan?: () => void;
 };
 
 /**
@@ -58,11 +53,20 @@ export type ScanTimelineProps = {
  * more become a vertical timeline, newest at top, under a continuous rail - the
  * same reading order as opening the record itself.
  */
-export function ScanTimeline({ screenings, onOpen }: ScanTimelineProps) {
+export function ScanTimeline({
+  screenings,
+  onOpen,
+  onAddScan,
+}: ScanTimelineProps) {
   useLocale();
   if (screenings.length === 0) return null;
   if (screenings.length === 1)
-    return <SoloScan screening={screenings[0]} onOpen={onOpen} />;
+    return (
+      <View style={styles.soloStack}>
+        <SoloScan screening={screenings[0]} onOpen={onOpen} />
+        <NextScanSlot onPress={onAddScan} />
+      </View>
+    );
   return <ScanRail screenings={screenings} onOpen={onOpen} />;
 }
 
@@ -76,19 +80,13 @@ function SoloScan({
 }) {
   useLocale();
   const theme = useTheme();
-  const c = tierColor(theme, screening.triage.tier);
   const cls = CLASS_DISPLAY[screening.classification.topClass];
 
   return (
     // Shadow lives on this outer layer, not the clipped card below: a shadow and
     // `overflow: hidden` on the same view fight on iOS. The solid white backing
     // creates the framed-card treatment from the reference UI.
-    <View
-      style={[
-        styles.soloShadow,
-        { backgroundColor: theme.surface },
-      ]}
-    >
+    <View style={[styles.soloShadow, { backgroundColor: theme.surface }]}>
       <PressableScale
         onPress={() => onOpen(screening)}
         accessibilityRole="button"
@@ -103,18 +101,6 @@ function SoloScan({
               iconSize={32}
               contentFit="contain"
             />
-            <View
-              style={[
-                styles.tierPill,
-                styles.soloTier,
-                { backgroundColor: theme.surface },
-              ]}
-            >
-              <View style={[styles.tierDot, { backgroundColor: c.fg }]} />
-              <ThemedText type="caption" style={{ color: c.fg }}>
-                {TIER_LABEL[screening.triage.tier]}
-              </ThemedText>
-            </View>
             {/* Same chip as the capture screen's multi-shot indicator, so "more than one
                 angle was taken" reads the same way everywhere it shows up. */}
             {screening.images.length > 1 ? (
@@ -145,7 +131,7 @@ function SoloScan({
           <View style={styles.soloFooterLeft}>
             <View style={styles.soloFooterItem}>
               <Icon name="calendar" tintColor={theme.text} size={14} />
-              <ThemedText type="subhead">
+              <ThemedText type="headline">
                 {fmtDate(screening.createdAt)}
               </ThemedText>
             </View>
@@ -163,18 +149,56 @@ function SoloScan({
               </ThemedText>
             </View>
           </View>
-          {/* A contained pill, not bare text floating at the row's edge - it reads as
-              the status badge it is, the same way the tier pill on the photo does,
-              instead of looking like a stray label that wandered next to the date. */}
-          <View
-            style={[styles.latestPill, { backgroundColor: theme.brandTint }]}
-          >
-            <ThemedText type="caption" style={{ color: theme.brand }}>
-              {t("Latest Scan")}</ThemedText>
+          <View style={styles.soloOpen}>
+            <ThemedText type="subhead" themeColor="brand">
+              {t("View result")}
+            </ThemedText>
+            <Icon name="chevron.right" tintColor={theme.brand} size={14} />
           </View>
         </View>
       </PressableScale>
     </View>
+  );
+}
+
+/**
+ * The empty second entry under a first scan. A tracked spot with one photo has nothing to compare
+ * yet; this says what the record becomes, and doubles as the way to add to it.
+ */
+function NextScanSlot({ onPress }: { onPress?: () => void }) {
+  useLocale();
+  const theme = useTheme();
+  const body = (
+    <>
+      <View style={[styles.slotIcon, { backgroundColor: theme.brandTint }]}>
+        <Icon
+          name={onPress ? "plus.circle.fill" : "clock.arrow.circlepath"}
+          tintColor={theme.brand}
+          size={20}
+        />
+      </View>
+      <View style={styles.slotText}>
+        <ThemedText type="headline">{t("Your next scan goes here")}</ThemedText>
+        <ThemedText type="footnote" themeColor="textSecondary">
+          {t(
+            "Scan this spot again later and the photos will line up here, so changes are easy to see.",
+          )}
+        </ThemedText>
+      </View>
+    </>
+  );
+  const frame = [styles.slot, { borderColor: theme.muted }];
+  return onPress ? (
+    <PressableScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={t("Re-scan this spot")}
+      style={frame}
+    >
+      {body}
+    </PressableScale>
+  ) : (
+    <View style={frame}>{body}</View>
   );
 }
 
@@ -263,42 +287,30 @@ function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
                 </View>
 
                 <View style={styles.rowText}>
+                  <ThemedText type="headline" numberOfLines={1}>
+                    {cls.name}
+                  </ThemedText>
                   <View style={styles.rowTopLine}>
                     <View
                       style={[styles.rowTierPill, { backgroundColor: c.bg }]}
                     >
-                      <ThemedText type="caption" style={{ color: c.fg }}>
+                      <View
+                        style={[styles.tierDot, { backgroundColor: c.fg }]}
+                      />
+                      <ThemedText type="caption" style={styles.rowTierText}>
                         {TIER_LABEL[s.triage.tier]}
                       </ThemedText>
                     </View>
                     {isLatest ? (
-                      <View
-                        style={[
-                          styles.latestPill,
-                          { backgroundColor: theme.brandTint },
-                        ]}
-                      >
-                        <ThemedText
-                          type="caption"
-                          style={{ color: theme.brand }}
-                        >
-                          {t("Latest Scan")}</ThemedText>
-                      </View>
+                      <ThemedText type="caption" themeColor="brand">
+                        {t("Latest Scan")}
+                      </ThemedText>
                     ) : isFirst ? (
                       <ThemedText type="caption" themeColor="muted">
-                        {t("First scan")}</ThemedText>
+                        {t("First scan")}
+                      </ThemedText>
                     ) : null}
                   </View>
-                  <ThemedText type="headline" numberOfLines={1}>
-                    {cls.name}
-                  </ThemedText>
-                  <ThemedText
-                    type="footnote"
-                    themeColor="textSecondary"
-                    numberOfLines={1}
-                  >
-                    {fmtShort(s.createdAt)}
-                  </ThemedText>
                 </View>
 
                 <Icon name="chevron.right" tintColor={theme.muted} size={16} />
@@ -312,17 +324,6 @@ function ScanRail({ screenings, onOpen }: ScanTimelineProps) {
 }
 
 const styles = StyleSheet.create({
-  // Shared tier pill. A 10px dot alone floating on a photo disappears against a
-  // light lesion and reads as an artifact, so it sits on a solid chip.
-  tierPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Space.xs,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    ...Elevation.sm,
-  },
   tierDot: { width: 6, height: 6, borderRadius: 3 },
   // Multi-photo count. Same shape as the capture screen's countChip, scaled per context.
   countChip: {
@@ -356,7 +357,6 @@ const styles = StyleSheet.create({
   // 4:3 rather than square: closer to how the capture screen frames a lesion,
   // so the stored photo is not cropped a second time on the way in.
   soloPhoto: { width: "100%", aspectRatio: 4 / 3 },
-  soloTier: { position: "absolute", left: Space.md, bottom: Space.md },
   soloFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -366,12 +366,26 @@ const styles = StyleSheet.create({
     paddingBottom: Space.base,
   },
   soloFooterLeft: { gap: Space.xs },
-  soloFooterItem: { flexDirection: "row", alignItems: "center", gap: Space.xs },
-  latestPill: {
-    paddingHorizontal: Space.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
+  soloOpen: { flexDirection: "row", alignItems: "center", gap: 2 },
+  soloStack: { gap: Space.md },
+  slot: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.md,
+    padding: Space.base,
+    borderRadius: Radius.xl,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
   },
+  slotIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slotText: { flex: 1, gap: 2 },
+  soloFooterItem: { flexDirection: "row", alignItems: "center", gap: Space.xs },
 
   // Vertical timeline (2+ scans). No gap between rows: the rail's line-below-the-dot
   // spans each row's *full* height, so it has to butt against the next row's to read as
@@ -401,9 +415,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   countBadgeText: { color: "#FFFFFF" },
-  rowText: { flex: 1, gap: 2 },
+  rowText: { flex: 1, gap: Space.xs },
+  rowTierText: { fontWeight: "600" },
   rowTopLine: { flexDirection: "row", alignItems: "center", gap: Space.sm },
   rowTierPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.xs,
     paddingHorizontal: Space.sm,
     paddingVertical: 2,
     borderRadius: Radius.pill,

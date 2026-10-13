@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS facilities (
   photo_url       TEXT,
   photo_attribution TEXT,
   department_info TEXT,
+  derm_status     TEXT,
+  concerns        TEXT NOT NULL DEFAULT '[]',
+  pds_skin_cancer_center INTEGER,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_facilities_city ON facilities(city);
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS doctors (
   google_maps_url     TEXT,
   photo_url           TEXT,
   description         TEXT,
+  concerns            TEXT NOT NULL DEFAULT '[]',
   updated_at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_doctors_city ON doctors(city);
@@ -90,6 +94,11 @@ CREATE TABLE IF NOT EXISTS doctor_facility (
   facility_id TEXT NOT NULL,
   is_primary  INTEGER,
   schedule    TEXT,
+  schedule_days INTEGER,
+  room        TEXT,
+  phone       TEXT,
+  source_url  TEXT,
+  verified_at TEXT,
   updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_doctor_facility_doctor ON doctor_facility(doctor_id);
@@ -195,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 17;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -358,6 +367,22 @@ const MIGRATION_V16 = [
   "ALTER TABLE screenings ADD COLUMN mark_mesh TEXT",
 ];
 
+// v17 - patient-facing directory search (server migration 016): concern tags on facilities and
+// doctors, a hospital's dermatology status, and structured clinic days on doctor_facility so the
+// directory can answer "who is in on Saturday". Server rows only change when a script touches
+// them (which bumps updated_at), so the defaults here match the server defaults exactly.
+const MIGRATION_V17 = [
+  "ALTER TABLE facilities ADD COLUMN derm_status TEXT",
+  "ALTER TABLE facilities ADD COLUMN concerns TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE facilities ADD COLUMN pds_skin_cancer_center INTEGER",
+  "ALTER TABLE doctors ADD COLUMN concerns TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE doctor_facility ADD COLUMN schedule_days INTEGER",
+  "ALTER TABLE doctor_facility ADD COLUMN room TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN phone TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN source_url TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN verified_at TEXT",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -378,6 +403,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 14 ? MIGRATION_V14 : []),
     ...(version < 15 ? MIGRATION_V15 : []),
     ...(version < 16 ? MIGRATION_V16 : []),
+    ...(version < 17 ? MIGRATION_V17 : []),
   ];
   for (const stmt of pending) {
     try {

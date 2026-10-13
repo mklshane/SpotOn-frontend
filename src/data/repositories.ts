@@ -26,7 +26,8 @@ interface FacilityRow {
   google_rating: number | null; weekday_hours: string | null;
   weekend_hours: string | null; description: string | null;
   photo_url: string | null; photo_attribution: string | null;
-  department_info: string | null; updated_at: string;
+  department_info: string | null; derm_status: string | null; concerns: string | null;
+  pds_skin_cancer_center: number | null; updated_at: string;
 }
 
 interface DoctorRow {
@@ -35,7 +36,7 @@ interface DoctorRow {
   city: string | null;
   region: string | null; phone: string | null; website: string | null;
   google_maps_url: string | null; photo_url: string | null;
-  description: string | null; updated_at: string;
+  description: string | null; concerns: string | null; updated_at: string;
 }
 
 const toBool = (v: number | null): boolean | null =>
@@ -86,6 +87,9 @@ function toFacility(r: FacilityRow): FacilitySync {
     description: r.description, photo_url: r.photo_url,
     photo_attribution: r.photo_attribution,
     department_info: dept(r.department_info),
+    derm_status: (r.derm_status as FacilitySync["derm_status"]) ?? null,
+    concerns: arr(r.concerns),
+    pds_skin_cancer_center: toBool(r.pds_skin_cancer_center),
     updated_at: r.updated_at,
   };
 }
@@ -97,17 +101,27 @@ function toDoctor(r: DoctorRow): DoctorSync {
     specialties_display: r.specialties_display, status: r.status,
     city: r.city, region: r.region,
     phone: r.phone, website: r.website, google_maps_url: r.google_maps_url,
-    photo_url: r.photo_url, description: r.description, updated_at: r.updated_at,
+    photo_url: r.photo_url, description: r.description, concerns: arr(r.concerns),
+    updated_at: r.updated_at,
   };
 }
 
 // ---- facilities ---------------------------------------------------------------
+
+export type FacilityKind = "hospital" | "clinic";
+
+/** Collector types that are hospitals; everything else that is live is a clinic. */
+export const HOSPITAL_TYPES = ["private_hospital", "government_hospital", "medical_center"] as const;
 
 export interface FacilityQuery {
   q?: string; // name search
   service?: string; // single service tag (one of SERVICES)
   city?: string;
   type?: string; // collector type, e.g. dermatology_clinic
+  kind?: FacilityKind; // hospitals vs clinics (groups the collector types)
+  concern?: string; // single patient concern (one of CONCERNS, server migration 016)
+  /** Only places with a dermatologist in clinic on one of these days (Mon=1 .. Sun=64). */
+  dayMask?: number;
   hasBookingUrl?: boolean; // only facilities with an online booking page
   includeExcluded?: boolean; // default false - hide status='excluded'
   limit?: number;
@@ -132,6 +146,25 @@ function facilityWhere(query: FacilityQuery): { clause: string; params: (string 
   if (query.type) {
     where.push("type = ?");
     params.push(query.type);
+  }
+  if (query.kind) {
+    const placeholders = HOSPITAL_TYPES.map(() => "?").join(",");
+    where.push(`type ${query.kind === "hospital" ? "IN" : "NOT IN"} (${placeholders})`);
+    params.push(...HOSPITAL_TYPES);
+  }
+  if (query.concern) {
+    // concerns is a JSON array string like ["acne","skin_cancer_mole_check"]
+    where.push("concerns LIKE ?");
+    params.push(`%"${query.concern}"%`);
+  }
+  if (query.dayMask) {
+    // A clinic day lives on the doctor<->facility edge, not on the facility.
+    where.push(`EXISTS (SELECT 1 FROM doctor_facility df
+                          JOIN doctors d ON d.id = df.doctor_id
+                         WHERE df.facility_id = facilities.id
+                           AND (df.schedule_days & ?) != 0
+                           AND (d.status IS NULL OR d.status != 'excluded'))`);
+    params.push(query.dayMask);
   }
   if (query.service) {
     // services is a JSON array string like ["dermoscopy","excision"]
@@ -284,7 +317,27 @@ export interface DoctorPractice {
   facility: FacilitySync;
   is_primary: boolean | null;
   schedule: string | null;
+  schedule_days: number | null;
+  room: string | null;
+  phone: string | null; // the clinic room's own line, when known
+  verified_at: string | null;
 }
+
+/** The doctor_facility columns every practice read carries, aliased df_*. */
+const DF_COLUMNS = `df.is_primary AS df_is_primary, df.schedule AS df_schedule,
+  df.schedule_days AS df_schedule_days, df.room AS df_room, df.phone AS df_phone,
+  df.verified_at AS df_verified_at`;
+type DfColumns = {
+  df_is_primary: number | null; df_schedule: string | null; df_schedule_days: number | null;
+  df_room: string | null; df_phone: string | null; df_verified_at: string | null;
+};
+const edge = (r: DfColumns) => ({
+  schedule: r.df_schedule ?? null,
+  schedule_days: r.df_schedule_days ?? null,
+  room: r.df_room ?? null,
+  phone: r.df_phone ?? null,
+  verified_at: r.df_verified_at ?? null,
+});
 
 /**
  * Facilities a doctor practises at, primary first.
@@ -296,12 +349,9 @@ export async function getDoctorPractices(doctorId: string): Promise<DoctorPracti
   const db = await getDb();
   // f.* keeps the row shape identical to every other facility read, so the same
   // toFacility() parses it; the two df_* aliases carry the edge's own columns.
-  type PracticeRow = FacilityRow & {
-    df_is_primary: number | null;
-    df_schedule: string | null;
-  };
+  type PracticeRow = FacilityRow & DfColumns;
   const rows = await db.getAllAsync<PracticeRow>(
-    `SELECT f.*, df.is_primary AS df_is_primary, df.schedule AS df_schedule
+    `SELECT f.*, ${DF_COLUMNS}
        FROM doctor_facility df
        JOIN facilities f ON f.id = df.facility_id
       WHERE df.doctor_id = ?
@@ -312,7 +362,7 @@ export async function getDoctorPractices(doctorId: string): Promise<DoctorPracti
   return rows.map((r) => ({
     facility: toFacility(r),
     is_primary: toBool(r.df_is_primary),
-    schedule: r.df_schedule ?? null,
+    ...edge(r),
   }));
 }
 
@@ -321,6 +371,10 @@ export interface FacilityDoctor {
   doctor: DoctorSync;
   is_primary: boolean;
   schedule: string | null;
+  schedule_days: number | null;
+  room: string | null;
+  phone: string | null;
+  verified_at: string | null;
   /** True when the doctor has at least one active booking link on an active platform. */
   bookable: boolean;
 }
@@ -331,9 +385,9 @@ export interface FacilityDoctor {
  */
 export async function getFacilityDoctors(facilityId: string): Promise<FacilityDoctor[]> {
   const db = await getDb();
-  type Row = DoctorRow & { df_is_primary: number | null; df_schedule: string | null; bookable: number };
+  type Row = DoctorRow & DfColumns & { bookable: number };
   const rows = await db.getAllAsync<Row>(
-    `SELECT d.*, df.is_primary AS df_is_primary, df.schedule AS df_schedule,
+    `SELECT d.*, ${DF_COLUMNS},
             EXISTS (SELECT 1 FROM booking_links bl
                       JOIN telemedicine_platforms p ON p.id = bl.platform_id AND p.is_active = 1
                      WHERE bl.doctor_id = d.id AND bl.is_active = 1) AS bookable
@@ -347,7 +401,7 @@ export async function getFacilityDoctors(facilityId: string): Promise<FacilityDo
   return rows.map((r) => ({
     doctor: toDoctor(r),
     is_primary: toBool(r.df_is_primary) === true,
-    schedule: r.df_schedule ?? null,
+    ...edge(r),
     bookable: r.bookable === 1,
   }));
 }

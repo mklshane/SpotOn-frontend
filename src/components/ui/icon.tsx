@@ -25,6 +25,10 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'chevron.up': { set: 'ionicons', name: 'chevron-up' },
   'chevron.down': { set: 'ionicons', name: 'chevron-down' },
   'arrow.right.circle.fill': { set: 'ionicons', name: 'arrow-forward-circle' },
+  'arrow.up.circle.fill': { set: 'ionicons', name: 'arrow-up-circle' },
+  'arrow.down.circle.fill': { set: 'ionicons', name: 'arrow-down-circle' },
+  'equal.circle.fill': { set: 'ionicons', name: 'remove-circle' },
+  'plus.circle.fill': { set: 'ionicons', name: 'add-circle' },
   // glyphs
   checkmark: { set: 'ionicons', name: 'checkmark' },
   xmark: { set: 'ionicons', name: 'close' },

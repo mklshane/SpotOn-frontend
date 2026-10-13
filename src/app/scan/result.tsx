@@ -68,6 +68,27 @@ const PATTERN_WORD: Record<LesionClass, string> = {
   BENIGN: "benign",
 };
 
+/**
+ * The Learn article that explains each classified pattern. `label` is only set
+ * where "About <class name>" would read oddly ("About Benign").
+ */
+const LEARN_ARTICLE: Record<
+  LesionClass,
+  { params: { topicId: string; articleId?: string }; label?: string }
+> = {
+  MEL: { params: { topicId: "types-of-skin-cancer", articleId: "melanoma" } },
+  SCC: { params: { topicId: "types-of-skin-cancer", articleId: "scc" } },
+  BCC: { params: { topicId: "types-of-skin-cancer", articleId: "bcc" } },
+  OTHER: {
+    params: { topicId: "actinic-keratosis" },
+    label: "About precancerous and unusual spots",
+  },
+  BENIGN: {
+    params: { topicId: "harmless-spots" },
+    label: "About spots that are usually harmless",
+  },
+};
+
 export default function ResultScreen() {
   useLocale();
   const theme = useTheme();
@@ -150,6 +171,7 @@ export default function ResultScreen() {
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
   const cls = CLASS_DISPLAY[classification.topClass];
+  const learnArticle = LEARN_ARTICLE[classification.topClass];
   const pct = Math.round(displayConfidence(classification, triage) * 100);
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
@@ -469,16 +491,32 @@ export default function ResultScreen() {
                   icon="mappin.circle.fill"
                   label={t("Find a clinic near you")}
                   sublabel={t("Show your summary to a dermatologist")}
-                  onPress={() => router.push("/(tabs)/directory")}
+                  // Every scan is about a spot, so land on the places that do mole/skin-cancer
+                  // checks rather than the unfiltered list (aesthetic-only clinics included).
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/directory",
+                      params: { concern: "skin_cancer_mole_check" },
+                    })
+                  }
                 />
               ) : null,
               tier.showEducation ? (
                 <SettingsRow
                   key="learn"
                   icon="book.fill"
-                  label={t("Learn more about skin cancer")}
-                  sublabel={t("Warning signs and how to check your skin")}
-                  onPress={() => router.push("/(tabs)/learn")}
+                  label={
+                    learnArticle.label
+                      ? t(learnArticle.label)
+                      : t("About {{name}}", { name: cls.full })
+                  }
+                  sublabel={t("What it looks like and when to get it checked")}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/learn/article",
+                      params: learnArticle.params,
+                    })
+                  }
                 />
               ) : null,
               record.lesionId ? (

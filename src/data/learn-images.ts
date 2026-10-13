@@ -329,6 +329,287 @@ const IMAGES = {
     credit: DATASET_CREDIT,
     photoRequired: true,
   },
+
+  // Benign look-alikes and precancers, added 2026-10-13. Chosen on Fitzpatrick
+  // III to VI skin where the archive records it, since most of the set above is
+  // lighter skin. ISIC clinical photos of dermatofibroma, solar lentigo, and
+  // angioma are all CC BY-NC, so the angioma comes from Wikimedia Commons and the
+  // other two are described in text only.
+  'benign-mole': {
+    needs: 'Sourced. A common, evenly coloured mole.',
+    alt: 'An oval, evenly brown mole with a smooth edge',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_6928664.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_6928664/',
+      licence: 'CC BY',
+    },
+  },
+  'benign-seborrheic-keratosis': {
+    needs: 'Sourced. Seborrheic keratosis on Fitzpatrick VI skin.',
+    alt: 'A flat, dark grey-brown growth with a ridged, stuck-on surface on dark skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_1684376.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_1684376/',
+      licence: 'CC BY',
+    },
+  },
+  'benign-cherry-angioma': {
+    needs: 'Sourced. Several cherry angiomas on the shoulder, cropped.',
+    alt: 'Several small, bright red dots on the skin of the shoulder',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/commons-cherry-angioma.jpg'),
+    credit: {
+      org: 'JOAN, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Angioma_cereza_en_hombro.jpg',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'ak-example': {
+    needs: 'Sourced. Actinic keratosis on Fitzpatrick IV skin.',
+    alt: 'A rough, pink, scaly patch on sun-exposed brown skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_6973828.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_6973828/',
+      licence: 'CC BY',
+    },
+  },
+
+  // Gallery photographs, added 2026-10-13: each cancer type on Fitzpatrick IV
+  // and V skin, plus the low-sun sites the darker-skin article points to.
+  // Captions in the articles state only what the source records.
+  'bcc-brown-pigmented': {
+    needs: 'Sourced. BCC on Fitzpatrick V skin.',
+    alt: 'A blue-grey, pigmented basal cell carcinoma on brown skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_7837478.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_7837478/',
+      licence: 'CC BY',
+    },
+  },
+  'bcc-brown-bump': {
+    needs: 'Sourced. BCC on Fitzpatrick V skin.',
+    alt: 'A small, shiny brown bump of basal cell carcinoma on brown skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_4676550.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_4676550/',
+      licence: 'CC BY',
+    },
+  },
+  'scc-brown-crusted': {
+    needs: 'Sourced. SCC on Fitzpatrick IV skin.',
+    alt: 'A crusted squamous cell carcinoma on sun-damaged skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_4848137.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_4848137/',
+      licence: 'CC BY',
+    },
+  },
+  'scc-brown-plaque': {
+    needs: 'Sourced. SCC on Fitzpatrick V skin.',
+    alt: 'A pink, scaly raised patch of squamous cell carcinoma',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_5598808.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_5598808/',
+      licence: 'CC BY',
+    },
+  },
+  'melanoma-brown-flat': {
+    needs: 'Sourced. Melanoma on Fitzpatrick IV skin.',
+    alt: 'A flat, unevenly brown melanoma with an irregular edge',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_2494666.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_2494666/',
+      licence: 'CC BY',
+    },
+  },
+  'melanoma-brown-dark': {
+    needs: 'Sourced. Melanoma on Fitzpatrick IV skin.',
+    alt: 'A dark blue-black melanoma with a ragged, uneven edge',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_6782019.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_6782019/',
+      licence: 'CC BY',
+    },
+  },
+  'acral-sole-small': {
+    needs: 'Sourced. NCI Visuals Online, cropped.',
+    alt: 'A small, dark brown melanoma on the sole of the foot',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/nci-acral-melanoma.jpg'),
+    credit: {
+      org: 'National Cancer Institute (Kelly Nelson), via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Melanoma_(1).jpg',
+      licence: 'Public domain',
+    },
+  },
+  'acral-sole-large': {
+    needs: 'Sourced. Xavier-Junior et al., Diagnostic Pathology 2015, cropped.',
+    alt: 'A large, dark, irregular acral lentiginous melanoma across the sole',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/commons-acral-lentiginous-melanoma.jpg'),
+    credit: {
+      org: 'Xavier-Júnior et al., Diagnostic Pathology (2015), via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Photography_of_a_large_acral_lentiginous_melanoma.jpg',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'nail-melanoma': {
+    needs: 'Sourced. Melanoma of the thumb, cropped.',
+    alt: 'An advanced melanoma that has replaced a thumbnail',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/commons-thumb-melanoma.jpg'),
+    credit: {
+      org: 'Wawjak, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Melanoma_of_thumb.jpg',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'nail-streak': {
+    needs: 'Sourced. Longitudinal melanonychia, Lee and Eun 2024, cropped. The source does not state a diagnosis of melanoma.',
+    alt: 'A thin, dark line running the length of a thumbnail',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/commons-melanonychia.jpg'),
+    credit: {
+      org: 'Lee S, Eun S. Journal of Clinical Medicine (2024), via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Longitudinal_melanonychia.png',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'ak-thick': {
+    needs: 'Sourced. AK on Fitzpatrick IV skin.',
+    alt: 'Thick, yellowish crusts of actinic keratosis on sun-damaged skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_1944843.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_1944843/',
+      licence: 'CC BY',
+    },
+  },
+  'ak-raised': {
+    needs: 'Sourced. AK on Fitzpatrick V skin.',
+    alt: 'A small, raised, scaly bump of actinic keratosis on brown skin',
+    photoRequired: true,
+    asset: require('@/assets/images/learn/clinical/ISIC_7796428.jpg'),
+    credit: {
+      org: 'Federal University of Espírito Santo (UFES), via ISIC Archive',
+      url: 'https://api.isic-archive.com/api/v2/images/ISIC_7796428/',
+      licence: 'CC BY',
+    },
+  },
+
+  // Lifestyle photographs, added 2026-10-13: everyday sun protection, outdoor
+  // work, and what happens at a skin check. Not clinical, so no photoRequired.
+  // Same CC0 / CC BY / public-domain rule; Philippine settings where Commons
+  // had them. Files live in learn/lifestyle/ rather than learn/clinical/.
+  'life-umbrella-street': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'People walking under umbrellas on a sunny street in Lingayen, Pangasinan',
+    asset: require('@/assets/images/learn/lifestyle/umbrella-street.jpg'),
+    credit: {
+      org: 'Judgefloro, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:2173Poblacion,_Lingayen,_Pangasinan_62.jpg',
+      licence: 'CC0 1.0 (public domain)',
+    },
+  },
+  'life-sun-hat': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A woman wearing a wide-brimmed straw hat outdoors',
+    asset: require('@/assets/images/learn/lifestyle/sun-hat.jpg'),
+    credit: {
+      org: 'Daniel Atun, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Young_Woman_in_Sun_Hat.jpg',
+      licence: 'CC BY 2.0',
+    },
+  },
+  'life-sunscreen-face': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A man rubbing sunscreen into his face',
+    asset: require('@/assets/images/learn/lifestyle/sunscreen-face.jpg'),
+    credit: {
+      org: 'U.S. Air Force (Taylor Slater), via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Staying_safe_throughout_summer_(6696970).jpg',
+      licence: 'Public domain',
+    },
+  },
+  'life-sunscreen-label': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A sunscreen bottle labelled Broad Spectrum SPF 15 and water resistant',
+    asset: require('@/assets/images/learn/lifestyle/sunscreen-label.jpg'),
+    credit: {
+      org: 'U.S. Food and Drug Administration, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:New_Sunscreen_Labeling_(5829848553).jpg',
+      licence: 'Public domain',
+    },
+  },
+  'life-rice-farmers': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'Two rice farmers working bent over in a sunny paddy in Laguna',
+    asset: require('@/assets/images/learn/lifestyle/rice-farmers.jpg'),
+    credit: {
+      org: 'IRRI Images, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Rice_farmers_at_work_in_the_Philippines.jpg',
+      licence: 'CC BY 2.0',
+    },
+  },
+  'life-corn-farmers': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'Farmers loading harvested corn into a cart under the sun',
+    asset: require('@/assets/images/learn/lifestyle/corn-farmers.jpg'),
+    credit: {
+      org: 'Ranieljosecastaneda, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Corn_Farming_in_the_Philippines.jpg',
+      licence: 'CC BY 4.0',
+    },
+  },
+  'life-derm-screening': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A dermatologist looking closely at a spot on a patient\'s arm',
+    asset: require('@/assets/images/learn/lifestyle/derm-screening.jpg'),
+    credit: {
+      org: 'U.S. Air Force (Linda LaBonte Britt), via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:Clinic_hosts_skin_cancer_screening_160804-F-GK203-004.jpg',
+      licence: 'Public domain',
+    },
+  },
+  'life-dermatoscope': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A doctor examining the skin of a patient\'s neck through a handheld dermatoscope',
+    asset: require('@/assets/images/learn/lifestyle/dermatoscope.jpg'),
+    credit: {
+      org: 'U.S. Navy, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:US_Navy_081023-N-2959L-063_Lt._Cmdr._Stephen_Mannino_examines_a_Sailor_using_a_dermatascope_and_magnifying_loops.jpg',
+      licence: 'Public domain',
+    },
+  },
+  'life-back-check': {
+    needs: 'Sourced. Lifestyle photograph, cropped square.',
+    alt: 'A doctor checking the skin on a man\'s back',
+    asset: require('@/assets/images/learn/lifestyle/back-check.jpg'),
+    credit: {
+      org: 'U.S. Navy, via Wikimedia Commons',
+      url: 'https://commons.wikimedia.org/wiki/File:US_Navy_081023-N-2959L-029_Lt._Cdmr._Shumaker_examines_a_Sailor%27s_back_during_a_skin_cancer_screening.jpg',
+      licence: 'Public domain',
+    },
+  },
 } satisfies Record<string, ClinicalImageSpec>;
 
 export type ClinicalImageId = keyof typeof IMAGES;
@@ -350,12 +631,14 @@ export function pendingClinicalImages(): { id: ClinicalImageId; needs: string }[
 export function activeImageCredits(ids: readonly ClinicalImageId[]): ImageCredit[] {
   const seen = new Set<string>();
 
-  // Keyed on org, not url: a credit covering several datasets carries no url,
-  // and keying on an absent one would collapse every such credit into one row.
+  // Keyed on org and url together. Org alone merged distinct photos from one
+  // contributor into a single row linking only the first; url alone would
+  // merge every url-less credit, such as the shared dataset credit, into one.
   return ids.reduce<ImageCredit[]>((credits, id) => {
     const { asset, credit } = CLINICAL_IMAGES[id];
-    if (!asset || !credit || seen.has(credit.org)) return credits;
-    seen.add(credit.org);
+    const key = `${credit?.org}|${credit?.url ?? ''}`;
+    if (!asset || !credit || seen.has(key)) return credits;
+    seen.add(key);
     return [...credits, credit];
   }, []);
 }

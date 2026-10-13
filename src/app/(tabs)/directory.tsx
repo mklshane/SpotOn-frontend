@@ -18,6 +18,7 @@ import { Radius, Space } from "@/constants/theme";
 import { needsInitialSync, needsReconcile, runSync } from "@/data/sync";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { isConcern } from "@/lib/concerns";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function DirectoryScreen() {
@@ -26,7 +27,9 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { isOnline } = useConnectivity();
 
-  const params = useLocalSearchParams<{ segment?: string }>();
+  const params = useLocalSearchParams<{ segment?: string; concern?: string }>();
+  // /directory?concern=skin_cancer_mole_check - a scan result opens the directory pre-filtered.
+  const initialConcern = isConcern(params.concern) ? params.concern : null;
   const [segment, setSegment] = useState<DirectorySegment>("clinics");
   const [query, setQuery] = useState("");
 
@@ -34,7 +37,8 @@ export default function DirectoryScreen() {
   useEffect(() => {
     if (params.segment === "doctors" || params.segment === "clinics")
       setSegment(params.segment);
-  }, [params.segment]);
+    else if (initialConcern) setSegment("clinics");
+  }, [params.segment, initialConcern]);
   const debouncedQuery = useDebouncedValue(query, 250);
   const [overlayH, setOverlayH] = useState(0);
 
@@ -148,6 +152,7 @@ export default function DirectoryScreen() {
           syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
+          initialConcern={initialConcern}
         />
       </View>
       <View

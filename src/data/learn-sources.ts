@@ -88,10 +88,62 @@ export const SOURCES = localizedCopy({
     title: 'Cutaneous Squamous Cell Carcinoma',
     url: 'https://www.ncbi.nlm.nih.gov/books/NBK441939/',
   },
+  /**
+   * Backs the scan questionnaire's 7 mm diameter threshold, which differs from
+   * the ABCDE rule's 6 mm. Title read from bjgp.org on 2026-10-13.
+   */
+  glasgow7pcl: {
+    org: 'British Journal of General Practice (2013)',
+    title:
+      'Using the 7-point checklist as a diagnostic aid for pigmented skin lesions in general practice: a diagnostic validation study',
+    url: 'https://bjgp.org/content/63/610/e345',
+  },
   whoUvIndex: {
     org: 'World Health Organization',
     title: 'Radiation: The ultraviolet (UV) index',
     url: 'https://www.who.int/news-room/questions-and-answers/item/radiation-the-ultraviolet-(uv)-index',
+  },
+  // Fetched on 2026-10-13 for the harmless-spots, actinic keratosis, and
+  // darker-skin articles, with titles read back from the live pages as above.
+  aadMoles: {
+    org: 'American Academy of Dermatology',
+    title: 'Moles: Who gets and types',
+    url: 'https://www.aad.org/public/diseases/a-z/moles-types',
+  },
+  aadSeborrheicKeratosis: {
+    org: 'American Academy of Dermatology',
+    title: 'Seborrheic keratoses: Overview',
+    url: 'https://www.aad.org/public/diseases/a-z/seborrheic-keratoses-overview',
+  },
+  aadActinicKeratosis: {
+    org: 'American Academy of Dermatology',
+    title: 'Actinic keratosis: Overview',
+    url: 'https://www.aad.org/public/diseases/skin-cancer/actinic-keratosis-overview',
+  },
+  aadActinicKeratosisSymptoms: {
+    org: 'American Academy of Dermatology',
+    title: 'Actinic keratosis: Signs and symptoms',
+    url: 'https://www.aad.org/public/diseases/skin-cancer/actinic-keratosis-symptoms',
+  },
+  aadSkinOfColor: {
+    org: 'American Academy of Dermatology',
+    title: 'Finding skin cancer in darker skin tones',
+    url: 'https://www.aad.org/public/diseases/skin-cancer/types/common/melanoma/skin-color',
+  },
+  medlineCherryAngioma: {
+    org: 'MedlinePlus, National Library of Medicine',
+    title: 'Cherry angioma',
+    url: 'https://medlineplus.gov/ency/article/001441.htm',
+  },
+  dermnetDermatofibroma: {
+    org: 'DermNet',
+    title: 'Dermatofibroma (histiocytoma)',
+    url: 'https://dermnetnz.org/topics/dermatofibroma',
+  },
+  dermnetSolarLentigo: {
+    org: 'DermNet',
+    title: 'Solar lentigo',
+    url: 'https://dermnetnz.org/topics/solar-lentigo',
   },
 } as const satisfies Record<string, SourceRef>);
 
