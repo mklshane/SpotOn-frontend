@@ -40,6 +40,8 @@ function messageFor(e: unknown): string {
       console.warn('[auth] host error page:', e.message);
       return t('The server is unavailable right now. Please try again later.');
     }
+    // Rate limited (too many failed sign-ins for this account, or from this network).
+    if (e.status === 429) return t('Too many attempts. Please wait a few minutes and try again.');
     return e.detail;
   }
   // The friendly message hides the cause; keep the real one in the console for debugging.
