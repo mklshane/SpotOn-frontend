@@ -167,9 +167,12 @@ export default function CropScreen() {
   // (same dark-blob localizer the classifier's zoom refinement uses) and open the crop already
   // zoomed to the target fill - the spot lands inside the guide ring instead of the user having to
   // pinch it there. Best-effort: if no confident blob is found we leave the centered default.
-  // Skipped entirely when the camera handed us a box, which the effect above already used.
+  // Skipped entirely when the camera handed us a box, which the effect above already used, and for
+  // every camera shot without one: no live detection means there is no spot to zoom to, and the
+  // blob finder would otherwise lock onto whatever dark feature it finds (keyboard keys, a sleeve
+  // edge) and open the crop zoomed onto it.
   useEffect(() => {
-    if (!img || !uri || preframed.current) return;
+    if (!fromGallery || !img || !uri || preframed.current) return;
     const hasDetectorBox = [lx, ly, lw, lh]
       .map((v) => parseFloat(v ?? ''))
       .every(Number.isFinite);
@@ -205,7 +208,7 @@ export default function CropScreen() {
     return () => {
       alive = false;
     };
-  }, [img, uri, lx, ly, lw, lh, frame, scale, tx, ty]);
+  }, [fromGallery, img, uri, lx, ly, lw, lh, frame, scale, tx, ty]);
 
   const pan = Gesture.Pan()
     .onBegin(() => {

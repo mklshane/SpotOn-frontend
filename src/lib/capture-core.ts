@@ -845,6 +845,11 @@ function chooseTarget(
   const eligible = candidates.filter((candidate) => candidate.score >= CREATE_SCORE);
   if (eligible.length === 0) return null;
   const localized = eligible.filter((candidate) => isLocalized(candidate, roi));
+  // Only the wide crop may nominate a frame-filling box. The detector has no background class, and
+  // on a tight crop of plain skin it returns a phantom covering 60-85% of the crop at 0.2-0.34
+  // (measured on research/bare_skin_negatives), enough to clear CREATE and be drawn around a far
+  // smaller mole. A genuine close-up lesion is still nominated from the wide crop.
+  if (localized.length === 0 && roi.fraction < 1) return null;
   const pool = localized.length > 0 ? localized : eligible;
   let best = pool[0];
   let bestValue = targetUtility(best, zoomProgress);

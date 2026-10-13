@@ -507,5 +507,11 @@
   "Your photo": "Ang photo mo",
   "Your photos": "Ang mga photo mo",
   "Make sure the spot is sharp and well lit.": "Siguraduhing malinaw at maliwanag ang spot.",
-  "Add another angle (optional)": "Magdagdag ng ibang anggulo (opsyonal)"
+  "Add another angle (optional)": "Magdagdag ng ibang anggulo (opsyonal)",
+  "Delete this scan": "I-delete ang scan na ito",
+  "Delete this scan?": "I-delete ang scan na ito?",
+  "This can't be undone. The photos, answers and result for this scan are permanently removed from this device.": "Hindi na ito maibabalik. Permanenteng mabubura sa device na ito ang mga photo, sagot at resulta ng scan na ito.",
+  "Delete scan": "I-delete ang scan",
+  "Keep scan": "Itago ang scan",
+  "Could not delete this scan": "Hindi ma-delete ang scan na ito"
 }

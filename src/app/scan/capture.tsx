@@ -49,7 +49,6 @@ import {
   acceptsSession,
   SEARCH_FRACTIONS,
   padDrawnBox,
-  searchRoiForZoom,
   stepStability,
   stepActiveTarget,
   uprightRotation,
@@ -486,9 +485,9 @@ export default function CaptureScreen() {
    * Keying this on the number alone was safe while the device was fixed, and is not now: back and
    * front both commonly report neutralZoom 1, so flipping at 5x would leave zoomSV at 5. The
    * preview survives that (VisionCamera clamps to the device's range) but the DETECTOR does not -
-   * detectorZoomSV would stay at 5 and searchRoiForZoom would go on carving out the tight centre
-   * ROI that 5x implies, while the frame it is carving from is a full-width 1x view. The box then
-   * maps back through an ROI that never existed. device.id is the identity that actually changed.
+   * detectorZoomSV would stay at 5, and the tracker's zoom-dependent centre weighting and
+   * box-growth expectation would describe a zoom the frame does not have. device.id is the
+   * identity that actually changed.
    */
   const deviceId = device?.id;
   useEffect(() => {
@@ -496,8 +495,8 @@ export default function CaptureScreen() {
     syncDetectorZoom(neutralZoom);
   }, [deviceId, neutralZoom, zoomSV, syncDetectorZoom]);
   /* eslint-enable react-hooks/immutability */
-  // Quantized so a pinch cannot flood the JS thread: the ROI schedule is smooth in log2(zoom), so
-  // 2% steps are far finer than anything the crop can resolve.
+  // Quantized so a pinch cannot flood the JS thread: the zoom only feeds the tracker's centre
+  // weighting and geometry check, where 2% steps are far finer than anything that matters.
   useAnimatedReaction(
     () => Math.round(zoomSV.value * 50) / 50,
     (zoom, previous) => {
@@ -935,14 +934,17 @@ export default function CaptureScreen() {
           const zoomRatio = Math.max(1, zoom / Math.max(0.001, neutralZoom));
           const cropIndex = nextSearchCrop(cropIndexSV.value, pinnedCropSV.value);
           cropIndexSV.value = cropIndex;
-          const zoomRoi = searchRoiForZoom(frame.width, frame.height, zoom, neutralZoom);
           const guideCenter = previewToFullFrame(
             { cx: 0.5, cy: 0.42, w: 0, h: 0 },
             frame.width, frame.height, SW, SH, mirrored,
           );
+          // The search cycle is NOT narrowed by zoom: VisionCamera's frames are already zoomed, so
+          // shrinking the crop too magnified the spot twice. At 4x even the "wide" crop was a 46%
+          // centre square, the detector never saw the whole view, and its no-background phantom
+          // (a box filling most of a tight crop of plain skin) out-scored the real, now-blurry mole.
           const requestedRoi = focusedSearchRoi(
             frame.width, frame.height,
-            Math.min(zoomRoi.fraction, SEARCH_FRACTIONS[cropIndex]),
+            SEARCH_FRACTIONS[cropIndex],
             cropIndex === 0 ? { cx: 0.5, cy: 0.5, w: 0, h: 0 } : guideCenter,
           );
           const crop = sensorCropForRoi(frame.width, frame.height, frame.orientation, requestedRoi);

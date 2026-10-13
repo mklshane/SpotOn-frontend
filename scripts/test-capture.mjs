@@ -494,6 +494,19 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   const firstChoice = stepActiveTarget(initialActiveTargetState, [huge, localized], roi, 0, 1);
   check('localized candidate is preferred over a frame-sized region', firstChoice.state.acquisition.candidate === localized);
 
+  // The bare-skin phantom: a box filling most of a TIGHT crop must not be nominated, while the same
+  // relative size on the wide crop still is (that is the close-up "move back" path).
+  const tightRoi = { cx: 0.5, cy: 0.5, w: 0.46, h: 0.46, fraction: 0.46, zoomProgress: 1 };
+  const phantom = C(0.5, 0.5, 0.32, 0.8 * 0.46, 0.8 * 0.46);
+  check('tight crop does not nominate a crop-filling phantom',
+    stepActiveTarget(initialActiveTargetState, [phantom], tightRoi, 1, 1).state.acquisition === null);
+  check('wide crop still nominates a frame-filling close-up',
+    stepActiveTarget(initialActiveTargetState, [C(0.5, 0.5, 0.32, 0.8, 0.8)], roi, 0, 1)
+      .state.acquisition?.candidate.score === 0.32);
+  const mole = C(0.52, 0.5, 0.3, 0.04, 0.04);
+  check('tight crop nominates the small mole over the phantom',
+    stepActiveTarget(initialActiveTargetState, [phantom, mole], tightRoi, 1, 1).state.acquisition?.candidate === mole);
+
   const active = acquire(C(0.72, 0.5, 0.5)).state;
   const sameLow = C(0.72, 0.5, 0.25);
   const distantHigh = C(0.9, 0.85, 0.99);

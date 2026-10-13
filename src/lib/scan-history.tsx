@@ -8,6 +8,7 @@ import {
   updateLesionLabel,
 } from '@/data/lesion-repo';
 import {
+  deleteScreening,
   insertScreeningLinked,
   listScreenings,
   setScreeningLesion,
@@ -68,6 +69,8 @@ type ScanHistoryContextValue = {
   /** Mint a lesion from an already-saved screening and link it. Returns the new lesion. */
   trackScreening: (screeningId: string, label?: string | null) => Promise<Lesion | undefined>;
   deleteLesion: (id: string) => Promise<void>;
+  /** Permanently delete one screening and its photo files from this device. */
+  deleteEntry: (id: string) => Promise<void>;
 };
 
 const ScanHistoryContext = createContext<ScanHistoryContextValue | undefined>(undefined);
@@ -293,6 +296,14 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
     setEntries((prev) => prev.map((e) => (e.lesionId === id ? { ...e, lesionId: null } : e)));
   }, [accountId]);
 
+  const deleteEntry = useCallback<ScanHistoryContextValue['deleteEntry']>(async (id) => {
+    if (!accountId) return;
+    await deleteScreening(id, accountId);
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    // The lesion's count/latest tier moved with it; re-read rather than patching in place.
+    setLesions(await listLesions(accountId, { includeArchived: true }));
+  }, [accountId]);
+
   const value = useMemo<ScanHistoryContextValue>(
     () => ({
       entries: scopedEntries,
@@ -306,6 +317,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       linkScreening,
       trackScreening,
       deleteLesion,
+      deleteEntry,
       getById: (id) => scopedEntries.find((e) => e.id === id),
       getLesionById: (id) => scopedLesions.find((l) => l.id === id),
       screeningsForLesion: (lesionId) =>
@@ -326,6 +338,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       linkScreening,
       trackScreening,
       deleteLesion,
+      deleteEntry,
     ],
   );
 

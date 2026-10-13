@@ -2,7 +2,7 @@ import { t, useLocale } from "@/lib/i18n";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import Animated, {
   FadeInDown,
   LayoutAnimationConfig,
@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
 import { ThemedText } from "@/components/themed-text";
-import { Button, Card, ImageViewer, Screen } from "@/components/ui";
+import { Button, Card, ConfirmDialog, ImageViewer, Screen } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useAndroidBack } from "@/hooks/use-android-back";
@@ -58,7 +58,7 @@ export default function ResultScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  const { getById, loading, storageIsEphemeral } = useScanHistory();
+  const { getById, loading, storageIsEphemeral, deleteEntry } = useScanHistory();
   const record = id ? getById(id) : undefined;
   // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
   // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
@@ -77,6 +77,31 @@ export default function ResultScreen() {
   // ends a scan; reached from a list, the default pop is what should happen.
   useAndroidBack(flowTerminal ? goBack : null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Set once the delete lands, so the pop animation shows a blank screen rather than
+  // "This result could not be found." for the record we just removed.
+  const [deleted, setDeleted] = useState(false);
+
+  async function handleDelete() {
+    if (!record) return;
+    setDeleting(true);
+    try {
+      await deleteEntry(record.id);
+      setDeleted(true);
+      setConfirmDeleteVisible(false);
+      goBack();
+    } catch (e) {
+      console.warn("[result] delete failed", e);
+      // Close the dialog before alerting: an Alert stacked on an open Modal is unreliable on iOS.
+      setDeleting(false);
+      setConfirmDeleteVisible(false);
+      Alert.alert(
+        t("Could not delete this scan"),
+        t("Something went wrong. Please try again."),
+      );
+    }
+  }
 
   const tierColor = (tier: TriageTier) =>
     tier === "low"
@@ -88,6 +113,7 @@ export default function ResultScreen() {
           : { fg: theme.riskCritical, bg: theme.riskCriticalBg };
 
   if (!record) {
+    if (deleted) return <Screen>{null}</Screen>;
     return (
       <Screen>
         <Header onBack={goBack} />
@@ -434,8 +460,28 @@ export default function ResultScreen() {
           {tier.offerReminder ? (
             <ReminderRow lesionId={record.lesionId} />
           ) : null}
+          <Button
+            label={t("Delete this scan")}
+            variant="ghost"
+            icon="trash.fill"
+            onPress={() => setConfirmDeleteVisible(true)}
+          />
         </Animated.View>
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmDeleteVisible}
+        icon="trash.fill"
+        destructive
+        loading={deleting}
+        title={t("Delete this scan?")}
+        message={t(
+          "This can't be undone. The photos, answers and result for this scan are permanently removed from this device.",
+        )}
+        confirmLabel={deleting ? t("Deleting…") : t("Delete scan")}
+        cancelLabel={t("Keep scan")}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteVisible(false)}
+      />
       <ImageViewer
         visible={viewerUri != null}
         uri={viewerUri ?? ""}
