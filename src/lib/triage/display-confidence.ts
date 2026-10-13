@@ -17,22 +17,56 @@ import type { LesionClass } from './types';
 export const BENIGN_DISPLAY_SHARPEN = 1.5;
 export const BENIGN_DISPLAY_CAP = 0.97;
 
-export function displayConfidence(
-  classification: { topClass: LesionClass; topConfidence: number; probs: Record<LesionClass, number> },
-  triage: { malignantGateApplied: boolean; confidenceQualifier?: unknown },
-): number {
+type DisplayInput = {
+  classification: { topClass: LesionClass; topConfidence: number; probs: Record<LesionClass, number> };
+  triage: { malignantGateApplied: boolean; confidenceQualifier?: unknown };
+};
+
+/** The boosted BENIGN value, or null when the boost doesn't apply (shown values = stored values). */
+function boostedBenign(
+  classification: DisplayInput['classification'],
+  triage: DisplayInput['triage'],
+): number | null {
   const { topClass, topConfidence, probs } = classification;
   if (topClass !== 'BENIGN' || triage.malignantGateApplied || triage.confidenceQualifier) {
-    return topConfidence;
+    return null;
   }
   let sum = 0;
   for (const p of Object.values(probs)) {
-    if (!Number.isFinite(p) || p < 0) return topConfidence;
+    if (!Number.isFinite(p) || p < 0) return null;
     sum += p ** BENIGN_DISPLAY_SHARPEN;
   }
-  if (!(sum > 0)) return topConfidence;
+  if (!(sum > 0)) return null;
   const sharpened = probs.BENIGN ** BENIGN_DISPLAY_SHARPEN / sum;
   // The boost alone never lifts a value past the cap, but a real confidence already above it is
   // shown as-is (up to 100%) - the display is never lower than the real value.
   return Math.max(topConfidence, Math.min(sharpened, BENIGN_DISPLAY_CAP));
+}
+
+export function displayConfidence(
+  classification: DisplayInput['classification'],
+  triage: DisplayInput['triage'],
+): number {
+  return boostedBenign(classification, triage) ?? classification.topConfidence;
+}
+
+/**
+ * DISPLAY-ONLY per-class breakdown that agrees with `displayConfidence`: when the benign boost
+ * applies, BENIGN takes the boosted value and the other classes share the remainder in their
+ * original proportions (so their ordering is unchanged and the bars still sum to 100%).
+ */
+export function displayProbs(
+  classification: DisplayInput['classification'],
+  triage: DisplayInput['triage'],
+): Record<LesionClass, number> {
+  const { probs } = classification;
+  const benign = boostedBenign(classification, triage);
+  if (benign === null) return probs;
+  const restReal = 1 - probs.BENIGN;
+  const out = { ...probs };
+  for (const c of Object.keys(out) as LesionClass[]) {
+    if (c === 'BENIGN') out[c] = benign;
+    else out[c] = restReal > 0 ? (probs[c] / restReal) * (1 - benign) : 0;
+  }
+  return out;
 }

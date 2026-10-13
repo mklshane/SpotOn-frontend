@@ -46,7 +46,7 @@ import {
   malignantGateCopy,
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
-import { displayConfidence } from "@/lib/triage/display-confidence";
+import { displayConfidence, displayProbs } from "@/lib/triage/display-confidence";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -205,33 +205,50 @@ export default function ResultScreen() {
           </Animated.View>
         ) : null}
 
-        {/* 1 · Hero - classified type, tier, confidence ring. Keep the card neutral so the tier
-            color stays focused on the badge and confidence ring. */}
+        {/* 1 · Hero - classified type, tier, confidence ring, and the one action to take. The card
+            stays white; the tier color lives in the pill, the ring and the action band, so it reads
+            as status rather than tinting the whole screen. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: colors.bg }]}>
-            <View style={styles.heroTop}>
-              {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
-                  "% match to a pattern with features similar to…" line right below, and in the
-                  disclaimer - not in the label the user repeats to a clinician. */}
-              <ThemedText type="title1" style={styles.heroTitle}>
-                {cls.name}
-              </ThemedText>
-              <View style={[styles.tierBadge, { backgroundColor: colors.fg }]}>
-                <ThemedText type="subhead" style={{ color: theme.onBrand }}>
+          <View style={[styles.hero, { backgroundColor: theme.surface }]}>
+            <View style={styles.heroBody}>
+              <View style={[styles.tierBadge, { backgroundColor: colors.bg }]}>
+                <View
+                  style={[styles.tierDot, { backgroundColor: colors.fg }]}
+                />
+                <ThemedText type="footnote" style={styles.tierBadgeText}>
                   {qualifier ? t("Precautionary") : tier.name}
                 </ThemedText>
               </View>
+              {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
+                  "% match to a pattern with features similar to…" line right below, and in the
+                  disclaimer - not in the label the user repeats to a clinician. */}
+              <ThemedText type="title1">{cls.name}</ThemedText>
+              <View style={styles.heroConf}>
+                <ConfidenceRing pct={pct} color={colors.fg} />
+                <View style={styles.heroConfText}>
+                  <ThemedText type="subhead" themeColor="textSecondary">
+                    {t("AI confidence")}
+                  </ThemedText>
+                  {/* `topClass` is the raw model enum - this printed "78% probability for MEL
+                      pattern" in the most important sentence on the screen. */}
+                  <ThemedText type="callout">
+                    {pct}
+                    {t("% match to")} {cls.lay}.
+                  </ThemedText>
+                </View>
+              </View>
             </View>
-            <View style={styles.heroBottom}>
-              <ConfidenceRing pct={pct} color={colors.fg} />
-              <View style={styles.heroConfText}>
-                <ThemedText type="headline">{t("AI confidence")}</ThemedText>
-                {/* `topClass` is the raw model enum - this printed "78% probability for MEL
-                    pattern" in the most important sentence on the screen. */}
-                <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}
-                  {t("% match to")} {cls.lay}.
+            <View style={[styles.priority, { backgroundColor: colors.bg }]}>
+              <Icon
+                name="arrow.right.circle.fill"
+                tintColor={colors.fg}
+                size={22}
+              />
+              <View style={styles.priorityText}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {t("Priority action:").replace(/:$/, "")}
                 </ThemedText>
+                <ThemedText type="headline">{tier.priorityAction}</ThemedText>
               </View>
             </View>
           </View>
@@ -321,22 +338,8 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 3 · The one action to take, with the safety warning immediately underneath. */}
-        <Animated.View
-          entering={FadeInDown.delay(110)}
-          style={styles.priorityBlock}
-        >
-          <View style={[styles.priority, { backgroundColor: colors.bg }]}>
-            <View
-              style={[styles.priorityDot, { backgroundColor: colors.fg }]}
-            />
-            <ThemedText
-              type="subhead"
-              style={[styles.priorityText, { color: colors.fg }]}
-            >
-              {t("Priority action:")} {tier.priorityAction}
-            </ThemedText>
-          </View>
+        {/* 3 · The safety warning, right under the photo and the action it qualifies. */}
+        <Animated.View entering={FadeInDown.delay(110)}>
           <WarningBanner />
         </Animated.View>
 
@@ -345,23 +348,35 @@ export default function ResultScreen() {
           <Card style={styles.section}>
             <ThemedText type="headline">{t("What this means")}</ThemedText>
             {qualifier ? (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
                 {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
               </ThemedText>
             ) : gated ? (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
                 {malignantGateCopy(classification.topClass).body}{" "}
                 {tier.recommendation}
               </ThemedText>
             ) : (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
                 {t("This result suggests a")}{" "}
-                <ThemedText type="body" style={{ color: colors.fg }}>
+                <ThemedText type="callout" style={styles.emphasis}>
                   {PATTERN_WORD[classification.topClass]} {t("pattern (")}
                   {classification.topClass})
                 </ThemedText>{" "}
                 {t("based on your photo.")}{" "}
-                <ThemedText type="body">
+                <ThemedText type="callout" style={styles.emphasis}>
                   {t("It is not a confirmed diagnosis.")}
                 </ThemedText>{" "}
                 {tier.recommendation}
@@ -607,24 +622,14 @@ function WarningBanner() {
   useLocale();
   const theme = useTheme();
   return (
-    <View
-      style={[
-        styles.warningBanner,
-        {
-          backgroundColor: theme.riskModerateBg,
-          borderColor: theme.riskModerate,
-        },
-      ]}
-    >
+    <View style={[styles.warningBanner, { backgroundColor: theme.elementBg }]}>
       <Icon
         name="exclamationmark.triangle.fill"
         tintColor={theme.riskModerate}
         size={18}
       />
       <View style={styles.warningCopy}>
-        <ThemedText type="subhead" style={{ color: theme.riskModerate }}>
-          {t("Avoid self-medication")}
-        </ThemedText>
+        <ThemedText type="subhead">{t("Avoid self-medication")}</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
           {t(AVOID_SELF_MEDICATION_WARNING).replace(/^[^.]*\.\s*/, "")}
         </ThemedText>
@@ -685,13 +690,14 @@ function AboutType({ record }: { record: ScreeningRecord }) {
   const [open, setOpen] = useState(false);
   const { classification } = record;
   const cls = CLASS_DISPLAY[classification.topClass];
+  const probs = displayProbs(classification, record.triage);
 
   return (
     <Card style={styles.section}>
       <ThemedText type="headline">
         {t("About {{name}}", { name: cls.full })}
       </ThemedText>
-      <ThemedText type="body" themeColor="textSecondary">
+      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
         {cls.about}
       </ThemedText>
       <LayoutAnimationConfig skipEntering={false}>
@@ -713,7 +719,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
         {open ? (
           <Animated.View entering={FadeInDown} style={styles.bars}>
             {CLASS_BY_URGENCY.map((c) => {
-              const p = classification.probs[c] ?? 0;
+              const p = probs[c] ?? 0;
               const top = c === classification.topClass;
               return (
                 <View key={c} style={styles.barRow}>
@@ -969,26 +975,29 @@ const styles = StyleSheet.create({
     gap: Space.base,
   },
   center: { textAlign: "center" },
-  // Keep the hero card neutral so the tier color is reserved for status accents.
   hero: {
     borderRadius: Radius.xl,
-    padding: Space.xl,
-    gap: Space.lg,
+    overflow: "hidden",
     ...Elevation.sm,
   },
-  heroTop: {
+  heroBody: { padding: Space.xl, gap: Space.md },
+  tierBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: Space.md,
-  },
-  heroTitle: { flex: 1 },
-  tierBadge: {
+    alignSelf: "flex-start",
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.pill,
   },
-  heroBottom: { flexDirection: "row", alignItems: "center", gap: Space.lg },
+  tierDot: { width: 8, height: 8, borderRadius: 4 },
+  tierBadgeText: { fontWeight: "600" },
+  heroConf: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.base,
+    marginTop: Space.xs,
+  },
   heroConfText: { flex: 1, gap: 2 },
   // Keep the photo inset inside the white card so the media and details read as one framed
   // record, matching the tracked-spot card treatment.
@@ -1028,29 +1037,26 @@ const styles = StyleSheet.create({
   },
   thumbSmall: { width: 56, height: 56, borderRadius: Radius.sm },
   photoCaptionText: { flex: 1, gap: 2 },
-  // Priority action, with the disclaimer as a footnote beneath.
-  priorityBlock: { gap: Space.md },
   priority: {
     flexDirection: "row",
     alignItems: "center",
     gap: Space.md,
-    paddingHorizontal: Space.base,
+    paddingHorizontal: Space.xl,
     paddingVertical: Space.base,
-    borderRadius: Radius.md,
   },
-  priorityDot: { width: 8, height: 8, borderRadius: 4 },
-  priorityText: { flex: 1 },
+  priorityText: { flex: 1, gap: 2 },
   warningBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: Space.sm,
-    padding: Space.md,
-    borderWidth: 1,
-    borderRadius: Radius.md,
+    gap: Space.md,
+    padding: Space.base,
+    borderRadius: Radius.lg,
   },
   warningCopy: { flex: 1, gap: 2 },
   // Cards
   section: { gap: Space.md },
+  para: { lineHeight: 22 },
+  emphasis: { fontWeight: "600" },
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
