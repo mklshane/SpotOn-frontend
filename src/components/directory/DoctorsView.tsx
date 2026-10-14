@@ -8,7 +8,14 @@ import type { DoctorSync, FacilitySync } from "@/api/types";
 import { Chip } from "@/components/ui/chip";
 import { ListState } from "@/components/ui/list-state";
 import { Space } from "@/constants/theme";
-import { listDoctors, listFacilities } from "@/data/repositories";
+import {
+  distanceMeters,
+  listDoctors,
+  listFacilities,
+  nearestPracticeMeters,
+  type FacilityWithDistance,
+} from "@/data/repositories";
+import { useLocation } from "@/hooks/use-location";
 
 import { ClinicCard } from "./ClinicCard";
 import { DoctorCard } from "./DoctorCard";
@@ -52,24 +59,45 @@ export function DoctorsView({
   useLocale();
   const [mode, setMode] = useState<BookingMode>("doctors");
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
-  const [clinics, setClinics] = useState<FacilitySync[] | null>(null);
+  const [doctorDistance, setDoctorDistance] = useState<Map<string, number>>(new Map());
+  const [clinics, setClinics] = useState<(FacilitySync | FacilityWithDistance)[] | null>(null);
   const [error, setError] = useState(false);
+  const { coords } = useLocation();
 
   useEffect(() => {
     let cancelled = false;
     // Error is cleared on the next SUCCESS (not up front in the effect body): a later failed
     // query used to leave stale rows on screen with no message, since the error only rendered
     // while the list was still loading.
+    // With a location fix, nearest first: read every bookable row (a few hundred), sort by
+    // distance, keep 100. Without one, the alphabetical first 100 as before.
     if (mode === "doctors") {
-      listDoctors({ q: query || undefined, hasBookingLink: true, limit: 100 })
-        .then((rows) => {
+      (async () => {
+        const rows = await listDoctors({ q: query || undefined, hasBookingLink: true, limit: coords ? 5000 : 100 });
+        if (!coords) return { rows, dist: new Map<string, number>() };
+        const dist = await nearestPracticeMeters(coords.latitude, coords.longitude);
+        // Doctors with no mapped practice keep their alphabetical order, after the located ones.
+        const sorted = [...rows].sort(
+          (a, b) => (dist.get(a.id) ?? Infinity) - (dist.get(b.id) ?? Infinity),
+        );
+        return { rows: sorted.slice(0, 100), dist };
+      })()
+        .then(({ rows, dist }) => {
           if (cancelled) return;
           setError(false);
+          setDoctorDistance(dist);
           setDoctors(rows);
         })
         .catch(() => !cancelled && setError(true));
     } else {
-      listFacilities({ q: query || undefined, hasBookingUrl: true, limit: 100 })
+      (async () => {
+        const rows = await listFacilities({ q: query || undefined, hasBookingUrl: true, limit: coords ? 5000 : 100 });
+        if (!coords) return rows;
+        return rows
+          .map((f) => ({ ...f, distance_m: distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude) }))
+          .sort((a, b) => a.distance_m - b.distance_m)
+          .slice(0, 100);
+      })()
         .then((rows) => {
           if (cancelled) return;
           setError(false);
@@ -80,7 +108,7 @@ export function DoctorsView({
     return () => {
       cancelled = true;
     };
-  }, [mode, query, syncVersion]);
+  }, [mode, query, syncVersion, coords]);
 
   const loading = mode === "doctors" ? doctors === null : clinics === null;
   const empty =
@@ -135,6 +163,7 @@ export function DoctorsView({
             renderItem={({ item }) => (
               <DoctorCard
                 doctor={item}
+                distanceM={doctorDistance.get(item.id)}
                 onPress={() =>
                   router.push({
                     pathname: "/directory/doctor",

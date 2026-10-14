@@ -9,11 +9,16 @@ import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { humanizeTag } from '@/lib/format';
+import { formatDistance, humanizeTag } from '@/lib/format';
 
-export type DoctorCardProps = { doctor: DoctorSync; onPress: () => void };
+export type DoctorCardProps = {
+  doctor: DoctorSync;
+  onPress: () => void;
+  /** Metres to the doctor's nearest practice, when the user's location is known. */
+  distanceM?: number | null;
+};
 
-export function DoctorCard({ doctor, onPress }: DoctorCardProps) {
+export function DoctorCard({ doctor, onPress, distanceM }: DoctorCardProps) {
   useLocale();
   const theme = useTheme();
   const specialty = doctor.specialties_display || doctor.specialties.map(humanizeTag).join(', ');
@@ -38,12 +43,19 @@ export function DoctorCard({ doctor, onPress }: DoctorCardProps) {
         </View>
 
         <View style={styles.footer}>
-          {location ? (
+          {location || distanceM != null ? (
             <View style={styles.location}>
               <Icon name="mappin.circle.fill" size={13} tintColor={theme.muted} />
-              <ThemedText type="caption" themeColor="muted" numberOfLines={1} style={styles.locationText}>
-                {location}
-              </ThemedText>
+              {distanceM != null ? (
+                <ThemedText type="caption" themeColor="brand" style={styles.distance}>
+                  {formatDistance(distanceM)}
+                </ThemedText>
+              ) : null}
+              {location ? (
+                <ThemedText type="caption" themeColor="muted" numberOfLines={1} style={styles.locationText}>
+                  {distanceM != null ? `· ${location}` : location}
+                </ThemedText>
+              ) : null}
             </View>
           ) : (
             <View style={styles.location} />
@@ -69,4 +81,5 @@ const styles = StyleSheet.create({
   },
   location: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   locationText: { flexShrink: 1 },
+  distance: { fontWeight: '700' },
 });

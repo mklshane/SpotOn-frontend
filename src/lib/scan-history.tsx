@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import {
   deleteLesion as deleteLesionRow,
   listLesions,
+  pruneEmptyLesions,
   setLesionArchived,
   updateLesionLabel,
 } from '@/data/lesion-repo';
@@ -141,6 +142,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
     if (!accountId) return () => { alive = false; };
 
     claimLegacyHistory(accountId)
+      .then(() => pruneEmptyLesions(accountId))
       .then(() => {
         void syncSelfCheckReminder().catch((e) => console.warn('[notifications] account sync failed', e));
         return Promise.all([

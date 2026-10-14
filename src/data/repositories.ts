@@ -231,6 +231,28 @@ export interface FacilityWithDistance extends FacilitySync {
 }
 
 /**
+ * Metres from a point to each doctor's NEAREST practice (doctor_facility -> facility with
+ * coordinates). Doctors with no mapped practice are absent from the map. One pass over
+ * ~1.7k links, so cheap enough to run on every location fix.
+ */
+export async function nearestPracticeMeters(lat: number, lng: number): Promise<Map<string, number>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ doctor_id: string; latitude: number; longitude: number }>(
+    `SELECT df.doctor_id, f.latitude, f.longitude
+       FROM doctor_facility df JOIN facilities f ON f.id = df.facility_id
+      WHERE f.latitude IS NOT NULL AND f.longitude IS NOT NULL
+        AND (f.status IS NULL OR f.status != 'excluded')`,
+  );
+  const out = new Map<string, number>();
+  for (const r of rows) {
+    const d = distanceMeters(lat, lng, r.latitude, r.longitude);
+    const prev = out.get(r.doctor_id);
+    if (prev === undefined || d < prev) out.set(r.doctor_id, d);
+  }
+  return out;
+}
+
+/**
  * Facilities near a point, sorted ascending by distance. Prefilters with a
  * bounding box in SQL (cheap), then sorts the candidates by exact haversine.
  */

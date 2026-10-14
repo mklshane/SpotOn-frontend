@@ -116,6 +116,19 @@ export async function listLesions(
   return rows.map(toLesion);
 }
 
+/**
+ * Delete lesions with no screenings. Cleans up spots orphaned before refreshLesionRollup started
+ * removing them, so the list stops showing "Not scanned yet - 0 scans" cards.
+ */
+export async function pruneEmptyLesions(userId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `DELETE FROM lesions WHERE user_id = ?
+        AND NOT EXISTS (SELECT 1 FROM screenings s WHERE s.lesion_id = lesions.id AND s.user_id = lesions.user_id)`,
+    userId,
+  );
+}
+
 export async function updateLesionLabel(id: string, label: string | null, userId: string): Promise<void> {
   const db = await getDb();
   await db.runAsync(
@@ -157,8 +170,8 @@ export async function setLesionArchived(id: string, archived: boolean, userId: s
 
 /**
  * Recompute the rollups from `screenings`. Idempotent - safe to call after any insert, delete or
- * relink. A lesion with no screenings left keeps its row (the user may still be tracking the spot)
- * with a zeroed count.
+ * relink. A lesion with no screenings left is deleted and null is returned: every lesion is born
+ * from a scan, so an empty one is a leftover "Not scanned yet" card, not a spot being tracked.
  */
 export async function refreshLesionRollup(id: string, userId: string): Promise<Lesion | null> {
   const db = await getDb();
@@ -172,6 +185,10 @@ export async function refreshLesionRollup(id: string, userId: string): Promise<L
     id,
     userId,
   );
+  if (!agg?.n) {
+    await db.runAsync("DELETE FROM lesions WHERE id = ? AND user_id = ?", id, userId);
+    return null;
+  }
   const latest = await db.getFirstAsync<{ id: string; tier: string }>(
     "SELECT id, tier FROM screenings WHERE lesion_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1",
     id,
