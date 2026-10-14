@@ -15,10 +15,10 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const out = mkdtempSync(join(tmpdir(), 'directory-core-'));
 execFileSync(
   join(ROOT, 'node_modules/.bin/tsc'),
-  ['src/lib/directory-core.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
+  ['src/lib/directory-core.ts', 'src/lib/concerns.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { splitPhones, toDialable, normalizeUrl, parseHHMM, openStatusAt, haversineMeters } = await import(
+const { splitPhones, toDialable, formatPhone, normalizeUrl, parseHHMM, openStatusAt, haversineMeters } = await import(
   pathToFileURL(join(out, 'directory-core.js')).href
 );
 
@@ -92,6 +92,22 @@ check('evaluated in Manila regardless of device zone', openStatusAt(wk, we, new 
 // ---- distance ----
 const d = haversineMeters(14.5995, 120.9842, 14.6760, 121.0437); // Manila → Quezon City ≈ 10.6 km
 check('haversine ≈ 10.6 km', d > 10_000 && d < 11_200);
+
+// Call button labels show the number in the usual PH form, whatever the listing wrote.
+check('mobile label', formatPhone(toDialable('09765094655')) === '0976 509 4655');
+check('Manila landline label', formatPhone(toDialable('0287133315')) === '(02) 8713 3315');
+check('provincial landline label', formatPhone(toDialable('(043) 773 6800')) === '(043) 773 6800');
+check('provincial, unspaced', formatPhone(toDialable('0437564386')) === '(043) 756 4386');
+check('local 7-digit kept', formatPhone(toDialable('7982572')) === '7982572');
+
+// Derm-first ranking: the directory lists places where a dermatologist can be seen first.
+const { dermTier } = await import(pathToFileURL(join(out, 'concerns.js')).href);
+check('derm clinic is tier 0', dermTier({ type: 'dermatology_clinic', derm_status: 'unchecked' }) === 0);
+check('hospital with linked derm is tier 0', dermTier({ type: 'private_hospital', derm_status: 'has_derm_doctors' }) === 0);
+check('PDS center hospital is tier 0', dermTier({ type: 'government_hospital', derm_status: 'unchecked', pds_skin_cancer_center: true }) === 0);
+check('derm dept, no names is tier 1', dermTier({ type: 'medical_center', derm_status: 'derm_dept_no_names' }) === 1);
+check('no derm found is tier 2', dermTier({ type: 'private_hospital', derm_status: 'no_derm_found' }) === 2);
+check('unchecked hospital is tier 2', dermTier({ type: 'government_hospital', derm_status: null }) === 2);
 
 console.log(`directory core: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

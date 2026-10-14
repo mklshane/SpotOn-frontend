@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import type { DoctorSync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
-import { hasPhone, usePhoneCall } from "@/components/directory/use-phone-call";
+import { callLabel, hasPhone, phoneDials, usePhoneCall } from "@/components/directory/use-phone-call";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -119,6 +119,13 @@ export default function DoctorDetailScreen() {
   const ranked = useMemo(() => rankLinks(links), [links]);
   const [best, ...others] = ranked;
   const websiteUrl = normalizeUrl(doctor?.website);
+  // Every number a clinic button above already dials; the direct line only shows if it adds one.
+  const showDirectLine = useMemo(() => {
+    const shown = new Set(
+      practices.flatMap((p) => phoneDials(hasPhone(p.phone) ? p.phone : p.facility.phone)),
+    );
+    return phoneDials(doctor?.phone).some((d) => !shown.has(d));
+  }, [doctor?.phone, practices]);
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -281,16 +288,34 @@ export default function DoctorDetailScreen() {
                     </Pressable>
                     {hasPhone(p.phone) || hasPhone(p.facility.phone) ? (
                       <Button
-                        label={t("Call clinic")}
+                        // The doctor's own clinic line beats the hospital trunk line.
+                        label={callLabel(hasPhone(p.phone) ? p.phone : p.facility.phone)}
                         variant="outline"
                         icon="phone.fill"
-                        // The doctor's own clinic line beats the hospital trunk line.
                         onPress={() => phone.call(hasPhone(p.phone) ? p.phone : p.facility.phone)}
                       />
                     ) : null}
                   </Card>
                 );
               })}
+            </View>
+          ) : null}
+
+          {/* 3b · The doctor's own number (PDS listing: often a secretary or mobile). Labelled, and
+              skipped when it is one of the clinic lines above, so two Call buttons never dial the
+              same place under different names. */}
+          {showDirectLine ? (
+            <View style={styles.section}>
+              <ThemedText type="title2">{t("Doctor's direct line")}</ThemedText>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {t("The doctor's own number from their PDS listing, often a secretary or clinic mobile.")}
+              </ThemedText>
+              <Button
+                label={callLabel(doctor.phone)}
+                variant="outline"
+                icon="phone.fill"
+                onPress={() => phone.call(doctor.phone)}
+              />
             </View>
           ) : null}
 
@@ -328,8 +353,8 @@ export default function DoctorDetailScreen() {
             </View>
           ) : null}
 
-          {/* 5 · About + the doctor's own contacts (secondary to clinic phones) */}
-          {doctor.description || hasPhone(doctor.phone) || websiteUrl ? (
+          {/* 5 · About + the doctor's website */}
+          {doctor.description || websiteUrl ? (
             <View style={styles.section}>
               <ThemedText type="title2">{t("About")}</ThemedText>
               {doctor.description ? (
@@ -337,17 +362,8 @@ export default function DoctorDetailScreen() {
                   {doctor.description}
                 </ThemedText>
               ) : null}
-              {hasPhone(doctor.phone) || websiteUrl ? (
+              {websiteUrl ? (
                 <View style={styles.actions}>
-                  {hasPhone(doctor.phone) ? (
-                    <Button
-                      label={t("Call")}
-                      variant="outline"
-                      icon="phone.fill"
-                      onPress={() => phone.call(doctor.phone)}
-                      style={styles.actionButton}
-                    />
-                  ) : null}
                   {websiteUrl ? (
                     <Button
                       label={t("Website")}

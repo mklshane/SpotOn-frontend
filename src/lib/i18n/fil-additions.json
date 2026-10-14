@@ -779,5 +779,9 @@
   "Checked {{date}}": "Na-check noong {{date}}",
   "No dermatologist listed here yet. Call the hospital's OPD to ask about a skin clinic schedule.": "Wala pang nakalistang dermatologist dito. Tumawag sa OPD ng ospital para itanong ang schedule ng skin clinic.",
   "PDS dermatology training hospital": "PDS dermatology training hospital",
-  "Showing places for: {{concern}}": "Mga lugar para sa: {{concern}}"
+  "Showing places for: {{concern}}": "Mga lugar para sa: {{concern}}",
+  "Call {{number}}": "Tawagan ang {{number}}",
+  "Call {{number}} +{{count}}": "Tawagan ang {{number}} +{{count}}",
+  "Doctor's direct line": "Direktang linya ng doktor",
+  "The doctor's own number from their PDS listing, often a secretary or clinic mobile.": "Sariling numero ng doktor mula sa kanilang PDS listing, kadalasang sekretarya o mobile ng clinic."
 }

@@ -23,7 +23,7 @@ import {
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
-import { CONCERNS, WEEKEND_MASK, type ConcernId } from "@/lib/concerns";
+import { CONCERNS, dermTier, WEEKEND_MASK, type ConcernId } from "@/lib/concerns";
 import { isOpenNow } from "@/lib/hours";
 import { downloadAreaPack } from "@/lib/map-offline";
 import NetInfo from "@react-native-community/netinfo";
@@ -104,9 +104,12 @@ export function ClinicsView({
   }
 
   // A new deep link (another scan result) must re-apply its concern; the screen stays mounted.
-  useEffect(() => {
+  // Adjusted during render (same pattern as the sort default above), not in an effect.
+  const [appliedConcern, setAppliedConcern] = useState(initialConcern);
+  if (initialConcern !== appliedConcern) {
+    setAppliedConcern(initialConcern);
     if (initialConcern) setConcern(initialConcern);
-  }, [initialConcern]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -166,19 +169,16 @@ export function ClinicsView({
         (f) => isOpenNow(f.weekday_hours, f.weekend_hours) === true,
       );
 
-    const sorted = [...rows];
-    if (sort === "distance" && coords) {
-      sorted.sort(
-        (a, b) =>
-          ("distance_m" in a ? a.distance_m : Infinity) -
-          ("distance_m" in b ? b.distance_m : Infinity),
-      );
-    } else if (sort === "rating") {
-      sorted.sort((a, b) => (b.google_rating ?? 0) - (a.google_rating ?? 0));
-    } else {
-      sorted.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    return sorted;
+    const byKey: (a: Facility, b: Facility) => number =
+      sort === "distance" && coords
+        ? (a, b) =>
+            ("distance_m" in a ? a.distance_m : Infinity) -
+            ("distance_m" in b ? b.distance_m : Infinity)
+        : sort === "rating"
+          ? (a, b) => (b.google_rating ?? 0) - (a.google_rating ?? 0)
+          : (a, b) => a.name.localeCompare(b.name);
+    // Places where a dermatologist can actually be seen come first, whatever the sort.
+    return [...rows].sort((a, b) => dermTier(a) - dermTier(b) || byKey(a, b));
   }, [facilities, openOnly, sort, coords]);
 
   const cycleSort = useCallback(() => {

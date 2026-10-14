@@ -2,7 +2,7 @@ import { t } from '@/lib/i18n';
 import { useCallback, useState } from 'react';
 
 import { ActionSheet } from '@/components/ui/action-sheet';
-import { callNumber, splitPhones, type PhoneOption } from '@/lib/links';
+import { callNumber, formatPhone, splitPhones, type PhoneOption } from '@/lib/links';
 
 /**
  * Call a listing's free-text phone field. One number dials straight away; several (about 2% of
@@ -38,4 +38,23 @@ export function usePhoneCall() {
 /** True when the field holds at least one dialable number - hide Call otherwise. */
 export function hasPhone(raw: string | null | undefined): boolean {
   return splitPhones(raw).length > 0;
+}
+
+/**
+ * "Call (043) 773 6800" - a Call button names the number it dials, so two buttons on one
+ * screen (hospital trunk line vs the doctor's own line) can't be confused. A field holding
+ * several numbers shows the first and how many more the picker will offer.
+ */
+export function callLabel(raw: string | null | undefined): string {
+  const phones = splitPhones(raw);
+  if (!phones.length) return t('Call');
+  const number = formatPhone(phones[0].dial);
+  return phones.length > 1
+    ? t('Call {{number}} +{{count}}', { number, count: phones.length - 1 })
+    : t('Call {{number}}', { number });
+}
+
+/** Every dialable number in a phone field, normalised - for spotting the same line twice. */
+export function phoneDials(raw: string | null | undefined): string[] {
+  return splitPhones(raw).map((p) => p.dial);
 }

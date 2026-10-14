@@ -381,6 +381,9 @@ const MIGRATION_V17 = [
   "ALTER TABLE doctor_facility ADD COLUMN phone TEXT",
   "ALTER TABLE doctor_facility ADD COLUMN source_url TEXT",
   "ALTER TABLE doctor_facility ADD COLUMN verified_at TEXT",
+  // Rows synced before v17 never carried these columns, and an incremental sync only
+  // re-sends rows changed since the cursor; dropping it makes the next sync a full one.
+  "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
 ];
 
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {

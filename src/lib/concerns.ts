@@ -35,3 +35,20 @@ export function formatScheduleDays(mask: number | null | undefined): string | nu
   const days = DAY_NAMES.filter((_, i) => mask & (1 << i));
   return days.length === 7 ? "Daily" : days.join(", ");
 }
+
+/**
+ * Directory rank: 0 = a dermatologist can be seen here (derm clinic, hospital with a linked
+ * derm, PDS referral center), 1 = hospital with a derm department but no names online,
+ * 2 = hospital where no dermatologist was found or nobody has checked yet. The app is a
+ * dermatology directory, so tier 0 always lists first; the chosen sort applies within a tier.
+ */
+export function dermTier(f: {
+  type?: string | null;
+  derm_status?: string | null;
+  pds_skin_cancer_center?: boolean | null;
+}): 0 | 1 | 2 {
+  if (f.pds_skin_cancer_center || f.derm_status === "has_derm_doctors") return 0;
+  const hospital = f.type === "private_hospital" || f.type === "government_hospital" || f.type === "medical_center";
+  if (!hospital) return 0;
+  return f.derm_status === "derm_dept_no_names" ? 1 : 2;
+}

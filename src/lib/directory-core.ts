@@ -54,6 +54,21 @@ export function toDialable(part: string): string | null {
 }
 
 /**
+ * A dialable number in the form Filipinos write it, for button labels: "0917 547 7622",
+ * "(02) 8894 3952", "(043) 773 6800". Listings spell the same number a dozen ways
+ * ("0437564386", "+63 43 756-4386"); the label should not. Unrecognised shapes come back as-is.
+ */
+export function formatPhone(dial: string): string {
+  const m = /^\+63(\d+)$/.exec(dial);
+  if (!m) return dial;
+  const n = m[1];
+  if (n.length === 10 && n.startsWith('9')) return `0${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+  if (n.length === 9 && n.startsWith('2')) return `(02) ${n.slice(1, 5)} ${n.slice(5)}`;
+  if (n.length === 9) return `(0${n.slice(0, 2)}) ${n.slice(2, 5)} ${n.slice(5)}`;
+  return `0${n}`;
+}
+
+/**
  * A listing URL → something safe to open, or null. Adds a missing scheme ("www.clinic.ph"),
  * rejects anything but http(s) (mailto:, javascript:, tel: in a website field) and strings that
  * don't parse. A null means the UI should hide the button rather than show one that does nothing.

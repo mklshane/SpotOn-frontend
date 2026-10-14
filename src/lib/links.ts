@@ -3,7 +3,7 @@ import { openBrowserAsync } from 'expo-web-browser';
 
 import { normalizeUrl } from './directory-core';
 
-export { normalizeUrl, splitPhones, type PhoneOption } from './directory-core';
+export { formatPhone, normalizeUrl, splitPhones, type PhoneOption } from './directory-core';
 
 /** Dial one already-normalized number (see splitPhones / usePhoneCall for free-text fields). */
 export function callNumber(dial: string): void {
