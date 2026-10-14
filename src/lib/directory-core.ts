@@ -182,3 +182,150 @@ export function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: 
     Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
+
+// ---- schedules -----------------------------------------------------------------------------
+
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** "03:00 PM" -> "3 PM", "10:30 AM" -> "10:30 AM"; anything else unchanged. */
+function shortTime(t: string): string {
+  const m = /^(\d{1,2}):(\d{2})\s*([AP]M)$/i.exec(t.trim());
+  if (!m) return t.trim();
+  const h = String(Number(m[1]));
+  return m[2] === '00' ? `${h} ${m[3].toUpperCase()}` : `${h}:${m[2]} ${m[3].toUpperCase()}`;
+}
+
+/** "Mon, Tue, Wed, Fri" -> "Mon–Wed, Fri": runs of 3+ consecutive days collapse. */
+function dayRuns(idx: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < idx.length; ) {
+    let j = i;
+    while (j + 1 < idx.length && idx[j + 1] === idx[j] + 1) j++;
+    if (j - i >= 2) out.push(`${DAY_SHORT[idx[i]]}–${DAY_SHORT[idx[j]]}`);
+    else for (let k = i; k <= j; k++) out.push(DAY_SHORT[idx[k]]);
+    i = j + 1;
+  }
+  return out.join(', ');
+}
+
+/** "Monday", "Mon", "Thurs" -> 0..6, else -1. */
+function dayIndex(word: string): number {
+  const w = word.trim().toLowerCase().replace(/\.$/, '');
+  if (w.length < 3) return -1;
+  return DAYS.findIndex((d) => d.toLowerCase().startsWith(w.slice(0, 3)) && d.toLowerCase().startsWith(w));
+}
+
+/** "Monday to Wednesday, Saturday" / "Tuesday and Thursday" / "Friday" -> day indexes, else null. */
+function parseDays(text: string): number[] | null {
+  const out: number[] = [];
+  for (const item of text.split(/,|\band\b|&/i).map((x) => x.trim()).filter(Boolean)) {
+    const range = /^(\w+\.?)\s*(?:to|-|–)\s*(\w+\.?)$/i.exec(item);
+    if (range) {
+      const [a, b] = [dayIndex(range[1]), dayIndex(range[2])];
+      if (a < 0 || b < 0) return null;
+      for (let d = a; ; d = (d + 1) % 7) {
+        out.push(d);
+        if (d === b) break;
+      }
+    } else {
+      const d = dayIndex(item);
+      if (d < 0) return null;
+      out.push(d);
+    }
+  }
+  return out.length ? out : null;
+}
+
+const RANGE = /^(\d{1,2}:\d{2}\s*[AP]M)\s*[-–]\s*(\d{1,2}:\d{2}\s*[AP]M)$/i;
+
+/** "10:00 AM - 03:00 PM, 04:00 PM - 06:00 PM" -> "10 AM–3 PM, 4–6 PM"; null if not times. */
+function parseHours(text: string): string | null {
+  if (/^by appointment$/i.test(text.trim())) return 'By appointment';
+  const parts = text.split(',').map((x) => x.trim());
+  const out: string[] = [];
+  for (const part of parts) {
+    const r = RANGE.exec(part);
+    if (!r) return null;
+    const [a, b] = [shortTime(r[1]), shortTime(r[2])];
+    out.push(a.slice(-2) === b.slice(-2) ? `${a.slice(0, -3)}–${b}` : `${a}–${b}`);
+  }
+  return out.join(', ');
+}
+
+/**
+ * The stored schedule as one short line. Both shapes in the data are read:
+ *   "Monday | 10:00 AM - 03:00 PM; Tuesday | 10:00 AM - 03:00 PM"           (hospital rosters)
+ *   "Monday to Tuesday, Thursday to Saturday | 11:00 AM - 03:00 PM | (By Appointment)"  (SeriousMD)
+ * Days that share hours are grouped and 3+ consecutive days become a range: "Mon–Fri · 10 AM–3 PM",
+ * "Mon, Wed · 1–5 PM; Sat · 9 AM–12 PM". Bracketed notes ("By appointment", "first Saturday of
+ * the month only") are kept; loose text - contact numbers, secretaries' names - is dropped, since
+ * the Call button carries the number. A second listing ("| Also listed: …") becomes a hint.
+ * Returns null when no day + hours pair can be read, so callers show the raw text instead.
+ */
+export function compactSchedule(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const [main, ...also] = raw.split(/\s*\|\s*Also listed:\s*/i);
+  const groups = new Map<string, number[]>();
+  const notes: string[] = [];
+  let days: number[] | null = null;
+  for (const seg of main.split(/[|;]/).map((x) => x.trim()).filter(Boolean)) {
+    const d = parseDays(seg);
+    if (d) {
+      days = d;
+      continue;
+    }
+    const h = parseHours(seg);
+    if (h && days) {
+      groups.set(h, [...(groups.get(h) ?? []), ...days]);
+      days = null;
+      continue;
+    }
+    const note = /^\((.*)\)$/.exec(seg);
+    if (note) {
+      const n = note[1].trim();
+      if (n && !notes.some((x) => x.toLowerCase() === n.toLowerCase())) notes.push(n);
+    }
+    // anything else (phone numbers, "Kindly message …") is dropped
+  }
+  if (!groups.size) return null;
+  const line = [...groups.entries()]
+    .sort((x, y) => Math.min(...x[1]) - Math.min(...y[1]))
+    .map(([hours, ds]) => `${dayRuns([...new Set(ds)].sort((a, b) => a - b))} · ${hours}`)
+    .join('; ');
+  const extra = [...notes, also.length ? 'other hours also listed' : null].filter(Boolean);
+  return extra.length ? `${line} (${extra.join('; ')})` : line;
+}
+
+/** doctor_facility.schedule_days bit for a JS weekday (0 = Sunday): Mon=1 … Sun=64. */
+export function scheduleDayBit(jsDay: number): number {
+  return jsDay === 0 ? 64 : 1 << (jsDay - 1);
+}
+
+// ---- what a listing may claim --------------------------------------------------------------
+
+/**
+ * Services shown on a listing. Oncology, histopathology and immunohistochemistry tags came from
+ * keyword sweeps of whole hospitals, not from a skin clinic - in a dermatology app they read as
+ * "treats skin cancer here". A hospital with no dermatologist on record shows none at all.
+ */
+const NOT_SKIN_SERVICES = new Set(['oncology_treatment', 'histopathology', 'immunohistochemistry']);
+export function displayServices(services: string[], hospitalWithoutDerm: boolean): string[] {
+  if (hospitalWithoutDerm) return [];
+  return services.filter((s) => !NOT_SKIN_SERVICES.has(s));
+}
+
+/**
+ * True when a doctor's `city` actually holds a clinic name ("Dermcare Skin Clinic",
+ * "St Lukes Global Room 1102") - about a fifth of PDS imports. Such a value must not be
+ * shown as the doctor's location.
+ */
+export function looksLikePlaceName(city: string | null | undefined): boolean {
+  return !!city && /clinic|hospital|medical|cent(er|re)|derm|skin|room|bldg|building|floor|tower|plaza|mall|@|\d{3,}/i.test(city);
+}
+
+/** For list cards, which only have the row: a hospital with no dermatologist on record. */
+export function isHospitalWithoutDerm(f: { type?: string | null; derm_status?: string | null }): boolean {
+  const hospital = f.type === 'private_hospital' || f.type === 'government_hospital' || f.type === 'medical_center';
+  return hospital && f.derm_status !== 'has_derm_doctors';
+}

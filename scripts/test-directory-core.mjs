@@ -18,7 +18,7 @@ execFileSync(
   ['src/lib/directory-core.ts', 'src/lib/concerns.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { splitPhones, toDialable, formatPhone, normalizeUrl, parseHHMM, openStatusAt, haversineMeters } = await import(
+const { splitPhones, toDialable, formatPhone, compactSchedule, scheduleDayBit, displayServices, looksLikePlaceName, normalizeUrl, parseHHMM, openStatusAt, haversineMeters } = await import(
   pathToFileURL(join(out, 'directory-core.js')).href
 );
 
@@ -99,6 +99,22 @@ check('Manila landline label', formatPhone(toDialable('0287133315')) === '(02) 8
 check('provincial landline label', formatPhone(toDialable('(043) 773 6800')) === '(043) 773 6800');
 check('provincial, unspaced', formatPhone(toDialable('0437564386')) === '(043) 756 4386');
 check('local 7-digit kept', formatPhone(toDialable('7982572')) === '7982572');
+
+// Compact schedules: same hours grouped, 3+ consecutive days as a range.
+check('weekday block', compactSchedule('Monday | 10:00 AM - 03:00 PM; Tuesday | 10:00 AM - 03:00 PM; Wednesday | 10:00 AM - 03:00 PM; Thursday | 10:00 AM - 03:00 PM; Friday | 10:00 AM - 03:00 PM') === 'Mon–Fri · 10 AM–3 PM');
+check('mixed hours', compactSchedule('Tuesday | 09:00 AM - 11:00 AM; Saturday | 09:00 AM - 11:00 AM') === 'Tue, Sat · 9–11 AM');
+check('two groups', compactSchedule('Monday | 01:00 PM - 05:00 PM; Wednesday | 01:00 PM - 05:00 PM; Saturday | 09:00 AM - 12:00 PM') === 'Mon, Wed · 1–5 PM; Sat · 9 AM–12 PM');
+check('split day hours', compactSchedule('Monday | 10:00 AM - 12:00 PM, 01:00 PM - 05:00 PM') === 'Mon · 10 AM–12 PM, 1–5 PM');
+check('also listed hint', compactSchedule('Friday | 03:00 PM - 06:00 PM | Also listed: Tuesday | 10:00 AM - 11:00 AM') === 'Fri · 3–6 PM (other hours also listed)');
+check('by appointment', compactSchedule('Tuesday | By appointment') === 'Tue · By appointment');
+check('SeriousMD day phrase', compactSchedule('Monday to Tuesday, Thursday to Saturday | 11:00 AM - 03:00 PM | (By Appointment)') === 'Mon, Tue, Thu–Sat · 11 AM–3 PM (By Appointment)');
+check('SeriousMD two blocks + contact dropped', compactSchedule('Tuesday and Thursday | 09:00 AM - 05:00 PM | (Walk-In and Appointment) | Friday | 09:00 AM - 01:00 PM | Call 0917 000 0000') === 'Tue, Thu · 9 AM–5 PM; Fri · 9 AM–1 PM (Walk-In and Appointment)');
+check('roster note kept, contact dropped', compactSchedule('Wednesday | 09:30 AM - 11:30 AM | (By Appointment) | Contact Jona 0961 000 6594') === 'Wed · 9:30–11:30 AM (By Appointment)');
+check('unreadable -> null', compactSchedule('Mon-Sat 9-5') === null);
+check('Sunday bit', scheduleDayBit(0) === 64 && scheduleDayBit(1) === 1 && scheduleDayBit(6) === 32);
+check('hospital without derm shows no services', displayServices(['skin_biopsy'], true).length === 0);
+check('oncology tag dropped', displayServices(['oncology_treatment', 'dermoscopy'], false).join() === 'dermoscopy');
+check('clinic name is not a city', looksLikePlaceName('Dermcare Skin Clinic') && !looksLikePlaceName('Lipa City, Batangas'));
 
 // Derm-first ranking: the directory lists places where a dermatologist can be seen first.
 const { dermTier } = await import(pathToFileURL(join(out, 'concerns.js')).href);

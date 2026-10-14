@@ -23,6 +23,7 @@ import {
   type DoctorPractice,
 } from "@/data/repositories";
 import { formatScheduleDays } from "@/lib/concerns";
+import { compactSchedule, looksLikePlaceName } from "@/lib/directory-core";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -119,13 +120,20 @@ export default function DoctorDetailScreen() {
   const ranked = useMemo(() => rankLinks(links), [links]);
   const [best, ...others] = ranked;
   const websiteUrl = normalizeUrl(doctor?.website);
+  // About a fifth of PDS imports put a clinic name in `city` ("Dermcare Skin Clinic"); then the
+  // first practice's city is the honest location line.
+  const ownCity = doctor?.city && !looksLikePlaceName(doctor.city) ? doctor.city : null;
+  const firstPlace = practices[0]?.facility;
+  const location = ownCity
+    ? [ownCity, doctor?.region].filter(Boolean).join(" · ")
+    : firstPlace
+      ? [firstPlace.city, firstPlace.province].filter(Boolean).join(", ")
+      : doctor?.region ?? null;
   // Every number a clinic button above already dials; the direct line only shows if it adds one.
-  const showDirectLine = useMemo(() => {
-    const shown = new Set(
-      practices.flatMap((p) => phoneDials(hasPhone(p.phone) ? p.phone : p.facility.phone)),
-    );
-    return phoneDials(doctor?.phone).some((d) => !shown.has(d));
-  }, [doctor?.phone, practices]);
+  const clinicDials = new Set(
+    practices.flatMap((p) => phoneDials(hasPhone(p.phone) ? p.phone : p.facility.phone)),
+  );
+  const showDirectLine = phoneDials(doctor?.phone).some((d) => !clinicDials.has(d));
 
   const goBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -179,11 +187,11 @@ export default function DoctorDetailScreen() {
                 {doctor.title}
               </ThemedText>
             ) : null}
-            {doctor.city || doctor.region ? (
+            {location ? (
               <View style={styles.locationRow}>
                 <Icon name="mappin.circle.fill" size={14} tintColor={theme.textSecondary} />
                 <ThemedText type="footnote" themeColor="textSecondary">
-                  {[doctor.city, doctor.region].filter(Boolean).join(" · ")}
+                  {location}
                 </ThemedText>
               </View>
             ) : null}
@@ -268,8 +276,10 @@ export default function DoctorDetailScreen() {
                         {p.schedule || p.schedule_days ? (
                           <View style={styles.metaRow}>
                             <Icon name="clock.fill" size={12} tintColor={theme.textSecondary} />
-                            <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2} style={styles.availText}>
-                              {p.schedule ? formatSchedule(p.schedule) : t(formatScheduleDays(p.schedule_days) ?? "")}
+                            <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={3} style={styles.availText}>
+                              {p.schedule
+                                ? compactSchedule(p.schedule) ?? formatSchedule(p.schedule)
+                                : t(formatScheduleDays(p.schedule_days) ?? "")}
                             </ThemedText>
                           </View>
                         ) : null}

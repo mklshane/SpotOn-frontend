@@ -3,13 +3,13 @@ import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { FacilitySync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
-import { hasPhone, usePhoneCall } from "@/components/directory/use-phone-call";
+import { hasPhone, phoneText, usePhoneCall } from "@/components/directory/use-phone-call";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -28,7 +28,7 @@ import { formatScheduleDays } from "@/lib/concerns";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useKnownLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
-import { zonedDayMinutes } from "@/lib/directory-core";
+import { compactSchedule, displayServices, scheduleDayBit, zonedDayMinutes } from "@/lib/directory-core";
 import {
   facilityNameParts,
   formatDistance,
@@ -199,10 +199,25 @@ function ClinicBody({
   const weekendToday = day === 0 || day === 6;
   const dept = facility.department_info;
   const hasDeptInfo = !!(dept && (dept.has_derm_department || dept.department_name || dept.opd_notes));
+  const isHospital = (HOSPITAL_TYPES as readonly string[]).includes(facility.type);
+  const noDermHere = isHospital && !doctors.length;
   // Derm-relevant services first: this is a skin-check app, and "Dermatology" buried after
-  // "Dental" and "Diagnostics" in an alphabetical facet list is the wrong emphasis.
-  const services = [...facility.services].sort(
+  // "Dental" and "Diagnostics" in an alphabetical facet list is the wrong emphasis. Hospital-wide
+  // tags (oncology, histopathology) and anything on a hospital with no derm are not shown.
+  const services = displayServices(facility.services, noDermHere).sort(
     (a, b) => Number(!/derm|skin/i.test(a)) - Number(!/derm|skin/i.test(b)),
+  );
+  // Who is in today first, then anyone with a published schedule, then the rest.
+  const todayBit = scheduleDayBit(day);
+  const orderedDoctors = useMemo(
+    () =>
+      [...doctors].sort(
+        (a, b) =>
+          Number(!((a.schedule_days ?? 0) & todayBit)) - Number(!((b.schedule_days ?? 0) & todayBit)) ||
+          Number(!a.schedule) - Number(!b.schedule) ||
+          a.doctor.name.localeCompare(b.doctor.name),
+      ),
+    [doctors, todayBit],
   );
 
   const summary: string[] = [];
@@ -327,7 +342,7 @@ function ClinicBody({
           <Card style={styles.infoCard} elevation="sm">
             <View style={styles.cardHead}>
               <IconCircle icon="clock.fill" variant="tint" size={32} />
-              <ThemedText type="headline">{t("Hours")}</ThemedText>
+              <ThemedText type="headline">{isHospital ? t("Hospital hours") : t("Hours")}</ThemedText>
             </View>
             <HoursLine
               label={t("Mon–Fri")}
@@ -340,7 +355,9 @@ function ClinicBody({
               today={weekendToday}
             />
             <ThemedText type="footnote" themeColor="textSecondary">
-              {t("Hours can change on holidays - call ahead to confirm.")}
+              {isHospital
+                ? t("Dermatologists keep their own clinic days, listed below. Call ahead to confirm.")
+                : t("Hours can change on holidays - call ahead to confirm.")}
             </ThemedText>
           </Card>
         ) : null}
@@ -387,7 +404,12 @@ function ClinicBody({
                     {t("Dermatology Department")}</ThemedText>
                   {dept?.has_derm_department ? <Badge label={t("Confirmed")} tone="brand" /> : null}
                 </View>
-                {dept?.department_name ? (
+                {noDermHere ? (
+                  <ThemedText type="callout" themeColor="textSecondary">
+                    {t("This hospital has a dermatology department, but no dermatologists are listed online. Call the hospital's OPD for the skin clinic schedule.")}
+                  </ThemedText>
+                ) : null}
+                {dept?.department_name && !/^dermatology$/i.test(dept.department_name.trim()) ? (
                   <ThemedText type="callout" themeColor="textSecondary">
                     {dept.department_name}
                   </ThemedText>
@@ -411,7 +433,7 @@ function ClinicBody({
 
         {/* A hospital with no listed dermatologist stays visible - it may still run a skin clinic -
             but says so plainly instead of implying a derm is on site. */}
-        {!doctors.length && (HOSPITAL_TYPES as readonly string[]).includes(facility.type) ? (
+        {noDermHere && !hasDeptInfo ? (
           <Card style={styles.section} elevation="sm">
             <ThemedText type="footnote" themeColor="textSecondary">
               {t("No dermatologist listed here yet. Call the hospital's OPD to ask about a skin clinic schedule.")}
@@ -428,7 +450,7 @@ function ClinicBody({
                 {doctors.length === 1 ? t("1 doctor") : t("{{count}} doctors", { count: doctors.length })}
               </ThemedText>
             </View>
-            {doctors.map((d) => (
+            {orderedDoctors.map((d) => (
               <Pressable
                 key={d.doctor.id}
                 onPress={() => router.push({ pathname: "/directory/doctor", params: { id: d.doctor.id } })}
@@ -443,14 +465,24 @@ function ClinicBody({
                     <ThemedText type="headline" numberOfLines={2}>
                       {d.doctor.name}
                     </ThemedText>
+                    {(d.schedule_days ?? 0) & todayBit ? (
+                      <View style={styles.bookableTag}>
+                        <Icon name="clock.fill" size={12} tintColor={theme.riskLow} />
+                        <ThemedText type="caption" style={{ color: theme.riskLow }}>
+                          {t("In today")}
+                        </ThemedText>
+                      </View>
+                    ) : null}
                     {d.schedule || d.schedule_days ? (
-                      <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
-                        {d.schedule ? formatSchedule(d.schedule) : t(formatScheduleDays(d.schedule_days) ?? "")}
+                      <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={3}>
+                        {d.schedule
+                          ? compactSchedule(d.schedule) ?? formatSchedule(d.schedule)
+                          : t(formatScheduleDays(d.schedule_days) ?? "")}
                       </ThemedText>
                     ) : null}
                     {d.room || hasPhone(d.phone) ? (
                       <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-                        {[d.room ? t("Room {{room}}", { room: d.room }) : null, hasPhone(d.phone) ? d.phone : null]
+                        {[d.room ? t("Room {{room}}", { room: d.room }) : null, hasPhone(d.phone) ? phoneText(d.phone) : null]
                           .filter(Boolean)
                           .join(" · ")}
                       </ThemedText>

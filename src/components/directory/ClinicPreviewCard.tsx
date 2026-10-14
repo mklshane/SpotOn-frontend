@@ -10,6 +10,7 @@ import { Icon } from '@/components/ui/icon';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
+import { displayServices, isHospitalWithoutDerm } from '@/lib/directory-core';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHoursLine, isOpenNow } from '@/lib/hours';
 
@@ -37,8 +38,9 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
   const distance = 'distance_m' in facility ? facility.distance_m : null;
   const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
 
-  const shown = facility.services.slice(0, MAX_SERVICES_SHOWN);
-  const extra = facility.services.length - shown.length;
+  const services = displayServices(facility.services, isHospitalWithoutDerm(facility));
+  const shown = services.slice(0, MAX_SERVICES_SHOWN);
+  const extra = services.length - shown.length;
   // Never show the raw taxonomy tag - humanize the service list, or the practice type if there are no services.
   const specialization = shown.length ? shown.map(humanizeTag).join('; ') : humanizeTag(facility.type);
 

@@ -9,6 +9,7 @@ import { Icon } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { looksLikePlaceName } from '@/lib/directory-core';
 import { formatDistance, humanizeTag } from '@/lib/format';
 
 export type DoctorCardProps = {
@@ -22,7 +23,9 @@ export function DoctorCard({ doctor, onPress, distanceM }: DoctorCardProps) {
   useLocale();
   const theme = useTheme();
   const specialty = doctor.specialties_display || doctor.specialties.map(humanizeTag).join(', ');
-  const location = [doctor.city, doctor.region].filter(Boolean).join(' · ');
+  // `city` sometimes holds a clinic name; show the region alone rather than a fake location.
+  const city = doctor.city && !looksLikePlaceName(doctor.city) ? doctor.city : null;
+  const location = [city, doctor.region].filter(Boolean).join(' · ');
 
   return (
     <Pressable onPress={onPress} accessibilityRole="button">

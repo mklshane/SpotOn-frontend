@@ -783,5 +783,9 @@
   "Call {{number}}": "Tawagan ang {{number}}",
   "Call {{number}} +{{count}}": "Tawagan ang {{number}} +{{count}}",
   "Doctor's direct line": "Direktang linya ng doktor",
-  "The doctor's own number from their PDS listing, often a secretary or clinic mobile.": "Sariling numero ng doktor mula sa kanilang PDS listing, kadalasang sekretarya o mobile ng clinic."
+  "The doctor's own number from their PDS listing, often a secretary or clinic mobile.": "Sariling numero ng doktor mula sa kanilang PDS listing, kadalasang sekretarya o mobile ng clinic.",
+  "Hospital hours": "Oras ng ospital",
+  "Dermatologists keep their own clinic days, listed below. Call ahead to confirm.": "May sariling araw ng clinic ang mga dermatologist, nakalista sa ibaba. Tumawag muna para makasiguro.",
+  "This hospital has a dermatology department, but no dermatologists are listed online. Call the hospital's OPD for the skin clinic schedule.": "May dermatology department ang ospital na ito, pero walang dermatologist na nakalista online. Tumawag sa OPD ng ospital para sa iskedyul ng skin clinic.",
+  "In today": "Nandito ngayon"
 }

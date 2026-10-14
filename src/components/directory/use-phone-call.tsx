@@ -58,3 +58,11 @@ export function callLabel(raw: string | null | undefined): string {
 export function phoneDials(raw: string | null | undefined): string[] {
   return splitPhones(raw).map((p) => p.dial);
 }
+
+/** A phone field for display: "(043) 773 6800", "0917 547 7622 +1"; the raw text if unparseable. */
+export function phoneText(raw: string | null | undefined): string {
+  const phones = splitPhones(raw);
+  if (!phones.length) return raw ?? '';
+  const first = formatPhone(phones[0].dial);
+  return phones.length > 1 ? `${first} +${phones.length - 1}` : first;
+}

@@ -10,11 +10,12 @@ import { Icon } from '@/components/ui/icon';
 import { Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
+import { displayServices, isHospitalWithoutDerm } from '@/lib/directory-core';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHoursLine, isOpenNow } from '@/lib/hours';
 import { normalizeUrl, openDirections, openWebsite } from '@/lib/links';
 
-import { hasPhone, usePhoneCall } from './use-phone-call';
+import { hasPhone, phoneText, usePhoneCall } from './use-phone-call';
 
 export type ClinicCardProps = {
   facility: FacilitySync | FacilityWithDistance;
@@ -26,7 +27,7 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
   const theme = useTheme();
   const distance = 'distance_m' in facility ? facility.distance_m : null;
   const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
-  const topService = facility.services[0];
+  const topService = displayServices(facility.services, isHospitalWithoutDerm(facility))[0];
   const phone = usePhoneCall();
   const bookingUrl = normalizeUrl(facility.booking_url);
 
@@ -78,9 +79,9 @@ export function ClinicCard({ facility, onPress }: ClinicCardProps) {
               <ThemedText type="footnote" themeColor="muted">
                 {formatHoursLine("Mon–Fri", facility.weekday_hours)}
               </ThemedText>
-              {facility.phone ? (
+              {hasPhone(facility.phone) ? (
                 <ThemedText type="footnote" themeColor="muted">
-                  {facility.phone}
+                  {phoneText(facility.phone)}
                 </ThemedText>
               ) : null}
             </View>
