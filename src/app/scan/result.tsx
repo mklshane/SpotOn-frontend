@@ -233,18 +233,23 @@ export default function ResultScreen() {
         <Animated.View entering={FadeInDown}>
           <View style={[styles.hero, { backgroundColor: theme.surface }]}>
             <View style={styles.heroBody}>
-              <View style={[styles.tierBadge, { backgroundColor: colors.bg }]}>
-                <View
-                  style={[styles.tierDot, { backgroundColor: colors.fg }]}
-                />
-                <ThemedText type="footnote" style={styles.tierBadgeText}>
-                  {qualifier ? t("Precautionary") : tier.name}
+              {/* Class name left, tier pill pinned to the top-right corner of the same row. */}
+              <View style={styles.heroTitleRow}>
+                {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
+                    "% match to a pattern with features similar to…" line right below, and in the
+                    disclaimer - not in the label the user repeats to a clinician. */}
+                <ThemedText type="title1" style={styles.heroTitle}>
+                  {cls.name}
                 </ThemedText>
+                <View style={[styles.tierBadge, { backgroundColor: colors.bg }]}>
+                  <View
+                    style={[styles.tierDot, { backgroundColor: colors.fg }]}
+                  />
+                  <ThemedText type="footnote" style={styles.tierBadgeText}>
+                    {qualifier ? t("Precautionary") : tier.name}
+                  </ThemedText>
+                </View>
               </View>
-              {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
-                  "% match to a pattern with features similar to…" line right below, and in the
-                  disclaimer - not in the label the user repeats to a clinician. */}
-              <ThemedText type="title1">{cls.name}</ThemedText>
               <View style={styles.heroConf}>
                 <ConfidenceRing pct={pct} color={colors.fg} />
                 <View style={styles.heroConfText}>
@@ -1019,6 +1024,14 @@ const styles = StyleSheet.create({
     ...Elevation.sm,
   },
   heroBody: { padding: Space.xl, gap: Space.md },
+  heroTitleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: Space.md,
+  },
+  // flexShrink so a long name ("Squamous cell carcinoma") wraps instead of pushing the pill off.
+  heroTitle: { flexShrink: 1 },
   tierBadge: {
     flexDirection: "row",
     alignItems: "center",

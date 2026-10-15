@@ -101,6 +101,7 @@ import { loadSkinGateForCamera, readSkinGateLayout, type SkinGateModel } from '@
 import { SKIN_GATE_FACE_MAX, SKIN_GATE_MIN } from '@/lib/triage/scan-flow';
 import {
   DETECTION_SMOOTHING_CONFIG as SMOOTH,
+  predictLead,
   softDeadband,
 } from '@/lib/detection-smoothing';
 import { makeOneEuro } from '@/lib/one-euro';
@@ -134,6 +135,12 @@ Reanimated.addWhitelistedNativeProps({ zoom: true });
 // Drawing-only padding for the green box; the forwarded crop box stays tight.
 const BOX_PAD = 0.25;
 const BOX_MAX = 0.98;
+/**
+ * Smallest side (pt) the green box is drawn at. A small mole's padded box was barely bigger than
+ * the spot itself and read as a speck rather than a reticle on it (screen recording, 2026-10-15).
+ * Drawing only - the crop box forwarded to the cropper keeps the detector's true extents.
+ */
+const BOX_MIN_PT = 72;
 
 const LIVE_MARGIN = 0.04; // coach this much before the still gate would reject
 const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
@@ -515,18 +522,22 @@ export default function CaptureScreen() {
   // The detected box in full-frame (= saved photo) normalized coords, carried to the crop
   // screen so it can auto-frame the lesion without re-running the model (see shoot()).
   const lastImgBox = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // Measured gap between accepted detections (ms), smoothed. Feeds the box's latency lead; measured
+  // rather than assumed because the real cadence ranges from ~12 fps (iOS) to ~1 fps (low Android).
+  const lastDetectAtRef = useRef<number | null>(null);
+  const detectIntervalRef = useRef(1000 / TARGET_FPS_HIGH);
   // One-Euro filters - one per tracked scalar. Preview box (what's drawn) + img box (forwarded
   // to crop). These keep the box steady under small camera shifts but responsive to real motion.
   const euro = useMemo(
     () => ({
-      px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+      px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
     }),
     [],
   );
@@ -582,6 +593,7 @@ export default function CaptureScreen() {
     lastImgBox.current = null;
     // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
     Object.values(euro).forEach((f) => f.reset());
+    lastDetectAtRef.current = null;
     applyCoach();
   }, [applyCoach, boxValues, euro, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
     pinnedCropSV, trackingSV]);
@@ -652,6 +664,7 @@ export default function CaptureScreen() {
         batch.zoomRatio,
         // Android passes are 3-10x slower than iOS; a confident nominee shows on its first pass.
         ANDROID_CAPTURE ? LOCK_SCORE : undefined,
+        Date.now(),
       );
       targetRef.current = decision.state;
       if (PERF_LOG) {
@@ -704,6 +717,9 @@ export default function CaptureScreen() {
 
       if (decision.kind === 'clear') {
         clearTrack();
+        // clearTrack resets the tracker wholesale; keep the decision's memory of the lost lesion so
+        // it can re-lock on its first frame back (stepActiveTarget, RELOCK_MS).
+        targetRef.current = decision.state;
         recordSelection();
         return;
       }
@@ -763,13 +779,33 @@ export default function CaptureScreen() {
       lastCenter.current = { x: fx, y: fy };
       lastSize.current = { w: fw, h: fh };
 
-      const displayBox = { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh };
+      // Where the lesion is NOW: the detection is `age` ms old on arrival and will be on screen for
+      // about half an interval more. Drawn box only - lastCenter (deadband/stability), autofocus
+      // and the crop box all keep the un-extrapolated, measured position.
+      const lastDetectAt = lastDetectAtRef.current;
+      if (lastDetectAt !== null && !acquired && !handover) {
+        const gap = Math.min(1500, Math.max(16, t - lastDetectAt));
+        detectIntervalRef.current = detectIntervalRef.current * 0.7 + gap * 0.3;
+      }
+      lastDetectAtRef.current = t;
+      const age = t - batch.startedAt;
+      const lx = fx + predictLead(euro.px.velocity(), age, detectIntervalRef.current);
+      const ly = fy + predictLead(euro.py.velocity(), age, detectIntervalRef.current);
+      // Square floor in points, so a tiny mole still gets a reticle-sized box around it.
+      const dw = Math.max(fw, BOX_MIN_PT / SW);
+      const dh = Math.max(fh, BOX_MIN_PT / SH);
+      const displayBox = { x: lx - dw / 2, y: ly - dh / 2, w: dw, h: dh };
       const wasVisible = visibleRef.current;
       visibleRef.current = true;
       // Pixels against the same measured view size the mapping above normalised by.
       const viewDims = { width: SW, height: SH };
       if (handover) handoverDetectionBox(boxValues, displayBox, viewDims);
-      else trackDetectionBox(boxValues, displayBox, { snap: acquired || !wasVisible, size: viewDims });
+      // A re-lock glides from where the box just faded, so losing and regaining the same mole reads
+      // as one continuous box rather than a new one appearing.
+      else trackDetectionBox(boxValues, displayBox, {
+        snap: !decision.relock && (acquired || !wasVisible),
+        size: viewDims,
+      });
 
       const icx = euro.ix.filter(imageBox.cx, t);
       const icy = euro.iy.filter(imageBox.cy, t);
@@ -896,6 +932,7 @@ export default function CaptureScreen() {
     lastImgBox.current = null;
     metricsRef.current = null;
     Object.values(euro).forEach((filter) => filter.reset());
+    lastDetectAtRef.current = null;
     resetDetectionBox(boxValues, { immediate: true });
     guideRef.current = guide;
     guideSV.value = guide;

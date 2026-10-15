@@ -4,20 +4,40 @@ import { StyleSheet, View } from 'react-native';
 
 import type { BodyMark } from '@/lib/triage/types';
 
-import { BodyModel } from './body-model';
+import { BodyModel, surfaceNormalAt } from './body-model';
 import { BodyLights, Marker } from './mannequin';
 
-/** Keep the selected model point in the middle of a small, read-only card preview. */
+/** Camera distance from the marked point. */
+const PREVIEW_DIST = 2.2;
+/** How hard the view is pulled toward straight front/back, so side spots don't become a profile. */
+const AXIS_PULL = 0.6;
+
+/**
+ * Keep the selected model point in the middle of a small, read-only card preview, seen from the
+ * side its skin faces.
+ *
+ * The direction comes from the mesh's own surface normal at the point, not from `mark.view`: that
+ * field was decided by depth against the body's box centre until 2026-10-15 and is wrong for most
+ * front-of-shin and front-of-elbow marks already saved, which put the camera behind the leg with
+ * the marker hidden. Deriving it here fixes those old records without migrating them.
+ */
 function PreviewCamera({ mark }: { mark: BodyMark }) {
   const { camera } = useThree();
 
   useEffect(() => {
     const [x, y, z] = mark.point;
-    const depth = mark.view === 'front' ? 2.2 : -2.2;
+    const n = surfaceNormalAt(mark.point, mark.mesh ?? 'male');
+    const fallbackZ = mark.view === 'front' ? 1 : -1;
+    // Horizontal part of the normal only - looking down at a shoulder or up at a sole reads badly
+    // in a 132pt card - blended toward the nearer of straight-front / straight-back.
+    let dx = n ? n[0] : 0;
+    let dz = n ? n[2] : fallbackZ;
+    dz += AXIS_PULL * (Math.sign(dz) || fallbackZ);
+    const len = Math.hypot(dx, dz) || 1;
+    dx /= len;
+    dz /= len;
 
-    // Stay mostly front-on while looking at the selected point, so an arm or leg spot is
-    // cropped into view without turning the preview into an unexpected side profile.
-    camera.position.set(x * 0.35, y, depth);
+    camera.position.set(x + dx * PREVIEW_DIST, y, z + dz * PREVIEW_DIST);
     camera.lookAt(x, y, z);
   }, [camera, mark]);
 

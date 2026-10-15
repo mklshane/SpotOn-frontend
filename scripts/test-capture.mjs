@@ -30,7 +30,7 @@ const {
   SEARCH_FRACTIONS, nextSearchCrop, focusedSearchRoi, sensorCropForRoi, localSkinRoi,
   stepLocalSkin, acceptsSession,
   allowsVisibleTarget,
-  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState,
+  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState, RELOCK_MS,
   isLocalized,
   uprightRotation, stepScene, initialSceneState, SCENE_CONFIRM,
   MAX_CLUSTERED_CANDIDATES,
@@ -568,6 +568,59 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
     outside = outsideResult.state;
   }
   check('ROI exit still requires a controlled three-cycle handoff', outsideResult.kind === 'handover');
+}
+
+/* ------------------------------------------------------------------ staying on a moving lesion */
+{
+  const roi = { cx: 0.5, cy: 0.5, w: 1, h: 1, fraction: 1, zoomProgress: 0 };
+  const C = (cx, cy, score = 0.8, w = 0.03, h = 0.03) => ({ box: { cx, cy, w, h }, score });
+  const step = (s, cands, now) => stepActiveTarget(s, cands, roi, 0, 1, undefined, now);
+  const DT = 83; // 12 fps
+
+  // A small mole panning at 0.12 per detection (~1.4 screen/s, a brisk hand move). Each jump is past
+  // the 0.12 association floor on its own; prediction from the previous sightings has to carry it.
+  let s = step(step(initialActiveTargetState, [C(0.2, 0.5)], 0).state, [C(0.2, 0.5)], DT).state;
+  s = step(s, [C(0.3, 0.5)], 2 * DT).state; // establishes velocity
+  const kinds = [];
+  for (let i = 0; i < 5; i++) {
+    const r = step(s, [C(0.3 + 0.12 * (i + 1), 0.5)], (3 + i) * DT);
+    s = r.state;
+    kinds.push(r.kind);
+  }
+  check('a fast-moving small mole stays one updating track', kinds.every((k) => k === 'update'));
+  check('the tracker learns the motion', s.vx > 1);
+
+  // Without a clock (the old call shape) nothing is predicted - behaviour is position-only.
+  const noClock = stepActiveTarget(step(step(initialActiveTargetState, [C(0.5, 0.5)], 0).state, [C(0.5, 0.5)], 0).state,
+    [C(0.55, 0.5)], roi, 0, 1);
+  check('no clock → zero velocity', noClock.state.vx === 0 && noClock.kind === 'update');
+
+  // Lose a tracked mole, then see it again further along its path: one frame re-locks it.
+  let lost = step(step(initialActiveTargetState, [C(0.4, 0.5)], 0).state, [C(0.4, 0.5)], DT).state;
+  lost = step(lost, [C(0.42, 0.5)], 2 * DT).state;
+  let t = 2 * DT;
+  let cleared;
+  for (let i = 0; i < 4; i++) {
+    t += DT;
+    cleared = step(lost, [], t);
+    lost = cleared.state;
+  }
+  check('misses still clear the track', cleared.kind === 'clear' && cleared.state.lost !== null);
+  const back = step(lost, [C(0.47, 0.5, 0.5)], t + 200);
+  check('the lost mole re-locks on its first frame back', back.kind === 'acquire' && back.relock === true);
+
+  // ...but an unrelated spot elsewhere still has to confirm over two frames, as before.
+  const stranger = step(lost, [C(0.85, 0.2, 0.9)], t + 200);
+  check('an unrelated candidate after a loss still needs confirmation', stranger.kind === 'none');
+  check('waiting on a stranger keeps the lost memory', stranger.state.lost !== null);
+
+  // ...and the memory expires.
+  const late = step(lost, [C(0.47, 0.5, 0.5)], t + RELOCK_MS + 50);
+  check('re-lock memory expires after RELOCK_MS', late.kind === 'none' && !late.relock);
+
+  // A weak re-sighting is not enough - re-lock keeps the CREATE_SCORE evidence bar.
+  const weak = step(lost, [C(0.47, 0.5, CREATE_SCORE - 0.01)], t + 200);
+  check('re-lock still requires CREATE_SCORE', weak.kind !== 'acquire');
 }
 
 if (fails.length) {

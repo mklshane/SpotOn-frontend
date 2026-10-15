@@ -102,7 +102,21 @@ function readMesh(glbPath) {
   for (let i = 0; i < src.length / 3; i++) {
     verts.push(applyMat4(world, src[i * 3], src[i * 3 + 1], src[i * 3 + 2]));
   }
-  return verts;
+  return { verts, indices: readAccessor(json, bin, prim.indices) };
+}
+
+/** Area-weighted vertex normals, the same thing three's computeVertexNormals() gives the app. */
+function vertexNormals(pts, indices) {
+  const n = pts.map(() => [0, 0, 0]);
+  for (let i = 0; i < indices.length; i += 3) {
+    const [a, b, c] = [indices[i], indices[i + 1], indices[i + 2]];
+    const A = pts[a], B = pts[b], C = pts[c];
+    const u = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+    const w = [C[0] - A[0], C[1] - A[1], C[2] - A[2]];
+    const f = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    for (const k of [a, b, c]) { n[k][0] += f[0]; n[k][1] += f[1]; n[k][2] += f[2]; }
+  }
+  return n.map((v) => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; });
 }
 
 const box3 = (pts) => ({
@@ -123,7 +137,9 @@ function check(name, cond, detail = '') {
 const fitted = new Map();
 for (const [rel, variant] of MESH_SOURCES) {
   console.log(`\n${variant} (${rel})`);
-  const pts = normalise(readMesh(resolve(ROOT, rel)));
+  const { verts, indices } = readMesh(resolve(ROOT, rel));
+  const pts = normalise(verts);
+  const normals = vertexNormals(pts, indices);
   const box = box3(pts);
   fitted.set(variant, { pts, box, flat: Float64Array.from(pts.flat()) });
   const counts = new Map();
@@ -150,6 +166,32 @@ for (const [rel, variant] of MESH_SOURCES) {
   // Anatomical left is +X on the fitted mesh - a mirrored import would silently swap every side.
   const rightmost = pts.reduce((a, b) => (b[0] > a[0] ? b : a));
   check(`${variant}: +X side is Left`, resolveRegionFromPoint({ x: rightmost[0], y: rightmost[1], z: rightmost[2] }, box).startsWith('Left'));
+
+  // Front/back. The viewer decides it from the tapped surface's normal (body-viewer.tsx pick()),
+  // because the old `z >= box centre` test called 93-100% of the front of the shin and the front
+  // of the elbow 'back' - the toes and chest push the box centre forward of both - which turned
+  // the tracked-spot thumbnail around to the calf with the marker hidden. These pin the normal
+  // rule to landmarks whose facing is not in doubt, and need the mesh winding to be outward.
+  const facingOf = (i) => (normals[i][2] >= 0 ? 'front' : 'back');
+  const frontmostIn = (keep) => {
+    let best = -1;
+    pts.forEach((p, i) => { if (keep(p) && (best < 0 || p[2] > pts[best][2])) best = i; });
+    return best;
+  };
+  const ratioOf = (p) => (p[1] - box.min.y) / (box.max.y - box.min.y);
+  const label = (i) => resolveRegionFromPoint({ x: pts[i][0], y: pts[i][1], z: pts[i][2] }, box, facingOf(i));
+  const backmost = pts.reduce((a, p, i) => (p[2] < pts[a][2] ? i : a), 0);
+  check(`${variant}: backmost vertex faces back (outward winding)`, facingOf(backmost) === 'back');
+  for (const side of [1, -1]) {
+    const name = side > 0 ? 'Left' : 'Right';
+    const shin = frontmostIn((p) => p[0] * side > 0 && ratioOf(p) > 0.14 && ratioOf(p) < 0.24);
+    check(`${variant}: front of ${name} shin is 'front'`, facingOf(shin) === 'front');
+    check(`${variant}: front of ${name} shin labels lower leg`, label(shin) === `${name} lower leg`, label(shin));
+  }
+  const chest = frontmostIn((p) => Math.abs(p[0]) < 0.12 && ratioOf(p) > 0.74 && ratioOf(p) < 0.82);
+  check(`${variant}: front of chest labels Chest`, label(chest) === 'Chest', label(chest));
+  const throat = frontmostIn((p) => Math.abs(p[0]) < 0.05 && ratioOf(p) > 0.86 && ratioOf(p) < 0.89);
+  check(`${variant}: front of neck labels Neck`, label(throat) === 'Neck', label(throat));
 
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
   console.log(`  ${counts.size}/${ALL_REGIONS.length} regions hit; largest: ${top.map(([r, n]) => `${r} ${((n / pts.length) * 100).toFixed(1)}%`).join(', ')}`);

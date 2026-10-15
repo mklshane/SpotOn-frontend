@@ -49,8 +49,11 @@ const check = (name, cond) => (cond ? pass++ : fails.push(name));
 let r = analyzeRgba(buf((x, y) => { const n = noise(x, y); return [190 + n, 140 + n, 120 + n]; }), S, S);
 check('textured skin: brightness ok', r.brightness.ok);
 check('textured skin: skin ok', r.skin.ok);
-check('textured skin: sharp ok', r.sharpness.ok);
-check('textured skin: pass', r.brightness.ok && r.sharpness.ok && r.skin.ok);
+// This "texture" is ±11-luma pseudo-noise, which the edge term's 5x5 smooth averages away: the frame
+// has no structure to be in focus, which since 2026-10-14 (EDGE_CONTRAST_MIN) is a focus failure
+// rather than an abstention - it is exactly what a defocused, featureless photo looks like.
+check('featureless skin: focus withheld (no structure)', !r.sharpness.ok);
+check('featureless skin: everything else ok', r.brightness.ok && r.skin.ok);
 
 // Too dark.
 r = analyzeRgba(buf((x, y) => { const n = noise(x, y); return [(190 + n) * 0.1, (140 + n) * 0.1, (120 + n) * 0.1]; }), S, S);
@@ -153,9 +156,18 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
   }), E, E);
   check('shading gradient: NOT a lesion', !e.lesion.ok);
 
-  // A photo with no lesion has no edge to measure: the term must abstain, not reject.
+  // A frame with no edge of real contrast no longer abstains (2026-10-14, EDGE_CONTRAST_MIN): its
+  // steepest pixels are grain ripple, whose contrast ÷ slope reads SHORT - that is how a featureless
+  // defocused photo passed. No structure now reports the ceiling width.
   e = analyzeRgba(ebuf((x, y) => skin(x, y, 1)), E, E);
-  check('bare skin: edge width abstains', e.sharpness.edgeWidth <= LESION_EDGE_WIDTH && e.sharpness.ok);
+  check('bare skin, no structure: edge width at ceiling', e.sharpness.edgeWidth > LESION_EDGE_WIDTH);
+  check('bare skin, no structure: focus NOT ok', !e.sharpness.ok);
+  // ...but low-contrast skin detail that IS structure (a few faint pores, ~20 luma) still reads sharp.
+  e = analyzeRgba(ebuf((x, y) => {
+    const pore = ((x % 24) - 12) ** 2 + ((y % 24) - 12) ** 2 < 9;
+    return skin(x, y, pore ? 0.8 : 1);
+  }), E, E);
+  check(`faint sharp pores: focus ok (edgeWidth ${e.sharpness.edgeWidth.toFixed(1)})`, e.sharpness.ok);
 }
 
 /* ------------------------------------------------ edge width vs the auto-zoom (2026-09-19) - */
@@ -249,6 +261,30 @@ check('flat skin: sharp not ok', !r.sharpness.ok);
     f.sharpness.edgeWidth > LESION_EDGE_WIDTH,
   );
   check('defocused close-up: focus NOT ok', !f.sharpness.ok);
+
+  // 2026-10-14: a featureless defocused close-up at ~3x auto-zoom, all rows green. Its steepest
+  // pixels were 4-luma ripple, so contrast ÷ slope read 7.6 - "sharp". See EDGE_CONTRAST_MIN.
+  const g = jpeg.decode(readFileSync(join(ROOT, 'scripts/fixtures/iqa-defocused-featureless-2026-10-14.jpg')), {
+    useTArray: true,
+    formatAsRGBA: true,
+  });
+  const h = analyzeRgba(g.data, g.width, g.height);
+  check('featureless defocus: exposure passes (precondition)', h.brightness.ok);
+  check('featureless defocus: skin passes (precondition)', h.skin.ok);
+  check(
+    `featureless defocus: edge width over the bar (${h.sharpness.edgeWidth.toFixed(1)} > ${LESION_EDGE_WIDTH})`,
+    h.sharpness.edgeWidth > LESION_EDGE_WIDTH,
+  );
+  check('featureless defocus: focus NOT ok', !h.sharpness.ok);
+
+  // 2026-10-14, later: focus locked on the BACKGROUND (bedding, a cable) with the spot soft in the
+  // middle. Whole-frame width read 6.9 / 10.0 off the sharp background; see EDGE_ROI_FRAC. The
+  // AssistiveTouch button in the recording was masked out before saving.
+  for (const name of ['iqa-bg-focus-2026-10-14-a', 'iqa-bg-focus-2026-10-14-b']) {
+    const im = jpeg.decode(readFileSync(join(ROOT, `scripts/fixtures/${name}.jpg`)), { useTArray: true, formatAsRGBA: true });
+    const r = analyzeRgba(im.data, im.width, im.height);
+    check(`${name}: edge width over the bar (${r.sharpness.edgeWidth.toFixed(1)} > ${LESION_EDGE_WIDTH})`, r.sharpness.edgeWidth > LESION_EDGE_WIDTH);
+  }
 }
 
 /* ------------------------------------------------------------- lesion presence ---------- */
@@ -325,8 +361,14 @@ check('off-frame blob: lesion not ok', !r.lesion.ok);
   check('lesion close-up: gate says yes', closeup.skin.ok && closeup.lesion.ok);
 }
 
-// A one-sided luminance ramp (shadow) must NOT block the pass - shadow is advisory.
-r = analyzeRgba(buf((x, y) => { const n = noise(x, y); const f = 1 - (x / S) * 0.5; return [(190 + n) * f, (140 + n) * f, (120 + n) * f]; }), S, S);
+// A one-sided luminance ramp (shadow) must NOT block the pass - shadow is advisory. The hard-edged
+// spot in the middle gives focus something to read: since EDGE_ROI_FRAC the centre must have structure.
+r = analyzeRgba(buf((x, y) => {
+  const n = noise(x, y);
+  const f = 1 - (x / S) * 0.5;
+  const t = Math.hypot(x - S / 2, y - S / 2) < S * 0.12 ? 0.5 : 1;
+  return [(190 * t + n) * f, (140 * t + n) * f, (120 * t + n) * f];
+}), S, S);
 check('shadow advisory: still passes exposure+focus+skin', r.brightness.ok && r.sharpness.ok && r.skin.ok);
 
 /* --------------------------------------------------------------------- hair -------------- */

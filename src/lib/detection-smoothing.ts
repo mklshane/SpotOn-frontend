@@ -23,8 +23,16 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * 1€ filter constants for the box CENTRE (lib/one-euro.ts). minCutoff sets how hard a nearly
    * still signal is smoothed; beta is how fast the filter opens up as the target starts moving,
    * which is what keeps "stable when stationary" from turning into "laggy when moving".
+   *
+   * beta is in units of (screen fractions per second)^-1. The shipped 0.05 assumed pixel-scale
+   * inputs: a brisk 0.3 screen/s pan raised the cutoff by 0.015 Hz, so the filter was a FIXED
+   * 1.5 Hz low-pass and the box trailed the mole by ~100 ms from the filter alone (screen recording,
+   * iPhone, 2026-10-15). beta 2 lifts the cutoff by ~0.6 Hz on that pan and well past it on a fast
+   * one, while hand tremor (~0.01-0.03 screen/s) barely moves it. minCutoff 1.5 -> 0.5 makes a still
+   * box markedly steadier (the second recording read as "jitters a bit"); the speed-driven cutoff
+   * and the lead below repay the lag.
    */
-  position: { minCutoff: 1.5, beta: 0.05 },
+  position: { minCutoff: 0.5, beta: 2 },
   /**
    * 1€ constants for WIDTH/HEIGHT - deliberately heavier than `position`.
    *
@@ -34,7 +42,33 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * breathes, and the size breathing is the one people notice. A lower minCutoff smooths size
    * harder; the lower beta keeps it from chasing a size spike that is really just a noisy edge.
    */
-  size: { minCutoff: 0.9, beta: 0.02 },
+  size: { minCutoff: 0.4, beta: 0.5 },
+  /**
+   * Cutoff (Hz) of the 1€ filter's own speed estimate. The library default of 1 Hz takes several
+   * frames to notice that the camera started moving, which is the window in which beta cannot help;
+   * 2 Hz notices within one or two detections. The same speed estimate drives `lead` below.
+   */
+  dCutoff: 2,
+
+  /**
+   * Latency compensation. The detector's box describes a frame that is already `resultAge` ms old
+   * by the time it is drawn, and the drawn box then has to last until the next detection - so while
+   * the camera moves, an unpredicted box is always behind the mole. The lead extrapolates the
+   * filtered centre along the filter's own velocity estimate to where the mole is NOW.
+   *
+   * `minSpeed` is a SOFT dead zone, subtracted from the speed rather than gating it: detector noise
+   * alone puts the filtered speed at ~0.06 screen/s on a still hand, and a hard gate there let those
+   * spikes through at full strength (jitter 0.0033 vs 0.0019 shipped). Subtracting keeps the still
+   * box quieter than before and the response continuous as motion starts.
+   *
+   * Chosen together with `spring` on the end-to-end sim in scripts/test-detection-smoothing.mjs,
+   * which reports trail, still jitter, stutter (how unevenly the box moves frame to frame on a
+   * steady pan) and stop overshoot. A hard gate with gain 1 was jitterier than shipped and
+   * overshot ~0.027 of the screen.
+   *
+   * `maxLeadMs` / `maxLead` bound the extrapolation on a slow phone or a wild swing.
+   */
+  lead: { gain: 1, minSpeed: 0.1, maxLeadMs: 150, maxLead: 0.06 },
 
   /**
    * Deadband (fraction of the screen) below which movement is damped away rather than drawn, so
@@ -82,9 +116,16 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * was the largest single contributor to the jitter, and it sat downstream of a 1€ filter that was
    * doing its job correctly.
    *
-   * Same stiffness (so it is no slower to arrive), damping raised to 2*sqrt(stiffness): the box
-   * approaches its target and stops, without overshoot or ring. `criticalDamping` derives it rather
-   * than hard-coding, so re-tuning stiffness cannot silently reintroduce the oscillation.
+   * Damping is 2*sqrt(stiffness): the box approaches its target and stops, without overshoot or
+   * ring. `criticalDamping` derives it rather than hard-coding, so re-tuning stiffness cannot
+   * silently reintroduce the oscillation.
+   *
+   * Stiffness is 320 ON PURPOSE - it was briefly 1600 (2026-10-15) to cut the spring's 2/omega
+   * trail, and that was wrong: a 1600 spring finishes each move in ~70 ms, but on device detections
+   * land every 100-230 ms, so a steady pan played as dash-stop-dash-stop. Measured frame by frame
+   * on the second screen recording, and on the sim as stutter 0.58 vs 0.18 at 320. At 320 each
+   * move glides across most of the gap to the next detection; the trail it adds is what the lead
+   * above is for.
    */
   spring: { stiffness: 320, mass: 1 },
 } as const;
@@ -98,6 +139,28 @@ export function criticalDamping(stiffness: number, mass = 1): number {
 export function boxSpring(): { stiffness: number; mass: number; damping: number } {
   const { stiffness, mass } = DETECTION_SMOOTHING_CONFIG.spring;
   return { stiffness, mass, damping: criticalDamping(stiffness, mass) };
+}
+
+/**
+ * How far (screen fractions) to push the filtered centre ahead along its velocity, so the drawn box
+ * sits where the lesion is now rather than where it was when the frame was captured.
+ *
+ * `speed` is the 1€ filter's derivative (screen fractions / s), `ageMs` how old the detection is on
+ * arrival, `intervalMs` the detection cadence - the box will be shown for about half an interval on
+ * average before the next one replaces it. `minSpeed` is subtracted (soft dead zone), so a still
+ * box never moves and the lead grows continuously from zero as motion starts.
+ */
+export function predictLead(
+  speed: number,
+  ageMs: number,
+  intervalMs: number,
+  cfg: { gain: number; minSpeed: number; maxLeadMs: number; maxLead: number } = DETECTION_SMOOTHING_CONFIG.lead,
+): number {
+  const magnitude = Math.abs(speed);
+  if (!Number.isFinite(speed) || magnitude <= cfg.minSpeed) return 0;
+  const leadS = Math.min(cfg.maxLeadMs, Math.max(0, ageMs) + Math.max(0, intervalMs) / 2) / 1000;
+  const lead = cfg.gain * Math.sign(speed) * (magnitude - cfg.minSpeed) * leadS;
+  return Math.max(-cfg.maxLead, Math.min(cfg.maxLead, lead));
 }
 
 /* ------------------------------------------------------------------ smoothing primitives */

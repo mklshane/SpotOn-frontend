@@ -15,8 +15,17 @@ export const ARM_RATIO = 0.35;
  * The mesh is fitted standing (Y up), facing +Z, centered on X. Anatomical LEFT = +X.
  * Thresholds are normalized to the model's bounding box so they're scale-independent, and
  * shared by every body variant - see body-model.tsx, which fits each mesh into the same box.
+ *
+ * `facing` should come from the surface normal at the hit. The `z >= box centre` fallback is only
+ * for callers without one, and it is wrong over much of the body: the box is pushed forward by the
+ * toes and chest, so the whole front of the shin, the front of the elbow and (on the female mesh)
+ * about a third of the upper chest and neck sit behind the centre and read as "back".
  */
-export function resolveRegionFromPoint(point: Vector3, box: Box3): string {
+export function resolveRegionFromPoint(
+  point: Vector3,
+  box: Box3,
+  facing?: 'front' | 'back',
+): string {
   const sizeX = box.max.x - box.min.x;
   const sizeY = box.max.y - box.min.y;
   const cx = (box.max.x + box.min.x) / 2;
@@ -24,7 +33,7 @@ export function resolveRegionFromPoint(point: Vector3, box: Box3): string {
 
   const ratio = (point.y - box.min.y) / sizeY; // 0 = feet, 1 = head
   const xrel = (point.x - cx) / sizeX; // -0.5 .. 0.5
-  const front = point.z >= cz;
+  const front = facing ? facing === 'front' : point.z >= cz;
   const armSide = xrel >= 0 ? 'Left' : 'Right';
 
   // Head / neck

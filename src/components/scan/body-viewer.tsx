@@ -170,12 +170,25 @@ export function BodyViewer({ mark, onPick }: BodyViewerProps) {
       raycaster.setFromCamera(ndc, s.camera);
       const hits = raycaster.intersectObjects(s.group.children, true);
       if (!hits.length) return;
-      const p = hits[0].point;
-      const cz = (box.max.z + box.min.z) / 2;
+      const hit = hits[0];
+      const p = hit.point;
+      // Front/back comes from the way the tapped skin faces, not from the point's depth against
+      // the box centre: the toes and chest push that centre forward, so the whole front of the
+      // shin and the front of the elbow sat behind it and were saved as 'back'. A side-on surface
+      // (shin edge, outer thigh) falls back to whichever side the camera was looking from.
+      const n = hit.face?.normal.clone().transformDirection(hit.object.matrixWorld);
+      const facing: 'front' | 'back' =
+        n && n.z > 0.1
+          ? 'front'
+          : n && n.z < -0.1
+            ? 'back'
+            : s.camera.position.z >= p.z
+              ? 'front'
+              : 'back';
       onPick({
         point: [p.x, p.y, p.z],
-        region: resolveRegionFromPoint(p, box),
-        view: p.z >= cz ? 'front' : 'back',
+        region: resolveRegionFromPoint(p, box, facing),
+        view: facing,
         mesh: variant,
       });
     },

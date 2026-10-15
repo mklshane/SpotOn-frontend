@@ -194,6 +194,58 @@ export const EDGE_WIDTH_BINS = 1024;
  * BLUR_GATE.md's history still line up. Was 14 on the old scale, which is not comparable.
  */
 export const LESION_EDGE_WIDTH = 17;
+/**
+ * CONTRAST FLOOR for the edges above (2026-10-14, BLUR_GATE.md round 5).
+ *
+ * The term assumes the steepest 0.5% of pixels ARE edges. On a photo blurred past having any, they
+ * are not: what is steepest is grain / compression ripple that survived the 5×5 smooth, a few luma
+ * high and spread everywhere. Contrast ÷ slope of a 4-luma ripple is a SHORT width, so the most
+ * defocused photos read as the sharpest. Reported case (fixture
+ * iqa-defocused-featureless-2026-10-14.jpg): a featureless defocused close-up at ~3× auto-zoom, all
+ * three rows green, edge width 7.6 - its edge pixels had a median contrast of 4.4 luma.
+ *
+ * So an edge pixel only counts if the contrast around it is at least EDGE_CONTRAST_MIN, and if
+ * fewer than EDGE_STRUCTURED_FRAC of the selected pixels clear that, the frame has no structure to
+ * be sharp: the term reports the histogram ceiling (~64px) and the focus row fails. It no longer
+ * abstains on featureless frames - a lesion photo with nothing in focus IS the failure.
+ *
+ * Measured (edge_contrast_r5_proto.py, 65 full-res held-out photos + 275 app-framed + 37 bare skin):
+ *
+ *   condition                 before    → 13 / 0.6
+ *   sharp+grain, all framings     0%           0%
+ *   app-framed real photos      1.8%         2.2%   (the one new flag is genuinely blurry)
+ *   σ=10+grain, zoom 2.28×      4.6%        75.4%
+ *   σ=10+grain, zoom 3.01×        0%        89.2%
+ *   σ=5+grain,  zoom 3.01×     12.3%        53.8%
+ *   lesion-free bare skin       8.1%        21.6%   (cost: smooth skin with no spot reads blurry)
+ *
+ * 13 / 0.6 is the strongest rule that keeps sharp photos at 0% in every framing; 15 / 0.5 catches
+ * more but starts rejecting sharp 3× zooms (3.1%).
+ */
+export const EDGE_CONTRAST_MIN = 13;
+export const EDGE_STRUCTURED_FRAC = 0.6;
+/**
+ * CENTRE REGION for the edge term (2026-10-14, BLUR_GATE.md round 6).
+ *
+ * Whole-frame width reads the frame's steepest edges, wherever they are. When focus locks on the
+ * BACKGROUND (bedding, a cable, a rug behind a limb), those are sharp and the soft spot in the
+ * middle never gets a vote. Reported twice the same evening (fixtures iqa-bg-focus-2026-10-14-a/b):
+ * whole-frame 6.9 / 10.0, centre 28.1 / no structure. The term is now measured over the whole frame
+ * AND over the centre EDGE_ROI_FRAC (the crop centres the spot there), each with its own percentile,
+ * and the wider of the two is the reading.
+ *
+ * Measured (edge_roi_r6_proto.py; 65 held-out, 275 app-framed; "ctr" = only the centre defocused):
+ *
+ *   condition                       whole only   → whole + centre 0.6
+ *   ctr σ=5 / σ=10, zoom 1.5×        20 / 17%        63 / 66%
+ *   sharp+grain, 1.5× / 3.01×         0 / 0%          0 / 1.5%
+ *   app-framed real photos            2.2%            3.3%
+ *
+ * Centre-only was weaker than both (a blurred frame's centre can be smoother than its edges); 0.5
+ * cost more sharp 3× zooms (4.6%). Known false reject: a sharp photo whose centre is one diffuse
+ * lesion border and little else (MEL/general/web_32806413dcfaa4a0.jpg reads 19.4 at the centre).
+ */
+export const EDGE_ROI_FRAC = 0.6;
 export const SHADOW_GRAD = 0.25; // one side this much darker than the other (0..1) = uneven light (advisory)
 export const SKIN_MIN = 0.3; // fraction of skin-coloured pixels required
 
@@ -443,7 +495,8 @@ function slideExtreme(line: Float32Array, len: number, r: number, isMax: boolean
 }
 
 /**
- * Median width (px) of the frame's steepest edges, after a 5×5 box smooth - see LESION_EDGE_WIDTH.
+ * Median width (px) of the steepest edges, after a 5×5 box smooth - see LESION_EDGE_WIDTH. Measured
+ * over the whole frame and over the centre EDGE_ROI_FRAC, and the wider (blurrier) of the two wins.
  * 0 when the frame has no slope at all (flat), which the Laplacian term already rejects.
  *
  * Both the edge percentile and the median come from fixed-width histograms rather than sorts: O(n),
@@ -473,29 +526,28 @@ function edgeWidthOf(gray: ArrayLike<number>, W: number, H: number): number {
     for (let x = 0; x < W; x++) sm[y * W + x] /= EDGE_SMOOTH;
   }
 
-  // Forward-difference slope histogram over (W-1)×(H-1) -> the bin where the edges start.
+  // Forward-difference slope, binned. The percentile is taken per REGION below.
   const gradBin = (x: number, y: number) => {
     const c = sm[y * W + x];
     const gx = sm[y * W + x + 1] - c;
     const gy = sm[(y + 1) * W + x] - c;
     return Math.min(EDGE_GRAD_BINS - 1, Math.floor(Math.sqrt(gx * gx + gy * gy) / EDGE_GRAD_BIN));
   };
-  const hist = new Int32Array(EDGE_GRAD_BINS);
-  for (let y = 0; y < H - 1; y++) for (let x = 0; x < W - 1; x++) hist[gradBin(x, y)]++;
-  const n = (W - 1) * (H - 1);
-  const target = Math.ceil(EDGE_GRAD_PCT * n);
-  let edgeBin = EDGE_GRAD_BINS - 1;
-  for (let b = 0, cum = 0; b < EDGE_GRAD_BINS; b++) {
-    cum += hist[b];
-    if (cum >= target) {
-      edgeBin = b;
-      break;
+  // The bin where the steepest EDGE_GRAD_PCT of a region's pixels start.
+  const edgeBinOf = (x0: number, x1: number, y0: number, y1: number) => {
+    const hist = new Int32Array(EDGE_GRAD_BINS);
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) hist[gradBin(x, y)]++;
+    const target = Math.ceil(EDGE_GRAD_PCT * (x1 - x0) * (y1 - y0));
+    for (let b = 0, cum = 0; b < EDGE_GRAD_BINS; b++) {
+      cum += hist[b];
+      if (cum >= target) return b;
     }
-  }
-  if (edgeBin === 0) return 0; // no slope anywhere worth the name
+    return EDGE_GRAD_BINS - 1;
+  };
+  if (edgeBinOf(0, W - 1, 0, H - 1) === 0) return 0; // no slope anywhere worth the name
 
   // Local contrast = max − min over a (2R+1)² window: separable, rows then columns. `tmp` is reused
-  // for the max, `sm2` holds the min.
+  // for the max, `lo` holds the min.
   const R = EDGE_RANGE_RADIUS;
   const L = Math.max(W, H);
   const q = new Int32Array(L);
@@ -520,27 +572,42 @@ function edgeWidthOf(gray: ArrayLike<number>, W: number, H: number): number {
     }
   }
 
-  // Median of contrast ÷ slope over the edge pixels.
-  const wHist = new Int32Array(EDGE_WIDTH_BINS);
-  let m = 0;
-  for (let y = 0; y < H - 1; y++) {
-    for (let x = 0; x < W - 1; x++) {
-      if (gradBin(x, y) < edgeBin) continue;
-      const i = y * W + x;
-      const c = sm[i];
-      const gx = sm[i + 1] - c;
-      const gy = sm[i + W] - c;
-      const w = (hi[i] - lo[i]) / Math.sqrt(gx * gx + gy * gy);
-      wHist[Math.min(EDGE_WIDTH_BINS - 1, Math.floor(w / EDGE_WIDTH_BIN))]++;
-      m++;
+  // Median of contrast ÷ slope over a region's edge pixels that have real contrast (EDGE_CONTRAST_MIN).
+  const regionWidth = (x0: number, x1: number, y0: number, y1: number) => {
+    const edgeBin = Math.max(1, edgeBinOf(x0, x1, y0, y1));
+    const wHist = new Int32Array(EDGE_WIDTH_BINS);
+    let m = 0;
+    let selected = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        if (gradBin(x, y) < edgeBin) continue;
+        selected++;
+        const i = y * W + x;
+        const range = hi[i] - lo[i];
+        if (range < EDGE_CONTRAST_MIN) continue;
+        const c = sm[i];
+        const gx = sm[i + 1] - c;
+        const gy = sm[i + W] - c;
+        const w = range / Math.sqrt(gx * gx + gy * gy);
+        wHist[Math.min(EDGE_WIDTH_BINS - 1, Math.floor(w / EDGE_WIDTH_BIN))]++;
+        m++;
+      }
     }
-  }
-  const half = Math.ceil(m / 2);
-  for (let b = 0, cum = 0; b < EDGE_WIDTH_BINS; b++) {
-    cum += wHist[b];
-    if (cum >= half) return b * EDGE_WIDTH_BIN;
-  }
-  return (EDGE_WIDTH_BINS - 1) * EDGE_WIDTH_BIN;
+    if (selected === 0) return 0;
+    // No structure: the "edges" were ripple. Report the ceiling so the focus row fails.
+    if (m < EDGE_STRUCTURED_FRAC * selected) return (EDGE_WIDTH_BINS - 1) * EDGE_WIDTH_BIN;
+    const half = Math.ceil(m / 2);
+    for (let b = 0, cum = 0; b < EDGE_WIDTH_BINS; b++) {
+      cum += wHist[b];
+      if (cum >= half) return b * EDGE_WIDTH_BIN;
+    }
+    return (EDGE_WIDTH_BINS - 1) * EDGE_WIDTH_BIN;
+  };
+
+  // Whole frame AND the centre (where the spot is framed) must both be sharp - see EDGE_ROI_FRAC.
+  const cx = Math.floor(((W - 1) * (1 - EDGE_ROI_FRAC)) / 2);
+  const cy = Math.floor(((H - 1) * (1 - EDGE_ROI_FRAC)) / 2);
+  return Math.max(regionWidth(0, W - 1, 0, H - 1), regionWidth(cx, W - 1 - cx, cy, H - 1 - cy));
 }
 
 /**

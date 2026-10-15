@@ -144,6 +144,46 @@ export function markPointOn(
   );
 }
 
+/**
+ * Outward surface normal of the `variant` mesh nearest to `point` (a point already on that mesh).
+ *
+ * Read from the vertex normals the geometry already carries, so a stored mark can be framed from
+ * the side it faces without having saved its normal. Older marks carry a `view` that was often
+ * wrong (see body-viewer.tsx pick()), so the preview uses this instead of trusting it. Linear over
+ * ~41k vertices, and cached, because every tracked-spot card asks once.
+ */
+const NORMAL_CACHE = new Map<string, [number, number, number]>();
+
+export function surfaceNormalAt(
+  point: [number, number, number],
+  variant: BodyVariant,
+): [number, number, number] | null {
+  const key = `${variant}:${point.join(',')}`;
+  const cached = NORMAL_CACHE.get(key);
+  if (cached) return cached;
+  const { geo } = getBodyGeometry(variant);
+  if (!geo) return null;
+  const pos = geo.getAttribute('position').array;
+  const nor = geo.getAttribute('normal').array;
+  const [px, py, pz] = point;
+  let best = -1;
+  let bestD = Infinity;
+  for (let i = 0; i < pos.length; i += 3) {
+    const dx = pos[i] - px;
+    const dy = pos[i + 1] - py;
+    const dz = pos[i + 2] - pz;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  if (best < 0) return null;
+  const out: [number, number, number] = [nor[best], nor[best + 1], nor[best + 2]];
+  NORMAL_CACHE.set(key, out);
+  return out;
+}
+
 export function BodyModel({
   variant,
   onReady,

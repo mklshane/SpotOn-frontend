@@ -741,7 +741,22 @@ const CHALLENGER_FRAMES = 3;
 const CHALLENGER_RELATIVE_CENTER = 0.75;
 const CHALLENGER_ABSOLUTE_CENTER = 0.08;
 const ASSOCIATION_IOU = 0.2;
-const ASSOCIATION_MIN_DISTANCE = 0.08;
+/**
+ * Floor on how far (preview fractions) a detection may land from the PREDICTED box and still be
+ * this lesion. 0.08 -> 0.12 (2026-10-15): for a small mole the diagonal term is tiny, so the floor
+ * is the whole gate, and an ordinary hand move between two detections cleared 0.08 - the box missed,
+ * dropped after MAX_MISSES and re-acquired, which on screen is the box falling off the mole.
+ * Prediction (below) absorbs steady motion; this absorbs the jerk. Still far inside the 0.28 gap
+ * the challenger logic treats as a different lesion.
+ */
+const ASSOCIATION_MIN_DISTANCE = 0.12;
+/** Longest extrapolation (s) applied to a tracked box during misses - past this, prediction is a guess. */
+const PREDICT_MAX_S = 0.3;
+/**
+ * A lesion lost this recently (ms) and seen again near where it was heading re-locks on its first
+ * frame, instead of re-running the two-frame acquisition as if it were a new object.
+ */
+export const RELOCK_MS = 700;
 const ASSOCIATION_DIAGONAL_SCALE = 0.6;
 const GEOMETRY_MIN_SCALE = 0.6;
 const GEOMETRY_MAX_SCALE = 1.7;
@@ -756,6 +771,13 @@ export type ActiveTargetState = {
   geometry: PendingCandidate | null;
   misses: number;
   lastZoomRatio: number;
+  /** Preview-normalized velocity of the active box (fractions / s), from successive sightings. */
+  vx: number;
+  vy: number;
+  /** When the active box was last actually seen (ms), or null when unknown. */
+  seenAt: number | null;
+  /** The last track that cleared - where it was (predicted), when, and how it was moving. */
+  lost: { box: NormBox; at: number; vx: number; vy: number } | null;
 };
 
 export const initialActiveTargetState: ActiveTargetState = {
@@ -765,13 +787,24 @@ export const initialActiveTargetState: ActiveTargetState = {
   geometry: null,
   misses: 0,
   lastZoomRatio: 1,
+  vx: 0,
+  vy: 0,
+  seenAt: null,
+  lost: null,
 };
 
 export type TrackerDecision = {
   state: ActiveTargetState;
   kind: 'none' | 'hold' | 'acquire' | 'update' | 'handover' | 'clear';
   target: DetectionCandidate | null;
+  /** An 'acquire' that is the just-lost lesion coming back - draw it as a continuation, not a new box. */
+  relock?: boolean;
 };
+
+function shiftBox(box: NormBox, vx: number, vy: number, dtS: number): NormBox {
+  const dt = Math.min(PREDICT_MAX_S, Math.max(0, dtS));
+  return { ...box, cx: box.cx + vx * dt, cy: box.cy + vy * dt };
+}
 
 function centerDistance(box: NormBox): number {
   return Math.hypot(box.cx - 0.5, box.cy - 0.5);
@@ -906,8 +939,35 @@ export function stepActiveTarget(
    * qualify; weaker ones still need the two-frame confirmation that filters one-off false hits.
    */
   fastAcquireScore?: number,
+  /**
+   * Wall clock (ms) of this batch. Drives motion prediction and re-lock; callers that omit it get
+   * the old position-only behaviour (every dt is zero), which is what the pure tests rely on.
+   */
+  nowMs = 0,
 ): TrackerDecision {
   if (!previous.active) {
+    // Re-lock: the lesion we just lost, seen again near where it was heading. Same evidence bar as
+    // any acquisition (CREATE_SCORE), but one frame instead of two - it is not a new object.
+    const lost = previous.lost && nowMs - previous.lost.at <= RELOCK_MS ? previous.lost : null;
+    if (lost) {
+      const expected = shiftBox(lost.box, lost.vx, lost.vy, (nowMs - lost.at) / 1000);
+      const back = chooseAssociated(
+        expected,
+        candidates.filter((candidate) => candidate.score >= CREATE_SCORE),
+        roi,
+      );
+      if (back) {
+        const state: ActiveTargetState = {
+          ...initialActiveTargetState,
+          active: back,
+          lastZoomRatio: zoomRatio,
+          vx: lost.vx,
+          vy: lost.vy,
+          seenAt: nowMs,
+        };
+        return { state, kind: 'acquire', target: back, relock: true };
+      }
+    }
     // Once the first CREATE-qualified frame nominates a lesion, look for that same lesion first on
     // the confirmation frame. Re-running the global ranking here lets crowded scenes alternate
     // between two nearly equal candidates forever, so neither can complete its two-frame acquire.
@@ -916,13 +976,13 @@ export function stepActiveTarget(
         chooseTarget(candidates, roi, zoomProgress)
       : chooseTarget(candidates, roi, zoomProgress);
     if (!candidate) {
-      return { state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio }, kind: 'none', target: null };
+      return { state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio, lost }, kind: 'none', target: null };
     }
     const acquisition = nextPending(previous.acquisition, candidate);
     const fast = fastAcquireScore !== undefined && candidate.score >= fastAcquireScore;
     if (acquisition.streak < ACQUIRE_FRAMES && !fast) {
       return {
-        state: { ...previous, acquisition, lastZoomRatio: zoomRatio },
+        state: { ...previous, acquisition, lastZoomRatio: zoomRatio, lost },
         kind: 'none',
         target: null,
       };
@@ -931,19 +991,32 @@ export function stepActiveTarget(
       ...initialActiveTargetState,
       active: candidate,
       lastZoomRatio: zoomRatio,
+      seenAt: nowMs,
     };
     return { state, kind: 'acquire', target: candidate };
   }
 
   const active = previous.active;
-  const associated = chooseAssociated(active.box, candidates, roi);
+  // Look for the lesion where it should be NOW, not where it was last seen: a steadily moving camera
+  // otherwise walks the mole out of the association gate one detection at a time.
+  const sinceSeenS = previous.seenAt === null ? 0 : (nowMs - previous.seenAt) / 1000;
+  const expected = shiftBox(active.box, previous.vx, previous.vy, sinceSeenS);
+  const associated = chooseAssociated(expected, candidates, roi);
   let nextActive = active;
   let kind: TrackerDecision['kind'] = 'hold';
   let misses = previous.misses;
   let geometry = previous.geometry;
 
+  let { vx, vy, seenAt } = previous;
   if (associated) {
     misses = 0;
+    // Velocity from consecutive sightings, half-blended so one noisy box cannot fling the
+    // prediction. Skipped when there is no usable time base (the pure tests pass no clock).
+    if (previous.seenAt !== null && sinceSeenS > 0.005) {
+      vx = 0.5 * vx + 0.5 * ((associated.box.cx - active.box.cx) / sinceSeenS);
+      vy = 0.5 * vy + 0.5 * ((associated.box.cy - active.box.cy) / sinceSeenS);
+    }
+    seenAt = nowMs;
     if (geometryIsPlausible(previous, associated, zoomRatio)) {
       nextActive = associated;
       geometry = null;
@@ -961,8 +1034,9 @@ export function stepActiveTarget(
     geometry = null;
   }
 
+  const reference = associated ? nextActive.box : expected;
   const alternatives = candidates.filter(
-    (candidate) => candidate.score >= CREATE_SCORE && !belongsTo(nextActive.box, candidate.box),
+    (candidate) => candidate.score >= CREATE_SCORE && !belongsTo(reference, candidate.box),
   );
   const challengerCandidate = chooseTarget(alternatives, roi, zoomProgress);
   let challenger: PendingCandidate | null = null;
@@ -981,13 +1055,18 @@ export function stepActiveTarget(
       ...initialActiveTargetState,
       active: challenger.candidate,
       lastZoomRatio: zoomRatio,
+      seenAt: nowMs,
     };
     return { state, kind: 'handover', target: challenger.candidate };
   }
 
   if (!associated && misses > MAX_MISSES) {
     return {
-      state: { ...initialActiveTargetState, lastZoomRatio: zoomRatio },
+      state: {
+        ...initialActiveTargetState,
+        lastZoomRatio: zoomRatio,
+        lost: { box: expected, at: nowMs, vx, vy },
+      },
       kind: 'clear',
       target: null,
     };
@@ -1000,6 +1079,9 @@ export function stepActiveTarget(
     challenger,
     geometry,
     misses,
+    vx,
+    vy,
+    seenAt,
     lastZoomRatio: kind === 'update' ? zoomRatio : previous.lastZoomRatio,
   };
   return { state, kind, target: nextActive };

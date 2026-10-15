@@ -22,8 +22,9 @@ const SEARCHING = 'rgba(255,255,255,0.85)';
  * Critically damped (see detection-smoothing.ts). This spring's only job is to carry the box
  * between detections - filling the ~83 ms between inference results at display refresh rate. It is
  * NOT the smoothing layer; the 1€ filter upstream is, and a spring asked to smooth as well would
- * only add lag. Stiffness is unchanged from the value that shipped, so arrival is no slower; what
- * changed is the damping, which was 0.67 of critical and therefore overshot every detection.
+ * only add lag. Damping was raised to critical (it was 0.67, and overshot every detection). The
+ * stiffness is kept soft enough that each move spans the gap to the next detection - a stiffer
+ * spring arrives early and waits, which reads as stutter (see detection-smoothing.ts).
  */
 const SPRING = boxSpring();
 
