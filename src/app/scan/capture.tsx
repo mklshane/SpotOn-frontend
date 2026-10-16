@@ -141,6 +141,8 @@ const BOX_MAX = 0.98;
  * Drawing only - the crop box forwarded to the cropper keeps the detector's true extents.
  */
 const BOX_MIN_PT = 72;
+/** How long local skin evidence for a spot survives that spot not being nominated (ms). */
+const LOCAL_SKIN_KEEP_MS = 1000;
 
 const LIVE_MARGIN = 0.04; // coach this much before the still gate would reject
 const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
@@ -416,6 +418,9 @@ export default function CaptureScreen() {
   const localSkinGenerationRef = useRef(0);
   // Anchor local skin approval to one lesion, so a slowly drifting track cannot carry it away.
   const localSkinBoxRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // When the anchored spot was last nominated. Its skin evidence survives a frame or two of the
+  // nominee flickering out, but not a long absence.
+  const localSkinSeenAtRef = useRef(0);
   const visibleRef = useRef(false);
   const sessionRef = useRef(0);
   const firstSearchAtRef = useRef(0);
@@ -685,7 +690,9 @@ export default function CaptureScreen() {
         if (isLocalized(nominee, previewRoi)) {
           const box = nominee.imageBox;
           const previous = localSkinBoxRef.current;
+          const now = Date.now();
           if (!previous || decision.kind === 'handover' ||
+              now - localSkinSeenAtRef.current > LOCAL_SKIN_KEEP_MS ||
               Math.hypot(previous.cx - box.cx, previous.cy - box.cy) > 0.12) {
             localSkinGenerationRef.current += 1;
             localSkinStreakRef.current = 0;
@@ -694,6 +701,7 @@ export default function CaptureScreen() {
             lastLocalSkinAtSV.value = 0;
             localSkinBoxRef.current = box;
           }
+          localSkinSeenAtRef.current = now;
           localSkinCxSV.value = box.cx;
           localSkinCySV.value = box.cy;
           localSkinWSV.value = box.w;
@@ -707,12 +715,14 @@ export default function CaptureScreen() {
           localSkinStreakRef.current = 0;
         }
       } else {
+        // No nominee this frame: stop asking for local skin reads, but KEEP the evidence already
+        // gathered for the anchored spot. A faint lesion's score flickers around the bar, and
+        // wiping the streak on every miss meant that with a broad not-skin scene (a wall at the
+        // frame edge) it could never collect the two consecutive reads that let its box show -
+        // 13 s of searching on a centred, visible lesion (screen recording 2026-10-15). The anchor
+        // is still dropped if the next nominee is elsewhere (> 0.12) or after LOCAL_SKIN_KEEP_MS.
         pinnedCropSV.value = -1;
-        localSkinGenerationRef.current += 1;
         localSkinRequestedSV.value = 0;
-        localSkinNeededSV.value = false;
-        localSkinBoxRef.current = null;
-        localSkinStreakRef.current = 0;
       }
 
       if (decision.kind === 'clear') {

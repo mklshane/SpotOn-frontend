@@ -81,6 +81,26 @@ export const CREATE_SCORE = 0.28;
  */
 export const KEEP_SCORE = 0.24;
 /**
+ * The bar an ALREADY-TRACKED lesion has to clear to stay tracked, frame to frame - deliberately
+ * the worklet's own candidate floor (RAW_CANDIDATE_SCORE), i.e. any candidate that reaches JS at
+ * all may continue a track it belongs to. Creation is unaffected: a new box still needs
+ * CREATE_SCORE.
+ *
+ * This is ByteTrack's second association stage: weak detections may extend an existing track,
+ * never start one. The live preview is exactly where that matters - the KEEP_SCORE note above
+ * predicted live confidences would run lower than the stills it was fitted on, and they do.
+ * Measured 2026-10-15 by running this detector over a screen recording of a faint pink lesion held
+ * centred and in view (overlay inpainted out; scratch analysis): median score 0.24-0.26, so at
+ * KEEP_SCORE only 47-66% of frames continued the track and the longest miss run was 0.9-1.0 s -
+ * far past MAX_MISSES, so the box dropped while the lesion sat still. At 0.20, 86-95% of frames
+ * continue and the longest miss run is <= 0.4 s.
+ *
+ * Guarded: a continuation below KEEP_SCORE must also keep a plausible size (geometryIsPlausible).
+ * The detector's bare-skin phantom (a crop-filling box at 0.2-0.34, see chooseTarget) is the one
+ * thing a lower bar could otherwise latch onto, and it never has the tracked lesion's size.
+ */
+export const CONTINUE_SCORE = 0.2;
+/**
  * Above this the box is "locked" - green, and eligible for the ready coach.
  *
  * Lowered 0.5 -> 0.38 (2026-08-04). Measured on 198 held-out clinical photos through the shipping
@@ -761,6 +781,28 @@ const ASSOCIATION_DIAGONAL_SCALE = 0.6;
 const GEOMETRY_MIN_SCALE = 0.6;
 const GEOMETRY_MAX_SCALE = 1.7;
 const GEOMETRY_CONFIRM_FRAMES = 2;
+/**
+ * The detector's no-background phantom: on plain skin it returns one big box covering most of
+ * whatever crop it was given, at a weak score. Measured 2026-10-16 replaying a screen recording
+ * through this tracker (scratch replay harness, overlay inpainted): on every crop size the phantom
+ * covered 0.57-0.71 of the crop at 0.20-0.30, while the real mole in the same frames was 0.05-0.12
+ * of the crop at 0.33-0.38. CLOSE_MIN (0.72) sat just above the phantom, so the tracker nominated
+ * it from the first frame and the drawn box grew to fill the screen - on 85 of 129 replayed frames.
+ *
+ * Big AND weak is the phantom's signature; either alone is a lesion (a mole held close is big, a
+ * faint one is weak). A candidate wider than PHANTOM_MIN_FRACTION of its crop must reach
+ * LOCK_SCORE to be considered at all - genuine close-up lesions do, the phantom never has (its
+ * observed ceiling is 0.34).
+ */
+const PHANTOM_MIN_FRACTION = 0.45;
+
+export function isPhantomLike(candidate: DetectionCandidate, roi: SearchRoi): boolean {
+  const fraction = Math.max(
+    candidate.box.w / Math.max(roi.w, 0.001),
+    candidate.box.h / Math.max(roi.h, 0.001),
+  );
+  return fraction > PHANTOM_MIN_FRACTION && candidate.score < LOCK_SCORE;
+}
 
 type PendingCandidate = { candidate: DetectionCandidate; streak: number };
 
@@ -841,11 +883,12 @@ function chooseAssociated(
   reference: NormBox,
   candidates: DetectionCandidate[],
   roi: SearchRoi,
+  minScore = KEEP_SCORE,
 ): DetectionCandidate | null {
   const associated: DetectionCandidate[] = [];
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
-    if (candidate.score >= KEEP_SCORE && belongsTo(reference, candidate.box)) {
+    if (candidate.score >= minScore && belongsTo(reference, candidate.box)) {
       associated.push(candidate);
     }
   }
@@ -945,6 +988,9 @@ export function stepActiveTarget(
    */
   nowMs = 0,
 ): TrackerDecision {
+  // Phantoms are dropped before anything else sees them: they may not nominate, continue, or
+  // challenge a track. See PHANTOM_MIN_FRACTION.
+  candidates = candidates.filter((candidate) => !isPhantomLike(candidate, roi));
   if (!previous.active) {
     // Re-lock: the lesion we just lost, seen again near where it was heading. Same evidence bar as
     // any acquisition (CREATE_SCORE), but one frame instead of two - it is not a new object.
@@ -1001,7 +1047,17 @@ export function stepActiveTarget(
   // otherwise walks the mole out of the association gate one detection at a time.
   const sinceSeenS = previous.seenAt === null ? 0 : (nowMs - previous.seenAt) / 1000;
   const expected = shiftBox(active.box, previous.vx, previous.vy, sinceSeenS);
-  const associated = chooseAssociated(expected, candidates, roi);
+  // Match against the predicted position OR where the lesion was last seen. Prediction must only
+  // ever add matches: one jumpy detection inflates the velocity, the prediction runs off, and the
+  // lesion - still sitting where it was - would otherwise stop matching and the track would clear
+  // (replayed on the 2026-10-16 recording: cleared with the mole at 0.03 from its last position).
+  const match = (minScore?: number) =>
+    chooseAssociated(expected, candidates, roi, minScore) ??
+    chooseAssociated(active.box, candidates, roi, minScore);
+  // Weak (CONTINUE_SCORE..KEEP_SCORE) continuations only count when their size is plausible.
+  const strong = match();
+  const weak = strong ? null : match(CONTINUE_SCORE);
+  const associated = strong ?? (weak && geometryIsPlausible(previous, weak, zoomRatio) ? weak : null);
   let nextActive = active;
   let kind: TrackerDecision['kind'] = 'hold';
   let misses = previous.misses;

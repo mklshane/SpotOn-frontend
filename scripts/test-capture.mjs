@@ -30,7 +30,8 @@ const {
   SEARCH_FRACTIONS, nextSearchCrop, focusedSearchRoi, sensorCropForRoi, localSkinRoi,
   stepLocalSkin, acceptsSession,
   allowsVisibleTarget,
-  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState, RELOCK_MS,
+  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState, RELOCK_MS, CONTINUE_SCORE,
+  isPhantomLike, LOCK_SCORE,
   isLocalized,
   uprightRotation, stepScene, initialSceneState, SCENE_CONFIRM,
   MAX_CLUSTERED_CANDIDATES,
@@ -500,9 +501,13 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   const phantom = C(0.5, 0.5, 0.32, 0.8 * 0.46, 0.8 * 0.46);
   check('tight crop does not nominate a crop-filling phantom',
     stepActiveTarget(initialActiveTargetState, [phantom], tightRoi, 1, 1).state.acquisition === null);
-  check('wide crop still nominates a frame-filling close-up',
+  // A frame-filling box is a close-up lesion only when it is confident; weak and big is the phantom.
+  check('wide crop still nominates a confident frame-filling close-up',
+    stepActiveTarget(initialActiveTargetState, [C(0.5, 0.5, 0.45, 0.8, 0.8)], roi, 0, 1)
+      .state.acquisition?.candidate.score === 0.45);
+  check('wide crop does not nominate a weak frame-filling box (phantom)',
     stepActiveTarget(initialActiveTargetState, [C(0.5, 0.5, 0.32, 0.8, 0.8)], roi, 0, 1)
-      .state.acquisition?.candidate.score === 0.32);
+      .state.acquisition === null);
   const mole = C(0.52, 0.5, 0.3, 0.04, 0.04);
   check('tight crop nominates the small mole over the phantom',
     stepActiveTarget(initialActiveTargetState, [phantom, mole], tightRoi, 1, 1).state.acquisition?.candidate === mole);
@@ -621,6 +626,78 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   // A weak re-sighting is not enough - re-lock keeps the CREATE_SCORE evidence bar.
   const weak = step(lost, [C(0.47, 0.5, CREATE_SCORE - 0.01)], t + 200);
   check('re-lock still requires CREATE_SCORE', weak.kind !== 'acquire');
+}
+
+/* ------------------------------------------------------------------ faint lesions: weak continuation */
+{
+  const roi = { cx: 0.5, cy: 0.5, w: 1, h: 1, fraction: 1, zoomProgress: 0 };
+  const C = (cx, cy, score, w = 0.05, h = 0.05) => ({ box: { cx, cy, w, h }, score });
+  const step = (s, cands, now) => stepActiveTarget(s, cands, roi, 0, 1, undefined, now);
+  const faint = 0.21; // under KEEP_SCORE, over CONTINUE_SCORE: the 2026-10-15 recording's typical frame
+  check('the continuation bar sits under KEEP_SCORE', CONTINUE_SCORE < KEEP_SCORE && faint >= CONTINUE_SCORE);
+
+  let s = step(step(initialActiveTargetState, [C(0.5, 0.5, 0.4)], 0).state, [C(0.5, 0.5, 0.4)], 100).state;
+  const kinds = [];
+  for (let i = 0; i < 10; i++) {
+    const r = step(s, [C(0.5 + 0.002 * i, 0.5, faint)], 200 + 100 * i);
+    s = r.state;
+    kinds.push(r.kind);
+  }
+  check('a tracked faint lesion keeps its box on sub-KEEP frames', kinds.every((k) => k === 'update'));
+
+  // The bare-skin phantom: same centre, crop-filling size, weak score. It must not carry the track.
+  let p = step(step(initialActiveTargetState, [C(0.5, 0.5, 0.4)], 0).state, [C(0.5, 0.5, 0.4)], 100).state;
+  const phantomKinds = [];
+  for (let i = 0; i < 5; i++) {
+    const r = step(p, [C(0.5, 0.5, faint, 0.6, 0.6)], 200 + 100 * i);
+    p = r.state;
+    phantomKinds.push(r.kind);
+  }
+  check('a weak phantom of implausible size counts as a miss', phantomKinds.slice(0, 3).every((k) => k === 'hold'));
+  check('...and the track still clears if nothing real returns', phantomKinds[3] === 'clear');
+
+  // Creation is unchanged: a faint spot never starts a box on its own.
+  let fresh = initialActiveTargetState;
+  let created = false;
+  for (let i = 0; i < 6; i++) {
+    const r = step(fresh, [C(0.5, 0.5, faint)], 100 * i);
+    fresh = r.state;
+    created ||= r.kind === 'acquire';
+  }
+  check('a faint spot alone never creates a box', !created);
+}
+
+/* ------------------------------------------------------------------ the phantom (2026-10-16 recording) */
+{
+  // Values measured replaying the recording: phantom 0.57-0.71 of the crop at 0.20-0.30, the real
+  // mole 0.05-0.12 of the crop at 0.33-0.38, on the 0.46 crop (ROI 0.748 x 0.345 of the screen).
+  const roi = { cx: 0.5, cy: 0.42, w: 0.748, h: 0.345, fraction: 0.46, zoomProgress: 0 };
+  const phantom = { box: { cx: 0.5, cy: 0.42, w: 0.45, h: 0.21 }, score: 0.25 };
+  const mole = { box: { cx: 0.46, cy: 0.44, w: 0.083, h: 0.038 }, score: 0.36 };
+  check('the measured phantom is recognised', isPhantomLike(phantom, roi));
+  check('the measured mole is not', !isPhantomLike(mole, roi));
+  check('a big box that is confident is not a phantom', !isPhantomLike({ ...phantom, score: LOCK_SCORE }, roi));
+  check('a phantom-only frame nominates nothing',
+    stepActiveTarget(initialActiveTargetState, [phantom], roi, 0, 1).state.acquisition === null);
+
+  const step = (s, cands, now) => stepActiveTarget(s, cands, roi, 0, 1, undefined, now);
+  let s = step(step(initialActiveTargetState, [mole], 0).state, [mole], 100).state;
+  // The mole goes faint while the phantom stays: the box must hold on the mole, never grow onto it.
+  const faintMole = { ...mole, score: 0.21 };
+  let grew = false;
+  for (let i = 0; i < 10; i++) {
+    const r = step(s, i % 2 ? [phantom] : [phantom, faintMole], 200 + 100 * i);
+    s = r.state;
+    if (s.active && s.active.box.w > 0.2) grew = true;
+  }
+  check('the tracked box never grows onto the phantom', !grew && s.active !== null);
+
+  // One jumpy detection must not throw the track away (prediction overshoot).
+  let j = step(step(initialActiveTargetState, [mole], 0).state, [mole], 100).state;
+  j = step(j, [{ ...mole, box: { ...mole.box, cx: 0.53 } }], 200).state; // jump -> inflated velocity
+  for (let i = 0; i < 3; i++) j = step(j, [], 300 + 100 * i).state;      // misses: prediction runs off
+  const back = step(j, [{ ...mole, box: { ...mole.box, cx: 0.51 } }], 600);
+  check('a lesion near its last-seen spot still matches after the prediction ran off', back.kind === 'update');
 }
 
 if (fails.length) {
