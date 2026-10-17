@@ -51,6 +51,7 @@ import {
   padDrawnBox,
   stepStability,
   stepActiveTarget,
+  relockWindowMs,
   uprightRotation,
   type Coach,
   type CoachKind,
@@ -670,6 +671,8 @@ export default function CaptureScreen() {
         // Android passes are 3-10x slower than iOS; a confident nominee shows on its first pass.
         ANDROID_CAPTURE ? LOCK_SCORE : undefined,
         Date.now(),
+        // A slow Android pass often lands after iOS's 700 ms re-lock window; widen it to two passes.
+        relockWindowMs(ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined),
       );
       targetRef.current = decision.state;
       if (PERF_LOG) {
@@ -815,6 +818,8 @@ export default function CaptureScreen() {
       else trackDetectionBox(boxValues, displayBox, {
         snap: !decision.relock && (acquired || !wasVisible),
         size: viewDims,
+        // Android: soften the glide to span its slower detector passes (iOS keeps the 320 spring).
+        cadenceMs: ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined,
       });
 
       const icx = euro.ix.filter(imageBox.cx, t);

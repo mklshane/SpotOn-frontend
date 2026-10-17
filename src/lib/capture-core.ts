@@ -777,6 +777,18 @@ const PREDICT_MAX_S = 0.3;
  * frame, instead of re-running the two-frame acquisition as if it were a new object.
  */
 export const RELOCK_MS = 700;
+/** Longest re-lock window, however slow the detector. */
+const RELOCK_MAX_MS = 2500;
+
+/**
+ * Re-lock window for a detector producing a result every `intervalMs`. RELOCK_MS assumes iOS's
+ * ~10 Hz; on an Android CPU pass of 0.6-1.2 s the next result usually lands after 700 ms, so the
+ * window covers two passes there. Never shorter than RELOCK_MS, so iOS is unchanged.
+ */
+export function relockWindowMs(intervalMs?: number): number {
+  if (intervalMs === undefined || !Number.isFinite(intervalMs) || intervalMs <= 0) return RELOCK_MS;
+  return Math.min(RELOCK_MAX_MS, Math.max(RELOCK_MS, 2 * intervalMs));
+}
 const ASSOCIATION_DIAGONAL_SCALE = 0.6;
 const GEOMETRY_MIN_SCALE = 0.6;
 const GEOMETRY_MAX_SCALE = 1.7;
@@ -987,6 +999,8 @@ export function stepActiveTarget(
    * the old position-only behaviour (every dt is zero), which is what the pure tests rely on.
    */
   nowMs = 0,
+  /** How long a lost lesion can re-lock on one frame; see relockWindowMs. */
+  relockMs = RELOCK_MS,
 ): TrackerDecision {
   // Phantoms are dropped before anything else sees them: they may not nominate, continue, or
   // challenge a track. See PHANTOM_MIN_FRACTION.
@@ -994,7 +1008,7 @@ export function stepActiveTarget(
   if (!previous.active) {
     // Re-lock: the lesion we just lost, seen again near where it was heading. Same evidence bar as
     // any acquisition (CREATE_SCORE), but one frame instead of two - it is not a new object.
-    const lost = previous.lost && nowMs - previous.lost.at <= RELOCK_MS ? previous.lost : null;
+    const lost = previous.lost && nowMs - previous.lost.at <= relockMs ? previous.lost : null;
     if (lost) {
       const expected = shiftBox(lost.box, lost.vx, lost.vy, (nowMs - lost.at) / 1000);
       const back = chooseAssociated(

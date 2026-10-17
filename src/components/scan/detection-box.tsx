@@ -90,9 +90,11 @@ export function useDetectionBoxValues(): DetectionBoxValues {
 export function trackDetectionBox(
   v: DetectionBoxValues,
   bbox: DetectionBBox,
-  opts?: { snap?: boolean; size?: ViewSize },
+  opts?: { snap?: boolean; size?: ViewSize; cadenceMs?: number },
 ): void {
   const { width, height } = opts?.size ?? Dimensions.get('window');
+  // A slow detector (Android CPU) gets a softer spring so the box glides across the whole gap.
+  const spring = opts?.cadenceMs === undefined ? SPRING : boxSpring(opts.cadenceMs);
   const px = bbox.x * width;
   const py = bbox.y * height;
   const pw = bbox.w * width;
@@ -103,10 +105,10 @@ export function trackDetectionBox(
     v.w.value = pw;
     v.h.value = ph;
   } else {
-    v.x.value = withSpring(px, SPRING);
-    v.y.value = withSpring(py, SPRING);
-    v.w.value = withSpring(pw, SPRING);
-    v.h.value = withSpring(ph, SPRING);
+    v.x.value = withSpring(px, spring);
+    v.y.value = withSpring(py, spring);
+    v.w.value = withSpring(pw, spring);
+    v.h.value = withSpring(ph, spring);
   }
   v.searching.value = withTiming(0, { duration: CFG.fadeInMs });
   v.active.value = withTiming(1, { duration: CFG.fadeInMs });

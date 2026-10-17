@@ -30,7 +30,7 @@ const {
   SEARCH_FRACTIONS, nextSearchCrop, focusedSearchRoi, sensorCropForRoi, localSkinRoi,
   stepLocalSkin, acceptsSession,
   allowsVisibleTarget,
-  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState, RELOCK_MS, CONTINUE_SCORE,
+  clusterDetectionCandidates, boxIou, stepActiveTarget, initialActiveTargetState, RELOCK_MS, relockWindowMs, CONTINUE_SCORE,
   isPhantomLike, LOCK_SCORE,
   isLocalized,
   uprightRotation, stepScene, initialSceneState, SCENE_CONFIRM,
@@ -626,6 +626,18 @@ check('padding is capped', padDrawnBox({ cx: 0.5, cy: 0.5, w: 5, h: 5 }, 0.25, 0
   // A weak re-sighting is not enough - re-lock keeps the CREATE_SCORE evidence bar.
   const weak = step(lost, [C(0.47, 0.5, CREATE_SCORE - 0.01)], t + 200);
   check('re-lock still requires CREATE_SCORE', weak.kind !== 'acquire');
+
+  // Slow Android passes: the next result after a loss lands ~1 s later, past iOS's window. A window
+  // sized to the cadence still re-locks it; iOS cadences keep RELOCK_MS exactly.
+  const slow = 900;
+  const androidBack = stepActiveTarget(lost, [C(0.47, 0.5, 0.5)], roi, 0, 1, undefined, t + slow,
+    relockWindowMs(slow));
+  check('a slow-cadence (Android) re-lock within two passes still re-locks',
+    androidBack.kind === 'acquire' && androidBack.relock === true);
+  check('relockWindowMs: iOS cadences keep RELOCK_MS',
+    relockWindowMs(83) === RELOCK_MS && relockWindowMs(230) === RELOCK_MS && relockWindowMs(undefined) === RELOCK_MS);
+  check('relockWindowMs: two passes on a slow phone', relockWindowMs(900) === 1800);
+  check('relockWindowMs: capped', relockWindowMs(5000) === 2500 && relockWindowMs(NaN) === RELOCK_MS);
 }
 
 /* ------------------------------------------------------------------ faint lesions: weak continuation */

@@ -126,8 +126,14 @@ export const DETECTION_SMOOTHING_CONFIG = {
    * on the second screen recording, and on the sim as stutter 0.58 vs 0.18 at 320. At 320 each
    * move glides across most of the gap to the next detection; the trail it adds is what the lead
    * above is for.
+   *
+   * Slow detectors (Android CPU passes, ~0.3-1.2 s) get a proportionally softer spring so each move
+   * still spans the gap instead of gliding for 0.2 s and then sitting for the rest of a 1 s pass.
+   * Stiffness scales with (slowCadenceMs / interval)^2 - the spring's time constant grows linearly
+   * with the interval - and only once the cadence is slower than `slowCadenceMs` (the slowest iOS
+   * gap measured), so iOS is untouched. `minStiffness` stops a very slow phone from swimming.
    */
-  spring: { stiffness: 320, mass: 1 },
+  spring: { stiffness: 320, mass: 1, slowCadenceMs: 230, minStiffness: 16 },
 } as const;
 
 /** Damping that makes a spring critically damped: the fastest approach with no overshoot. */
@@ -135,9 +141,17 @@ export function criticalDamping(stiffness: number, mass = 1): number {
   return 2 * Math.sqrt(stiffness * mass);
 }
 
-/** The Reanimated spring config the box is animated with. */
-export function boxSpring(): { stiffness: number; mass: number; damping: number } {
-  const { stiffness, mass } = DETECTION_SMOOTHING_CONFIG.spring;
+/** Box spring stiffness for a detector producing a result every `intervalMs` (see `spring`). */
+export function springStiffness(intervalMs?: number): number {
+  const { stiffness, slowCadenceMs, minStiffness } = DETECTION_SMOOTHING_CONFIG.spring;
+  if (intervalMs === undefined || !Number.isFinite(intervalMs) || intervalMs <= slowCadenceMs) return stiffness;
+  return Math.max(minStiffness, stiffness * (slowCadenceMs / intervalMs) ** 2);
+}
+
+/** The Reanimated spring config the box is animated with, optionally adapted to a slow cadence. */
+export function boxSpring(intervalMs?: number): { stiffness: number; mass: number; damping: number } {
+  const { mass } = DETECTION_SMOOTHING_CONFIG.spring;
+  const stiffness = springStiffness(intervalMs);
   return { stiffness, mass, damping: criticalDamping(stiffness, mass) };
 }
 

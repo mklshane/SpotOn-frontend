@@ -27,7 +27,7 @@ const m = await import(pathToFileURL(join(out, 'detection-smoothing.js')).href);
 const { makeOneEuro } = await import(pathToFileURL(join(out, 'one-euro.js')).href);
 const {
   DETECTION_SMOOTHING_CONFIG: CFG,
-  criticalDamping, boxSpring, softDeadband, stepAssociation, initialAssociationState, predictLead,
+  criticalDamping, boxSpring, springStiffness, softDeadband, stepAssociation, initialAssociationState, predictLead,
 } = m;
 
 let pass = 0;
@@ -52,6 +52,20 @@ const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
   check('the superseded config was underdamped', 24 / (2 * Math.sqrt(320)) < 0.7);
   check('criticalDamping matches the closed form', near(criticalDamping(320, 1), 2 * Math.sqrt(320)));
   check('criticalDamping scales with mass', near(criticalDamping(100, 4), 2 * Math.sqrt(400)));
+
+  // Cadence-adaptive spring (slow Android passes). iOS cadences must be exactly the shipped spring.
+  check('iOS cadences keep the shipped spring',
+    [undefined, 83, 167, 230].every((ms) => springStiffness(ms) === CFG.spring.stiffness));
+  check('a slower cadence gets a softer spring', springStiffness(600) < springStiffness(300) &&
+    springStiffness(300) < CFG.spring.stiffness);
+  // Time constant grows with the interval: omega * interval stays what iOS has at slowCadenceMs.
+  const omegaT = (ms) => Math.sqrt(springStiffness(ms)) * ms;
+  check('slow springs keep the iOS glide-to-gap ratio', near(omegaT(600), omegaT(230), 1e-6));
+  check('very slow phones are floored', springStiffness(10000) === CFG.spring.minStiffness);
+  check('bad intervals fall back to the shipped spring', springStiffness(NaN) === CFG.spring.stiffness);
+  const slow = boxSpring(900);
+  check('slow spring is still critically damped',
+    near(slow.damping / (2 * Math.sqrt(slow.stiffness * slow.mass)), 1, 1e-12));
 }
 
 /* ---------------------------------------------------------------- soft deadband */
