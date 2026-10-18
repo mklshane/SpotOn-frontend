@@ -13,10 +13,10 @@ export type ConditionsCardProps = {
   data: Conditions | null;
   placeName: string | null;
   usingDefault: boolean;
-  /** Full card on Learn; a single slim row on Home. */
-  variant?: 'full' | 'compact';
-  /** Shows the "Use my location" link (full variant only). */
+  /** Shows the "Use my location" link while the reading is for the default city. */
   onRequestLocation?: () => void;
+  /** The weather provider credit. Learn shows it; Home leaves it off to stay light. */
+  showAttribution?: boolean;
   onPress: () => void;
 };
 
@@ -109,18 +109,17 @@ export function ConditionsCard({
   data,
   placeName,
   usingDefault,
-  variant = 'full',
   onRequestLocation,
+  showAttribution = true,
   onPress,
 }: ConditionsCardProps) {
   const theme = useTheme();
-  const compact = variant === 'compact';
   const place = usingDefault ? t('Metro Manila') : placeName ?? t('Your location');
   const eyebrow = `${t('Right now')} · ${place}`;
-  const dialSize = compact ? 48 : 64;
+  const dialSize = 64;
   const cardStyle = [
     styles.card,
-    compact ? styles.cardCompact : styles.cardFull,
+    styles.cardFull,
     { backgroundColor: theme.surface, borderColor: theme.hairline },
     Elevation.sm,
   ];
@@ -140,7 +139,7 @@ export function ConditionsCard({
           <View style={styles.text}>
             {eyebrowText}
             <View style={[styles.skelLine, block, { width: '70%' }]} />
-            {compact ? null : <View style={[styles.skelLine, block, { width: '45%' }]} />}
+            <View style={[styles.skelLine, block, { width: '45%' }]} />
           </View>
         </View>
       </View>
@@ -150,29 +149,7 @@ export function ConditionsCard({
   const d = describe(data);
   const a11y = `${eyebrow}. ${d.temp}. ${t('UV index')} ${d.uv}, ${d.label}. ${d.advice}`;
 
-  if (compact) {
-    return (
-      <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={a11y} style={cardStyle}>
-        <View style={styles.row}>
-          <UvDial level={d.level} uv={d.uv} size={dialSize} />
-          <View style={styles.text}>
-            {eyebrowText}
-            <ThemedText type="headline" numberOfLines={1}>
-              {d.label}
-            </ThemedText>
-            <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-              {d.advice}
-            </ThemedText>
-          </View>
-          <View style={styles.tempCompact}>
-            <ThemedText type="headline">{d.temp}</ThemedText>
-            <Icon name="chevron.right" size={14} tintColor={theme.muted} />
-          </View>
-        </View>
-      </PressableScale>
-    );
-  }
-
+  const showLocate = usingDefault && Boolean(onRequestLocation);
   const peak =
     data.uvMaxToday === null ? null : t('Peak UV today: {{uv}}', { uv: String(Math.round(data.uvMaxToday)) });
   return (
@@ -202,21 +179,25 @@ export function ConditionsCard({
         </ThemedText>
       </View>
 
-      <View style={styles.footer}>
-        {usingDefault && onRequestLocation ? (
-          <Pressable onPress={onRequestLocation} hitSlop={Space.md} accessibilityRole="button" style={styles.locate}>
-            <Icon name="mappin.circle.fill" size={16} tintColor={theme.brand} />
-            <ThemedText type="footnote" themeColor="brand" style={styles.locateLabel}>
-              {t('Use my location')}
+      {showLocate || showAttribution ? (
+        <View style={styles.footer}>
+          {showLocate ? (
+            <Pressable onPress={onRequestLocation} hitSlop={Space.md} accessibilityRole="button" style={styles.locate}>
+              <Icon name="mappin.circle.fill" size={16} tintColor={theme.brand} />
+              <ThemedText type="footnote" themeColor="brand" style={styles.locateLabel}>
+                {t('Use my location')}
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <View />
+          )}
+          {showAttribution ? (
+            <ThemedText type="caption" themeColor="muted">
+              {data.source === 'met-norway' ? t('Weather data by MET Norway') : t('Weather data by Open-Meteo')}
             </ThemedText>
-          </Pressable>
-        ) : (
-          <View />
-        )}
-        <ThemedText type="caption" themeColor="muted">
-          {data.source === 'met-norway' ? t('Weather data by MET Norway') : t('Weather data by Open-Meteo')}
-        </ThemedText>
-      </View>
+          ) : null}
+        </View>
+      ) : null}
     </PressableScale>
   );
 }
@@ -228,7 +209,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   cardFull: { padding: Space.base, gap: Space.md },
-  cardCompact: { paddingVertical: Space.md, paddingHorizontal: Space.base },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   // minWidth: 0 lets long place names / advice ellipsize on 360px devices.
   text: { flex: 1, minWidth: 0, gap: 2 },
@@ -236,7 +216,6 @@ const styles = StyleSheet.create({
   dial: { alignItems: 'center', justifyContent: 'center' },
   dialValue: { fontWeight: '800', fontVariant: ['tabular-nums'] },
   dialUnit: { fontSize: 10, lineHeight: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: -2 },
-  tempCompact: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   tempFull: { fontVariant: ['tabular-nums'] },
   advice: {
     flexDirection: 'row',

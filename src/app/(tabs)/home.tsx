@@ -261,10 +261,11 @@ export default function HomeScreen() {
         {conditions.status !== 'hidden' ? (
           <TourTarget id="homeConditions" style={styles.conditions}>
             <ConditionsCard
-              variant="compact"
               data={conditions.data}
               placeName={conditions.placeName}
               usingDefault={conditions.usingDefault}
+              onRequestLocation={() => void conditions.requestLocation()}
+              showAttribution={false}
               onPress={() => router.push({ pathname: '/learn/article', params: { topicId: 'prevention' } })}
             />
           </TourTarget>
