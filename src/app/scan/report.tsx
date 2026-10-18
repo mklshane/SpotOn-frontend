@@ -335,7 +335,10 @@ function SymptomsCard({ model }: { model: ReportModel }) {
       <SectionHeader
         variant="label"
         title={t("Reported symptoms")}
-        subtitle={`You answered yes to ${model.yesCount} of ${model.symptoms.length}`}
+        subtitle={t('You answered yes to {{count}} of {{total}} questions.', {
+          count: model.yesCount,
+          total: model.symptoms.length,
+        })}
       />
       <View style={styles.rows}>
         {model.symptoms.map((s, i) => (
@@ -365,7 +368,7 @@ function AnswerChip({ answer }: { answer: ReportSymptom['answer'] }) {
   return (
     <View style={[styles.chip, { backgroundColor: tone.bg }]}>
       <ThemedText type="caption" style={[styles.chipText, { color: tone.fg }]}>
-        {answer}
+        {t(answer)}
       </ThemedText>
     </View>
   );
