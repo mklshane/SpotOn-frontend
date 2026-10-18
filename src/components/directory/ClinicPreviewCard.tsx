@@ -10,19 +10,22 @@ import { Icon } from '@/components/ui/icon';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
-import { displayServices, isHospitalWithoutDerm } from '@/lib/directory-core';
+import { displayServices, isHospitalType, isHospitalWithoutDerm, type DermSummary } from '@/lib/directory-core';
+import { dermSummaryLine, todayScheduleBit } from '@/lib/directory-display';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHoursLine, isOpenNow } from '@/lib/hours';
 
 export type ClinicPreviewCardProps = {
   facility: FacilitySync | FacilityWithDistance;
+  /** Linked dermatologists here; undefined = not loaded (falls back to derm_status). */
+  derm?: DermSummary;
   onClose: () => void;
 };
 
 const MAX_SERVICES_SHOWN = 2;
 
 /** The callout attached to a tapped map pin (rendered inside a MapLibre `Marker`). */
-export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps) {
+export function ClinicPreviewCard({ facility, derm, onClose }: ClinicPreviewCardProps) {
   useLocale();
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -36,9 +39,13 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
   }
 
   const distance = 'distance_m' in facility ? facility.distance_m : null;
-  const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
+  // A hospital's own hours (often 24h) say nothing about when a dermatologist is in.
+  const hospital = isHospitalType(facility.type);
+  const open = hospital ? null : isOpenNow(facility.weekday_hours, facility.weekend_hours);
+  const noDerm = isHospitalWithoutDerm(facility, derm?.count);
+  const dermLine = noDerm ? t('No dermatologist listed - call the OPD') : dermSummaryLine(derm, todayScheduleBit());
 
-  const services = displayServices(facility.services, isHospitalWithoutDerm(facility));
+  const services = displayServices(facility.services, noDerm);
   const shown = services.slice(0, MAX_SERVICES_SHOWN);
   const extra = services.length - shown.length;
   // Never show the raw taxonomy tag - humanize the service list, or the practice type if there are no services.
@@ -62,9 +69,15 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         {extra > 0 ? (
           <ThemedText type="footnote" themeColor="brand" style={styles.more}>
             {' '}
-            +{extra} {t("more")}</ThemedText>
+            {t("+{{count}} more", { count: extra })}</ThemedText>
         ) : null}
       </View>
+
+      {dermLine ? (
+        <ThemedText type="footnote" themeColor={noDerm ? 'textSecondary' : 'brand'} style={styles.hoursLabel} numberOfLines={1}>
+          {dermLine}
+        </ThemedText>
+      ) : null}
 
       {open != null ? (
         <Pressable

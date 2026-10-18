@@ -1,11 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
+import { AppState } from 'react-native';
 
 import { ApiError } from '@/api/client';
 import { t } from '@/lib/i18n';
 import type { UserProfile } from '@/api/types';
 
 import * as authApi from './auth-api';
-import { fetchProfile } from './profile';
+import { fetchProfile, syncPendingProfile } from './profile';
+import { applyPendingProfile, readPendingProfile } from './profile-pending';
+import { markProductTourPending } from './product-tour-storage';
 
 type AuthResult = { error: string | null };
 
@@ -59,6 +63,7 @@ function messageFor(e: unknown): string {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUserState] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bootstrapComplete, setBootstrapComplete] = useState(false);
 
   // Mirror the profile to encrypted storage so it survives restarts (offline-first).
   const setUser = useCallback((u: UserProfile | null) => {
@@ -77,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 5000)),
       ]);
       if (!hasStored) {
-        if (mounted) setLoading(false);
+        if (mounted) { setLoading(false); setBootstrapComplete(true); }
         return;
       }
 
@@ -85,27 +90,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // kicked out just because the network is unavailable. Unblock the UI without waiting.
       const cached = await authApi.loadCachedProfile();
       if (cached && mounted) {
-        setUserState(cached);
+        setUserState(applyPendingProfile(cached, await readPendingProfile(cached.id)));
         setLoading(false);
       }
 
       // Refresh from the server (background if we already restored a cache; blocking otherwise).
       try {
         const me = await fetchProfile(); // refreshes the access token on 401
-        if (mounted) setUserState(me);
-        await authApi.cacheProfile(me);
+        // A pending sync can finish while this initial GET is in flight. Keep the newer
+        // server response already cached by that sync instead of restoring a stale one.
+        const latestCached = await authApi.loadCachedProfile();
+        const freshest = latestCached?.id === me.id &&
+          Date.parse(latestCached.updated_at) > Date.parse(me.updated_at)
+          ? latestCached : me;
+        const visible = applyPendingProfile(freshest, await readPendingProfile(me.id));
+        if (mounted) setUserState(visible);
+        await authApi.cacheProfile(visible);
       } catch {
         // If the refresh failed the session is gone (tokens cleared) → log out. Otherwise it's
         // just offline - keep the cached profile so the user stays signed in.
         if (!authApi.hasTokens() && mounted) setUserState(null);
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted) { setLoading(false); setBootstrapComplete(true); }
       }
     })();
     return () => {
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId || !bootstrapComplete) return;
+    let active = true;
+    const replay = () => {
+      void syncPendingProfile(userId).then((result) => {
+        if (active && result) {
+          setUserState((current) => current?.id === userId ? result.user : current);
+        }
+      }).catch((error) => console.warn('[profile] pending sync failed:', error));
+    };
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) replay();
+    });
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') replay();
+    });
+    const retry = setInterval(replay, 60_000);
+    replay();
+    return () => { active = false; unsubscribe(); appState.remove(); clearInterval(retry); };
+  }, [user?.id, bootstrapComplete]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -115,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: async (identifier, password) => {
         try {
           const tokens = await authApi.login(identifier, password);
-          setUserState(tokens.user); // login() already cached the profile via persist()
+          setUserState(applyPendingProfile(tokens.user, await readPendingProfile(tokens.user.id)));
           return { error: null };
         } catch (e) {
           return { error: messageFor(e) };
@@ -124,6 +158,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp: async (input) => {
         try {
           const tokens = await authApi.register(input);
+          await markProductTourPending(tokens.user.id).catch((e) =>
+            console.warn('[tour] could not save first-run state:', e),
+          );
           setUserState(tokens.user);
           return { error: null };
         } catch (e) {

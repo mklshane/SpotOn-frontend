@@ -14,6 +14,8 @@ import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { prewarmLesionModel } from '@/lib/lesion-model';
 import { prewarmSkinGate } from '@/lib/skin-gate';
+import { prewarmFaceModel } from '@/lib/face-model';
+import { prewarmSpotVerifier } from '@/lib/spot-verifier';
 import { useScreeningSession } from '@/lib/screening-session';
 
 export default function BodyAreaScreen() {
@@ -32,6 +34,10 @@ export default function BodyAreaScreen() {
     // the camera at a lesion waiting for a box. Fire-and-forget; capture.tsx still owns the load.
     prewarmLesionModel();
     prewarmSkinGate();
+    // The upload's multi-spot search (scan/crop.tsx) needs these two as well; loading them here
+    // keeps their load and first-invoke cost out of the "Finding spots..." wait.
+    prewarmSpotVerifier();
+    prewarmFaceModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

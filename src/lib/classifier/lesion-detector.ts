@@ -2,7 +2,7 @@
 import { transformToRgba } from '@/lib/image-ops';
 
 import { getLesionModel, readLayout } from '../lesion-model';
-import { DET_CONF, type LesionBox, selectLesionBox } from './detector-core';
+import { decodeDetections, type LesionBox, selectLesionBox } from './detector-core';
 
 /**
  * Still-image lesion localization with the app's YOLO detector - the same model, at the same
@@ -50,7 +50,8 @@ export function detectLesionBox(uri: string): Promise<LesionBox | null> {
 
 async function runDetector(uri: string): Promise<LesionBox | null> {
   const model = await getLesionModel();
-  const { inputSize, chMajor, channels, anchors, numClasses } = readLayout(model);
+  const layout = readLayout(model);
+  const { inputSize } = layout;
 
   // image-ops: the browser's downscaler on web, so the detector sees the same sharpness a phone
   // would. It also returns pixels straight from the canvas - no JPEG round-trip.
@@ -67,24 +68,26 @@ async function runDetector(uri: string): Promise<LesionBox | null> {
 
   const outputs = await model.run([tensor.buffer as ArrayBuffer]);
   const out = new Float32Array(outputs?.[0] ?? new ArrayBuffer(0));
-  if (out.length < anchors * channels) return null;
+  return selectLesionBox(decodeDetections(out, layout));
+}
 
-  // YOLOv8 head: box in channels 0..3 (cx,cy,w,h normalized), class scores in 4..; either layout.
-  const cands: LesionBox[] = [];
-  for (let i = 0; i < anchors; i++) {
-    let score = 0;
-    for (let k = 0; k < numClasses; k++) {
-      const v = out[chMajor ? (4 + k) * anchors + i : i * channels + 4 + k];
-      if (v > score) score = v;
-    }
-    if (score < DET_CONF) continue;
-    cands.push({
-      cx: out[chMajor ? i : i * channels],
-      cy: out[chMajor ? anchors + i : i * channels + 1],
-      bw: out[chMajor ? 2 * anchors + i : i * channels + 2],
-      bh: out[chMajor ? 3 * anchors + i : i * channels + 3],
-      conf: score,
-    });
-  }
-  return selectLesionBox(cands);
+/** The detector's square input side. */
+export async function detectorInputSize(): Promise<number> {
+  return readLayout(await getLesionModel()).inputSize;
+}
+
+/**
+ * Run the detector on a ready-made input tensor (RGB 0..1, detectorInputSize() square) and return
+ * every box at or above DET_CONF, normalized to that input. For the multi-spot picker
+ * (lesion-candidates.ts), which builds its tensors from one decode of the photo. Queued with
+ * detectLesionBox on the one interpreter.
+ */
+export function detectTensor(tensor: Float32Array): Promise<LesionBox[]> {
+  const run = detectorQueue.catch(() => {}).then(async () => {
+    const model = await getLesionModel();
+    const outputs = await model.run([tensor.buffer as ArrayBuffer]);
+    return decodeDetections(new Float32Array(outputs?.[0] ?? new ArrayBuffer(0)), readLayout(model));
+  });
+  detectorQueue = run.catch(() => {});
+  return run;
 }

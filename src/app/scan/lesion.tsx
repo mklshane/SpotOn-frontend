@@ -209,17 +209,9 @@ export default function LesionDetailScreen() {
             being monitored does not slide around while it is being read. */}
         <EntranceProvider screen={`lesion-${lesion.id}`} replay>
           <Entrance index={0}>
-            {/* White card, tier in a pill - the same hero as the result screen, so "how urgent is
-                this" reads in one visual language across both. With 2+ scans the card's footer
-                band answers the question this screen exists for: is it getting worse? */}
+            {/* Name and record details stay together; the status has its own calm footer. */}
             <View style={[styles.hero, { backgroundColor: theme.surface }]}>
               <View style={styles.heroBody}>
-                <View style={[styles.tierBadge, { backgroundColor: bg }]}>
-                  <View style={[styles.tierDot, { backgroundColor: fg }]} />
-                  <ThemedText type="footnote" style={styles.tierBadgeText}>
-                    {TIER_LABEL[tier]}
-                  </ThemedText>
-                </View>
                 {editing ? (
                   <TextField
                     value={draft}
@@ -269,76 +261,41 @@ export default function LesionDetailScreen() {
                     </View>
                   </Pressable>
                 )}
-                {/* One meta line. The region only shows when the user has named the spot - an
-                    unnamed spot is already titled "Chest spot", so "Chest" under it was an echo. */}
-                <View style={styles.heroMeta}>
-                  <Icon
-                    name="mappin.circle.fill"
-                    tintColor={theme.brand}
-                    size={16}
-                  />
-                  <ThemedText
-                    type="subhead"
-                    themeColor="textSecondary"
-                    style={styles.heroMetaText}
-                  >
-                    {[
-                      lesion.label?.trim()
-                        ? lesion.mark?.region
-                          ? t(lesion.mark.region)
-                          : t("Location not marked")
-                        : null,
-                      trend.count
-                        ? `${trend.count} ${trend.count === 1 ? "scan" : "scans"}`
-                        : null,
-                      trend.firstAt
-                        ? `${trend.count === 1 ? "Started" : "Since"} ${fmtDate(trend.firstAt)}`
-                        : null,
-                      lesion.archived ? "not tracked" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </ThemedText>
-                </View>
+                <ThemedText type="subhead" themeColor="textSecondary" style={styles.heroMeta}>
+                  {[
+                    lesion.label?.trim()
+                      ? lesion.mark?.region
+                        ? t(lesion.mark.region)
+                        : t("Location not marked")
+                      : null,
+                    `${trend.count} ${trend.count === 1 ? t("scan") : t("scans")}`,
+                    trend.firstAt
+                      ? `${trend.count === 1 ? "Started" : "Since"} ${fmtDate(trend.firstAt)}`
+                      : null,
+                    lesion.archived ? "not tracked" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </ThemedText>
               </View>
 
-              {/* The verdict leads, in the tier's own colour. Most spots hold steady, so "Held
-                  steady" is the fallback that also catches a null direction - never an invented
-                  move in either direction. */}
-              {trend.count > 1 && trend.tierTo ? (
-                <View
-                  style={[
-                    styles.trendBand,
-                    { backgroundColor: tierColor(theme, trend.tierTo).bg },
-                  ]}
-                >
-                  <Icon
-                    name={
-                      trend.tierDirection === 1
-                        ? "arrow.up.circle.fill"
-                        : trend.tierDirection === -1
-                          ? "arrow.down.circle.fill"
-                          : "equal.circle.fill"
-                    }
-                    tintColor={tierColor(theme, trend.tierTo).fg}
-                    size={22}
-                  />
-                  <View style={styles.trendText}>
-                    <ThemedText type="headline">
-                      {trend.tierDirection === 1
-                        ? `Moved up to ${TIER_LABEL[trend.tierTo]}`
-                        : trend.tierDirection === -1
-                          ? `Eased to ${TIER_LABEL[trend.tierTo]}`
-                          : `Held steady at ${TIER_LABEL[trend.tierTo]}`}
-                    </ThemedText>
-                    <ThemedText type="footnote" themeColor="textSecondary">
-                      {trend.spanDays === 0
-                        ? `${trend.count === 2 ? "Both" : `All ${trend.count}`} scans on ${fmtDate(trend.firstAt!)}`
-                        : `Over ${trend.spanDays} ${trend.spanDays === 1 ? "day" : "days"} · ${fmtDate(trend.firstAt!)} → ${fmtDate(trend.lastAt!)}`}
-                    </ThemedText>
-                  </View>
+              <View style={[styles.trendBand, { backgroundColor: bg }]}>
+                <View style={[styles.tierBadge, { backgroundColor: theme.surface }]}>
+                  <View style={[styles.tierDot, { backgroundColor: fg }]} />
+                  <ThemedText type="footnote" style={[styles.tierBadgeText, { color: fg }]}>
+                    {TIER_LABEL[tier]}
+                  </ThemedText>
                 </View>
-              ) : null}
+                <ThemedText type="subhead" style={styles.trendText}>
+                  {trend.count > 1 && trend.tierTo
+                    ? trend.tierDirection === 1
+                      ? t("Moved up")
+                      : trend.tierDirection === -1
+                        ? t("Eased down")
+                        : t("Held steady")
+                    : t("Latest Scan")}
+                </ThemedText>
+              </View>
             </View>
           </Entrance>
 
@@ -348,9 +305,6 @@ export default function LesionDetailScreen() {
               <SectionHeader title={t("Over time")} variant="label" />
               <ScanTimeline
                 screenings={screenings}
-                onAddScan={
-                  latest && !lesion.archived ? startFollowUp : undefined
-                }
                 onOpen={(s) =>
                   router.push({
                     pathname: "/scan/result",
@@ -358,6 +312,14 @@ export default function LesionDetailScreen() {
                   })
                 }
               />
+              {screenings.length === 1 && !lesion.archived ? (
+                <View style={[styles.firstScanNote, { backgroundColor: theme.elementBg }]}>
+                  <Icon name="arrow.clockwise" tintColor={theme.brand} size={18} />
+                  <ThemedText type="footnote" themeColor="textSecondary" style={styles.firstScanText}>
+                    {t("Scan this spot again later and the photos will line up here, so changes are easy to see.")}
+                  </ThemedText>
+                </View>
+              ) : null}
             </Entrance>
           ) : null}
 
@@ -389,7 +351,8 @@ export default function LesionDetailScreen() {
           ) : null}
 
           {/* Since-first summary */}
-          {trend.count > 1 && trend.tierFrom && trend.tierTo ? (
+          {trend.count > 1 && trend.tierFrom && trend.tierTo &&
+            (trend.modelChanged || trend.classChanged || trend.answerFlips.length > 0) ? (
             <Entrance index={3} style={styles.section}>
               <SectionHeader title={t("What changed")} variant="label" />
               <Card style={styles.changeCard}>
@@ -480,42 +443,10 @@ export default function LesionDetailScreen() {
                       );
                     })}
                   </View>
-                ) : (
-                  <ThemedText type="footnote" themeColor="muted">
-                    {t(
-                      "Your answers about this spot are unchanged since the last check.",
-                    )}
-                  </ThemedText>
-                )}
+                ) : null}
               </Card>
             </Entrance>
           ) : null}
-
-          {/* One filled pill, one quiet link. Two outlined buttons of equal
-            width read as an either/or choice; re-scanning is the action this
-            screen exists to prompt, and the result is already one tap away
-            from the timeline above. */}
-          <Entrance index={4} style={styles.actions}>
-            <Button
-              label={t("Re-scan this spot")}
-              variant="brand"
-              onPress={startFollowUp}
-              disabled={!latest}
-            />
-            {/* A single scan's card already opens its result, so only offer this from two up. */}
-            {latest && trend.count > 1 ? (
-              <Button
-                label={t("View latest result")}
-                variant="ghost"
-                onPress={() =>
-                  router.push({
-                    pathname: "/scan/result",
-                    params: { id: latest.id },
-                  })
-                }
-              />
-            ) : null}
-          </Entrance>
 
           {/* recommendations.ts calls this "mandatory on every results surface", and until now it
               rendered on exactly one (the result screen). This screen carries a tier badge, a
@@ -531,6 +462,14 @@ export default function LesionDetailScreen() {
           </Entrance>
         </EntranceProvider>
       </ScrollView>
+      <View style={[styles.bottomAction, { backgroundColor: theme.background, borderTopColor: theme.hairline, paddingBottom: insets.bottom + Space.md }]}>
+        <Button
+          label={t("Re-scan this spot")}
+          variant="brand"
+          onPress={startFollowUp}
+          disabled={!latest || lesion.archived}
+        />
+      </View>
     </Screen>
   );
 }
@@ -632,15 +571,15 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 20 },
   content: {
     paddingHorizontal: Space.xl,
-    paddingTop: Space.sm,
-    gap: Space.xxl,
+    paddingTop: Space.base,
+    gap: Space.xl,
   },
   hero: {
     borderRadius: Radius.xl,
     overflow: "hidden",
     ...Elevation.sm,
   },
-  heroBody: { padding: Space.xl, gap: Space.md },
+  heroBody: { padding: Space.xl, gap: Space.sm },
   tierBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -655,11 +594,11 @@ const styles = StyleSheet.create({
   trendBand: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Space.md,
+    gap: Space.base,
     paddingHorizontal: Space.xl,
-    paddingVertical: Space.base,
+    paddingVertical: Space.md,
   },
-  trendText: { flex: 1, gap: 2 },
+  trendText: { flex: 1, fontWeight: "600" },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -675,9 +614,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  heroMeta: { flexDirection: "row", alignItems: "center", gap: Space.xs },
-  heroMetaText: { flex: 1 },
+  heroMeta: { marginTop: Space.xs },
   section: { gap: Space.md },
+  firstScanNote: { flexDirection: "row", alignItems: "flex-start", gap: Space.md, padding: Space.base, borderRadius: Radius.lg },
+  firstScanText: { flex: 1 },
 
   pressed: { opacity: 0.85 },
   sparkCard: { gap: Space.md },
@@ -702,5 +642,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   flipText: { flex: 1, gap: 2 },
-  actions: { gap: Space.md },
+  bottomAction: { paddingHorizontal: Space.xl, paddingTop: Space.md, borderTopWidth: StyleSheet.hairlineWidth },
 });

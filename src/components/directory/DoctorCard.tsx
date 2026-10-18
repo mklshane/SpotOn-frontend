@@ -10,6 +10,7 @@ import { IconCircle } from '@/components/ui/icon-circle';
 import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { looksLikePlaceName } from '@/lib/directory-core';
+import type { DoctorCardInfo } from '@/data/repositories';
 import { formatDistance, humanizeTag } from '@/lib/format';
 
 export type DoctorCardProps = {
@@ -17,18 +18,34 @@ export type DoctorCardProps = {
   onPress: () => void;
   /** Metres to the doctor's nearest practice, when the user's location is known. */
   distanceM?: number | null;
+  /** Primary practice, clinic days and bookability (from doctorCardInfo). */
+  info?: DoctorCardInfo;
+  /** Today's bit in the schedule_days mask. */
+  todayBit: number;
 };
 
-export function DoctorCard({ doctor, onPress, distanceM }: DoctorCardProps) {
+export function DoctorCard({ doctor, onPress, distanceM, info, todayBit }: DoctorCardProps) {
   useLocale();
   const theme = useTheme();
   const specialty = doctor.specialties_display || doctor.specialties.map(humanizeTag).join(', ');
   // `city` sometimes holds a clinic name; show the region alone rather than a fake location.
   const city = doctor.city && !looksLikePlaceName(doctor.city) ? doctor.city : null;
   const location = [city, doctor.region].filter(Boolean).join(' · ');
+  const inToday = !!info && (info.daysMask & todayBit) !== 0;
+  const a11yLabel = [
+    doctor.name,
+    specialty,
+    info?.practiceName,
+    distanceM != null ? formatDistance(distanceM) : location || null,
+    inToday ? t('In today') : null,
+    info?.online ? t('Online consult') : info?.bookable ? t('Books online') : null,
+    doctor.pds_certified ? t('PDS Certified') : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
-    <Pressable onPress={onPress} accessibilityRole="button">
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yLabel}>
       <Card style={styles.card} elevation="sm">
         <View style={styles.top}>
           <IconCircle icon="stethoscope" size={48} variant="tint" />
@@ -40,6 +57,14 @@ export function DoctorCard({ doctor, onPress, distanceM }: DoctorCardProps) {
               <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={2}>
                 {specialty}
               </ThemedText>
+            ) : null}
+            {info?.practiceName ? (
+              <View style={styles.practice}>
+                <Icon name="building.2.fill" size={12} tintColor={theme.muted} />
+                <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1} style={styles.locationText}>
+                  {info.practiceName}
+                </ThemedText>
+              </View>
             ) : null}
           </View>
           <Icon name="chevron.right" size={14} tintColor={theme.muted} style={styles.chevron} />
@@ -63,7 +88,17 @@ export function DoctorCard({ doctor, onPress, distanceM }: DoctorCardProps) {
           ) : (
             <View style={styles.location} />
           )}
-          {doctor.pds_certified ? <Badge label={t("PDS Certified")} tone="brand" /> : null}
+          <View style={styles.tags}>
+            {inToday ? <Badge label={t("In today")} tone="brand" /> : null}
+            {info?.online ? (
+              <Badge label={t("Online consult")} />
+            ) : info?.bookable ? (
+              <Badge label={t("Books online")} />
+            ) : null}
+            {doctor.pds_certified && !inToday && !info?.bookable ? (
+              <Badge label={t("PDS Certified")} tone="brand" />
+            ) : null}
+          </View>
         </View>
       </Card>
     </Pressable>
@@ -85,4 +120,6 @@ const styles = StyleSheet.create({
   location: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   locationText: { flexShrink: 1 },
   distance: { fontWeight: '700' },
+  practice: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 2 },
+  tags: { flexDirection: 'row', gap: Space.xs, flexShrink: 0 },
 });

@@ -28,6 +28,7 @@ import {
 } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
 import { SettingsRow } from "@/components/ui/settings-row";
+import { NearbyDerms } from "@/components/directory/NearbyDerms";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useAndroidBack } from "@/hooks/use-android-back";
 import { useTheme } from "@/hooks/use-theme";
@@ -488,24 +489,22 @@ export default function ResultScreen() {
               }
             />
           ) : null}
+          {tier.showDirectory ? (
+            // The nearest places to get the spot checked, not just a link to the directory.
+            <NearbyDerms
+              onSeeAll={() =>
+                router.push({
+                  pathname: "/(tabs)/directory",
+                  // Every scan is about a spot, so land on the places that do mole/skin-cancer
+                  // checks. `at` makes every visit a new request: the directory stays mounted, so
+                  // without it a second scan couldn't re-apply a chip the user had cleared.
+                  params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
+                })
+              }
+            />
+          ) : null}
           <Card padded={false} style={styles.actionList}>
             {[
-              tier.showDirectory ? (
-                <SettingsRow
-                  key="clinic"
-                  icon="mappin.circle.fill"
-                  label={t("Find a clinic near you")}
-                  sublabel={t("Show your summary to a dermatologist")}
-                  // Every scan is about a spot, so land on the places that do mole/skin-cancer
-                  // checks rather than the unfiltered list (aesthetic-only clinics included).
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/directory",
-                      params: { concern: "skin_cancer_mole_check" },
-                    })
-                  }
-                />
-              ) : null,
               tier.showEducation ? (
                 <SettingsRow
                   key="learn"

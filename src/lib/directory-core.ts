@@ -324,8 +324,73 @@ export function looksLikePlaceName(city: string | null | undefined): boolean {
   return !!city && /clinic|hospital|medical|cent(er|re)|derm|skin|room|bldg|building|floor|tower|plaza|mall|@|\d{3,}/i.test(city);
 }
 
-/** For list cards, which only have the row: a hospital with no dermatologist on record. */
-export function isHospitalWithoutDerm(f: { type?: string | null; derm_status?: string | null }): boolean {
-  const hospital = f.type === 'private_hospital' || f.type === 'government_hospital' || f.type === 'medical_center';
-  return hospital && f.derm_status !== 'has_derm_doctors';
+/**
+ * A hospital with no dermatologist on record. One rule for the list card, map preview and detail
+ * page: when the number of linked (non-excluded) dermatologists is known it decides - the card and
+ * the detail page used to disagree, one reading `derm_status`, the other counting doctors - and
+ * `derm_status` is only the fallback for a caller that has no count.
+ */
+/** Collector types that are hospitals (mirrors HOSPITAL_TYPES in data/repositories.ts). */
+export function isHospitalType(type: string | null | undefined): boolean {
+  return type === 'private_hospital' || type === 'government_hospital' || type === 'medical_center';
+}
+
+export function isHospitalWithoutDerm(
+  f: { type?: string | null; derm_status?: string | null },
+  dermCount?: number | null,
+): boolean {
+  if (!isHospitalType(f.type)) return false;
+  if (dermCount != null) return dermCount === 0;
+  return f.derm_status !== 'has_derm_doctors';
+}
+
+// ---- search --------------------------------------------------------------------------------
+
+const ACCENTS: [RegExp, string][] = [
+  [/[ñ]/g, 'n'],
+  [/[áàâäã]/g, 'a'],
+  [/[éèêë]/g, 'e'],
+  [/[íìîï]/g, 'i'],
+  [/[óòôöõ]/g, 'o'],
+  [/[úùûü]/g, 'u'],
+];
+
+/**
+ * User search text folded for matching: lower-case with Spanish/Filipino accents stripped, so
+ * "Las Pinas" finds "Las Piñas". A plain table rather than String.normalize('NFD'), which depends
+ * on the JS engine's Intl build. The SQL side folds the column the same way (see repositories.ts).
+ */
+export function foldSearch(text: string): string {
+  let s = text.toLowerCase().trim();
+  for (const [re, to] of ACCENTS) s = s.replace(re, to);
+  return s;
+}
+
+/** A LIKE '%…%' pattern for user text, folded, with % _ and \ escaped - use with ESCAPE '\'. */
+export function likeContains(text: string): string {
+  return `%${foldSearch(text).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/** Count and union of clinic days for the dermatologists linked to one facility. */
+export type DermSummary = {
+  count: number;
+  daysMask: number;
+  /** How many of them can be booked online (an active link on an active platform). */
+  bookable: number;
+};
+
+/** Fold doctor_facility rows (one per linked derm) into a summary per facility. */
+export function summarizeDerms(
+  rows: { facility_id: string; schedule_days: number | null; bookable?: number | null }[],
+): Map<string, DermSummary> {
+  const out = new Map<string, DermSummary>();
+  for (const r of rows) {
+    const prev = out.get(r.facility_id) ?? { count: 0, daysMask: 0, bookable: 0 };
+    out.set(r.facility_id, {
+      count: prev.count + 1,
+      daysMask: prev.daysMask | (r.schedule_days ?? 0),
+      bookable: prev.bookable + (r.bookable ? 1 : 0),
+    });
+  }
+  return out;
 }

@@ -80,6 +80,11 @@ export function hasTokens(): boolean {
   return accessToken != null;
 }
 
+/** Used by the authenticated profile photo request. */
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
 export async function clearTokens(): Promise<void> {
   const accountId = getActiveAccountId() ?? await SecureStore.getItemAsync(ACTIVE_ACCOUNT_KEY);
   accessToken = null;
@@ -132,6 +137,8 @@ export async function clearAllLocalData(): Promise<void> {
   // Reminder metadata is account-scoped, and cancellation must happen while that scope is active.
   await cancelSelfCheckReminder().catch(() => {});
   if (accountId) {
+    const { removePendingProfile } = await import('./profile-pending');
+    await removePendingProfile(accountId);
     // The server row is already gone, so this history is unreachable - leaving it
     // would strand the account's lesion photos in documentDirectory for good.
     //
@@ -146,6 +153,7 @@ export async function clearAllLocalData(): Promise<void> {
       console.warn('[auth] could not clear local history for deleted account', e);
     }
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.reengagementRemindersEnabled), '');
+    await setMeta(accountStorageKey(accountId, STORAGE_KEYS.productTourStatus), '').catch(() => {});
   }
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
   await clearTokens();

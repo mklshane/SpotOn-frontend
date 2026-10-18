@@ -108,6 +108,8 @@ import {
 import { makeOneEuro } from '@/lib/one-euro';
 import { Radius, Space } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
+import { Gyroscope } from 'expo-sensors';
+import { makeSteadyTracker, waitForSteady } from '@/lib/steady-shot';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
 // would recreate the gesture mid-pinch and crash react-native-gesture-handler).
@@ -187,6 +189,13 @@ const SEARCH_SKIN_MS_LOW = 333;
 /** Keep the former 3/s or 1.5/s cadence while tracking. */
 const TRACK_SKIN_MS_HIGH = 333;
 const TRACK_SKIN_MS_LOW = 667;
+/**
+ * iOS ignores Vibration.vibrate's duration and always runs a ~400 ms buzz. A tap inside that
+ * window would shoot a vibrating phone, so the steady wait holds off until the buzz is over.
+ */
+const IOS_BUZZ_MS = 450;
+/** Show "Hold steady…" only if the steady wait is visibly delaying the shot. */
+const STEADY_HINT_AFTER_MS = 150;
 /** Maximum time the shutter waits for an already-running detector pass to release the camera frame. */
 const CAPTURE_INFERENCE_WAIT_MS = 500;
 /** Keep capture paused until the navigation transition has removed this screen's camera output. */
@@ -400,6 +409,28 @@ export default function CaptureScreen() {
   const [guide, setGuide] = useState(true);
   const [busy, setBusy] = useState(false);
   const captureInFlightRef = useRef(false);
+  // Steady-shot: gyro samples feed this while the camera is live, and shoot() waits on it.
+  const steadyTracker = useMemo(() => makeSteadyTracker(), []);
+  const lastBuzzAtRef = useRef(0);
+  const [holdSteady, setHoldSteady] = useState(false);
+  useEffect(() => {
+    if (!isFocused || !appActive) return;
+    let sub: { remove(): void } | null = null;
+    let alive = true;
+    Gyroscope.isAvailableAsync()
+      .then((ok) => {
+        if (!ok || !alive) return;
+        Gyroscope.setUpdateInterval(16);
+        // Stamp with Date.now(): the sensor's own timestamp uses a different clock per platform.
+        sub = Gyroscope.addListener(({ x, y, z }) => steadyTracker.push(x, y, z, Date.now()));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      sub?.remove();
+      steadyTracker.reset();
+    };
+  }, [isFocused, appActive, steadyTracker]);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
   // The ONLY per-frame-derived React state. Everything else the detector produces (the box pose,
@@ -1331,7 +1362,10 @@ export default function CaptureScreen() {
   const wasReady = useRef(false);
   useEffect(() => {
     const ready = coach === 'ready';
-    if (ready && !wasReady.current) Vibration.vibrate(10);
+    if (ready && !wasReady.current) {
+      Vibration.vibrate(10);
+      lastBuzzAtRef.current = Date.now();
+    }
     wasReady.current = ready;
   }, [coach]);
 
@@ -1369,17 +1403,35 @@ export default function CaptureScreen() {
     perfMark('shutter');
     // Instant acknowledgement: the still can take a second or two to save on Android, and a
     // spinner alone read as "the tap did not register".
-    Vibration.vibrate(15);
+    // No vibration here: on iOS it is a ~400 ms buzz that shook the phone DURING the exposure.
+    // The flash below is the acknowledgement.
     shutterFlash.value = withSequence(withTiming(0.7, { duration: 40 }), withTiming(0, { duration: 220 }));
     if (ANDROID_CAPTURE) setBusy(true);
     let navigated = false;
     try {
       // The current detector pass owns a camera frame and the shared TFLite interpreter. Let it
       // finish before asking the native camera to capture a still; new passes are already paused.
-      await waitForCaptureIdle(
-        () => inferenceBusySV.value,
-        ANDROID_CAPTURE ? ANDROID_CAPTURE_WAIT_MS : CAPTURE_INFERENCE_WAIT_MS,
-      );
+      // In parallel: wait for the phone to stop moving after the tap (the tap itself jolts it,
+      // which blurs a macro shot). Overlapping the two waits means steadiness costs nothing when
+      // a detector pass is still finishing anyway.
+      const hintTimer = setTimeout(() => setHoldSteady(true), STEADY_HINT_AFTER_MS);
+      const steadyWait = waitForSteady(steadyTracker, {
+        now: Date.now,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        notBefore: Platform.OS === 'ios' ? lastBuzzAtRef.current + IOS_BUZZ_MS : 0,
+      });
+      let steadyRes;
+      try {
+        await waitForCaptureIdle(
+          () => inferenceBusySV.value,
+          ANDROID_CAPTURE ? ANDROID_CAPTURE_WAIT_MS : CAPTURE_INFERENCE_WAIT_MS,
+        );
+        steadyRes = await steadyWait;
+      } finally {
+        clearTimeout(hintTimer);
+        setHoldSteady(false);
+      }
+      perfLog('capture.steadyWait', steadyRes.waitedMs, steadyRes.reason);
       // Freeze metadata at exposure time, before image manipulation or the expiry timer can
       // change it. Slow Android results must not auto-crop a new photo to an old target.
       const androidCaptureBox = ANDROID_CAPTURE && metricsRef.current != null &&
@@ -1573,7 +1625,9 @@ export default function CaptureScreen() {
           Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
           preview stays visible and the user can watch it sharpen. */}
       {/* Android's full-quality capture runs AF/AE first; moving during it is the main way to blur. */}
-      {busy ? (
+      {holdSteady ? (
+        <CoachPill kind="steady" top={insets.top + Space.xxl} />
+      ) : busy ? (
         ANDROID_CAPTURE ? <CoachPill kind="steady" top={insets.top + Space.xxl} /> : null
       ) : coach == null ? null : coach === 'dark' ? (
         <CaptureCoach title={t("It's too dark")} subtitle={t("Turn on the light or move somewhere brighter")} icon="sun.max" />

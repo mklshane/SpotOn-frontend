@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS booking_links (
   is_active          INTEGER NOT NULL,
   last_verified      TEXT,
   next_available     TEXT,
+  offers_online      INTEGER,
   created_at         TEXT NOT NULL,
   updated_at         TEXT
 );
@@ -99,6 +100,7 @@ CREATE TABLE IF NOT EXISTS doctor_facility (
   phone       TEXT,
   source_url  TEXT,
   verified_at TEXT,
+  consultation_fee INTEGER,
   updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_doctor_facility_doctor ON doctor_facility(doctor_id);
@@ -119,6 +121,19 @@ CREATE TABLE IF NOT EXISTS telemedicine_platforms (
 CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY NOT NULL,
   value TEXT
+);
+
+-- Clinics and doctors a user saved ("My dermatologists"). Per account, this device only. Not a
+-- synced table, so the directory sync's sweep never touches it; name/subtitle are a snapshot so a
+-- saved place stays readable even after the directory drops it.
+CREATE TABLE IF NOT EXISTS saved_items (
+  user_id   TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  item_id   TEXT NOT NULL,
+  name      TEXT NOT NULL,
+  subtitle  TEXT,
+  saved_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, kind, item_id)
 );
 
 -- Tracked lesions. MUST stay ABOVE the screenings block, and nothing above that block may repeat
@@ -204,7 +219,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -386,6 +401,17 @@ const MIGRATION_V17 = [
   "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
 ];
 
+// v18 - consultation fee per doctor-clinic link and which booking links are online consults
+// (server migration 018), plus the local saved_items table (created by SCHEMA; its index lives
+// here per the note above SCHEMA_VERSION).
+const MIGRATION_V18 = [
+  "ALTER TABLE doctor_facility ADD COLUMN consultation_fee INTEGER",
+  "ALTER TABLE booking_links ADD COLUMN offers_online INTEGER",
+  "CREATE INDEX IF NOT EXISTS idx_saved_items_user ON saved_items(user_id, saved_at DESC)",
+  // Existing rows predate these columns; a full sync re-reads them.
+  "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -407,6 +433,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 15 ? MIGRATION_V15 : []),
     ...(version < 16 ? MIGRATION_V16 : []),
     ...(version < 17 ? MIGRATION_V17 : []),
+    ...(version < 18 ? MIGRATION_V18 : []),
   ];
   for (const stmt of pending) {
     try {

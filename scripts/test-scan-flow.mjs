@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, decideSetQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
+const { decideIqa, decideQuality, decideSetQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, colourSkinOk, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -195,6 +195,15 @@ for (const r of ['pending', 'ok', 'timeout']) {
 // low-confidence photo reaches analysis, which applies the floor.
 const strike2 = decideAnalysis({ verdict: 'apply-floor', acceptedLowConfidence: false });
 check('second low-confidence attempt finalizes with the floor', strike2.kind === 'finalize' && strike2.applyFloor === true);
+
+// Pale skin under flash (2026-10-18): grey/bluish pixels fail the colour rule, so a CONFIDENT model
+// overrules it - and only a confident one.
+check('flash-pale skin: confident model overrules the colour rule', colourSkinOk(false, 0.97));
+check('colour rule still vetoes when the model is unsure', !colourSkinOk(false, 0.6));
+check('colour rule still vetoes when the model did not run', !colourSkinOk(false, undefined));
+check('colour pass needs no model', colourSkinOk(true, undefined));
+check('flash-pale skin passes the whole gate',
+  decideIqa({ error: false, brightnessOk: true, sharpOk: true, skinOk: colourSkinOk(false, 0.97), presenceOk: true, skinGate: 'skin' }).pass);
 
 if (fails.length) {
   console.error(`\nscan flow: ${pass} passed, ${fails.length} FAILED`);

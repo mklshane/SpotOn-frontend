@@ -1,6 +1,5 @@
 import { t, useLocale } from '@/lib/i18n';
 import BottomSheet, { BottomSheetFlatList } from "@gorhom/bottom-sheet";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -13,23 +12,30 @@ import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
 import { Icon } from "@/components/ui/icon";
 import { ListState } from "@/components/ui/list-state";
-import { Elevation, Radius, Space } from "@/constants/theme";
+import { Radius, Space } from "@/constants/theme";
 import {
+  countFacilities,
   distanceMeters,
+  facilityDermSummary,
   listFacilities,
   type FacilityKind,
   type FacilityWithDistance,
 } from "@/data/repositories";
 import { useConnectivity } from "@/hooks/use-connectivity";
-import { useLocation } from "@/hooks/use-location";
+import type { Coords, LocationStatus } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
 import { CONCERNS, dermTier, WEEKEND_MASK, type ConcernId } from "@/lib/concerns";
+import { isHospitalType, type DermSummary } from "@/lib/directory-core";
+import { todayScheduleBit } from "@/lib/directory-display";
 import { isOpenNow } from "@/lib/hours";
 import { downloadAreaPack } from "@/lib/map-offline";
 import NetInfo from "@react-native-community/netinfo";
 
 import { ClinicCard } from "./ClinicCard";
 import { ClinicMap } from "./ClinicMap";
+import { DirectoryFilterSheet } from "./DirectoryFilterSheet";
+import { PdsAttribution } from "./PdsAttribution";
+import { usePhoneCall } from "./use-phone-call";
 
 export type ClinicsViewProps = {
   query: string;
@@ -53,17 +59,24 @@ export type ClinicsViewProps = {
   onRetrySync?: () => void;
   /** Pre-select a concern, e.g. `skin_cancer_mole_check` when arriving from a scan result. */
   initialConcern?: ConcernId | null;
+  /** Changes on every deep link, so a repeat visit re-applies `initialConcern` after it was cleared. */
+  initialConcernKey?: string | null;
+  /** Owned by the directory screen so both tabs share one GPS request. */
+  coords: Coords | null;
+  locationStatus: LocationStatus;
+  onRequestLocation: () => void;
 };
 
 type SortMode = "distance" | "rating" | "name";
 type Facility = FacilitySync | FacilityWithDistance;
 
 const SCREEN_H = Dimensions.get("window").height;
-const ALL_CHIP = "All Clinics";
-const OPEN_CHIP = "Open Now";
-const HOSPITALS_CHIP = "Hospitals";
-const CLINICS_CHIP = "Clinics";
-const WEEKEND_CHIP = "Weekend clinic";
+const NO_DERMS: DermSummary = { count: 0, daysMask: 0, bookable: 0 };
+/** Browsing with a location shows this many nearest places (a search covers everything). */
+const NEAREST_LIMIT = 200;
+/** A concern chip only appears when this many live places list it as a focus. */
+const MIN_CONCERN_PLACES = 15;
+
 
 // `topInset` stays part of the props contract (the parent screen still needs it
 // to size/position the search header itself) but is no longer consumed here -
@@ -77,18 +90,24 @@ export function ClinicsView({
   syncing = false,
   onRetrySync,
   initialConcern = null,
+  initialConcernKey = null,
+  coords,
+  locationStatus,
+  onRequestLocation,
 }: ClinicsViewProps) {
   useLocale();
   const theme = useTheme();
-  const { coords } = useLocation();
   const { isOnline } = useConnectivity();
+  const phone = usePhoneCall();
 
   const [facilities, setFacilities] = useState<Facility[] | null>(null);
+  const [dermSummary, setDermSummary] = useState<Map<string, DermSummary> | null>(null);
   const [error, setError] = useState(false);
   const [concern, setConcern] = useState<ConcernId | null>(initialConcern);
   const [kind, setKind] = useState<FacilityKind | null>(null);
   const [weekendOnly, setWeekendOnly] = useState(false);
-  const [openOnly, setOpenOnly] = useState(false);
+  const [todayOnly, setTodayOnly] = useState(false);
+  const [bookingOnly, setBookingOnly] = useState(false);
   const [sort, setSort] = useState<SortMode>("name");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Live top-edge Y position of the bottom sheet, in screen space - kept in
@@ -104,39 +123,62 @@ export function ClinicsView({
   }
 
   // A new deep link (another scan result) must re-apply its concern; the screen stays mounted.
-  // Adjusted during render (same pattern as the sort default above), not in an effect.
-  const [appliedConcern, setAppliedConcern] = useState(initialConcern);
-  if (initialConcern !== appliedConcern) {
-    setAppliedConcern(initialConcern);
+  // Keyed on the link's nonce, not the concern: every scan sends the same concern, so comparing
+  // values never re-applied a chip the user had cleared. Adjusted during render, not in an effect.
+  const requestKey = `${initialConcern ?? ""}:${initialConcernKey ?? ""}`;
+  const [appliedRequest, setAppliedRequest] = useState(requestKey);
+  if (requestKey !== appliedRequest) {
+    setAppliedRequest(requestKey);
     if (initialConcern) setConcern(initialConcern);
   }
 
+  // Concern tags come from each doctor's own listed focus areas (37_tag_concerns), so most are
+  // sparse. A chip that would filter down to a handful of places nationwide is hidden.
+  const [concernCounts, setConcernCounts] = useState<Map<ConcernId, number> | null>(null);
   useEffect(() => {
     let cancelled = false;
+    Promise.all(CONCERNS.map(async (c) => [c.id, await countFacilities({ concern: c.id })] as const))
+      .then((pairs) => !cancelled && setConcernCounts(new Map(pairs)))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [syncVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+    facilityDermSummary()
+      .then((m) => !cancelled && setDermSummary(m))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [syncVersion]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Browsing with a location: the NEAREST places only (NEAREST_LIMIT), so the list and map stay
+    // about where the user is. Typing a search looks through the whole directory (a doctor's or a
+    // town's name may be far away), still nearest first. Without a location there is nothing to
+    // be near, so every match is listed by name and the "Turn on location" banner shows.
     const params = {
       q: query || undefined,
       concern: concern ?? undefined,
       kind: kind ?? undefined,
       dayMask: weekendOnly ? WEEKEND_MASK : undefined,
-      limit: 200,
+      hasBookingUrl: bookingOnly || undefined,
+      limit: null,
     };
-    /**
-     * With a location, every row gets a distance - search results included - and the cap keeps
-     * the NEAREST 200 rather than a radius box. The old path skipped distances whenever a query
-     * was typed (all rows sorted as Infinity, i.e. by name, under a "sorted by distance" label),
-     * and outside a 15 km box fell back to the alphabetically first 200 clinics nationwide.
-     * The whole directory is ~1.6k rows, so a JS haversine pass is cheap.
-     */
     const fetcher = (async (): Promise<Facility[]> => {
-      if (!coords) return listFacilities(params);
-      const all = await listFacilities({ ...params, limit: 5000 });
-      return all
+      const all = await listFacilities(params);
+      if (!coords) return all;
+      const located = all
         .map((f) => ({
           ...f,
           distance_m: distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude),
         }))
-        .sort((a, b) => a.distance_m - b.distance_m)
-        .slice(0, params.limit);
+        .sort((a, b) => a.distance_m - b.distance_m);
+      return query ? located : located.slice(0, NEAREST_LIMIT);
     })();
     fetcher
       .then((rows) => {
@@ -150,7 +192,7 @@ export function ClinicsView({
     return () => {
       cancelled = true;
     };
-  }, [query, concern, kind, weekendOnly, coords, syncVersion]);
+  }, [query, concern, kind, weekendOnly, bookingOnly, coords, syncVersion]);
 
   // Offline map tiles (~25 km pack) only on Wi-Fi: on PH prepaid data a silent background
   // download is a real cost the user never agreed to.
@@ -161,13 +203,21 @@ export function ClinicsView({
       .catch(() => {});
   }, [coords, isOnline]);
 
+  const sortLabel = sort === "distance" ? t("Nearest") : sort === "rating" ? t("Top rated") : t("A–Z");
+  const todayBit = todayScheduleBit();
   const filtered = useMemo(() => {
     if (!facilities) return [];
     let rows = facilities;
-    if (openOnly)
+    if (todayOnly) {
+      // "Derm in today": a linked dermatologist holds clinic today, or a (non-hospital) clinic is
+      // open right now. A hospital's own 24h hours don't count - they were what "Open Now" used
+      // to match, listing every hospital as if a dermatologist were in.
       rows = rows.filter(
-        (f) => isOpenNow(f.weekday_hours, f.weekend_hours) === true,
+        (f) =>
+          ((dermSummary?.get(f.id)?.daysMask ?? 0) & todayBit) !== 0 ||
+          (!isHospitalType(f.type) && isOpenNow(f.weekday_hours, f.weekend_hours) === true),
       );
+    }
 
     const byKey: (a: Facility, b: Facility) => number =
       sort === "distance" && coords
@@ -177,9 +227,10 @@ export function ClinicsView({
         : sort === "rating"
           ? (a, b) => (b.google_rating ?? 0) - (a.google_rating ?? 0)
           : (a, b) => a.name.localeCompare(b.name);
-    // Places where a dermatologist can actually be seen come first, whatever the sort.
+    // Places where a dermatologist can actually be seen come first, whatever the sort - within the
+    // nearest NEAREST_LIMIT, so a far derm clinic never outranks the neighbourhood.
     return [...rows].sort((a, b) => dermTier(a) - dermTier(b) || byKey(a, b));
-  }, [facilities, openOnly, sort, coords]);
+  }, [facilities, todayOnly, dermSummary, todayBit, sort, coords]);
 
   const cycleSort = useCallback(() => {
     setSort((s) => {
@@ -189,20 +240,41 @@ export function ClinicsView({
     });
   }, [coords]);
 
+  const anyFilter = !!(query || concern || kind || weekendOnly || todayOnly || bookingOnly);
   // Nothing local AND the download failed or can't run: "not downloaded yet", not "0 results".
   const notDownloaded =
-    facilities?.length === 0 && !query && !concern && !kind && !weekendOnly && !openOnly &&
-    (syncFailed || !isOnline) && !syncing;
+    facilities?.length === 0 && !anyFilter && (syncFailed || !isOnline) && !syncing;
+  const showLocationBanner = !coords && locationStatus === "denied" && !notDownloaded;
 
-  const sortLabel =
-    sort === "distance" ? "distance" : sort === "rating" ? "rating" : "name";
-  // Concern chips come right after the place filters; the active concern is moved to the front so
-  // a pre-selected one (from a scan result) is visible without scrolling.
-  const concernIds = CONCERNS.map((c) => c.id as string);
-  const chips = [
-    ALL_CHIP, OPEN_CHIP, HOSPITALS_CHIP, CLINICS_CHIP, WEEKEND_CHIP,
-    ...(concern ? [concern, ...concernIds.filter((c) => c !== concern)] : concernIds),
-  ];
+  const clearFilters = () => {
+    setConcern(null);
+    setKind(null);
+    setWeekendOnly(false);
+    setTodayOnly(false);
+    setBookingOnly(false);
+  };
+  const filtersSet = !!(concern || kind || weekendOnly || todayOnly || bookingOnly);
+
+  // Concerns offered in the filter sheet: only those enough places list (plus the active one).
+  const concernIds: ConcernId[] = CONCERNS.map((c) => c.id).filter(
+    (id) => id === concern || !concernCounts || (concernCounts.get(id) ?? 0) >= MIN_CONCERN_PLACES,
+  );
+  const activeConcern = concern ? CONCERNS.find((c) => c.id === concern) : undefined;
+  const filterCount = [concern, kind, weekendOnly, todayOnly, bookingOnly].filter(Boolean).length;
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  // "Near Lipa City" - the area of the nearest place, which is what the list is about.
+  const nearest = coords && !query
+    ? (facilities ?? []).reduce<Facility | null>(
+        (best, f) => ("distance_m" in f && (!best || f.distance_m < (best as FacilityWithDistance).distance_m) ? f : best),
+        null,
+      )
+    : null;
+  const heading = query
+    ? t("Results for “{{query}}”", { query })
+    : nearest?.city
+      ? t("Near {{place}}", { place: nearest.city })
+      : t("All clinics");
 
   // OVERHERE FOR SNAP CHANGE: If you want to change the snap points, do it here, top snap is the initial when you open the page
   // Bottom snap is when the user pulls the image app, going over 64 wont do much as the search bar is on top of this portion.
@@ -222,6 +294,7 @@ export function ClinicsView({
         onSelectFacility={setSelectedId}
         sheetPosition={sheetPosition}
         query={query}
+        dermSummary={dermSummary ?? undefined}
       />
 
       {header}
@@ -241,133 +314,114 @@ export function ClinicsView({
         handleIndicatorStyle={{ backgroundColor: theme.hairline }}
       >
         <View style={styles.header}>
-          <View
-            style={[
-              styles.resultsCard,
-              { backgroundColor: theme.surface, borderColor: theme.brandTint },
-            ]}
-          >
-            <LinearGradient
-              colors={["rgba(255,255,255,0)", "rgba(255,233,218,0.6)"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-
-            <View
-              style={[styles.resultsIcon, { backgroundColor: theme.brandTint }]}
-            >
-              <Icon name="cross.case.fill" tintColor={theme.brand} size={20} />
-            </View>
-
-            <View style={styles.resultsText}>
-              <ThemedText type="title2" style={styles.resultsCount}>
-                {filtered.length}
+          {/* One compact line instead of a card: where, how many, and how they're ordered. */}
+          <View style={styles.titleRow}>
+            <View style={styles.titleText} accessible accessibilityLiveRegion="polite">
+              <ThemedText type="headline" numberOfLines={1}>
+                {notDownloaded ? t("Directory not downloaded yet") : heading}
               </ThemedText>
-              <ThemedText
-                type="footnote"
-                themeColor="textSecondary"
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.8}
+              {!notDownloaded ? (
+                <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
+                  {filtered.length === 1
+                    ? t("1 place")
+                    : t("{{count}} places", { count: filtered.length })}
+                </ThemedText>
+              ) : null}
+            </View>
+            {notDownloaded && onRetrySync ? (
+              <Pressable
+                onPress={onRetrySync}
+                accessibilityRole="button"
+                accessibilityLabel={t("Try again")}
+                hitSlop={8}
+                style={({ pressed }) => [styles.sortPill, { backgroundColor: theme.brandTint }, pressed && styles.pressed]}
               >
-                {notDownloaded
-                  ? t("Directory not downloaded yet")
-                  : t(filtered.length === 1 ? "clinic · sorted by {{sort}}" : "clinics · sorted by {{sort}}", { sort: t(sortLabel) })}
-              </ThemedText>
-            </View>
-
-            <Pressable
-              onPress={notDownloaded && onRetrySync ? onRetrySync : cycleSort}
-              accessibilityRole="button"
-              accessibilityLabel={notDownloaded ? t("Try again") : t("Change sort order")}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.sortButton,
-                { backgroundColor: theme.brandTint },
-                pressed && styles.pressed,
-              ]}
-            >
-              <Icon
-                name={notDownloaded ? "arrow.clockwise" : "arrow.up.arrow.down"}
-                size={15}
-                tintColor={theme.brand}
-              />
-            </Pressable>
+                <Icon name="arrow.clockwise" size={13} tintColor={theme.brandPressed} />
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={cycleSort}
+                accessibilityRole="button"
+                accessibilityLabel={t("Sort")}
+                accessibilityValue={{ text: sortLabel }}
+                accessibilityHint={t("Changes the sort order")}
+                hitSlop={8}
+                style={({ pressed }) => [styles.sortPill, { backgroundColor: theme.elementBg }, pressed && styles.pressed]}
+              >
+                <Icon name="arrow.up.arrow.down" size={13} tintColor={theme.textSecondary} />
+                <ThemedText type="footnote" themeColor="textSecondary" style={styles.sortText} numberOfLines={1}>
+                  {sortLabel}
+                </ThemedText>
+              </Pressable>
+            )}
           </View>
 
+          {showLocationBanner ? (
+            <Pressable
+              onPress={onRequestLocation}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.banner, { backgroundColor: theme.brandTint }, pressed && styles.pressed]}
+            >
+              <Icon name="mappin.circle.fill" size={14} tintColor={theme.brandPressed} />
+              <ThemedText type="footnote" themeColor="textSecondary" style={styles.bannerText}>
+                {t("Turn on location to see the places nearest you.")}
+              </ThemedText>
+              <ThemedText type="footnote" style={[styles.bannerAction, { color: theme.brandPressed }]}>
+                {t("Turn on")}
+              </ThemedText>
+            </Pressable>
+          ) : null}
+
+          {/* One rail: Filters (everything, incl. skin concern + sort) then the quick toggles. */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.chips}
           >
-            {chips.map((item) => {
-              if (item === ALL_CHIP) {
-                return (
-                  <Chip
-                    key={item}
-                    label={t(item)}
-                    active={!concern && !kind && !weekendOnly && !openOnly}
-                    onPress={() => {
-                      setConcern(null);
-                      setKind(null);
-                      setWeekendOnly(false);
-                      setOpenOnly(false);
-                    }}
-                  />
-                );
-              }
-              if (item === OPEN_CHIP) {
-                return (
-                  <Chip
-                    key={item}
-                    label={t(item)}
-                    active={openOnly}
-                    onPress={() => setOpenOnly((v) => !v)}
-                  />
-                );
-              }
-              if (item === HOSPITALS_CHIP || item === CLINICS_CHIP) {
-                const value: FacilityKind = item === HOSPITALS_CHIP ? "hospital" : "clinic";
-                return (
-                  <Chip
-                    key={item}
-                    label={t(item)}
-                    active={kind === value}
-                    onPress={() => setKind((v) => (v === value ? null : value))}
-                  />
-                );
-              }
-              if (item === WEEKEND_CHIP) {
-                return (
-                  <Chip
-                    key={item}
-                    label={t(item)}
-                    active={weekendOnly}
-                    onPress={() => setWeekendOnly((v) => !v)}
-                  />
-                );
-              }
-              const c = CONCERNS.find((x) => x.id === item);
-              if (!c) return null;
-              return (
-                <Chip
-                  key={item}
-                  label={t(c.label)}
-                  active={concern === c.id}
-                  onPress={() => setConcern((v) => (v === c.id ? null : c.id))}
-                />
-              );
-            })}
+            <Chip
+              size="sm"
+              icon="slider.horizontal.3"
+              label={filterCount ? t("Filters · {{count}}", { count: filterCount }) : t("Filters")}
+              active={filterCount > 0}
+              accessibilityLabel={t("Filters")}
+              onPress={() => setFiltersOpen(true)}
+            />
+            {activeConcern ? (
+              <Chip
+                size="sm"
+                label={t(activeConcern.label)}
+                active
+                trailingIcon="xmark"
+                accessibilityLabel={t("Remove filter {{name}}", { name: t(activeConcern.label) })}
+                onPress={() => setConcern(null)}
+              />
+            ) : null}
+            <Chip size="sm" label={t("Derm in today")} active={todayOnly} onPress={() => setTodayOnly((v) => !v)} />
+            <Chip
+              size="sm"
+              label={t("Clinics")}
+              active={kind === "clinic"}
+              onPress={() => setKind((v) => (v === "clinic" ? null : "clinic"))}
+            />
+            <Chip
+              size="sm"
+              label={t("Hospitals")}
+              active={kind === "hospital"}
+              onPress={() => setKind((v) => (v === "hospital" ? null : "hospital"))}
+            />
+            <Chip size="sm" label={t("Weekend")} active={weekendOnly} onPress={() => setWeekendOnly((v) => !v)} />
           </ScrollView>
         </View>
 
         <BottomSheetFlatList
           data={filtered}
-          keyExtractor={(f) => f.id}
-          renderItem={({ item }) => (
+          keyExtractor={(f: Facility) => f.id}
+          renderItem={({ item }: { item: Facility }) => (
             <ClinicCard
               facility={item}
+              derm={dermSummary ? dermSummary.get(item.id) ?? NO_DERMS : undefined}
+              onCall={phone.call}
+              isOnline={isOnline}
               onPress={() =>
                 router.push({
                   pathname: "/directory/clinic",
@@ -377,8 +431,11 @@ export function ClinicsView({
             />
           )}
           contentContainerStyle={styles.list}
+          initialNumToRender={8}
+          windowSize={7}
+          ListFooterComponent={filtered.length ? <PdsAttribution /> : null}
           ListEmptyComponent={
-            facilities?.length === 0 && syncing && !query && !concern && !kind && !weekendOnly && !openOnly ? (
+            facilities?.length === 0 && syncing && !anyFilter ? (
               <ListState kind="loading" title={t("Downloading the clinic directory…")} />
             ) : notDownloaded ? (
               // Nothing local AND the download failed or can't run: this is "not downloaded yet",
@@ -388,12 +445,6 @@ export function ClinicsView({
                 title={t("Clinic directory not downloaded yet")}
                 subtitle={t("Connect to the internet to download it. After that it works offline.")}
                 action={onRetrySync && isOnline ? { label: t("Try again"), onPress: onRetrySync } : undefined}
-              />
-            ) : !isOnline && facilities === null ? (
-              <ListState
-                kind="offline"
-                title={t("You're offline")}
-                subtitle={t("Showing cached clinics only.")}
               />
             ) : facilities === null ? (
               error ? (
@@ -410,12 +461,31 @@ export function ClinicsView({
               <ListState
                 kind="empty"
                 title={t("No clinics found")}
-                subtitle={t("Try a different search or filter.")}
+                subtitle={filtersSet ? t("Try fewer filters, or search a nearby city.") : t("Try a different search.")}
+                action={filtersSet ? { label: t("Clear filters"), onPress: clearFilters } : undefined}
               />
             )
           }
         />
       </BottomSheet>
+      {phone.sheet}
+      <DirectoryFilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        filters={{ kind, todayOnly, weekendOnly, bookingOnly, concern }}
+        onChange={(next) => {
+          if ("kind" in next) setKind(next.kind ?? null);
+          if ("todayOnly" in next) setTodayOnly(!!next.todayOnly);
+          if ("weekendOnly" in next) setWeekendOnly(!!next.weekendOnly);
+          if ("bookingOnly" in next) setBookingOnly(!!next.bookingOnly);
+          if ("concern" in next) setConcern(next.concern ?? null);
+        }}
+        onReset={clearFilters}
+        sort={sort}
+        onSort={setSort}
+        hasLocation={!!coords}
+        concernIds={concernIds}
+      />
     </View>
   );
 }
@@ -427,42 +497,28 @@ const styles = StyleSheet.create({
     paddingBottom: Space.sm,
     gap: Space.md,
   },
-  resultsCard: {
+  titleRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
+  titleText: { flex: 1, minWidth: 0, gap: 2 },
+  sortPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Space.md,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-    paddingVertical: Space.sm,
-    paddingHorizontal: Space.base,
-    overflow: "hidden",
-    ...Elevation.sm,
-  },
-  resultsIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    flexShrink: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  resultsText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  resultsCount: {
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  sortButton: {
-    width: 36,
+    gap: Space.xs,
     height: 36,
-    borderRadius: 18,
+    paddingHorizontal: Space.md,
+    borderRadius: Radius.pill,
     flexShrink: 0,
-    alignItems: "center",
-    justifyContent: "center",
   },
+  sortText: { fontWeight: "600" },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  bannerText: { flex: 1 },
+  bannerAction: { fontWeight: "700" },
   chips: { gap: Space.sm },
   list: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
   pressed: {

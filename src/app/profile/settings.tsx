@@ -35,6 +35,7 @@ import {
   setRemindersEnabled,
 } from "@/lib/notifications";
 import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
+import { useProductTour } from "@/lib/product-tour";
 
 const SUPPORT_EMAIL = "help.spoton@gmail.com";
 
@@ -51,6 +52,7 @@ export default function SettingsScreen() {
   useLocale();
   const theme = useTheme();
   const { user, signOut } = useAuth();
+  const { startReplay } = useProductTour();
 
   // Notifications
   const [remindersEnabled, setRemindersEnabledState] = useState(false);
@@ -293,6 +295,18 @@ export default function SettingsScreen() {
               accessory={remindersUnsupported ? null : "switch"}
               switchValue={remindersEnabled}
               onSwitchChange={handleToggleReminders}
+            />
+          </Card>
+
+          <View style={styles.sectionHead}>
+            <ThemedText type="title2">{t("Help & guidance")}</ThemedText>
+          </View>
+          <Card style={styles.section}>
+            <SettingsRow
+              icon="sparkles"
+              label={t("Replay product tour")}
+              sublabel={t("A quick guide to SpotOn's main features")}
+              onPress={() => { if (user) startReplay(user.id); }}
             />
           </Card>
 

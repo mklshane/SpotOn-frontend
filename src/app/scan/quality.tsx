@@ -35,6 +35,7 @@ import {
   nextStepAfterQuality,
   readStateFromVerdict,
   retakeStartsRescan,
+  colourSkinOk,
   skinGateVerdict,
   type IqaVerdict,
   type SkinGateVerdict,
@@ -92,6 +93,8 @@ type PhotoCheck = {
   checks: IqaChecks | null;
   error: boolean;
   skinGate: SkinGateVerdict | 'pending';
+  /** The gate's pSkin, so a confident 'skin' can overrule the colour rule (colourSkinOk). */
+  pSkin?: number;
 };
 
 const isSettled = (p: PhotoCheck) => (p.checks != null || p.error) && p.skinGate !== 'pending';
@@ -101,7 +104,7 @@ function verdictOf(p: PhotoCheck): IqaVerdict {
     error: p.error,
     brightnessOk: p.checks?.brightness.ok ?? false,
     sharpOk: p.checks?.sharpness.ok ?? false,
-    skinOk: p.checks?.skin.ok ?? false,
+    skinOk: colourSkinOk(p.checks?.skin.ok ?? false, p.pSkin),
     /**
      * THE IMAGE OWNS PRESENCE, NOT THE DETECTOR (2026-08-25). The detector fires on 88% of
      * lesion-free skin - it answers "where", never "whether". `checks.lesion` is the centre-surround
@@ -114,7 +117,7 @@ function verdictOf(p: PhotoCheck): IqaVerdict {
 }
 
 /** Run the skin gate once, retry once (a failed load clears skin-gate.ts's cache), bounded. */
-async function runSkinGate(uri: string): Promise<SkinGateVerdict> {
+async function runSkinGate(uri: string): Promise<{ verdict: SkinGateVerdict; pSkin?: number }> {
   const run = () => import('@/lib/skin-gate').then((m) => m.classifySkin(uri));
   const attempt = run().catch((e) => {
     console.warn('[iqa] skin gate failed, retrying once', e);
@@ -123,12 +126,12 @@ async function runSkinGate(uri: string): Promise<SkinGateVerdict> {
   const timeout = new Promise<'failed'>((resolve) => setTimeout(() => resolve('failed'), SKIN_GATE_TIMEOUT_MS));
   try {
     const p = await Promise.race([attempt, timeout]);
-    if (p === 'failed') return 'failed';
+    if (p === 'failed') return { verdict: 'failed' };
     if (__DEV__) console.log('[iqa] skin gate', JSON.stringify(p));
-    return skinGateVerdict(p);
+    return { verdict: skinGateVerdict(p), pSkin: p.skin };
   } catch (e) {
     console.warn('[iqa] skin gate failed', e);
-    return 'failed';
+    return { verdict: 'failed' };
   }
 }
 
@@ -208,9 +211,9 @@ export default function QualityScreen() {
             if (alive) patch(pos, { error: true });
           });
         const tSkin = Date.now();
-        const gate = runSkinGate(uri).then((v) => {
+        const gate = runSkinGate(uri).then(({ verdict: v, pSkin }) => {
           perfLog('quality.skinGate', Date.now() - tSkin, `photo=${pos + 1}`);
-          if (alive) patch(pos, { skinGate: v });
+          if (alive) patch(pos, { skinGate: v, pSkin });
         });
         await Promise.all([iqa, gate]);
       }
@@ -341,7 +344,7 @@ export default function QualityScreen() {
   const multi = photos.length > 1;
 
   const hairTipAt = (p: PhotoCheck) =>
-    !!p.checks?.skin.ok && p.skinGate === 'skin' && !!p.checks?.hair && !p.checks.hair.ok;
+    !!p.checks && colourSkinOk(p.checks.skin.ok, p.pSkin) && p.skinGate === 'skin' && !!p.checks?.hair && !p.checks.hair.ok;
   const hairTip = photos.some((p, i) => verdicts[i].pass && hairTipAt(p));
 
   const reasons = useMemo(() => {
@@ -632,7 +635,7 @@ function reasonsFor(
   if (!c) return [];
   // A whole face is skin, so it gets its own sentence - the fix is to move closer.
   if (p.skinGate === 'face') return [t('This looks like a whole face - move closer so the spot fills the frame.')];
-  if (!c.skin.ok || p.skinGate === 'not_skin') return [t('This doesn’t look like a photo of skin.')];
+  if (!colourSkinOk(c.skin.ok, p.pSkin) || p.skinGate === 'not_skin') return [t('This doesn’t look like a photo of skin.')];
   const out: string[] = [];
   if (!c.brightness.ok) {
     out.push(

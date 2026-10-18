@@ -380,7 +380,7 @@ export async function deleteScreening(id: string, userId: string): Promise<void>
 }
 
 /**
- * Delete every screening and lesion belonging to one account, photos included.
+ * Delete every screening, lesion and saved clinic/doctor belonging to one account, photos included.
  *
  * Used when the account itself is deleted: the server row is gone, so this history could never
  * be reached again - it would just sit in documentDirectory as orphaned lesion photos under a
@@ -395,6 +395,8 @@ export async function deleteAllForUser(userId: string): Promise<void> {
   await withDbTransaction(async () => {
     await db.runAsync("DELETE FROM screenings WHERE user_id = ?", userId);
     await db.runAsync("DELETE FROM lesions WHERE user_id = ?", userId);
+    // Saved clinics/doctors are account data too (saved-repo.ts).
+    await db.runAsync("DELETE FROM saved_items WHERE user_id = ?", userId);
   });
   // Files last: the rows are what make the history reachable, and a failed unlink
   // must not leave them behind.

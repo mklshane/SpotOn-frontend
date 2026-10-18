@@ -21,4 +21,7 @@ export {
   readAsStringAsync,
   readDirectoryAsync,
   writeAsStringAsync,
+  uploadAsync,
+  FileSystemUploadType,
+  FileSystemSessionType,
 } from 'expo-file-system/legacy';

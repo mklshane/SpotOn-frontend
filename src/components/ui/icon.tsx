@@ -120,6 +120,12 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   // multi-photo review + set quality check
   exclamationmark: { set: 'ionicons', name: 'alert' },
   'plus.viewfinder': { set: 'ionicons', name: 'add-circle-outline' },
+  // directory: saved / online consult / report
+  bookmark: { set: 'ionicons', name: 'bookmark-outline' },
+  'bookmark.fill': { set: 'ionicons', name: 'bookmark' },
+  'video.fill': { set: 'ionicons', name: 'videocam' },
+  flag: { set: 'ionicons', name: 'flag-outline' },
+  'slider.horizontal.3': { set: 'ionicons', name: 'options-outline' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

@@ -7,9 +7,10 @@
  * Upserts are idempotent, so re-seeing a row across pages is harmless. When all
  * collections are drained, store the response's `synced_at` as the next `since`.
  *
- * Change timestamps: doctors/facilities/booking_links use updated_at; platforms
- * use created_at (no updated_at on that table). Hard deletes aren't tracked by
- * the server, so a FULL sync additionally sweeps local rows the server did not
+ * Change timestamps: every collection pages by updated_at (platforms gained one
+ * in migration 014). Since 014 the server also sends soft-delete tombstones
+ * (deleted_at), which remove the local row. Rows hard-deleted BEFORE 014 left no
+ * tombstone, so a FULL sync additionally sweeps local rows the server did not
  * return - see runSync/sweepDeleted.
  */
 import { api } from "../api/client";
@@ -138,12 +139,12 @@ async function upsertBookingLinks(items: BookingLinkSync[]): Promise<void> {
         `INSERT OR REPLACE INTO booking_links
          (id,doctor_id,platform_id,url,consultation_fee,rating,review_count,
           is_introductory_fee,available_text,is_active,last_verified,
-          next_available,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          next_available,offers_online,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           b.id, b.doctor_id, b.platform_id, b.url, b.consultation_fee, b.rating,
           b.review_count, bit(b.is_introductory_fee), b.available_text,
-          bit(b.is_active), b.last_verified, b.next_available, b.created_at,
+          bit(b.is_active), b.last_verified, b.next_available, bit(b.offers_online ?? null), b.created_at,
           b.updated_at,
         ],
       );
@@ -159,12 +160,12 @@ async function upsertDoctorFacilities(items: DoctorFacilitySync[]): Promise<void
       await db.runAsync(
         `INSERT OR REPLACE INTO doctor_facility
          (id,doctor_id,facility_id,is_primary,schedule,schedule_days,room,phone,
-          source_url,verified_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          source_url,verified_at,consultation_fee,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           l.id, l.doctor_id, l.facility_id, bit(l.is_primary), l.schedule,
           l.schedule_days ?? null, l.room ?? null, l.phone ?? null, l.source_url ?? null,
-          l.verified_at ?? null, l.updated_at,
+          l.verified_at ?? null, l.consultation_fee ?? null, l.updated_at,
         ],
       );
     }
@@ -255,10 +256,11 @@ export interface SyncResult {
  * Run an incremental sync. Pass `full: true` to ignore the stored cursor,
  * re-pull everything, and sweep away rows the server no longer has.
  *
- * The sweep exists because /sync carries no tombstones: a hard-deleted row was
- * simply never mentioned again, and since every write here is INSERT OR REPLACE,
- * it survived on the device forever. That is not hypothetical - pathology labs
- * deleted server-side were still listed in the app's Clinics tab.
+ * The sweep exists because /sync carried no tombstones before migration 014: a
+ * hard-deleted row was simply never mentioned again, and since every write here is
+ * INSERT OR REPLACE, it survived on the device forever. That is not hypothetical -
+ * pathology labs deleted server-side were still listed in the app's Clinics tab.
+ * Tombstones now cover new deletions; the sweep still clears the pre-014 ones.
  *
  * Mark-and-sweep rather than clear-then-refill: the ids seen during the pass are
  * collected, and the delete only runs once every collection has drained. A sync

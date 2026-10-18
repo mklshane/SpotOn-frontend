@@ -9,6 +9,7 @@ import { Gradients, Radius, Space, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
+import { TourTarget } from '@/lib/product-tour';
 
 type SF = IconName;
 type TabConfig = { label: string; icon: SF; iconActive?: SF; center?: boolean };
@@ -74,33 +75,34 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
 
         if (cfg.center) {
           return (
-            <Pressable
-              key={route.key}
-              onPress={() => router.push('/scan/body')}
-              style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-              accessibilityRole="button">
-              <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>
-                <View style={styles.centerCircle}>
-                  <LinearGradient
-                    colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
-                    start={{ x: 0.1, y: 0 }}
-                    end={{ x: 0.9, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
+            <TourTarget key={route.key} id="scanTab" style={styles.item}>
+              <Pressable
+                onPress={() => router.push('/scan/body')}
+                style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+                accessibilityRole="button">
+                <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>
+                  <View style={styles.centerCircle}>
+                    <LinearGradient
+                      colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
+                      start={{ x: 0.1, y: 0 }}
+                      end={{ x: 0.9, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
+                  </View>
                 </View>
-              </View>
-              <ThemedText
-                type="caption"
-                themeColor={focused ? 'brand' : 'muted'}
-                style={[styles.label, focused && styles.labelActive]}>
-                {cfg.label}
-              </ThemedText>
-            </Pressable>
+                <ThemedText
+                  type="caption"
+                  themeColor={focused ? 'brand' : 'muted'}
+                  style={[styles.label, focused && styles.labelActive]}>
+                  {cfg.label}
+                </ThemedText>
+              </Pressable>
+            </TourTarget>
           );
         }
 
-        return (
+        const tab = (
           <Pressable
             key={route.key}
             onPress={onPress}
@@ -119,6 +121,9 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
             </ThemedText>
           </Pressable>
         );
+        return route.name === 'directory' || route.name === 'learn' || route.name === 'profile'
+          ? <TourTarget key={route.key} id={route.name === 'directory' ? 'directoryTab' : route.name === 'learn' ? 'learnTab' : 'profileTab'} style={styles.item}>{tab}</TourTarget>
+          : tab;
       })}
     </View>
   );

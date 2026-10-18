@@ -147,6 +147,12 @@
           "color": "#FF8A4C",
           "defaultChannel": "self-check"
         }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": false
+        }
       ]
     ],
     "experiments": {

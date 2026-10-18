@@ -31,7 +31,11 @@ import {
   type CameraRef,
 } from "@/lib/maplibre";
 
+import type { DermSummary } from "@/lib/directory-core";
+
 import { ClinicPreviewCard } from "./ClinicPreviewCard";
+
+const NO_DERMS: DermSummary = { count: 0, daysMask: 0, bookable: 0 };
 
 export type ClinicMapProps = {
   facilities: (FacilitySync | FacilityWithDistance)[];
@@ -47,6 +51,8 @@ export type ClinicMapProps = {
   sheetPosition: SharedValue<number>;
   /** The active search query - a change here (once `facilities` catches up) re-centers the camera on the results. */
   query: string;
+  /** Linked-dermatologist count and clinic days per facility, for the pin preview. */
+  dermSummary?: Map<string, DermSummary>;
 };
 
 const SCREEN_W = Dimensions.get("window").width;
@@ -71,6 +77,7 @@ export function ClinicMap({
   onSelectFacility,
   sheetPosition,
   query,
+  dermSummary,
 }: ClinicMapProps) {
   useLocale();
   const theme = useTheme();
@@ -336,6 +343,7 @@ export function ClinicMap({
             <View style={{ width: Math.min(SCREEN_W - 32, 320) }}>
               <ClinicPreviewCard
                 facility={selectedFacility}
+                derm={dermSummary ? dermSummary.get(selectedFacility.id) ?? NO_DERMS : undefined}
                 onClose={() => onSelectFacility(null)}
               />
             </View>

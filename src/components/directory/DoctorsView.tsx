@@ -2,23 +2,27 @@ import { t, useLocale } from '@/lib/i18n';
 import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { FlatList, ScrollView, StyleSheet, View } from "react-native";
 
-import type { DoctorSync, FacilitySync } from "@/api/types";
+import type { DoctorSync } from "@/api/types";
+import { ThemedText } from "@/components/themed-text";
 import { Chip } from "@/components/ui/chip";
+import { Icon } from "@/components/ui/icon";
 import { ListState } from "@/components/ui/list-state";
-import { Space } from "@/constants/theme";
+import { Radius, Space } from "@/constants/theme";
 import {
-  distanceMeters,
+  doctorCardInfo,
   listDoctors,
-  listFacilities,
   nearestPracticeMeters,
-  type FacilityWithDistance,
+  type DoctorCardInfo,
 } from "@/data/repositories";
-import { useLocation } from "@/hooks/use-location";
+import type { Coords } from "@/hooks/use-location";
+import { useTheme } from "@/hooks/use-theme";
+import { WEEKEND_MASK } from "@/lib/concerns";
+import { todayScheduleBit } from "@/lib/directory-display";
 
-import { ClinicCard } from "./ClinicCard";
 import { DoctorCard } from "./DoctorCard";
+import { PdsAttribution } from "./PdsAttribution";
 
 export type DoctorsViewProps = {
   query: string;
@@ -38,14 +42,16 @@ export type DoctorsViewProps = {
   /** A directory download is in flight - an empty DB means "downloading", not "no results". */
   syncing?: boolean;
   onRetrySync?: () => void;
+  /** Owned by the directory screen so both tabs share one GPS request. */
+  coords: Coords | null;
 };
 
-type BookingMode = "doctors" | "clinics";
+type DoctorFilter = "all" | "booking" | "online" | "today" | "weekend";
 
 /**
- * The "Online Booking" tab: ONLY entries that can be booked online.
- * A Doctors/Clinics toggle switches between doctors with an active booking
- * link and clinics with their own online-booking page (facilities.booking_url).
+ * The "Dermatologists" tab: every listed (PDS board-certified) dermatologist, searchable by name.
+ * It used to be "Online Booking" and listed only the ~150 doctors with a booking link, so the
+ * other ~1,350 could not be found by name anywhere in the app. Booking is now a filter chip.
  */
 export function DoctorsView({
   query,
@@ -55,77 +61,87 @@ export function DoctorsView({
   syncFailed = false,
   syncing = false,
   onRetrySync,
+  coords,
 }: DoctorsViewProps) {
   useLocale();
-  const [mode, setMode] = useState<BookingMode>("doctors");
+  const theme = useTheme();
+  const [filter, setFilter] = useState<DoctorFilter>("all");
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
   const [doctorDistance, setDoctorDistance] = useState<Map<string, number>>(new Map());
-  const [clinics, setClinics] = useState<(FacilitySync | FacilityWithDistance)[] | null>(null);
+  const [info, setInfo] = useState<Map<string, DoctorCardInfo>>(new Map());
   const [error, setError] = useState(false);
-  const { coords } = useLocation();
+  const todayBit = todayScheduleBit();
 
   useEffect(() => {
     let cancelled = false;
-    // Error is cleared on the next SUCCESS (not up front in the effect body): a later failed
-    // query used to leave stale rows on screen with no message, since the error only rendered
-    // while the list was still loading.
-    // With a location fix, nearest first: read every bookable row (a few hundred), sort by
-    // distance, keep 100. Without one, the alphabetical first 100 as before.
-    if (mode === "doctors") {
-      (async () => {
-        const rows = await listDoctors({ q: query || undefined, hasBookingLink: true, limit: coords ? 5000 : 100 });
-        if (!coords) return { rows, dist: new Map<string, number>() };
-        const dist = await nearestPracticeMeters(coords.latitude, coords.longitude);
-        // Doctors with no mapped practice keep their alphabetical order, after the located ones.
-        const sorted = [...rows].sort(
-          (a, b) => (dist.get(a.id) ?? Infinity) - (dist.get(b.id) ?? Infinity),
-        );
-        return { rows: sorted.slice(0, 100), dist };
-      })()
-        .then(({ rows, dist }) => {
-          if (cancelled) return;
-          setError(false);
-          setDoctorDistance(dist);
-          setDoctors(rows);
-        })
-        .catch(() => !cancelled && setError(true));
-    } else {
-      (async () => {
-        const rows = await listFacilities({ q: query || undefined, hasBookingUrl: true, limit: coords ? 5000 : 100 });
-        if (!coords) return rows;
-        return rows
-          .map((f) => ({ ...f, distance_m: distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude) }))
-          .sort((a, b) => a.distance_m - b.distance_m)
-          .slice(0, 100);
-      })()
-        .then((rows) => {
-          if (cancelled) return;
-          setError(false);
-          setClinics(rows);
-        })
-        .catch(() => !cancelled && setError(true));
-    }
+    doctorCardInfo()
+      .then((m) => !cancelled && setInfo(m))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [mode, query, syncVersion, coords]);
+  }, [syncVersion]);
 
-  const loading = mode === "doctors" ? doctors === null : clinics === null;
-  const empty =
-    mode === "doctors" ? doctors?.length === 0 : clinics?.length === 0;
+  useEffect(() => {
+    let cancelled = false;
+    // Error is cleared on the next SUCCESS (not up front in the effect body), and shown as a
+    // banner when old rows are still on screen - it used to render only in the empty state.
+    // With a location fix, nearest practice first; doctors with no mapped practice follow, by name.
+    (async () => {
+      const rows = await listDoctors({
+        q: query || undefined,
+        hasBookingLink: filter === "booking" || undefined,
+        offersOnline: filter === "online" || undefined,
+        dayMask: filter === "today" ? todayBit : filter === "weekend" ? WEEKEND_MASK : undefined,
+        limit: null,
+      });
+      if (!coords) return { rows, dist: new Map<string, number>() };
+      const dist = await nearestPracticeMeters(coords.latitude, coords.longitude);
+      const sorted = [...rows].sort(
+        (a, b) => (dist.get(a.id) ?? Infinity) - (dist.get(b.id) ?? Infinity),
+      );
+      return { rows: sorted, dist };
+    })()
+      .then(({ rows, dist }) => {
+        if (cancelled) return;
+        setError(false);
+        setDoctorDistance(dist);
+        setDoctors(rows);
+      })
+      .catch(() => !cancelled && setError(true));
+    return () => {
+      cancelled = true;
+    };
+  }, [filter, query, syncVersion, coords, todayBit]);
 
-  const modeToggle = (
-    <View style={styles.modeRow}>
-      <Chip
-        label={t("Doctors")}
-        active={mode === "doctors"}
-        onPress={() => setMode("doctors")}
-      />
-      <Chip
-        label={t("Clinics")}
-        active={mode === "clinics"}
-        onPress={() => setMode("clinics")}
-      />
+  const loading = doctors === null;
+  const toggle = (next: DoctorFilter) => setFilter((f) => (f === next ? "all" : next));
+
+  const listHeader = (
+    <View style={styles.headerBlock}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Chip label={t("All")} active={filter === "all"} onPress={() => setFilter("all")} />
+        <Chip label={t("Books online")} active={filter === "booking"} onPress={() => toggle("booking")} />
+        <Chip label={t("Online consult")} active={filter === "online"} onPress={() => toggle("online")} />
+        <Chip label={t("In today")} active={filter === "today"} onPress={() => toggle("today")} />
+        <Chip label={t("Weekend clinic")} active={filter === "weekend"} onPress={() => toggle("weekend")} />
+      </ScrollView>
+      {doctors ? (
+        <ThemedText type="footnote" themeColor="textSecondary" accessibilityLiveRegion="polite">
+          {doctors.length === 1
+            ? t("1 dermatologist")
+            : t("{{count}} dermatologists", { count: doctors.length })}
+          {coords ? ` · ${t("nearest first")}` : ""}
+        </ThemedText>
+      ) : null}
+      {error && doctors?.length ? (
+        <View style={[styles.errorBanner, { backgroundColor: theme.elementBg }]}>
+          <Icon name="exclamationmark.triangle.fill" size={13} tintColor={theme.riskHigh} />
+          <ThemedText type="footnote" themeColor="textSecondary" style={styles.flex}>
+            {t("Couldn't refresh this list. Showing the last results.")}
+          </ThemedText>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -138,7 +154,7 @@ export function DoctorsView({
     />
   ) : loading || (syncing && !query) ? (
     <ListState kind="loading" title={t("Loading…")} />
-  ) : syncFailed && !query ? (
+  ) : syncFailed && !query && filter === "all" ? (
     <ListState
       kind="offline"
       title={t("Directory not downloaded yet")}
@@ -148,54 +164,40 @@ export function DoctorsView({
   ) : (
     <ListState
       kind="empty"
-      title={t("No online booking found")}
-      subtitle={t("Try a different search.")}
+      title={t("No dermatologists found")}
+      subtitle={filter !== "all" ? t("Try fewer filters.") : t("Try a different search.")}
+      action={filter !== "all" ? { label: t("Clear filters"), onPress: () => setFilter("all") } : undefined}
     />
   );
 
   return (
     <View style={styles.fill}>
       <View style={[styles.list, { paddingTop: topInset }]}>
-        {mode === "doctors" ? (
-          <FlatList
-            data={doctors ?? []}
-            keyExtractor={(d) => d.id}
-            renderItem={({ item }) => (
-              <DoctorCard
-                doctor={item}
-                distanceM={doctorDistance.get(item.id)}
-                onPress={() =>
-                  router.push({
-                    pathname: "/directory/doctor",
-                    params: { id: item.id },
-                  })
-                }
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            ListHeaderComponent={modeToggle}
-            ListEmptyComponent={empty || loading || error ? emptyState : null}
-          />
-        ) : (
-          <FlatList
-            data={clinics ?? []}
-            keyExtractor={(f) => f.id}
-            renderItem={({ item }) => (
-              <ClinicCard
-                facility={item}
-                onPress={() =>
-                  router.push({
-                    pathname: "/directory/clinic",
-                    params: { id: item.id },
-                  })
-                }
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            ListHeaderComponent={modeToggle}
-            ListEmptyComponent={empty || loading || error ? emptyState : null}
-          />
-        )}
+        <FlatList
+          data={doctors ?? []}
+          keyExtractor={(d) => d.id}
+          renderItem={({ item }) => (
+            <DoctorCard
+              doctor={item}
+              distanceM={doctorDistance.get(item.id)}
+              info={info.get(item.id)}
+              todayBit={todayBit}
+              onPress={() =>
+                router.push({
+                  pathname: "/directory/doctor",
+                  params: { id: item.id },
+                })
+              }
+            />
+          )}
+          contentContainerStyle={styles.listContent}
+          initialNumToRender={10}
+          windowSize={7}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={doctors?.length ? <PdsAttribution /> : null}
+          ListEmptyComponent={emptyState}
+        />
       </View>
 
       {/* Keep the shared segment/search header above the list in web hit-testing order. */}
@@ -208,5 +210,15 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   list: { flex: 1 },
   listContent: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
-  modeRow: { flexDirection: "row", gap: Space.sm, marginBottom: Space.base },
+  headerBlock: { gap: Space.sm, marginBottom: Space.base },
+  chips: { gap: Space.sm },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.sm,
+    borderRadius: Radius.md,
+    paddingVertical: Space.sm,
+    paddingHorizontal: Space.md,
+  },
+  flex: { flex: 1 },
 });

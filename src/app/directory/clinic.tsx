@@ -1,6 +1,5 @@
 import { t, useLocale } from '@/lib/i18n';
 import { Image } from "expo-image";
-import * as Linking from "expo-linking";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -9,38 +8,42 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { FacilitySync } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
+import { ListingActions } from "@/components/directory/ListingActions";
+import { PdsAttribution } from "@/components/directory/PdsAttribution";
 import { hasPhone, phoneText, usePhoneCall } from "@/components/directory/use-phone-call";
+import { ActionSheet } from "@/components/ui/action-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { IconCircle } from "@/components/ui/icon-circle";
 import { ListState } from "@/components/ui/list-state";
 import { Screen } from "@/components/ui/screen";
-import { Radius, Space } from "@/constants/theme";
+import { Gradients, Radius, Space } from "@/constants/theme";
 import {
   distanceMeters,
+  getBestBookingLink,
   getFacility,
   getFacilityDoctors,
   HOSPITAL_TYPES,
   type FacilityDoctor,
 } from "@/data/repositories";
-import { formatScheduleDays } from "@/lib/concerns";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useKnownLocation } from "@/hooks/use-location";
 import { useTheme } from "@/hooks/use-theme";
-import { compactSchedule, displayServices, scheduleDayBit, zonedDayMinutes } from "@/lib/directory-core";
+import { displayServices, isHospitalWithoutDerm, scheduleDayBit, zonedDayMinutes } from "@/lib/directory-core";
+import { roomText, scheduleText } from "@/lib/directory-display";
 import {
   facilityNameParts,
   formatDistance,
+  formatFee,
   formatFeeRange,
-  formatSchedule,
   formatShortDate,
   humanizeTag,
 } from "@/lib/format";
 import { formatHours, openChangeLabel, openStatus } from "@/lib/hours";
-import { normalizeUrl, openDirections, openWebsite } from "@/lib/links";
-
-const SUPPORT_EMAIL = "help.spoton@gmail.com";
+import { useAuth } from "@/lib/auth";
+import { normalizeUrl, openDirections, openWebsite, reportDirectoryIssue } from "@/lib/links";
+import { mapsLink, type ShareListing } from "@/lib/share-listing";
 
 /** facility_type is advisory; only the values a patient can act on get a badge. */
 const CARE_TYPE_LABEL: Record<string, string> = {
@@ -48,6 +51,26 @@ const CARE_TYPE_LABEL: Record<string, string> = {
   aesthetic: "Aesthetic only",
   mixed: "Medical & aesthetic",
 };
+
+/** What "Share" sends: where it is, how to reach it, and who is in when. */
+function clinicShare(facility: FacilitySync, doctors: FacilityDoctor[]): ShareListing {
+  const skinLine = hasPhone(facility.department_info?.phone) ? facility.department_info?.phone : null;
+  const phone = skinLine ?? (hasPhone(facility.phone) ? facility.phone : null);
+  const scheduled = doctors
+    .filter((d) => d.schedule || d.schedule_days)
+    .slice(0, 3)
+    .map((d) => `${d.doctor.name}: ${scheduleText(d.schedule, d.schedule_days) ?? ""}`.trim());
+  return {
+    title: facilityNameParts(facility).title ?? facility.name,
+    lines: [
+      facility.address,
+      phone ? t("Phone: {{phone}}", { phone: phoneText(phone) }) : null,
+      scheduled.length ? t("Dermatologists:") : null,
+      ...scheduled,
+    ],
+    mapsUrl: mapsLink(facility.google_maps_url, facility.latitude, facility.longitude),
+  };
+}
 
 /**
  * Clinic details. Ordered by what a patient deciding where to go needs, top to bottom:
@@ -99,7 +122,19 @@ export default function ClinicDetailScreen() {
     else router.replace("/(tabs)/directory");
   }, []);
 
-  const showHero = !loading && !error && !!facility?.photo_url;
+  // Every loaded clinic gets the hero layout: its photo, or a branded placeholder for the ~175
+  // places Google has no photo of - so back/save/share sit in the same spot on every page.
+  const showHero = !loading && !error && !!facility;
+  const actions = facility ? (
+    <ListingActions
+      kind="facility"
+      itemId={facility.id}
+      name={facilityNameParts(facility).title ?? facility.name}
+      subtitle={[facility.city, facility.province].filter(Boolean).join(", ") || null}
+      share={clinicShare(facility, doctors)}
+      onDark={showHero}
+    />
+  ) : null;
 
   return (
     <Screen padded={false} edges={showHero ? ["bottom"] : ["top", "bottom"]}>
@@ -116,7 +151,7 @@ export default function ClinicDetailScreen() {
           </Pressable>
           <ThemedText type="headline" themeColor="textSecondary">
             {t("Clinic")}</ThemedText>
-          <View style={styles.headerSpacer} />
+          {actions ?? <View style={styles.headerSpacer} />}
         </View>
       ) : null}
 
@@ -148,7 +183,7 @@ export default function ClinicDetailScreen() {
               ? distanceMeters(coords.latitude, coords.longitude, facility.latitude, facility.longitude)
               : null
           }
-          onCall={() => phone.call(facility.phone)}
+          onCall={phone.call}
         />
       )}
 
@@ -164,6 +199,7 @@ export default function ClinicDetailScreen() {
           <Icon name="chevron.left" tintColor="#FFFFFF" size={20} />
         </Pressable>
       ) : null}
+      {showHero ? <View style={[styles.heroActions, { top: insets.top + Space.sm }]}>{actions}</View> : null}
       {phone.sheet}
     </Screen>
   );
@@ -184,9 +220,10 @@ function ClinicBody({
   topInset: number;
   isOnline: boolean;
   distance: number | null;
-  onCall: () => void;
+  onCall: (phone: string | null | undefined) => void;
 }) {
   const theme = useTheme();
+  const signedIn = !!useAuth().user;
   const status = openStatus(facility.weekday_hours, facility.weekend_hours);
   const change = openChangeLabel(status);
   const feeRange = formatFeeRange(facility.fee_min, facility.fee_max);
@@ -200,7 +237,10 @@ function ClinicBody({
   const dept = facility.department_info;
   const hasDeptInfo = !!(dept && (dept.has_derm_department || dept.department_name || dept.opd_notes));
   const isHospital = (HOSPITAL_TYPES as readonly string[]).includes(facility.type);
-  const noDermHere = isHospital && !doctors.length;
+  // Same rule as the list card and map preview (the doctors list is the count here).
+  const noDermHere = isHospitalWithoutDerm(facility, doctors.length);
+  // The skin clinic's own line (cited hospital research) beats the hospital trunk line.
+  const skinClinicPhone = hasPhone(dept?.phone) ? dept?.phone ?? null : null;
   // Derm-relevant services first: this is a skin-check app, and "Dermatology" buried after
   // "Dental" and "Diagnostics" in an alphabetical facet list is the wrong emphasis. Hospital-wide
   // tags (oncology, histopathology) and anything on a hospital with no derm are not shown.
@@ -223,17 +263,50 @@ function ClinicBody({
   const summary: string[] = [];
   if (status.open != null) summary.push(change ? `${status.open ? t("Open") : t("Closed")} · ${change}` : status.open ? t("Open now") : t("Closed"));
   if (distance != null) summary.push(formatDistance(distance));
-  if (facility.google_rating != null) summary.push(`★ ${facility.google_rating.toFixed(1)} ${t("on Google")}`);
+  if (facility.google_rating != null) summary.push(t("★ {{rating}} on Google", { rating: facility.google_rating.toFixed(1) }));
 
-  const reportIssue = () => {
-    const subject = encodeURIComponent(`Incorrect clinic info: ${facility.name}`);
-    const body = encodeURIComponent(`Clinic ID: ${facility.id}\n\nWhat is wrong:\n`);
-    Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`).catch(() => {});
+  // The clinic's own booking page when it has a working one (43_verify_booking_urls); otherwise
+  // its dermatologists who can be booked online - one opens straight away, several get a picker.
+  const bookableDoctors = orderedDoctors.filter((d) => d.bookable);
+  const [bookPickerOpen, setBookPickerOpen] = useState(false);
+  const bookDoctor = (doctorId: string) =>
+    getBestBookingLink(doctorId)
+      .then((link) => (link ? openWebsite(link.url) : router.push({ pathname: "/directory/doctor", params: { id: doctorId } })))
+      .catch(() => {});
+  const onBook = () => {
+    if (bookingUrl) openWebsite(bookingUrl);
+    else if (bookableDoctors.length === 1) bookDoctor(bookableDoctors[0].doctor.id);
+    else setBookPickerOpen(true);
   };
+
+  const reportIssue = () =>
+    signedIn
+      ? router.push({ pathname: "/directory/report", params: { kind: "facility", id: facility.id, name: facility.name } })
+      : reportDirectoryIssue("clinic", facility.name, facility.id);
 
   return (
     <ScrollView contentContainerStyle={styles.body}>
-      {showHero ? (
+      {showHero && !facility.photo_url ? (
+        <LinearGradient
+          colors={Gradients.sunsetSoft.colors}
+          locations={Gradients.sunsetSoft.locations}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.heroWrap, styles.placeholderHero, { paddingTop: topInset }]}
+        >
+          <IconCircle icon={isHospital ? "cross.case.fill" : "building.2.fill"} variant="gradient" size={72} />
+          <ThemedText type="subhead" style={[styles.placeholderLabel, { color: theme.brandPressed }]}>
+            {humanizeTag(facility.type)}
+          </ThemedText>
+          {/* The back/save/share buttons are white on a dark disc - keep them readable here too. */}
+          <LinearGradient
+            colors={["rgba(33,26,21,0.18)", "rgba(33,26,21,0)"]}
+            style={[styles.heroScrim, { height: topInset + 72 }]}
+            pointerEvents="none"
+          />
+        </LinearGradient>
+      ) : null}
+      {showHero && facility.photo_url ? (
         <View style={styles.heroWrap}>
           <Image
             source={{ uri: facility.photo_url as string }}
@@ -251,7 +324,7 @@ function ClinicBody({
           {facility.photo_attribution ? (
             <View style={styles.attributionWrap}>
               <ThemedText type="caption" style={styles.attributionText}>
-                {t("Photo:")} {facility.photo_attribution}
+                {t("Photo: {{name}}", { name: facility.photo_attribution })}
               </ThemedText>
             </View>
           ) : null}
@@ -270,7 +343,11 @@ function ClinicBody({
           <View style={styles.badges}>
             <Badge label={humanizeTag(facility.type)} tone="brand" />
             {careType ? <Badge label={t(careType)} /> : null}
-            {facility.has_philhealth ? <Badge label={t("PhilHealth")} /> : null}
+            {/* Only a positive finding is shown: PhilHealth accredits hospitals, not private derm
+                clinics, so "unknown" must never read as "not covered". */}
+            {facility.has_philhealth ? (
+              <Badge label={isHospital ? t("PhilHealth-accredited hospital") : t("PhilHealth-accredited")} />
+            ) : null}
             {facility.pds_skin_cancer_center ? (
               <Badge label={t("PDS dermatology training hospital")} tone="brand" />
             ) : null}
@@ -294,18 +371,36 @@ function ClinicBody({
 
         {/* 2 · Actions, right under the title */}
         <View style={styles.actionRow}>
-          {bookingUrl ? (
+          {bookingUrl || bookableDoctors.length ? (
             <ActionTile
               icon="calendar"
               label={t("Book")}
               primary
               disabled={!isOnline}
-              hint={t("Opens the booking page in your browser")}
-              onPress={() => openWebsite(bookingUrl)}
+              hint={
+                bookingUrl
+                  ? t("Opens the booking page in your browser")
+                  : t("Book online with a dermatologist who practises here")
+              }
+              onPress={onBook}
+            />
+          ) : null}
+          {skinClinicPhone ? (
+            <ActionTile
+              icon="phone.fill"
+              label={t("Skin clinic")}
+              hint={t("Calls the dermatology clinic's own line")}
+              primary={!bookingUrl && !bookableDoctors.length}
+              onPress={() => onCall(skinClinicPhone)}
             />
           ) : null}
           {hasPhone(facility.phone) ? (
-            <ActionTile icon="phone.fill" label={t("Call")} primary={!bookingUrl} onPress={onCall} />
+            <ActionTile
+              icon="phone.fill"
+              label={skinClinicPhone ? t("Hospital") : t("Call")}
+              primary={!bookingUrl && !bookableDoctors.length && !skinClinicPhone}
+              onPress={() => onCall(facility.phone)}
+            />
           ) : null}
           <ActionTile
             icon="arrow.triangle.turn.up.right.diamond.fill"
@@ -455,7 +550,12 @@ function ClinicBody({
                 key={d.doctor.id}
                 onPress={() => router.push({ pathname: "/directory/doctor", params: { id: d.doctor.id } })}
                 accessibilityRole="button"
-                accessibilityLabel={[d.doctor.name, d.schedule, d.bookable ? t("Books online") : null]
+                accessibilityLabel={[
+                  d.doctor.name,
+                  (d.schedule_days ?? 0) & todayBit ? t("In today") : null,
+                  scheduleText(d.schedule, d.schedule_days),
+                  d.bookable ? t("Books online") : null,
+                ]
                   .filter(Boolean)
                   .join(", ")}
               >
@@ -475,14 +575,21 @@ function ClinicBody({
                     ) : null}
                     {d.schedule || d.schedule_days ? (
                       <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={3}>
-                        {d.schedule
-                          ? compactSchedule(d.schedule) ?? formatSchedule(d.schedule)
-                          : t(formatScheduleDays(d.schedule_days) ?? "")}
+                        {scheduleText(d.schedule, d.schedule_days)}
+                      </ThemedText>
+                    ) : null}
+                    {d.verified_at && (d.schedule || d.schedule_days) ? (
+                      <ThemedText type="caption" themeColor="muted">
+                        {t("Schedule checked {{date}}", { date: formatShortDate(d.verified_at) })}
                       </ThemedText>
                     ) : null}
                     {d.room || hasPhone(d.phone) ? (
                       <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-                        {[d.room ? t("Room {{room}}", { room: d.room }) : null, hasPhone(d.phone) ? phoneText(d.phone) : null]
+                        {[
+                          d.room ? roomText(d.room) : null,
+                          hasPhone(d.phone) ? phoneText(d.phone) : null,
+                          d.consultation_fee != null ? t("{{fee}} consult", { fee: formatFee(d.consultation_fee) }) : null,
+                        ]
                           .filter(Boolean)
                           .join(" · ")}
                       </ThemedText>
@@ -511,7 +618,7 @@ function ClinicBody({
               <View style={styles.infoRow}>
                 <IconCircle icon="banknote" variant="tint" size={32} />
                 <ThemedText type="callout" style={styles.flex}>
-                  {t("Consultation fee")} {feeRange}
+                  {t("Consultation fee {{fee}}", { fee: feeRange })}
                 </ThemedText>
               </View>
             ) : null}
@@ -533,8 +640,20 @@ function ClinicBody({
               {t("Report incorrect info")}
             </ThemedText>
           </Pressable>
+          <PdsAttribution style={styles.attribution} />
         </View>
       </View>
+      <ActionSheet
+        visible={bookPickerOpen}
+        title={t("Book with a dermatologist here")}
+        onClose={() => setBookPickerOpen(false)}
+        options={bookableDoctors.map((d) => ({
+          key: d.doctor.id,
+          label: d.doctor.name,
+          icon: "calendar" as const,
+          onPress: () => bookDoctor(d.doctor.id),
+        }))}
+      />
     </ScrollView>
   );
 }
@@ -572,7 +691,7 @@ function ActionTile({
       ]}
     >
       <Icon name={icon} size={20} tintColor={fg} />
-      <ThemedText type="footnote" style={[styles.tileLabel, { color: primary ? theme.onBrand : theme.text }]} numberOfLines={1}>
+      <ThemedText type="footnote" style={[styles.tileLabel, { color: primary ? theme.onBrand : theme.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
         {label}
       </ThemedText>
     </Pressable>
@@ -628,7 +747,10 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: Radius.xl,
   },
   heroPhoto: { width: "100%", height: "100%" },
+  placeholderHero: { height: 200, alignItems: "center", justifyContent: "center", gap: Space.sm },
+  placeholderLabel: { fontWeight: "600" },
   heroScrim: { position: "absolute", top: 0, left: 0, right: 0 },
+  heroActions: { position: "absolute", right: Space.base },
   heroBackBtn: {
     position: "absolute",
     left: Space.base,
@@ -689,4 +811,5 @@ const styles = StyleSheet.create({
     gap: Space.sm,
   },
   reportLink: { fontWeight: "600" },
+  attribution: { paddingVertical: 0 },
 });

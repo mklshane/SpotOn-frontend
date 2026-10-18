@@ -27,12 +27,27 @@ export type ChipProps = {
    * brand when selected - for chip rails that sit directly on a page.
    */
   variant?: 'tint' | 'solid';
+  /** `sm` (36pt, +4pt hit slop) for dense filter rails; `md` (44pt) elsewhere. */
+  size?: 'md' | 'sm';
+  /** Trailing glyph, e.g. an ✕ on a removable chip. */
+  trailingIcon?: IconName;
+  accessibilityLabel?: string;
   onPress?: () => void;
   style?: ViewStyle | ViewStyle[];
 };
 
 /** Toggleable filter chip. Selection eases between colors rather than snapping. */
-export function Chip({ label, active = false, icon, variant = 'tint', onPress, style }: ChipProps) {
+export function Chip({
+  label,
+  active = false,
+  icon,
+  variant = 'tint',
+  size = 'md',
+  trailingIcon,
+  accessibilityLabel,
+  onPress,
+  style,
+}: ChipProps) {
   const theme = useTheme();
   const solid = variant === 'solid';
 
@@ -74,15 +89,20 @@ export function Chip({ label, active = false, icon, variant = 'tint', onPress, s
       onPressOut={() => held.set(withSpring(0, spring))}
       // The solid rail sits on the page background, where an unselected white
       // chip would otherwise disappear into the warm off-white behind it.
-      style={[styles.chip, solid && Elevation.sm, containerStyle, style]}
+      hitSlop={size === 'sm' ? 4 : undefined}
+      style={[styles.chip, size === 'sm' && styles.chipSm, solid && Elevation.sm, containerStyle, style]}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ selected: active }}>
       {/* The glyph switches color outright: it is small enough that easing it
           reads as a lag rather than a transition. */}
       {icon ? (
         <Icon name={icon} size={14} tintColor={active ? activeFg : idleFg} style={styles.icon} />
       ) : null}
-      <Animated.Text style={[styles.label, solid && styles.labelSolid, labelStyle]}>{label}</Animated.Text>
+      <Animated.Text style={[styles.label, (solid || size === 'sm') && styles.labelSolid, labelStyle]}>{label}</Animated.Text>
+      {trailingIcon ? (
+        <Icon name={trailingIcon} size={12} tintColor={active ? activeFg : idleFg} style={styles.trailing} />
+      ) : null}
     </AnimatedPressable>
   );
 }
@@ -95,7 +115,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.base,
     borderRadius: Radius.pill,
   },
+  chipSm: { height: 36, paddingHorizontal: Space.md },
   icon: { marginRight: Space.xs },
+  trailing: { marginLeft: Space.xs },
   label: { ...Type.subhead },
   labelSolid: { fontWeight: '600' },
 });

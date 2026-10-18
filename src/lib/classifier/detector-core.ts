@@ -20,6 +20,45 @@ export type LesionBox = { cx: number; cy: number; bw: number; bh: number; conf: 
 /** Same shape as preprocess.ts CropBox (centre + half-side, normalized to the short edge). */
 export type SquareCrop = { cx: number; cy: number; half: number };
 
+/** Output layout of the YOLO head, as lesion-model.ts `readLayout` reports it. */
+export type YoloLayout = { chMajor: boolean; channels: number; anchors: number; numClasses: number };
+
+/**
+ * Every anchor scoring at least `minConf`, as normalized boxes. YOLOv8/11 head: box in channels
+ * 0..3 (cx, cy, w, h normalized), class scores in 4..; either memory layout.
+ */
+export function decodeDetections(out: Float32Array, layout: YoloLayout, minConf = DET_CONF): LesionBox[] {
+  const { chMajor, channels, anchors, numClasses } = layout;
+  const cands: LesionBox[] = [];
+  if (out.length < anchors * channels) return cands;
+  for (let i = 0; i < anchors; i++) {
+    let score = 0;
+    for (let k = 0; k < numClasses; k++) {
+      const v = out[chMajor ? (4 + k) * anchors + i : i * channels + 4 + k];
+      if (v > score) score = v;
+    }
+    if (score < minConf) continue;
+    cands.push({
+      cx: out[chMajor ? i : i * channels],
+      cy: out[chMajor ? anchors + i : i * channels + 1],
+      bw: out[chMajor ? 2 * anchors + i : i * channels + 2],
+      bh: out[chMajor ? 3 * anchors + i : i * channels + 3],
+      conf: score,
+    });
+  }
+  return cands;
+}
+
+/** The most confident box that is not frame-sized (see FULL_FRAME), or null. */
+export function mostConfidentBox(cands: readonly LesionBox[]): LesionBox | null {
+  let best: LesionBox | null = null;
+  for (const c of cands) {
+    if (c.bw >= FULL_FRAME && c.bh >= FULL_FRAME) continue;
+    if (!best || c.conf > best.conf) best = c;
+  }
+  return best;
+}
+
 /**
  * Pick the lesion box from above-threshold candidates: drop full-frame boxes (unless that is all
  * there is), keep the TOP_K most confident, and return the one nearest the frame centre.

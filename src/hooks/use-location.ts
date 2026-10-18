@@ -1,21 +1,29 @@
+import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export type Coords = { latitude: number; longitude: number };
 export type LocationStatus = 'idle' | 'granted' | 'denied';
 
-/** Foreground GPS fix. Works fully offline - only map tiles need connectivity. */
-export function useLocation(): { coords: Coords | null; status: LocationStatus } {
+/**
+ * Foreground GPS fix. Works fully offline - only map tiles need connectivity.
+ * `retry` asks again (or opens Settings when the OS won't show the prompt any more), for a
+ * "Turn on location" action on screens that sort by distance.
+ */
+export function useLocation(): { coords: Coords | null; status: LocationStatus; retry: () => void } {
   const [coords, setCoords] = useState<Coords | null>(null);
   const [status, setStatus] = useState<LocationStatus>('idle');
+  const [canAskAgain, setCanAskAgain] = useState(true);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const { status: permission } = await Location.requestForegroundPermissionsAsync();
+      const res = await Location.requestForegroundPermissionsAsync();
       if (cancelled) return;
-      if (permission !== 'granted') {
+      setCanAskAgain(res.canAskAgain !== false);
+      if (res.status !== 'granted') {
         setStatus('denied');
         return;
       }
@@ -33,9 +41,18 @@ export function useLocation(): { coords: Coords | null; status: LocationStatus }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
-  return { coords, status };
+  const retry = useCallback(() => {
+    if (status === 'denied' && !canAskAgain) {
+      // Throws synchronously on web, where there is no Settings app to open.
+      try {
+        Linking.openSettings().catch(() => {});
+      } catch {}
+    } else setAttempt((a) => a + 1);
+  }, [status, canAskAgain]);
+
+  return { coords, status, retry };
 }
 
 /**

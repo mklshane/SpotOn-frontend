@@ -18,7 +18,7 @@ execFileSync(
   ['src/lib/directory-core.ts', 'src/lib/concerns.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { splitPhones, toDialable, formatPhone, compactSchedule, scheduleDayBit, displayServices, looksLikePlaceName, normalizeUrl, parseHHMM, openStatusAt, haversineMeters } = await import(
+const { splitPhones, toDialable, formatPhone, compactSchedule, scheduleDayBit, displayServices, looksLikePlaceName, normalizeUrl, parseHHMM, openStatusAt, haversineMeters, foldSearch, likeContains, isHospitalWithoutDerm, isHospitalType, summarizeDerms } = await import(
   pathToFileURL(join(out, 'directory-core.js')).href
 );
 
@@ -124,6 +124,31 @@ check('PDS center hospital is tier 0', dermTier({ type: 'government_hospital', d
 check('derm dept, no names is tier 1', dermTier({ type: 'medical_center', derm_status: 'derm_dept_no_names' }) === 1);
 check('no derm found is tier 2', dermTier({ type: 'private_hospital', derm_status: 'no_derm_found' }) === 2);
 check('unchecked hospital is tier 2', dermTier({ type: 'government_hospital', derm_status: null }) === 2);
+
+// ---- search folding ----
+check('ñ folds to n', foldSearch('Las Piñas') === 'las pinas');
+check('accents fold', foldSearch(' José Ríñón ') === 'jose rinon');
+check('LIKE wildcards escaped', likeContains('50%_off') === '%50\\%\\_off%');
+check('backslash escaped', likeContains('a\\b') === '%a\\\\b%');
+
+// ---- one "hospital without derm" rule ----
+check('hospital with 0 linked derms', isHospitalWithoutDerm({ type: 'private_hospital', derm_status: 'has_derm_doctors' }, 0));
+check('hospital with linked derm', !isHospitalWithoutDerm({ type: 'private_hospital', derm_status: 'no_derm_found' }, 2));
+check('no count falls back to derm_status', isHospitalWithoutDerm({ type: 'government_hospital', derm_status: 'unchecked' }) && !isHospitalWithoutDerm({ type: 'government_hospital', derm_status: 'has_derm_doctors' }));
+check('clinic is never "hospital without derm"', !isHospitalWithoutDerm({ type: 'dermatology_clinic' }, 0));
+check('hospital types', isHospitalType('medical_center') && !isHospitalType('dermatology_clinic') && !isHospitalType(null));
+
+// ---- derm summary per facility ----
+const sum = summarizeDerms([
+  { facility_id: 'a', schedule_days: 2, bookable: 1 },
+  { facility_id: 'a', schedule_days: 32, bookable: 0 },
+  { facility_id: 'a', schedule_days: null },
+  { facility_id: 'b', schedule_days: null },
+]);
+check('summary counts bookable derms', sum.get('a').bookable === 1 && sum.get('b').bookable === 0);
+check('summary counts derms', sum.get('a').count === 3 && sum.get('b').count === 1);
+check('summary unions days (Tue|Sat)', sum.get('a').daysMask === (2 | 32) && sum.get('b').daysMask === 0);
+check('Saturday in today mask', (sum.get('a').daysMask & scheduleDayBit(6)) !== 0 && (sum.get('a').daysMask & scheduleDayBit(1)) === 0);
 
 console.log(`directory core: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

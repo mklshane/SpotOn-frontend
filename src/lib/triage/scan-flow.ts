@@ -54,6 +54,22 @@ export const SKIN_GATE_MIN = 0.5;
 /** pFace at or above this = a whole face, which gets its own "move closer" message. */
 export const SKIN_GATE_FACE_MAX = 0.5;
 
+/**
+ * pSkin at or above this lets the learned gate overrule the hand-built colour-skin rule (2026-10-18).
+ *
+ * Pale skin under a phone flash comes out neutral-to-bluish grey: the reported photos had mean cr
+ * 125-133 (neutral grey is 128) and scored 5-12% skin-coloured pixels against SKIN_MIN 0.30. No
+ * colour threshold can pass them without passing a grey wall too (see SKIN_CR_MIN), so the colour
+ * rule stays a veto only when the model is unsure. Scenes and walls are the model's job; the
+ * colour rule never caught anything the model passed with confidence on the held-out sets.
+ */
+export const SKIN_GATE_OVERRULES_COLOUR = 0.85;
+
+/** The colour-skin term as the gate uses it: the pixel rule, unless the model is confident it is skin. */
+export function colourSkinOk(coverageOk: boolean, pSkin: number | null | undefined): boolean {
+  return coverageOk || (pSkin ?? 0) >= SKIN_GATE_OVERRULES_COLOUR;
+}
+
 /** The skin gate's softmax -> a verdict. Face is checked first: its message is the actionable one. */
 export function skinGateVerdict(p: { skin: number; notSkin: number; face: number }): SkinGateVerdict {
   if (p.face >= SKIN_GATE_FACE_MAX) return 'face';

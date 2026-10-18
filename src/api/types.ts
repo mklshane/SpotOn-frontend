@@ -84,6 +84,7 @@ export interface DoctorFacilitySync {
   phone?: string | null; // clinic direct line
   source_url?: string | null;
   verified_at?: string | null;
+  consultation_fee?: number | null; // PHP, this doctor at this clinic (018)
   updated_at: string;
   deleted_at?: string | null; // tombstone: purge locally (014)
 }
@@ -101,6 +102,7 @@ export interface BookingLinkSync {
   is_active: boolean;
   last_verified: string | null;
   next_available: string | null; // first bookable slot (ISO 8601)
+  offers_online?: boolean | null; // online/video consult; null = unknown (018)
   created_at: string;
   updated_at: string | null; // change timestamp (server cursor)
   deleted_at?: string | null; // tombstone: purge locally (014)

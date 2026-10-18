@@ -54,17 +54,19 @@ export default function CompleteProfileScreen() {
 
   async function handleSubmit() {
     setFormError(null);
-    if (!validate() || !dob || !sex) return;
+    if (!validate() || !dob || !sex || !user) return;
     setSubmitting(true);
     try {
-      const { user: saved } = await saveProfile({
+      const result = await saveProfile({
         dateOfBirth: dob,
         sex,
         phone: hasPhone || !phone.trim() ? undefined : normalizePhilippinePhone(phone) ?? undefined,
-      });
-      // saveProfile re-fetches /me; keep the auth context and its account-scoped cache aligned with
-      // the server before leaving setup. Previously the stale registration response stayed live.
-      setUser(saved);
+      }, user);
+      setUser(result.user);
+      if (result.status === 'rejected') {
+        setFormError(result.error || "Couldn't save your details. Please try again.");
+        return;
+      }
       router.replace('/home');
     } catch {
       setFormError("Couldn't save your details. Check your connection and try again.");

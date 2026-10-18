@@ -18,7 +18,9 @@ import { Radius, Space } from "@/constants/theme";
 import { needsInitialSync, needsReconcile, runSync } from "@/data/sync";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useLocation } from "@/hooks/use-location";
 import { isConcern } from "@/lib/concerns";
+import { flushPendingReports } from "@/lib/directory-reports";
 import { useTheme } from "@/hooks/use-theme";
 
 export default function DirectoryScreen() {
@@ -27,18 +29,25 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { isOnline } = useConnectivity();
 
-  const params = useLocalSearchParams<{ segment?: string; concern?: string }>();
-  // /directory?concern=skin_cancer_mole_check - a scan result opens the directory pre-filtered.
+  // One GPS request for both tabs (each used to run its own).
+  const location = useLocation();
+  const params = useLocalSearchParams<{ segment?: string; concern?: string; at?: string }>();
+  // /directory?concern=skin_cancer_mole_check&at=<ms> - a scan result opens the directory
+  // pre-filtered; `at` differs per visit so the concern re-applies even after being cleared.
   const initialConcern = isConcern(params.concern) ? params.concern : null;
   const [segment, setSegment] = useState<DirectorySegment>("clinics");
   const [query, setQuery] = useState("");
 
-  // Allow deep links like /directory?segment=doctors to land on a segment.
-  useEffect(() => {
-    if (params.segment === "doctors" || params.segment === "clinics")
-      setSegment(params.segment);
+  // Deep links like /directory?segment=doctors land on a segment; a concern link (scan result)
+  // lands on Clinics. Keyed on the link's `at` nonce too, so a second scan switches back even if
+  // the user moved to the Dermatologists tab. Adjusted during render, not in an effect.
+  const linkKey = `${params.segment ?? ""}:${initialConcern ?? ""}:${params.at ?? ""}`;
+  const [appliedLink, setAppliedLink] = useState("::");
+  if (linkKey !== appliedLink) {
+    setAppliedLink(linkKey);
+    if (params.segment === "doctors" || params.segment === "clinics") setSegment(params.segment);
     else if (initialConcern) setSegment("clinics");
-  }, [params.segment, initialConcern]);
+  }
   const debouncedQuery = useDebouncedValue(query, 250);
   const [overlayH, setOverlayH] = useState(0);
 
@@ -58,6 +67,8 @@ export default function DirectoryScreen() {
     setSyncing(true);
     const full = (await needsInitialSync()) || (await needsReconcile());
     return runSync(full ? { full: true } : undefined)
+      // A sync that reached the server means we're online: send reports queued while offline.
+      .then(() => flushPendingReports().catch(() => 0))
       .catch((err) => {
         // First-ever / reconcile passes are full syncs: if this fails offline-first screens fall
         // back to an empty local DB, so it has to reach the UI, not just the console.
@@ -74,10 +85,12 @@ export default function DirectoryScreen() {
     // Initial sync: plain promise chain (not startSync) so no state is set synchronously here.
     (async () => {
       const full = (await needsInitialSync()) || (await needsReconcile());
-      await runSync(full ? { full: true } : undefined).catch((err) => {
-        console.warn("[directory] sync failed", err);
-        setSyncFailed(true);
-      });
+      await runSync(full ? { full: true } : undefined)
+        .then(() => flushPendingReports().catch(() => 0))
+        .catch((err) => {
+          console.warn("[directory] sync failed", err);
+          setSyncFailed(true);
+        });
       setSyncing(false);
       synced();
     })();
@@ -113,7 +126,7 @@ export default function DirectoryScreen() {
         value={query}
         onChangeText={setQuery}
         placeholder={
-          segment === "clinics" ? t("Search clinics or area…") : t("Search doctors…")
+          segment === "clinics" ? t("Search clinic, city or doctor…") : t("Search dermatologists…")
         }
         elevation="md"
       />
@@ -153,6 +166,10 @@ export default function DirectoryScreen() {
           topInset={overlayH}
           header={header}
           initialConcern={initialConcern}
+          initialConcernKey={params.at ?? null}
+          coords={location.coords}
+          locationStatus={location.status}
+          onRequestLocation={location.retry}
         />
       </View>
       <View
@@ -169,6 +186,7 @@ export default function DirectoryScreen() {
           syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
+          coords={location.coords}
         />
       </View>
       </View>

@@ -2,6 +2,7 @@
 export const STORAGE_KEYS = {
   hasSeenOnboarding: 'has_seen_onboarding',
   /** The remaining keys are passed through accountStorageKey before persistence. */
+  productTourStatus: 'product_tour_status',
   reengagementRemindersEnabled: 'reengagement_reminders_enabled',
   selfCheckReminderDueAt: 'self_check_reminder_due_at',
   /** Identifier of the OS-scheduled notification, so it can be cancelled or checked for later. */

@@ -1,5 +1,5 @@
 import { t, useLocale } from "@/lib/i18n";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
   StyleSheet,
@@ -44,6 +44,8 @@ export function IdentifierField({
   useLocale();
   const theme = useTheme();
   const inputRef = useRef<TextInput>(null);
+  const switchingModeRef = useRef(false);
+  const currentModeRef = useRef(mode);
   const [focused, setFocused] = useState(false);
   const isPhone = mode === "phone";
   const borderColor = error
@@ -51,6 +53,24 @@ export function IdentifierField({
     : focused
       ? theme.brand
       : theme.hairline;
+
+  useEffect(() => {
+    currentModeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
+    if (!switchingModeRef.current) return;
+    // The keyed input has mounted with its new native keyboard type. Give iOS and
+    // Android one layout pass after blurring the old input before requesting focus.
+    const timer = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(timer);
+  }, [mode]);
+
+  function handleToggleMode() {
+    switchingModeRef.current = true;
+    inputRef.current?.blur();
+    onToggleMode();
+  }
 
   return (
     <View style={containerStyle}>
@@ -77,6 +97,7 @@ export function IdentifierField({
           </>
         ) : null}
         <TextInput
+          key={mode}
           ref={inputRef}
           style={[styles.input, { color: theme.text }]}
           placeholder={isPhone ? "912 345 6789" : "you@email.com"}
@@ -110,8 +131,14 @@ export function IdentifierField({
               event.preventDefault();
             }
           }}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            switchingModeRef.current = false;
+            setFocused(true);
+          }}
           onBlur={() => {
+            // Ignore blur from the input that was just replaced. Its old value
+            // should not be validated as the newly selected identifier type.
+            if (switchingModeRef.current || mode !== currentModeRef.current) return;
             setFocused(false);
             onBlur?.();
           }}
@@ -132,7 +159,7 @@ export function IdentifierField({
         )}
         <Pressable
           hitSlop={8}
-          onPress={onToggleMode}
+          onPress={handleToggleMode}
           accessibilityRole="button"
         >
           <ThemedText type="footnote" themeColor="brand" style={styles.toggle}>

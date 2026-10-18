@@ -26,7 +26,7 @@ export type SkinGateModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 
 // Metro resolves non-JS assets through require(); see lesion-model.ts.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const MODEL_ASSET = require('../../assets/models/skin_gate_v1.tflite');
+const MODEL_ASSET = require('../../assets/models/skin_gate_v2.tflite');
 
 let modelPromise: Promise<SkinGateModel> | null = null;
 
@@ -86,6 +86,24 @@ let queue: Promise<unknown> = Promise.resolve();
 /** Class probabilities for a still (crop.tsx's square 1024² output). Throws if the model can't run. */
 export function classifySkin(uri: string): Promise<SkinGateProbs> {
   const run = queue.catch(() => {}).then(() => runSkinGate(uri));
+  queue = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Class probabilities for a ready-made input tensor (RGB 0..1, the model's square size). For the
+ * multi-spot picker (classifier/lesion-candidates.ts), which cuts its crops from one decode of the
+ * photo. Queued with classifySkin on the one interpreter. A malformed output reads as skin, which
+ * keeps the spot - there the gate only ever removes, so failing open is the safe side.
+ */
+export function skinGateOfTensor(tensor: Float32Array): Promise<SkinGateProbs> {
+  const run = queue.catch(() => {}).then(async () => {
+    const model = await getSkinGateModel();
+    const [out] = await model.run([tensor.buffer as ArrayBuffer]);
+    const p = new Float32Array(out as ArrayBuffer);
+    if (p.length < 3 || ![p[0], p[1], p[2]].every(Number.isFinite)) return { skin: 1, notSkin: 0, face: 0 };
+    return { skin: p[0], notSkin: p[1], face: p[2] };
+  });
   queue = run.catch(() => {});
   return run;
 }

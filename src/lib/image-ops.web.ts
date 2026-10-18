@@ -112,6 +112,13 @@ export async function transformToRgba(uri: string, actions: Action[]): Promise<R
  * caller has a URI, so this re-reads it through the same canvas path with no resize - which keeps
  * one decoder, and therefore one set of pixel values, across the web build.
  */
+export const lastFastDecoder = 'browser';
+
+/** Same as transformToRgba on web - the browser already decodes natively. See image-ops.ts. */
+export function transformToRgbaFast(uri: string, actions: Action[]): Promise<Rgba> {
+  return transformToRgba(uri, actions);
+}
+
 export async function decodeRgbaFromBase64(): Promise<Rgba> {
   throw new Error('decodeRgbaFromBase64 is native-only - use transformToRgba(uri, []) on web');
 }
