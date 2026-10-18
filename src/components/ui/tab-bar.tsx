@@ -75,11 +75,12 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
 
         if (cfg.center) {
           return (
-            <TourTarget key={route.key} id="scanTab" style={styles.item}>
-              <Pressable
-                onPress={() => router.push('/scan/body')}
-                style={({ pressed }) => [styles.item, pressed && styles.pressed]}
-                accessibilityRole="button">
+            <Pressable
+              key={route.key}
+              onPress={() => router.push('/scan/body')}
+              style={({ pressed }) => [styles.item, pressed && styles.pressed]}
+              accessibilityRole="button">
+              <TourTarget id="scanTab" style={styles.centerTarget}>
                 <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>
                   <View style={styles.centerCircle}>
                     <LinearGradient
@@ -91,18 +92,18 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
                     <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
                   </View>
                 </View>
-                <ThemedText
-                  type="caption"
-                  themeColor={focused ? 'brand' : 'muted'}
-                  style={[styles.label, focused && styles.labelActive]}>
-                  {cfg.label}
-                </ThemedText>
-              </Pressable>
-            </TourTarget>
+              </TourTarget>
+              <ThemedText
+                type="caption"
+                themeColor={focused ? 'brand' : 'muted'}
+                style={[styles.label, focused && styles.labelActive]}>
+                {cfg.label}
+              </ThemedText>
+            </Pressable>
           );
         }
 
-        const tab = (
+        return (
           <Pressable
             key={route.key}
             onPress={onPress}
@@ -121,9 +122,6 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
             </ThemedText>
           </Pressable>
         );
-        return route.name === 'directory' || route.name === 'learn' || route.name === 'profile'
-          ? <TourTarget key={route.key} id={route.name === 'directory' ? 'directoryTab' : route.name === 'learn' ? 'learnTab' : 'profileTab'} style={styles.item}>{tab}</TourTarget>
-          : tab;
       })}
     </View>
   );
@@ -143,11 +141,12 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   label: { ...Type.caption },
   labelActive: { fontWeight: '600' },
+  // The ring rises out of the bar; the tour target sits on the ring so the spotlight circles it.
+  centerTarget: { marginTop: -TabBarOverhang },
   centerRing: {
     width: RING,
     height: RING,
     borderRadius: RING / 2,
-    marginTop: -TabBarOverhang,
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',

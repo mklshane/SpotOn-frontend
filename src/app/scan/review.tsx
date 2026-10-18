@@ -16,6 +16,8 @@ import { releaseBlobUri } from '@/lib/blob-uri';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { useScreeningSession } from '@/lib/screening-session';
 import { discardScratch } from '@/lib/scratch-files';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 /**
  * Confirm the photo before it is checked (2026-10-07).
@@ -70,6 +72,8 @@ export default function ReviewScreen() {
   const count = set.length;
   const multi = count > 1;
   const atCap = count >= MAX_IMAGES_PER_SCREENING;
+  // The only tip here is about adding a photo, which is hidden at the cap.
+  useScanTips('review', { enabled: !atCap });
   const shown = (selectedUri && set.includes(selectedUri) ? selectedUri : set[count - 1]) ?? null;
   const fromGallery = session.source === 'gallery';
   // Same square crop.tsx draws, so the photo does not move when this screen replaces it.
@@ -178,17 +182,19 @@ export default function ReviewScreen() {
         <Button label={t('Proceed')} variant="brand" onPress={proceed} style={styles.cta} />
         {/* Optional and quiet on purpose: one photo is the standard screening. Kept in the layout at
             the cap (just hidden) so the Proceed button never jumps. */}
-        <Pressable
-          hitSlop={10}
-          onPress={addAnother}
-          disabled={atCap}
-          style={[styles.secondary, atCap && styles.hidden]}
-          accessibilityRole="button"
-          accessibilityElementsHidden={atCap}>
-          <ThemedText type="subhead" style={styles.secondaryText}>
-            {t('Add another angle (optional)')}
-          </ThemedText>
-        </Pressable>
+        <TourTarget id="reviewAddAngle">
+          <Pressable
+            hitSlop={10}
+            onPress={addAnother}
+            disabled={atCap}
+            style={[styles.secondary, atCap && styles.hidden]}
+            accessibilityRole="button"
+            accessibilityElementsHidden={atCap}>
+            <ThemedText type="subhead" style={styles.secondaryText}>
+              {t('Add another angle (optional)')}
+            </ThemedText>
+          </Pressable>
+        </TourTarget>
       </View>
     </View>
   );

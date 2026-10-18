@@ -46,6 +46,8 @@ import {
   evaluateScaleConsistency,
 } from '@/lib/triage/tps-core';
 import { perfLog } from '@/lib/perf-log';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 const STEP_MS = 1300; // per-check reveal cadence
 
@@ -397,14 +399,17 @@ export default function QualityScreen() {
 
   const all = photos.map((_, i) => i);
 
+  // A first-time tip holds the auto-advance too: it explains this screen, so it must not vanish under the user.
+  const tips = useScanTips('quality');
+
   // A clean set moves on by itself. A hair tip holds it: that advice is the whole point of
   // surfacing it on a passing photo, and it cannot be read on a screen that leaves in under a second.
   useEffect(() => {
-    if (!pass || analyzing || hairTip || hairPendingAny) return;
+    if (!pass || analyzing || hairTip || hairPendingAny || tips.blocking) return;
     const timer = setTimeout(() => advance(all), AUTO_ADVANCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pass, analyzing, hairTip, hairPendingAny]);
+  }, [pass, analyzing, hairTip, hairPendingAny, tips.blocking]);
 
   function retake() {
     if (proceeded.current) return;
@@ -536,30 +541,32 @@ export default function QualityScreen() {
           </ThemedText>
         </Animated.View>
 
-        <Card style={styles.checklist}>
-          {rows.map((row, i) => (
-            <Animated.View
-              key={row.label}
-              entering={FadeInDown.delay(120 * i)}
-              style={[styles.row, i > 0 && { borderTopColor: theme.hairline, borderTopWidth: StyleSheet.hairlineWidth }]}>
-              <View style={[styles.rowIcon, { backgroundColor: theme.brandTint }]}>
-                <Icon name={row.icon} tintColor={theme.brand} size={20} />
-              </View>
-              <ThemedText type="headline" style={styles.rowLabel}>
-                {row.label}
-              </ThemedText>
-              <Animated.View key={row.status} entering={ZoomIn.springify().damping(11)}>
-                {row.status === 'pending' ? (
-                  <PendingDot color={theme.muted} />
-                ) : row.status === 'ok' ? (
-                  <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={26} />
-                ) : (
-                  <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={24} />
-                )}
+        <TourTarget id="qualityChecklist" style={styles.checklistTarget}>
+          <Card style={styles.checklist}>
+            {rows.map((row, i) => (
+              <Animated.View
+                key={row.label}
+                entering={FadeInDown.delay(120 * i)}
+                style={[styles.row, i > 0 && { borderTopColor: theme.hairline, borderTopWidth: StyleSheet.hairlineWidth }]}>
+                <View style={[styles.rowIcon, { backgroundColor: theme.brandTint }]}>
+                  <Icon name={row.icon} tintColor={theme.brand} size={20} />
+                </View>
+                <ThemedText type="headline" style={styles.rowLabel}>
+                  {row.label}
+                </ThemedText>
+                <Animated.View key={row.status} entering={ZoomIn.springify().damping(11)}>
+                  {row.status === 'pending' ? (
+                    <PendingDot color={theme.muted} />
+                  ) : row.status === 'ok' ? (
+                    <Icon name="checkmark.circle.fill" tintColor={theme.riskLow} size={26} />
+                  ) : (
+                    <Icon name="exclamationmark.triangle.fill" tintColor={theme.riskModerate} size={24} />
+                  )}
+                </Animated.View>
               </Animated.View>
-            </Animated.View>
-          ))}
-        </Card>
+            ))}
+          </Card>
+        </TourTarget>
 
         {showReasons && reasons.length > 0 ? (
           <Animated.View entering={FadeIn} style={styles.reasons}>
@@ -721,7 +728,8 @@ const styles = StyleSheet.create({
   },
   header: { alignItems: 'center', gap: Space.xs, paddingTop: Space.lg },
   center: { textAlign: 'center' },
-  checklist: { marginTop: Space.lg, gap: 0 },
+  checklistTarget: { marginTop: Space.lg },
+  checklist: { gap: 0 },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.base, paddingVertical: Space.base },
   rowIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { flex: 1 },

@@ -32,6 +32,8 @@ import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { prewarmLesionModel } from '@/lib/lesion-model';
 import { useScreeningSession } from '@/lib/screening-session';
 import { ReviewChip } from '@/components/scan/review-chip';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 /** Same cap capture.tsx applies when baking in EXIF orientation. */
 const PHOTO_LONG_EDGE = 2048;
@@ -87,6 +89,8 @@ export default function CaptureWebScreen() {
       ? 'starting'
       : 'unavailable',
   );
+  // Tips point at the camera controls, which are only armed once the stream is live.
+  useScanTips('capture', { enabled: status === 'live' });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [guide, setGuide] = useState(true);
@@ -415,13 +419,12 @@ export default function CaptureWebScreen() {
         </Pressable>
       ) : null}
 
-      <Pressable
-        onPress={() => router.push('/scan/instructions')}
-        style={styles.instructions}
-        accessibilityRole="button">
-        <ThemedText type="subhead" style={styles.instructionsLabel}>
-          {t("Instructions")}</ThemedText>
-      </Pressable>
+      <TourTarget id="captureInstructions" style={styles.instructions}>
+        <Pressable onPress={() => router.push('/scan/instructions')} accessibilityRole="button">
+          <ThemedText type="subhead" style={styles.instructionsLabel}>
+            {t("Instructions")}</ThemedText>
+        </Pressable>
+      </TourTarget>
 
       {/* Zoom - always available: it is a canvas crop, so it works even on iOS where the
           MediaStreamTrack zoom constraint does not exist. */}
@@ -461,25 +464,29 @@ export default function CaptureWebScreen() {
           style={styles.sideBtn}
           accessibilityRole="button"
           accessibilityLabel={t("Upload a photo")}>
-          <Icon name="photo.on.rectangle" tintColor="#FFFFFF" size={26} />
+          <TourTarget id="captureUpload">
+            <Icon name="photo.on.rectangle" tintColor="#FFFFFF" size={26} />
+          </TourTarget>
         </Pressable>
 
         <ReviewChip style={styles.shotCount} />
 
-        <Pressable
-          onPress={shoot}
-          disabled={busy || status !== 'live'}
-          style={styles.shutter}
-          accessibilityRole="button"
-          accessibilityLabel={t("Capture")}>
-          <GradientBackground
-            variant="sunsetVivid"
-            start={{ x: 0.1, y: 0 }}
-            end={{ x: 0.9, y: 1 }}
-            style={styles.shutterFill}
-          />
-          <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />
-        </Pressable>
+        <TourTarget id="captureShutter">
+          <Pressable
+            onPress={shoot}
+            disabled={busy || status !== 'live'}
+            style={styles.shutter}
+            accessibilityRole="button"
+            accessibilityLabel={t("Capture")}>
+            <GradientBackground
+              variant="sunsetVivid"
+              start={{ x: 0.1, y: 0 }}
+              end={{ x: 0.9, y: 1 }}
+              style={styles.shutterFill}
+            />
+            <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />
+          </Pressable>
+        </TourTarget>
 
         <Pressable
           hitSlop={12}
@@ -487,11 +494,13 @@ export default function CaptureWebScreen() {
           style={styles.sideBtn}
           accessibilityRole="button"
           accessibilityLabel={t("Toggle guide")}>
-          <View style={[styles.toggle, guide && styles.toggleOn]}>
-            <View style={[styles.knob, guide && styles.knobOn]} />
-          </View>
-          <ThemedText type="caption" style={styles.guideLabel}>
-            {t("Guide")}</ThemedText>
+          <TourTarget id="captureGuide" style={styles.guideTarget}>
+            <View style={[styles.toggle, guide && styles.toggleOn]}>
+              <View style={[styles.knob, guide && styles.knobOn]} />
+            </View>
+            <ThemedText type="caption" style={styles.guideLabel}>
+              {t("Guide")}</ThemedText>
+          </TourTarget>
         </Pressable>
       </View>
     </View>
@@ -533,6 +542,7 @@ const styles = StyleSheet.create({
     paddingTop: Space.lg,
   },
   sideBtn: { alignItems: 'center', gap: Space.xs, width: 64 },
+  guideTarget: { alignItems: 'center', gap: Space.xs },
   shutter: {
     width: 76,
     height: 76,

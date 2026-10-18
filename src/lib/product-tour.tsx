@@ -1,58 +1,56 @@
 import { router, usePathname } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  AccessibilityInfo,
-  BackHandler,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  View,
-  type LayoutChangeEvent,
-  type StyleProp,
-  type ViewStyle,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
-import { ThemedText } from '@/components/themed-text';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Dots } from '@/components/ui/dots';
-import { Icon, type IconName } from '@/components/ui/icon';
-import { Radius, Space } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
-import { t, useLocale } from './i18n';
+import { CoachMarkOverlay, IntroCard, type CoachStep } from '@/components/tour/coach-mark';
+import { TabContentInset } from '@/components/ui/tab-bar';
 import { markProductTourSeen } from './product-tour-storage';
 
-type TargetId = 'scanTab' | 'directoryTab' | 'learnTab' | 'profileTab';
+/** Any element a tour can spotlight: the app tour's ids and the scan tips' ids share one registry. */
+export type TargetId = string;
 type TourOrigin = 'first-run' | 'settings';
-type TourSession = { userId: string; origin: TourOrigin; step: number };
-type TourStep = { route: '/home' | '/directory' | '/learn' | '/profile'; target: TargetId | null; title: string; body: string; icon: IconName };
+/**
+ * `dir` is the way the user last moved, so a skipped optional step keeps going the same way;
+ * `skipped` drops those steps from the progress count.
+ */
+type TourSession = { userId: string; origin: TourOrigin; step: number; dir: 1 | -1; skipped: number[] };
+type TourStep = CoachStep & { route: '/home' | '/directory' | '/learn' | '/profile' };
 
 const STEPS: TourStep[] = [
   {
-    route: '/home', target: null, icon: 'sparkles',
-    title: 'Welcome to your SpotOn tour',
-    body: 'A quick look at where to screen a spot, find care, learn, and review your activity. You can skip anytime.',
+    route: '/home', target: null, intro: true, icon: 'sparkles',
+    title: 'Welcome to SpotOn',
+    body: "Let's take a quick look at where to check a spot, find a dermatologist, and learn what to watch for.",
   },
   {
-    route: '/home', target: 'scanTab', icon: 'camera.viewfinder',
-    title: 'Start with a spot',
-    body: 'Tap Scan or the large Home card to start. SpotOn guides you through a clear photo and gives on-device triage, not a diagnosis.',
+    route: '/home', target: 'homeScanCard', shape: 'card', icon: 'camera.viewfinder',
+    title: 'Check a spot',
+    body: "Take a guided photo and get an on-device triage. It doesn't give a diagnosis.",
   },
   {
-    route: '/directory', target: 'directoryTab', icon: 'building.2',
-    title: 'Find care nearby',
-    body: 'Search for dermatology clinics and doctors. Saved directory information is also available offline.',
+    route: '/home', target: 'homeConditions', shape: 'card', optional: true, icon: 'sun.max',
+    title: "Today's UV",
+    body: 'Live UV and temperature, with sun-safety tips.',
   },
   {
-    route: '/learn', target: 'learnTab', icon: 'book',
-    title: 'Learn at your pace',
-    body: 'Read short guides on warning signs, skin care, and when to seek help.',
+    route: '/home', target: 'scanTab', shape: 'circle', inBottomBand: true, icon: 'camera.viewfinder',
+    title: 'Scan from anywhere',
+    body: 'This button opens the camera from any tab.',
   },
   {
-    route: '/profile', target: 'profileTab', icon: 'person',
-    title: 'Everything in one place',
-    body: 'Find your screening history, saved dermatologists, and Settings here. You can replay this tour from Settings anytime.',
+    route: '/directory', target: 'directorySearch', shape: 'card', icon: 'magnifyingglass',
+    title: 'Find a dermatologist',
+    body: "Search clinics or doctors near you. Results you've loaded also work offline.",
+  },
+  {
+    route: '/learn', target: 'learnFeatured', shape: 'card', icon: 'book',
+    title: 'Learn the warning signs',
+    body: 'Short guides you can read offline.',
+  },
+  {
+    route: '/profile', target: 'profileBodyMap', shape: 'card', icon: 'figure.stand',
+    title: 'Your spots on a 3D body',
+    body: 'Every screening is pinned to where it is on your body.',
   },
 ];
 
@@ -63,10 +61,12 @@ type TourContextValue = {
   startReplay: (userId: string) => void;
   next: () => void;
   back: () => void;
+  skipStep: () => void;
   dismiss: () => void;
-  registerTarget: (id: TargetId, ref: View | null) => void;
+  /** Returns the unregister function. An id can have several views (e.g. a header shared by two panes). */
+  registerTarget: (id: TargetId, view: View) => () => void;
   refreshTarget: () => void;
-  getTarget: (id: TargetId) => View | null;
+  getTargets: (id: TargetId) => View[];
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -74,28 +74,35 @@ const TourContext = createContext<TourContextValue | null>(null);
 export function ProductTourProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<TourSession | null>(null);
   const [targetEpoch, setTargetEpoch] = useState(0);
-  const targets = useRef(new Map<TargetId, View>());
+  const targets = useRef(new Map<TargetId, Set<View>>());
 
-  const registerTarget = useCallback((id: TargetId, ref: View | null) => {
-    if (ref) targets.current.set(id, ref);
-    else targets.current.delete(id);
+  const registerTarget = useCallback((id: TargetId, view: View) => {
+    const views = targets.current.get(id) ?? new Set<View>();
+    views.add(view);
+    targets.current.set(id, views);
     setTargetEpoch((value) => value + 1);
+    return () => {
+      views.delete(view);
+      if (!views.size) targets.current.delete(id);
+      setTargetEpoch((value) => value + 1);
+    };
   }, []);
   const refreshTarget = useCallback(() => setTargetEpoch((value) => value + 1), []);
-  const getTarget = useCallback((id: TargetId) => targets.current.get(id) ?? null, []);
+  const getTargets = useCallback((id: TargetId) => [...(targets.current.get(id) ?? [])], []);
 
   const startFirstRun = useCallback((userId: string) => {
-    setSession((current) => current ?? { userId, origin: 'first-run', step: 0 });
+    setSession((current) => current ?? { userId, origin: 'first-run', step: 0, dir: 1, skipped: [] });
   }, []);
   const startReplay = useCallback((userId: string) => {
-    setSession({ userId, origin: 'settings', step: 0 });
+    setSession({ userId, origin: 'settings', step: 0, dir: 1, skipped: [] });
     router.replace('/home');
   }, []);
-  const move = useCallback((direction: 1 | -1) => {
+  const move = useCallback((direction: 1 | -1, skip = false) => {
     if (!session) return;
     const nextStep = Math.max(0, Math.min(STEPS.length - 1, session.step + direction));
     if (nextStep === session.step) return;
-    setSession({ ...session, step: nextStep });
+    const skipped = skip ? [...session.skipped, session.step] : session.skipped;
+    setSession({ ...session, step: nextStep, dir: direction, skipped });
     if (STEPS[nextStep].route !== STEPS[session.step].route) {
       router.replace(STEPS[nextStep].route);
     }
@@ -118,11 +125,17 @@ export function ProductTourProvider({ children }: { children: React.ReactNode })
     if (session?.step === 0) dismiss();
     else move(-1);
   }, [dismiss, move, session?.step]);
+  const skipStep = useCallback(() => {
+    if (!session) return;
+    const atEnd = session.dir === 1 ? session.step === STEPS.length - 1 : session.step === 0;
+    if (atEnd) dismiss();
+    else move(session.dir, true);
+  }, [dismiss, move, session]);
 
   const value = useMemo(() => ({
-    session, targetEpoch, startFirstRun, startReplay, next, back, dismiss,
-    registerTarget, refreshTarget, getTarget,
-  }), [session, targetEpoch, startFirstRun, startReplay, next, back, dismiss, registerTarget, refreshTarget, getTarget]);
+    session, targetEpoch, startFirstRun, startReplay, next, back, skipStep, dismiss,
+    registerTarget, refreshTarget, getTargets,
+  }), [session, targetEpoch, startFirstRun, startReplay, next, back, skipStep, dismiss, registerTarget, refreshTarget, getTargets]);
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
 }
@@ -137,163 +150,50 @@ export function useProductTour() {
 export function TourTarget({ id, children, style }: { id: TargetId; children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const { registerTarget, refreshTarget } = useProductTour();
   const ref = useRef<View>(null);
-  useEffect(() => {
-    registerTarget(id, ref.current);
-    return () => registerTarget(id, null);
-  }, [id, registerTarget]);
+  useEffect(() => (ref.current ? registerTarget(id, ref.current) : undefined), [id, registerTarget]);
   const onLayout = useCallback((_event: LayoutChangeEvent) => refreshTarget(), [refreshTarget]);
   return <View ref={ref} collapsable={false} onLayout={onLayout} style={style}>{children}</View>;
 }
 
-type Rect = { x: number; y: number; width: number; height: number };
-const DIM = 'rgba(33, 26, 21, 0.62)';
-
 export function ProductTourOverlay() {
-  const locale = useLocale();
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const pathname = usePathname();
-  const { session, targetEpoch, getTarget, next, back, dismiss } = useProductTour();
-  const overlayRef = useRef<View>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
-  const [measurement, setMeasurement] = useState<{ key: string; rect: Rect | null; fallback: boolean } | null>(null);
-  const [cardHeight, setCardHeight] = useState(250);
+  const { session, targetEpoch, getTargets, next, back, skipStep, dismiss } = useProductTour();
   const step = session ? STEPS[session.step] : null;
-  const onRoute = Boolean(step && pathname === step.route);
-  const measureKey = session ? `${session.userId}:${session.origin}:${session.step}` : '';
-  const rect = measurement?.key === measureKey ? measurement.rect : null;
-  const fallback = measurement?.key === measureKey ? measurement.fallback : false;
+  if (!session || !step || pathname !== step.route) return null;
 
-  useEffect(() => {
-    if (onRoute && step) {
-      AccessibilityInfo.announceForAccessibility(`${t(step.title)}. ${t(step.body)}`);
-    }
-  }, [session?.step, onRoute, locale, step]);
-
-  useEffect(() => {
-    if (!session) return;
-    const handler = () => { back(); return true; };
-    const subscription = BackHandler.addEventListener('hardwareBackPress', handler);
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); back(); }
-    };
-    if (Platform.OS === 'web') document.addEventListener('keydown', onKeyDown);
-    return () => {
-      subscription.remove();
-      if (Platform.OS === 'web') document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [session, back]);
-
-  useEffect(() => {
-    if (!onRoute || !step?.target) return;
-    let cancelled = false;
-    const frame = requestAnimationFrame(() => {
-      const target = getTarget(step.target!);
-      if (!target || !overlayRef.current) return;
-      overlayRef.current.measureInWindow((overlayX, overlayY) => {
-        target.measureInWindow((x, y, width, height) => {
-          if (cancelled || width <= 0 || height <= 0) return;
-          setMeasurement({
-            key: measureKey,
-            rect: step.target === 'scanTab'
-              ? { x: x - overlayX, y: y - overlayY - Space.xxl, width, height: height + Space.xxl }
-              : { x: x - overlayX, y: y - overlayY, width, height },
-            fallback: false,
-          });
-        });
-      });
-    });
-    const timeout = setTimeout(() => {
-      if (!cancelled) setMeasurement((current) => current?.key === measureKey && current.rect
-        ? current : { key: measureKey, rect: null, fallback: true });
-    }, 500);
-    return () => { cancelled = true; cancelAnimationFrame(frame); clearTimeout(timeout); };
-  }, [measureKey, step?.target, onRoute, targetEpoch, getTarget, size.width, size.height]);
-
-  if (!session || !step || !onRoute) return null;
-  const pad = Space.sm;
-  const spot = rect && rect.x < size.width && rect.y < size.height && rect.x + rect.width > 0 && rect.y + rect.height > 0
-    ? {
-        x: Math.max(0, rect.x - pad),
-        y: Math.max(0, rect.y - pad),
-        width: Math.min(size.width, rect.x + rect.width + pad) - Math.max(0, rect.x - pad),
-        height: Math.min(size.height, rect.y + rect.height + pad) - Math.max(0, rect.y - pad),
-      }
-    : null;
-  if (step.target && !spot && !fallback) {
-    return <View ref={overlayRef} style={[StyleSheet.absoluteFill, { backgroundColor: DIM }]} onLayout={(e) => setSize(e.nativeEvent.layout)} />;
-  }
-
-  const gap = Space.base;
-  const topLimit = insets.top + Space.base;
-  const bottomLimit = size.height - insets.bottom - Space.base;
-  const centered = Math.max(topLimit, (size.height - cardHeight) / 2);
-  const below = spot ? spot.y + spot.height + gap : centered;
-  const above = spot ? spot.y - cardHeight - gap : centered;
-  const cardTop = spot
-    ? (below + cardHeight <= bottomLimit ? below : above >= topLimit ? above : centered)
-    : centered;
-  const cardWidth = Math.min(440, Math.max(0, size.width - Space.xl * 2));
-  const cardLeft = (size.width - cardWidth) / 2;
+  // Count only the stops that will show: not the intro, and not optional ones without a target.
+  const counted = STEPS.flatMap((s, i) =>
+    s.intro || session.skipped.includes(i) || (s.optional && s.target && !getTargets(s.target).length) ? [] : [i]);
 
   return (
-    <View
-      ref={overlayRef}
-      style={StyleSheet.absoluteFill}
-      onLayout={(e) => setSize(e.nativeEvent.layout)}
-      accessibilityViewIsModal
-      importantForAccessibility="yes">
-      {spot ? (
-        <>
-          <View style={[styles.dim, { left: 0, top: 0, width: size.width, height: spot.y }]} />
-          <View style={[styles.dim, { left: 0, top: spot.y, width: spot.x, height: spot.height }]} />
-          <View style={[styles.dim, { left: spot.x + spot.width, top: spot.y, width: size.width - spot.x - spot.width, height: spot.height }]} />
-          <View style={[styles.dim, { left: 0, top: spot.y + spot.height, width: size.width, height: size.height - spot.y - spot.height }]} />
-          <View style={[styles.spot, { left: spot.x, top: spot.y, width: spot.width, height: spot.height, borderColor: theme.brandBright }]} />
-        </>
-      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: DIM }]} />}
-      <Card
-        padded={false}
-        onLayout={(e) => setCardHeight(e.nativeEvent.layout.height)}
-        style={[styles.card, { left: cardLeft, top: cardTop, width: cardWidth, maxHeight: Math.max(0, size.height - insets.top - insets.bottom - Space.xxl) }]}
-        accessibilityLiveRegion="polite">
-        <ScrollView contentContainerStyle={styles.cardContent} showsVerticalScrollIndicator={false}>
-          <View style={styles.topRow}>
-            <View style={styles.eyebrow}>
-              <Icon name={step.icon} tintColor={theme.brand} size={16} />
-              <ThemedText type="caption" themeColor="brand" style={styles.eyebrowText}>{t('PRODUCT TOUR')}</ThemedText>
-            </View>
-            <Button label={t('Skip')} accessibilityLabel={t('Skip tour')} variant="ghost" onPress={dismiss} style={styles.skipButton} />
-          </View>
-          <ThemedText type="title2" accessibilityRole="header">{t(step.title)}</ThemedText>
-          <ThemedText type="callout" themeColor="textSecondary">{t(step.body)}</ThemedText>
-          <View style={styles.bottomRow}>
-            <Dots count={STEPS.length} activeIndex={session.step} />
-            <ThemedText type="caption" themeColor="muted">{session.step + 1} / {STEPS.length}</ThemedText>
-          </View>
-          <View style={[styles.actions, size.width < 375 && styles.actionsCompact]}>
-            {session.step > 0 ? <Button label={t('Back')} variant="outline" onPress={back} style={[styles.backButton, size.width < 375 && styles.fullButton]} /> : null}
-            <Button label={session.step === STEPS.length - 1 ? t('Finish tour') : t('Next')} onPress={next} style={[styles.nextButton, size.width < 375 && styles.fullButton]} />
-          </View>
-        </ScrollView>
-      </Card>
-    </View>
+    <CoachMarkOverlay
+      step={step}
+      stepKey={`${session.userId}:${session.origin}:${session.step}`}
+      progress={{ index: Math.max(0, counted.indexOf(session.step)), count: counted.length }}
+      canGoBack={session.step > 0}
+      isLast={session.step === STEPS.length - 1}
+      doneLabel="Done"
+      bottomBand={TabContentInset}
+      getTargets={getTargets}
+      targetEpoch={targetEpoch}
+      onNext={next}
+      onBack={back}
+      onDismiss={dismiss}
+      onSkipMissing={skipStep}
+      renderIntro={(layout) => (
+        <IntroCard
+          {...layout}
+          art={require('@/assets/images/tour/welcome.svg')}
+          artRatio={1.8}
+          title={step.title}
+          body={step.body}
+          startLabel="Start tour"
+          skipLabel="Not now"
+          skipAccessibilityLabel="Skip tour"
+          onStart={next}
+          onSkip={dismiss}
+        />
+      )}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  dim: { position: 'absolute', backgroundColor: DIM },
-  spot: { position: 'absolute', borderWidth: 2, borderRadius: Radius.lg, backgroundColor: 'transparent' },
-  card: { position: 'absolute' },
-  cardContent: { padding: Space.xl, gap: Space.md },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  eyebrow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  eyebrowText: { fontWeight: '700', letterSpacing: 0.6 },
-  skipButton: { height: 44, paddingHorizontal: Space.sm },
-  bottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: Space.xs },
-  actions: { flexDirection: 'row', gap: Space.sm },
-  actionsCompact: { flexDirection: 'column-reverse' },
-  fullButton: { flex: undefined },
-  backButton: { flex: 1 },
-  nextButton: { flex: 2 },
-});

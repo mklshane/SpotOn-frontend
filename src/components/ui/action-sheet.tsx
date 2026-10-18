@@ -12,6 +12,8 @@ import { Icon, type IconName } from './icon';
 export type ActionSheetOption = {
   key: string;
   label: string;
+  /** A second line under the label, for choices that need a word of explanation. */
+  description?: string;
   icon?: IconName;
   destructive?: boolean;
   onPress: () => void;
@@ -85,11 +87,18 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
                     tintColor={opt.destructive ? theme.riskCritical : theme.brand}
                   />
                 ) : null}
-                <ThemedText
-                  type="headline"
-                  themeColor={opt.destructive ? 'riskCritical' : 'text'}>
-                  {opt.label}
-                </ThemedText>
+                <View style={styles.rowText}>
+                  <ThemedText
+                    type="headline"
+                    themeColor={opt.destructive ? 'riskCritical' : 'text'}>
+                    {opt.label}
+                  </ThemedText>
+                  {opt.description ? (
+                    <ThemedText type="footnote" themeColor="textSecondary">
+                      {opt.description}
+                    </ThemedText>
+                  ) : null}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -123,10 +132,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    height: 58,
+    minHeight: 58,
     paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
     borderRadius: Radius.md,
   },
+  rowText: { flex: 1, gap: 2 },
   cancel: { height: 54, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.6 },
 });

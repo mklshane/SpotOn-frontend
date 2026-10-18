@@ -57,6 +57,22 @@ for (const file of walk('src')) {
 }
 for (const key of INDIRECT) if (!has(key)) missing.set(key, 'src/lib/form-validation.ts (indirect)');
 
+// Tour and tip copy lives in step objects and reaches t() as a variable, so read those fields too:
+// `title:` / `body:` in the steps, the intro card's label props, and scan-tips' FLOW_STEPS list.
+const TOUR_FILES = ['src/lib/product-tour.tsx', 'src/lib/scan-tips.tsx'];
+for (const file of TOUR_FILES) {
+  const src = readFileSync(join(ROOT, file), 'utf8');
+  const keys = [
+    ...[...src.matchAll(/\b(?:title|body): (["'])((?:\\.|(?!\1).)*)\1/g)].map((m) => m[2]),
+    ...[...src.matchAll(/\b(?:startLabel|skipLabel|skipAccessibilityLabel|doneLabel)="([^"]+)"/g)].map((m) => m[1]),
+    ...[...(src.match(/const FLOW_STEPS = \[([\s\S]*?)\];/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]),
+  ];
+  for (const raw of keys) {
+    const key = raw.replace(/\\"/g, '"').replace(/\\'/g, "'");
+    if (!has(key) && !missing.has(key)) missing.set(key, `${file} (tour copy)`);
+  }
+}
+
 if (missing.size) {
   console.error(`i18n coverage: ${missing.size} key(s) with no Filipino translation\n`);
   for (const [key, file] of [...missing].sort((a, b) => a[1].localeCompare(b[1]))) {

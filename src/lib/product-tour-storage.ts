@@ -27,3 +27,35 @@ export async function markProductTourSeen(userId: string): Promise<void> {
   sessionStatus.set(userId, 'seen');
   await setMeta(key(userId), 'seen');
 }
+
+// Scan-flow tips: one JSON list per account of the tip sets already shown.
+const scanTipsSession = new Map<string, string[]>();
+
+function scanTipsKey(userId: string) {
+  return accountStorageKey(userId, STORAGE_KEYS.scanTipsSeen);
+}
+
+export async function readSeenScanTips(userId: string): Promise<string[]> {
+  const cached = scanTipsSession.get(userId);
+  if (cached) return cached;
+  let seen: string[] = [];
+  try {
+    const parsed: unknown = JSON.parse((await getMeta(scanTipsKey(userId))) ?? '[]');
+    if (Array.isArray(parsed)) seen = parsed.filter((id): id is string => typeof id === 'string');
+  } catch {
+    // A corrupt value reads as "nothing seen"; the next write replaces it.
+  }
+  scanTipsSession.set(userId, seen);
+  return seen;
+}
+
+export async function markScanTipsSeen(userId: string, ids: string[]): Promise<void> {
+  const seen = [...new Set([...(await readSeenScanTips(userId)), ...ids])];
+  scanTipsSession.set(userId, seen);
+  await setMeta(scanTipsKey(userId), JSON.stringify(seen));
+}
+
+export async function resetScanTips(userId: string): Promise<void> {
+  scanTipsSession.set(userId, []);
+  await setMeta(scanTipsKey(userId), '[]');
+}

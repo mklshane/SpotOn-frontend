@@ -26,6 +26,8 @@ import { summarizeLesionTrend } from "@/lib/triage/lesion-trend";
 import { QUESTIONS } from "@/lib/triage/questions";
 import { CLASS_DISPLAY, DISCLAIMER } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
+import { TourTarget } from "@/lib/product-tour";
+import { useScanTips } from "@/lib/scan-tips";
 
 const TIER_LABEL: Record<TriageTier, string> = localizedCopy({
   low: "Low",
@@ -83,6 +85,8 @@ export default function LesionDetailScreen() {
   // values, new identity - on every keystroke, and LinearGradient repainted its bitmap
   // each time, stealing frames from the text input and making typed characters lag behind.
   // `fg` only changes when the tier does, never while editing, so this stays stable.
+
+  useScanTips("lesion", { enabled: Boolean(lesion) });
 
   if (!lesion) {
     return (
@@ -302,16 +306,18 @@ export default function LesionDetailScreen() {
           {/* Photo timeline - the highest-value element on this screen */}
           {screenings.length > 0 ? (
             <Entrance index={1} style={styles.section}>
-              <SectionHeader title={t("Over time")} variant="label" />
-              <ScanTimeline
-                screenings={screenings}
-                onOpen={(s) =>
-                  router.push({
-                    pathname: "/scan/result",
-                    params: { id: s.id },
-                  })
-                }
-              />
+              <TourTarget id="lesionTimeline" style={styles.section}>
+                <SectionHeader title={t("Over time")} variant="label" />
+                <ScanTimeline
+                  screenings={screenings}
+                  onOpen={(s) =>
+                    router.push({
+                      pathname: "/scan/result",
+                      params: { id: s.id },
+                    })
+                  }
+                />
+              </TourTarget>
               {screenings.length === 1 && !lesion.archived ? (
                 <View style={[styles.firstScanNote, { backgroundColor: theme.elementBg }]}>
                   <Icon name="arrow.clockwise" tintColor={theme.brand} size={18} />
@@ -463,12 +469,14 @@ export default function LesionDetailScreen() {
         </EntranceProvider>
       </ScrollView>
       <View style={[styles.bottomAction, { backgroundColor: theme.background, borderTopColor: theme.hairline, paddingBottom: insets.bottom + Space.md }]}>
-        <Button
-          label={t("Re-scan this spot")}
-          variant="brand"
-          onPress={startFollowUp}
-          disabled={!latest || lesion.archived}
-        />
+        <TourTarget id="lesionRescan">
+          <Button
+            label={t("Re-scan this spot")}
+            variant="brand"
+            onPress={startFollowUp}
+            disabled={!latest || lesion.archived}
+          />
+        </TourTarget>
       </View>
     </Screen>
   );

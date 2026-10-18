@@ -22,6 +22,7 @@ import { useLocation } from "@/hooks/use-location";
 import { isConcern } from "@/lib/concerns";
 import { flushPendingReports } from "@/lib/directory-reports";
 import { useTheme } from "@/hooks/use-theme";
+import { TourTarget } from "@/lib/product-tour";
 
 export default function DirectoryScreen() {
   useLocale();
@@ -115,21 +116,23 @@ export default function DirectoryScreen() {
       style={[styles.overlay, { paddingTop: insets.top + (Platform.OS === "web" ? Space.xl : 0) }]}
       onLayout={onOverlayLayout}
     >
-      <DirectorySegments
-        value={segment}
-        onChange={(next) => {
-          setSegment(next);
-          setQuery("");
-        }}
-      />
-      <SearchBar
-        value={query}
-        onChangeText={setQuery}
-        placeholder={
-          segment === "clinics" ? t("Search clinic, city or doctor…") : t("Search dermatologists…")
-        }
-        elevation="md"
-      />
+      <TourTarget id="directorySearch" style={styles.searchGroup}>
+        <DirectorySegments
+          value={segment}
+          onChange={(next) => {
+            setSegment(next);
+            setQuery("");
+          }}
+        />
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={
+            segment === "clinics" ? t("Search clinic, city or doctor…") : t("Search dermatologists…")
+          }
+          elevation="md"
+        />
+      </TourTarget>
       {!isOnline ? (
         <View
           style={[styles.offlineChip, { backgroundColor: theme.brandTint }]}
@@ -207,6 +210,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingBottom: Space.md,
   },
+  searchGroup: { gap: Space.md },
   offlineChip: {
     flexDirection: "row",
     alignSelf: "flex-start",

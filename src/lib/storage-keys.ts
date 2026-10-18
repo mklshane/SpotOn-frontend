@@ -3,6 +3,8 @@ export const STORAGE_KEYS = {
   hasSeenOnboarding: 'has_seen_onboarding',
   /** The remaining keys are passed through accountStorageKey before persistence. */
   productTourStatus: 'product_tour_status',
+  /** JSON array of scan-flow tip sets (`ScanTipsId`) the account has seen. */
+  scanTipsSeen: 'scan_tips_seen',
   reengagementRemindersEnabled: 'reengagement_reminders_enabled',
   selfCheckReminderDueAt: 'self_check_reminder_due_at',
   /** Identifier of the OS-scheduled notification, so it can be cancelled or checked for later. */

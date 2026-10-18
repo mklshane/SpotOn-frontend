@@ -16,6 +16,7 @@ import { SettingsRow } from "@/components/ui/settings-row";
 import { Gradients, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
+import { TourTarget } from "@/lib/product-tour";
 import { computeAge, SEX_LABELS, skinTypeLabel } from "@/lib/profile-format";
 import { useScanHistory } from "@/lib/scan-history";
 import { TabContentInset } from '@/components/ui/tab-bar';
@@ -192,14 +193,16 @@ export default function ProfileScreen() {
             </View>
           </Card>
 
-          <Card style={[styles.menu, styles.compactCard]}>
-            <SettingsRow
-              icon="figure.stand"
-              label={t("See body lesions")}
-              sublabel={t("View your screening history on the 3D body")}
-              onPress={() => router.push("/scan/history")}
-            />
-          </Card>
+          <TourTarget id="profileBodyMap" style={styles.menuTarget}>
+            <Card style={[styles.menu, styles.compactCard, styles.flush]}>
+              <SettingsRow
+                icon="figure.stand"
+                label={t("See body lesions")}
+                sublabel={t("View your screening history on the 3D body")}
+                onPress={() => router.push("/scan/history")}
+              />
+            </Card>
+          </TourTarget>
 
           <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
@@ -301,5 +304,8 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
   compactCard: { paddingVertical: Space.base },
+  // A tour target carries the card's top margin so the spotlight hugs the card, not the gap.
+  menuTarget: { marginTop: Space.base },
+  flush: { marginTop: 0 },
   actions: { marginTop: Space.xl },
 });

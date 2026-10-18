@@ -36,6 +36,7 @@ import {
 } from "@/lib/notifications";
 import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
 import { useProductTour } from "@/lib/product-tour";
+import { resetScanTips } from "@/lib/product-tour-storage";
 
 const SUPPORT_EMAIL = "help.spoton@gmail.com";
 
@@ -53,6 +54,13 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const { user, signOut } = useAuth();
   const { startReplay } = useProductTour();
+  // Replays the screening tips by starting a screening: the body screen opens on the overview.
+  const handleReplayScanTips = () => {
+    if (!user) return;
+    resetScanTips(user.id)
+      .catch((e) => console.warn("[scan-tips] could not reset:", e))
+      .finally(() => router.push("/scan/body"));
+  };
 
   // Notifications
   const [remindersEnabled, setRemindersEnabledState] = useState(false);
@@ -307,6 +315,12 @@ export default function SettingsScreen() {
               label={t("Replay product tour")}
               sublabel={t("A quick guide to SpotOn's main features")}
               onPress={() => { if (user) startReplay(user.id); }}
+            />
+            <SettingsRow
+              icon="camera.viewfinder"
+              label={t("Replay screening guide")}
+              sublabel={t("Walk through a screening with tips on each step")}
+              onPress={handleReplayScanTips}
             />
           </Card>
 

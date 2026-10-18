@@ -23,6 +23,8 @@ import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 import { rememberUpscale } from '@/lib/capture-upscale';
 import { discardScratch } from '@/lib/scratch-files';
 import { StatusBar } from 'expo-status-bar';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 const OUTPUT = 1024;
 /** Same long-edge cap capture.tsx bakes camera stills to (PHOTO_LONG_EDGE). */
@@ -142,6 +144,10 @@ export default function CropScreen() {
   // Auto-framing is a one-shot on open - never re-run and yank the view out from under the user.
   const preframed = useRef(false);
   const [mode, setMode] = useState<Mode>(fromGallery && !hasDetectorBox ? 'finding' : 'frame');
+  // Not in the multi-spot picker or while spots are still being found: the ring isn't up yet.
+  useScanTips('crop', { enabled: mode === 'frame' && Boolean(img) });
+  // An upload with several spots opens on the picker, which gets its own tips.
+  useScanTips('cropPick', { enabled: mode === 'pick' && Boolean(img) });
   // Lesions found in an upload (most confident first). Two or more → the picker.
   const [spots, setSpots] = useState<LesionCandidate[]>([]);
   const [wrapH, setWrapH] = useState(0);
@@ -481,7 +487,7 @@ export default function CropScreen() {
                 {t("We found {{n}} spots. Tap the one you want to check.", { n: spots.length })}
               </ThemedText>
             </View>
-            <View style={[styles.pickPhoto, { width: pickW, height: pickH }]}>
+            <TourTarget id="cropPickPhoto" style={[styles.pickPhoto, { width: pickW, height: pickH }]}>
               <Image source={{ uri: uri ?? undefined }} style={{ width: pickW, height: pickH }} contentFit="fill" />
               {rings.map(({ d, left, top, badge }, i) => {
                 const on = i === selected;
@@ -500,44 +506,46 @@ export default function CropScreen() {
                   </Pressable>
                 );
               })}
-            </View>
+            </TourTarget>
             {/* Close-ups of each spot: on a wide photo the rings sit on specks you cannot judge. */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ width: frame, flexGrow: 0 }}
-              contentContainerStyle={styles.thumbRow}>
-              {spots.map((c, i) => {
-                const on = i === selected;
-                // Zoom so the spot's box fills about half the tile, centred on it.
-                const L = Math.max(c.bw * img.w, c.bh * img.h);
-                const k = Math.min(THUMB * 4 / Math.min(img.w, img.h), Math.max(THUMB / Math.min(img.w, img.h), (THUMB * 0.5) / L));
-                return (
-                  <Pressable
-                    key={i}
-                    onPress={() => setSelected(i)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={t("Spot {{n}}", { n: i + 1 })}
-                    style={[styles.thumb, on && styles.thumbOn]}>
-                    <Image
-                      source={{ uri: uri ?? undefined }}
-                      contentFit="fill"
-                      style={{
-                        position: 'absolute',
-                        width: img.w * k,
-                        height: img.h * k,
-                        left: THUMB / 2 - c.cx * img.w * k,
-                        top: THUMB / 2 - c.cy * img.h * k,
-                      }}
-                    />
-                    <View style={[styles.thumbLabel, on && styles.thumbLabelOn]}>
-                      <ThemedText type="caption" style={styles.thumbLabelText}>{i + 1}</ThemedText>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <TourTarget id="cropPickThumbs">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ width: frame, flexGrow: 0 }}
+                contentContainerStyle={styles.thumbRow}>
+                {spots.map((c, i) => {
+                  const on = i === selected;
+                  // Zoom so the spot's box fills about half the tile, centred on it.
+                  const L = Math.max(c.bw * img.w, c.bh * img.h);
+                  const k = Math.min(THUMB * 4 / Math.min(img.w, img.h), Math.max(THUMB / Math.min(img.w, img.h), (THUMB * 0.5) / L));
+                  return (
+                    <Pressable
+                      key={i}
+                      onPress={() => setSelected(i)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={t("Spot {{n}}", { n: i + 1 })}
+                      style={[styles.thumb, on && styles.thumbOn]}>
+                      <Image
+                        source={{ uri: uri ?? undefined }}
+                        contentFit="fill"
+                        style={{
+                          position: 'absolute',
+                          width: img.w * k,
+                          height: img.h * k,
+                          left: THUMB / 2 - c.cx * img.w * k,
+                          top: THUMB / 2 - c.cy * img.h * k,
+                        }}
+                      />
+                      <View style={[styles.thumbLabel, on && styles.thumbLabelOn]}>
+                        <ThemedText type="caption" style={styles.thumbLabelText}>{i + 1}</ThemedText>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </TourTarget>
           </ScrollView>
         ) : (
           <>
@@ -554,12 +562,14 @@ export default function CropScreen() {
               {/* Framing target: fill this circle with the spot. Its diameter is the lesion-fill the
                   classifier reads most reliably, so "fill the circle" == "zoom to the right amount". */}
               <View style={styles.centerGuide} pointerEvents="none">
-                <View style={[styles.targetRing, { width: GUIDE_PCT }]}>
-                  <View style={[styles.tick, styles.tickTop]} />
-                  <View style={[styles.tick, styles.tickBottom]} />
-                  <View style={[styles.tick, styles.tickLeft]} />
-                  <View style={[styles.tick, styles.tickRight]} />
-                </View>
+                <TourTarget id="cropRing" style={[styles.ringTarget, { width: GUIDE_PCT }]}>
+                  <View style={[styles.targetRing, styles.ringFill]}>
+                    <View style={[styles.tick, styles.tickTop]} />
+                    <View style={[styles.tick, styles.tickBottom]} />
+                    <View style={[styles.tick, styles.tickLeft]} />
+                    <View style={[styles.tick, styles.tickRight]} />
+                  </View>
+                </TourTarget>
                 <View style={styles.centerDot} />
               </View>
 
@@ -589,14 +599,15 @@ export default function CropScreen() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + Space.lg }]}>
         {mode === 'pick' && current ? (
           <>
-            <Button
-              label={t("Check spot {{n}}", { n: selected + 1 })}
-              icon="arrow.right.circle.fill"
-              variant="brand"
-              onPress={() => pickSpot(current)}
-              style={styles.cta}
-            />
-            <View style={styles.secondaryRow}>
+            <TourTarget id="cropPickCheck" style={styles.cta}>
+              <Button
+                label={t("Check spot {{n}}", { n: selected + 1 })}
+                icon="arrow.right.circle.fill"
+                variant="brand"
+                onPress={() => pickSpot(current)}
+              />
+            </TourTarget>
+            <TourTarget id="cropPickMyself" style={styles.secondaryRow}>
               <Pressable
                 onPress={positionMyself}
                 accessibilityRole="button"
@@ -611,11 +622,13 @@ export default function CropScreen() {
                 <Icon name="photo.on.rectangle" tintColor="#FFFFFF" size={16} />
                 <ThemedText type="subhead" style={styles.secondaryText}>{t("Another photo")}</ThemedText>
               </Pressable>
-            </View>
+            </TourTarget>
           </>
         ) : (
           <>
-            <Button label={t("Use photo")} variant="brand" loading={busy || mode === 'finding'} onPress={confirm} style={styles.cta} />
+            <TourTarget id="cropUse" style={styles.cta}>
+              <Button label={t("Use photo")} variant="brand" loading={busy || mode === 'finding'} onPress={confirm} />
+            </TourTarget>
             <Pressable hitSlop={10} onPress={() => router.back()} style={styles.retake}>
               <ThemedText type="headline" style={styles.retakeText}>
                 {fromGallery ? t("Choose another") : t("Retake")}
@@ -743,6 +756,8 @@ const styles = StyleSheet.create({
   thumbLabelOn: { backgroundColor: Colors.light.brand },
   thumbLabelText: { color: '#FFFFFF', fontWeight: '700', fontSize: 11, lineHeight: 14 },
   cta: { alignSelf: 'stretch' },
+  ringTarget: { aspectRatio: 1 },
+  ringFill: { width: '100%' },
   secondaryRow: { flexDirection: 'row', gap: Space.md, alignSelf: 'stretch' },
   secondary: {
     flex: 1,

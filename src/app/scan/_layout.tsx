@@ -1,23 +1,27 @@
 import { Stack } from 'expo-router';
 
+import { ScanTipsProvider } from '@/lib/scan-tips';
+
 export default function ScanLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-      <Stack.Screen name="body" />
-      <Stack.Screen name="capture" options={{ animation: 'fade' }} />
-      <Stack.Screen name="crop" options={{ animation: 'fade' }} />
-      {/* No transition: review draws the photo where crop framed it, so it reads as one screen. */}
-      <Stack.Screen name="review" options={{ animation: 'none' }} />
-      <Stack.Screen name="quality" options={{ animation: 'fade' }} />
-      <Stack.Screen name="questionnaire" options={{ animation: 'fade', gestureEnabled: false }} />
-      <Stack.Screen name="analysis" options={{ animation: 'fade', gestureEnabled: false }} />
-      <Stack.Screen name="instructions" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
-      <Stack.Screen name="history" />
-      <Stack.Screen name="all" />
-      <Stack.Screen name="lesion" />
-      <Stack.Screen name="followup-confirm" options={{ gestureEnabled: false }} />
-      <Stack.Screen name="result" />
-      <Stack.Screen name="report" />
-    </Stack>
+    <ScanTipsProvider>
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        <Stack.Screen name="body" />
+        <Stack.Screen name="capture" options={{ animation: 'fade' }} />
+        <Stack.Screen name="crop" options={{ animation: 'fade' }} />
+        {/* No transition: review draws the photo where crop framed it, so it reads as one screen. */}
+        <Stack.Screen name="review" options={{ animation: 'none' }} />
+        <Stack.Screen name="quality" options={{ animation: 'fade' }} />
+        <Stack.Screen name="questionnaire" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="analysis" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="instructions" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="history" />
+        <Stack.Screen name="all" />
+        <Stack.Screen name="lesion" />
+        <Stack.Screen name="followup-confirm" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="result" />
+        <Stack.Screen name="report" />
+      </Stack>
+    </ScanTipsProvider>
   );
 }

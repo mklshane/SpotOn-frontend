@@ -23,6 +23,7 @@ import {
 } from '@/data/learn-content';
 import { useCurrentConditions } from '@/hooks/use-current-conditions';
 import { useTheme } from '@/hooks/use-theme';
+import { TourTarget } from '@/lib/product-tour';
 
 // Two topics are promoted into their own blocks above the list: the featured
 // card and the horizontal types rail. The browse list skips them rather than
@@ -120,17 +121,19 @@ export default function LearnScreen() {
 
           {featured ? (
             <Entrance index={1}>
-              <FeaturedEducationCard
-                image={FEATURED_IMAGE}
-                imageLabel="A woman checking the skin on her forearm"
-                category={getCategoryLabel(featured.category)}
-                title={t('Know the warning signs')}
-                description={t(
-                  'The ABCDE rule, and five things to look for in a mole, in one quick read.'
-                )}
-                meta={topicLengthLabel(featured)}
-                onPress={() => openTopic(featured)}
-              />
+              <TourTarget id="learnFeatured">
+                <FeaturedEducationCard
+                  image={FEATURED_IMAGE}
+                  imageLabel="A woman checking the skin on her forearm"
+                  category={getCategoryLabel(featured.category)}
+                  title={t('Know the warning signs')}
+                  description={t(
+                    'The ABCDE rule, and five things to look for in a mole, in one quick read.'
+                  )}
+                  meta={topicLengthLabel(featured)}
+                  onPress={() => openTopic(featured)}
+                />
+              </TourTarget>
             </Entrance>
           ) : null}
 

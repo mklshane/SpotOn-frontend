@@ -54,6 +54,8 @@ import type {
   ScreeningRecord,
   TriageTier,
 } from "@/lib/triage/types";
+import { TourTarget } from "@/lib/product-tour";
+import { useScanTips, useScanTipsScroller } from "@/lib/scan-tips";
 
 /** Order the probability breakdown by clinical urgency, matching the spec tables. */
 const CLASS_BY_URGENCY = (Object.keys(CLASS_WEIGHTS) as LesionClass[]).sort(
@@ -150,6 +152,9 @@ export default function ResultScreen() {
           ? { fg: theme.riskHigh, bg: theme.riskHighBg }
           : { fg: theme.riskCritical, bg: theme.riskCriticalBg };
 
+  useScanTips('result', { enabled: Boolean(record) });
+  const tipsScroller = useScanTipsScroller();
+
   if (!record) {
     if (deleted) return <Screen>{null}</Screen>;
     return (
@@ -195,6 +200,7 @@ export default function ResultScreen() {
       ) : null}
       <Header onBack={goBack} />
       <ScrollView
+        {...tipsScroller}
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
@@ -251,7 +257,7 @@ export default function ResultScreen() {
                   </ThemedText>
                 </View>
               </View>
-              <View style={styles.heroConf}>
+              <TourTarget id="resultConfidence" style={styles.heroConf}>
                 <ConfidenceRing pct={pct} color={colors.fg} />
                 <View style={styles.heroConfText}>
                   <ThemedText type="subhead" themeColor="textSecondary">
@@ -264,9 +270,9 @@ export default function ResultScreen() {
                     {t("% match to")} {cls.lay}.
                   </ThemedText>
                 </View>
-              </View>
+              </TourTarget>
             </View>
-            <View style={[styles.priority, { backgroundColor: colors.bg }]}>
+            <TourTarget id="resultPriority" style={[styles.priority, { backgroundColor: colors.bg }]}>
               <Icon
                 name="arrow.right.circle.fill"
                 tintColor={colors.fg}
@@ -278,7 +284,7 @@ export default function ResultScreen() {
                 </ThemedText>
                 <ThemedText type="headline">{tier.priorityAction}</ThemedText>
               </View>
-            </View>
+            </TourTarget>
           </View>
         </Animated.View>
 
@@ -477,85 +483,91 @@ export default function ResultScreen() {
           {/* One filled CTA so the main next step is unmistakable; everything else is a quieter
               list of options below it. */}
           {tier.showReport ? (
-            <Button
-              label={t("View screening summary")}
-              variant="brand"
-              icon="doc.text.fill"
-              onPress={() =>
-                router.push({
-                  pathname: "/scan/report",
-                  params: { id: record.id },
-                })
-              }
-            />
+            <TourTarget id="resultSummary">
+              <Button
+                label={t("View screening summary")}
+                variant="brand"
+                icon="doc.text.fill"
+                onPress={() =>
+                  router.push({
+                    pathname: "/scan/report",
+                    params: { id: record.id },
+                  })
+                }
+              />
+            </TourTarget>
           ) : null}
           {tier.showDirectory ? (
             // The nearest places to get the spot checked, not just a link to the directory.
-            <NearbyDerms
-              onSeeAll={() =>
-                router.push({
-                  pathname: "/(tabs)/directory",
-                  // Every scan is about a spot, so land on the places that do mole/skin-cancer
-                  // checks. `at` makes every visit a new request: the directory stays mounted, so
-                  // without it a second scan couldn't re-apply a chip the user had cleared.
-                  params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
-                })
-              }
-            />
+            <TourTarget id="resultDerms">
+              <NearbyDerms
+                onSeeAll={() =>
+                  router.push({
+                    pathname: "/(tabs)/directory",
+                    // Every scan is about a spot, so land on the places that do mole/skin-cancer
+                    // checks. `at` makes every visit a new request: the directory stays mounted, so
+                    // without it a second scan couldn't re-apply a chip the user had cleared.
+                    params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
+                  })
+                }
+              />
+            </TourTarget>
           ) : null}
-          <Card padded={false} style={styles.actionList}>
-            {[
-              tier.showEducation ? (
-                <SettingsRow
-                  key="learn"
-                  icon="book.fill"
-                  label={
-                    learnArticle.label
-                      ? t(learnArticle.label)
-                      : t("About {{name}}", { name: cls.full })
-                  }
-                  sublabel={t("What it looks like and when to get it checked")}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/learn/article",
-                      params: learnArticle.params,
-                    })
-                  }
-                />
-              ) : null,
-              record.lesionId ? (
-                <SettingsRow
-                  key="timeline"
-                  icon="clock.arrow.circlepath"
-                  label={t("See this spot over time")}
-                  sublabel={t("Compare with your earlier scans")}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/scan/lesion",
-                      params: { id: record.lesionId! },
-                    })
-                  }
-                />
-              ) : null,
-              tier.offerReminder ? (
-                <ReminderRow key="reminder" lesionId={record.lesionId} />
-              ) : null,
-            ]
-              .filter(Boolean)
-              .map((row, i) => (
-                <View key={(row as { key: string }).key}>
-                  {i > 0 ? (
-                    <View
-                      style={[
-                        styles.actionDivider,
-                        { backgroundColor: theme.hairline },
-                      ]}
-                    />
-                  ) : null}
-                  {row}
-                </View>
-              ))}
-          </Card>
+          <TourTarget id="resultMore">
+            <Card padded={false} style={styles.actionList}>
+              {[
+                tier.showEducation ? (
+                  <SettingsRow
+                    key="learn"
+                    icon="book.fill"
+                    label={
+                      learnArticle.label
+                        ? t(learnArticle.label)
+                        : t("About {{name}}", { name: cls.full })
+                    }
+                    sublabel={t("What it looks like and when to get it checked")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/learn/article",
+                        params: learnArticle.params,
+                      })
+                    }
+                  />
+                ) : null,
+                record.lesionId ? (
+                  <SettingsRow
+                    key="timeline"
+                    icon="clock.arrow.circlepath"
+                    label={t("See this spot over time")}
+                    sublabel={t("Compare with your earlier scans")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/scan/lesion",
+                        params: { id: record.lesionId! },
+                      })
+                    }
+                  />
+                ) : null,
+                tier.offerReminder ? (
+                  <ReminderRow key="reminder" lesionId={record.lesionId} />
+                ) : null,
+              ]
+                .filter(Boolean)
+                .map((row, i) => (
+                  <View key={(row as { key: string }).key}>
+                    {i > 0 ? (
+                      <View
+                        style={[
+                          styles.actionDivider,
+                          { backgroundColor: theme.hairline },
+                        ]}
+                      />
+                    ) : null}
+                    {row}
+                  </View>
+                ))}
+            </Card>
+          </TourTarget>
           <Pressable
             onPress={() => setConfirmDeleteVisible(true)}
             accessibilityRole="button"

@@ -110,6 +110,8 @@ import { Radius, Space } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
 import { Gyroscope } from 'expo-sensors';
 import { makeSteadyTracker, waitForSteady } from '@/lib/steady-shot';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
 // would recreate the gesture mid-pinch and crash react-native-gesture-handler).
@@ -306,6 +308,8 @@ export default function CaptureScreen() {
    */
   const [position, setPosition] = useState<CameraPosition>('back');
   const device = useCameraDevice(position);
+  // Tips point at the camera controls, which only exist once the camera is up.
+  useScanTips('capture', { enabled: hasPermission && Boolean(device) });
   const backDevice = useCameraDevice('back');
   const frontDevice = useCameraDevice('front');
   const canFlip = backDevice != null && frontDevice != null;
@@ -1666,10 +1670,12 @@ export default function CaptureScreen() {
       ) : null}
 
       {/* Instructions */}
-      <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
-        <ThemedText type="subhead" style={styles.instructionsLabel}>
-          {t("Instructions")}</ThemedText>
-      </Pressable>
+      <TourTarget id="captureInstructions" style={styles.instructionsAnchor}>
+        <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
+          <ThemedText type="subhead" style={styles.instructionsLabel}>
+            {t("Instructions")}</ThemedText>
+        </Pressable>
+      </TourTarget>
 
       {/* Zoom indicator - absent, not dead, on a fixed-focal-length camera (see canZoom). */}
       {canZoom ? (
@@ -1711,12 +1717,14 @@ export default function CaptureScreen() {
         <ReviewChip style={styles.shotCount} />
         {/* eslint-disable-next-line react-hooks/immutability -- event handler coordinates a
             native-backed worklet signal after render */}
-        <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")} accessibilityState={{ busy, disabled: busy }}>
-          <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
-          {ANDROID_CAPTURE && busy
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />}
-        </Pressable>
+        <TourTarget id="captureShutter">
+          <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")} accessibilityState={{ busy, disabled: busy }}>
+            <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
+            {ANDROID_CAPTURE && busy
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />}
+          </Pressable>
+        </TourTarget>
 
         <Pressable
           hitSlop={12}
@@ -1724,11 +1732,13 @@ export default function CaptureScreen() {
           style={styles.sideBtn}
           accessibilityRole="button"
           accessibilityLabel={t("Toggle guide")}>
-          <View style={[styles.toggle, guide && styles.toggleOn]}>
-            <View style={[styles.knob, guide && styles.knobOn]} />
-          </View>
-          <ThemedText type="caption" style={styles.guideLabel}>
-            {t("Guide")}</ThemedText>
+          <TourTarget id="captureGuide" style={styles.guideTarget}>
+            <View style={[styles.toggle, guide && styles.toggleOn]}>
+              <View style={[styles.knob, guide && styles.knobOn]} />
+            </View>
+            <ThemedText type="caption" style={styles.guideLabel}>
+              {t("Guide")}</ThemedText>
+          </TourTarget>
         </Pressable>
       </View>
 
@@ -1883,10 +1893,8 @@ const styles = StyleSheet.create({
   frameHintText: { color: 'rgba(255,255,255,0.92)' },
   close: { position: 'absolute', left: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   flip: { position: 'absolute', right: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  instructionsAnchor: { position: 'absolute', bottom: 196, alignSelf: 'center' },
   instructions: {
-    position: 'absolute',
-    bottom: 196,
-    alignSelf: 'center',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     borderRadius: 999,
@@ -1943,6 +1951,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   sideBtn: { width: 64, alignItems: 'center', gap: 4 },
+  guideTarget: { alignItems: 'center', gap: 4 },
   shutter: {
     width: 76,
     height: 76,

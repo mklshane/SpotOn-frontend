@@ -23,6 +23,7 @@ import { Elevation, Radius, Space } from '@/constants/theme';
 import { useCurrentConditions } from '@/hooks/use-current-conditions';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { TourTarget } from '@/lib/product-tour';
 import { useScanHistory } from '@/lib/scan-history';
 import { CLASS_DISPLAY, TIER_CONTENT } from '@/lib/triage/recommendations';
 import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
@@ -201,45 +202,47 @@ export default function HomeScreen() {
           </ThemedText>
         </View>
 
-        <Pressable
-          onPress={() => router.push('/scan/body')}
-          accessibilityRole="button"
-          accessibilityLabel={t("Start a new screening")}
-          style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}>
-          <Image
-            source={require('@/assets/images/home-screening-hero.png')}
-            contentFit="cover"
-            transition={180}
-            style={StyleSheet.absoluteFill}
-          />
-          <LinearGradient
-            colors={[
-              'rgba(242,106,46,0.98)',
-              'rgba(255,138,76,0.91)',
-              'rgba(255,138,76,0.22)',
-              'rgba(255,138,76,0.02)',
-            ]}
-            locations={[0, 0.45, 0.73, 1]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={StyleSheet.absoluteFill}
-          />
+        <TourTarget id="homeScanCard" style={styles.heroTarget}>
+          <Pressable
+            onPress={() => router.push('/scan/body')}
+            accessibilityRole="button"
+            accessibilityLabel={t("Start a new screening")}
+            style={({ pressed }) => [styles.heroCard, pressed && styles.pressed]}>
+            <Image
+              source={require('@/assets/images/home-screening-hero.png')}
+              contentFit="cover"
+              transition={180}
+              style={StyleSheet.absoluteFill}
+            />
+            <LinearGradient
+              colors={[
+                'rgba(242,106,46,0.98)',
+                'rgba(255,138,76,0.91)',
+                'rgba(255,138,76,0.22)',
+                'rgba(255,138,76,0.02)',
+              ]}
+              locations={[0, 0.45, 0.73, 1]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
 
-          <View style={styles.heroContent}>
-            <View style={styles.heroIcon}>
-              <Icon name="camera.viewfinder" tintColor={theme.onBrand} size={24} />
+            <View style={styles.heroContent}>
+              <View style={styles.heroIcon}>
+                <Icon name="camera.viewfinder" tintColor={theme.onBrand} size={24} />
+              </View>
+              <ThemedText type="title2" themeColor="onBrand">
+                {t("New screening")}</ThemedText>
+              <ThemedText type="footnote" themeColor="onBrand" style={styles.heroSubtitle}>
+                {t("Take a clear photo for private, on-device triage.")}</ThemedText>
+              <View style={[styles.heroButton, { backgroundColor: theme.surface }]}>
+                <ThemedText type="subhead" themeColor="brand">
+                  {t("Start screening")}</ThemedText>
+                <Icon name="chevron.right" tintColor={theme.brand} size={15} />
+              </View>
             </View>
-            <ThemedText type="title2" themeColor="onBrand">
-              {t("New screening")}</ThemedText>
-            <ThemedText type="footnote" themeColor="onBrand" style={styles.heroSubtitle}>
-              {t("Take a clear photo for private, on-device triage.")}</ThemedText>
-            <View style={[styles.heroButton, { backgroundColor: theme.surface }]}>
-              <ThemedText type="subhead" themeColor="brand">
-                {t("Start screening")}</ThemedText>
-              <Icon name="chevron.right" tintColor={theme.brand} size={15} />
-            </View>
-          </View>
-        </Pressable>
+          </Pressable>
+        </TourTarget>
 
         {/* Every tile below is a claim about the user's data. When the database is a throwaway
             (another tab holds the real one, or the browser refuses persistent storage) they all
@@ -256,7 +259,7 @@ export default function HomeScreen() {
 
         {/* Live UV + temperature: online-only, so offline Home is unchanged. */}
         {conditions.status !== 'hidden' ? (
-          <View style={styles.conditions}>
+          <TourTarget id="homeConditions" style={styles.conditions}>
             <ConditionsCard
               variant="compact"
               data={conditions.data}
@@ -264,7 +267,7 @@ export default function HomeScreen() {
               usingDefault={conditions.usingDefault}
               onPress={() => router.push({ pathname: '/learn/article', params: { topicId: 'prevention' } })}
             />
-          </View>
+          </TourTarget>
         ) : null}
 
         <View style={styles.sectionHead}>
@@ -481,9 +484,9 @@ const styles = StyleSheet.create({
     borderRadius: 85,
     opacity: 0.6,
   },
+  heroTarget: { marginTop: Space.xl },
   heroCard: {
     height: 230,
-    marginTop: Space.xl,
     borderRadius: Radius.xl,
     overflow: 'hidden',
     justifyContent: 'center',

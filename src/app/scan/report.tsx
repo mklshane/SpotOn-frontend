@@ -12,6 +12,8 @@ import { Icon } from '@/components/ui/icon';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 import {
   discardReportPdf,
   generateReportPdf,
@@ -168,6 +170,8 @@ export default function ReportScreen() {
       });
     }
   }, [ensurePdf]);
+
+  useScanTips('report', { enabled: Boolean(model && record) });
 
   if (!model || !record) {
     return (
@@ -490,17 +494,18 @@ function ActionBar({
           {t("Opens your browser's print dialog - choose \"Save as PDF\" there to keep a copy.")}
         </ThemedText>
       ) : null}
-      <Button
-        // On web there is no share sheet: report-pdf.web.ts routes both actions through the
-        // browser's own print dialog, from which the user saves a PDF. Naming it "Share or save"
-        // there promises a sheet that never appears.
-        label={Platform.OS === 'web' ? t("Save as PDF") : t("Share or save")}
-        variant="brand"
-        icon="square.and.arrow.up"
-        loading={busy}
-        onPress={onShare}
-        style={styles.barButton}
-      />
+      <TourTarget id="reportShare" style={styles.barButton}>
+        <Button
+          // On web there is no share sheet: report-pdf.web.ts routes both actions through the
+          // browser's own print dialog, from which the user saves a PDF. Naming it "Share or save"
+          // there promises a sheet that never appears.
+          label={Platform.OS === 'web' ? t("Save as PDF") : t("Share or save")}
+          variant="brand"
+          icon="square.and.arrow.up"
+          loading={busy}
+          onPress={onShare}
+        />
+      </TourTarget>
       <Button
         label={t("Print")}
         variant="outline"
