@@ -126,6 +126,24 @@ check('truncated buffer → null', locateLesion(new Uint8Array(10), W, W) === nu
 
 // ---- Multi-spot picker (scanLesionBlobs + candidate-core) ----
 
+// Clinical figure panel labels should not become selectable spots. A dark lesion of ordinary
+// brown pixels in the same corner must remain eligible.
+{
+  const data = scene(0.5, 0.5, 0);
+  for (let y = 67; y < 75; y++) for (let x = 67; x < 75; x++) {
+    const i = (y * W + x) * 4;
+    data[i] = data[i + 1] = data[i + 2] = 12;
+  }
+  const p = { cx: 0.88, cy: 0.88, size: 0.1, peak: 20 };
+  check('corner annotation rejected', cand.isCornerAnnotation({ data, width: W, height: W }, p));
+  check('same pixels away from corner retained', !cand.isCornerAnnotation({ data, width: W, height: W }, { ...p, cx: 0.5 }));
+  for (let y = 67; y < 75; y++) for (let x = 67; x < 75; x++) {
+    const i = (y * W + x) * 4;
+    data[i] = 55; data[i + 1] = 35; data[i + 2] = 30;
+  }
+  check('brown corner lesion retained', !cand.isCornerAnnotation({ data, width: W, height: W }, p));
+}
+
 // Three separate lesions on skin: the scan lists all of them, wherever they are in the frame.
 function multiScene() {
   const d = scene(0.5, 0.5, 0);

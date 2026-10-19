@@ -137,7 +137,7 @@ check('logit-space pooling ≠ softmax-space pooling', !near(logitThenSoftmax, s
 const classifySrc = readFileSync(join(ROOT, 'src/lib/classifier/classify.ts'), 'utf8');
 check('classify.ts pools TTA views with meanLogits before its softmax',
   /viewLogitsAll\.length \? meanLogitsCore\(viewLogitsAll\)/.test(classifySrc) &&
-    classifySrc.indexOf('meanLogitsCore(viewLogitsAll)') < classifySrc.indexOf('softmax(values, CONFIDENCE_TEMPERATURE)'));
+    classifySrc.indexOf('meanLogitsCore(viewLogitsAll)') < classifySrc.indexOf('softmax(values, temperature)'));
 
 /* ------------------------------------------------------------------ UT-15 detector box selection */
 const box = (cx, cy, bw, bh, conf) => ({ cx, cy, bw, bh, conf });

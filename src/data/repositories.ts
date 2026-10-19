@@ -555,40 +555,63 @@ export async function getFacilityDoctors(facilityId: string): Promise<FacilityDo
   }));
 }
 
-/** One way to see a dermatologist online: the doctor, their best online link and its platform. */
-export interface OnlineConsultOption {
+/** One way to book a dermatologist online: the doctor, their best booking link and its platform. */
+export interface OnlineBookingOption {
   doctor: DoctorSync;
   url: string;
   fee: number | null;
   platformName: string;
+  /** The link books a video consult (offers_online, 018), not just an in-clinic slot. */
+  online: boolean;
+  /** Metres to the doctor's nearest practice; null without a location or a mapped practice. */
+  distance: number | null;
 }
 
 /**
- * Doctors bookable for an ONLINE consult (offers_online links, 018), cheapest known fee first,
- * then by rating. For patients with no dermatologist within reach (the result screen's
- * "more than ~50 km away" fallback). One option per doctor.
+ * Doctors with an active booking link on an active platform, one option per doctor. Each doctor's
+ * best link is a video-consult one if any, then the cheapest known fee, then the best rating.
+ * With `coords` the doctors come nearest-practice first (unmapped ones last); without, video
+ * consults first, then fee and rating. `onlineOnly` keeps video-consult links only - the result
+ * screen's offer for patients with no dermatologist within reach.
  */
-export async function onlineConsultOptions(limit = 3): Promise<OnlineConsultOption[]> {
+export async function onlineBookingOptions({
+  limit = 3,
+  onlineOnly = false,
+  coords = null,
+}: { limit?: number; onlineOnly?: boolean; coords?: { latitude: number; longitude: number } | null } = {}): Promise<OnlineBookingOption[]> {
   const db = await getDb();
-  type Row = DoctorRow & { bl_url: string; bl_fee: number | null; bl_rating: number | null; p_name: string };
+  type Row = DoctorRow & {
+    bl_url: string; bl_fee: number | null; bl_rating: number | null; bl_online: number | null; p_name: string;
+  };
   const rows = await db.getAllAsync<Row>(
-    `SELECT d.*, bl.url AS bl_url, bl.consultation_fee AS bl_fee, bl.rating AS bl_rating, p.name AS p_name
+    `SELECT d.*, bl.url AS bl_url, bl.consultation_fee AS bl_fee, bl.rating AS bl_rating,
+            bl.offers_online AS bl_online, p.name AS p_name
        FROM booking_links bl
        JOIN telemedicine_platforms p ON p.id = bl.platform_id AND p.is_active = 1
        JOIN doctors d ON d.id = bl.doctor_id
-      WHERE bl.is_active = 1 AND bl.offers_online = 1
+      WHERE bl.is_active = 1 ${onlineOnly ? "AND bl.offers_online = 1" : ""}
         AND (d.status IS NULL OR d.status != 'excluded')
-      ORDER BY (bl.consultation_fee IS NULL), bl.consultation_fee, (bl.rating IS NULL), bl.rating DESC`,
+      ORDER BY (bl.offers_online = 1) DESC, (bl.consultation_fee IS NULL), bl.consultation_fee,
+               (bl.rating IS NULL), bl.rating DESC`,
   );
-  const out: OnlineConsultOption[] = [];
+  const dist = coords ? await nearestPracticeMeters(coords.latitude, coords.longitude) : null;
+  const out: OnlineBookingOption[] = [];
   const seen = new Set<string>();
   for (const r of rows) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
-    out.push({ doctor: toDoctor(r), url: r.bl_url, fee: r.bl_fee ?? null, platformName: r.p_name });
-    if (out.length >= limit) break;
+    out.push({
+      doctor: toDoctor(r),
+      url: r.bl_url,
+      fee: r.bl_fee ?? null,
+      platformName: r.p_name,
+      online: r.bl_online === 1,
+      distance: dist?.get(r.id) ?? null,
+    });
   }
-  return out;
+  // Stable sort: equal distances (and the unmapped tail) keep the SQL order.
+  if (dist) out.sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+  return out.slice(0, limit);
 }
 
 export interface BookingLinkWithPlatform extends BookingLinkSync {

@@ -16,6 +16,9 @@ import { asClassifierError, ClassifierError } from './errors';
 import {
   CLASS_ORDER,
   CONFIDENCE_TEMPERATURE,
+  DEMO_BCC_ENABLED,
+  DEMO_BCC_CONFIDENCE_TEMPERATURE,
+  DEMO_BCC_MODEL_VERSION,
   IMAGE_AGREEMENT_MIN_CONFIDENCE,
   INFERENCE_TIMEOUT_MS,
   DETECTOR_CROP_ENABLED,
@@ -85,11 +88,17 @@ export type SingleImageResult = {
   fullFrame: Prediction | null;
 };
 
-export type LoadedModel = { model: ClassifierModel; inputSize: number };
+export type LoadedModel = {
+  model: ClassifierModel;
+  inputSize: number;
+  temperature: number;
+  modelVersion: string;
+};
 
 /** Load the interpreter and verify the graph matches the class and input contract. */
-export async function prepareModel(): Promise<LoadedModel> {
-  const model = await getClassifierModel();
+export async function prepareModel(demo = false): Promise<LoadedModel> {
+  const useDemo = DEMO_BCC_ENABLED && demo;
+  const model = await getClassifierModel(useDemo);
   const { inputSize, layout, numClasses } = readClassifierLayout(model);
   if (numClasses !== CLASS_ORDER.length) {
     throw new ClassifierError(
@@ -105,7 +114,12 @@ export async function prepareModel(): Promise<LoadedModel> {
       `model input is ${layout.toUpperCase()}, but MODEL_INPUT_LAYOUT is ${MODEL_INPUT_LAYOUT}`,
     );
   }
-  return { model, inputSize };
+  return {
+    model,
+    inputSize,
+    temperature: useDemo ? DEMO_BCC_CONFIDENCE_TEMPERATURE : CONFIDENCE_TEMPERATURE,
+    modelVersion: useDemo ? DEMO_BCC_MODEL_VERSION : MODEL_VERSION,
+  };
 }
 
 /**
@@ -119,6 +133,7 @@ export async function classifyOne(
   uri: string,
   model: ClassifierModel,
   inputSize: number,
+  temperature = CONFIDENCE_TEMPERATURE,
 ): Promise<SingleImageResult> {
   /** One full prediction at a given crop: preprocess → TTA → averaged logits → softmax. */
   const predictAt = async (cropFraction: number, cropBox?: CropBox): Promise<Prediction> => {
@@ -178,7 +193,7 @@ export async function classifyOne(
     }
     // `values` is logit space for every export, so the calibrated softmax always applies - which is
     // what keeps CONFIDENCE_TEMPERATURE live on a probability-emitting graph.
-    const p = softmax(values, CONFIDENCE_TEMPERATURE);
+    const p = softmax(values, temperature);
     const byClass = {} as Record<LesionClass, number>;
     CLASS_ORDER.forEach((cls, i) => {
       byClass[cls] = p[i];
@@ -282,8 +297,8 @@ function logImageResult(r: SingleImageResult, inputSize: number, prefix: string)
  */
 export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<ClassificationOutput> {
   const run = (async () => {
-    const { model, inputSize } = await prepareModel();
-    const r = await classifyOne(uri, model, inputSize);
+    const { model, inputSize, temperature, modelVersion } = await prepareModel();
+    const r = await classifyOne(uri, model, inputSize, temperature);
     perfLog('classify.total', r.inferenceMs,
       `detector=${r.detectorUsed} refined=${r.refined} scaleUnstable=${r.scaleUnstable}`);
 
@@ -294,10 +309,10 @@ export async function classifyLesion(uri: string, attempt: 1 | 2): Promise<Class
       topClass: r.prediction.topClass,
       topConfidence: r.prediction.topConfidence,
       attempt,
-      modelVersion: MODEL_VERSION,
+      modelVersion,
       inputSize,
       normalization: NORMALIZATION,
-      temperature: CONFIDENCE_TEMPERATURE,
+      temperature,
       inferenceMs: r.inferenceMs,
       scaleUnstable: r.scaleUnstable,
       refined: r.refined,
@@ -376,18 +391,24 @@ export async function classifyLesionSet(
   opts?: { onImageDone?: (r: PerImageResult) => void },
 ): Promise<ClassificationOutput> {
   if (uris.length === 0) throw new ClassifierError('preprocess', 'no images to classify');
-  const { model, inputSize } = await prepareModel();
+  const loaded = await prepareModel();
   const parts: SetPart[] = [];
   for (let index = 0; index < uris.length; index++) {
-    const part = await classifyImageAt(uris[index], index, model, inputSize, attempt, uris.length);
+    const part = await classifyImageAt(uris[index], index, loaded, attempt, uris.length);
     parts.push(part);
     opts?.onImageDone?.(part.entry);
   }
-  return composeSetResult(parts, attempt, inputSize);
+  return composeSetResult(parts, attempt, loaded.inputSize);
 }
 
 /** One image's contribution to a set: the audit record plus the raw result, when it succeeded. */
-export type SetPart = { entry: PerImageResult; result: SingleImageResult | null; error?: unknown };
+export type SetPart = {
+  entry: PerImageResult;
+  result: SingleImageResult | null;
+  modelVersion: string;
+  temperature: number;
+  error?: unknown;
+};
 
 /**
  * Classify one image of a set, converting a failure into an excluded `PerImageResult` rather than
@@ -396,17 +417,19 @@ export type SetPart = { entry: PerImageResult; result: SingleImageResult | null;
 export async function classifyImageAt(
   uri: string,
   index: number,
-  model: ClassifierModel,
-  inputSize: number,
+  loaded: LoadedModel,
   attempt: 1 | 2,
   /** Set size when known up front; the live session classifies each photo as it is added. */
   total?: number,
 ): Promise<SetPart> {
+  const { model, inputSize, temperature, modelVersion } = loaded;
   try {
-    const r = await runExclusive(() => classifyOne(uri, model, inputSize), INFERENCE_TIMEOUT_MS);
+    const r = await runExclusive(() => classifyOne(uri, model, inputSize, temperature), INFERENCE_TIMEOUT_MS);
     if (DEBUG) logImageResult(r, inputSize, `attempt=${attempt} image=${index + 1}${total ? `/${total}` : ''}`);
     return {
       result: r,
+      modelVersion,
+      temperature,
       entry: {
         index,
         uri,
@@ -424,6 +447,8 @@ export async function classifyImageAt(
     if (DEBUG) console.warn(`[classifier] image ${index} excluded (${kind})`, e);
     return {
       result: null,
+      modelVersion,
+      temperature,
       error: e,
       entry: {
         index,
@@ -469,6 +494,10 @@ export function composeSetResult(
     throw asClassifierError(ordered[0].error, 'inference');
   }
   const shouldPool = MULTI_IMAGE_AGGREGATION_ENABLED && usable.length > 1;
+  const primaryModel = ordered[0];
+  if (shouldPool && ordered.some((p) => p.modelVersion !== primaryModel.modelVersion)) {
+    throw new ClassifierError('invalid-output', 'cannot pool logits from different classifier models');
+  }
   let probs: Record<LesionClass, number>;
   let topClass: LesionClass;
   let topConfidence: number;
@@ -476,7 +505,7 @@ export function composeSetResult(
     const values = meanLogitsCore(usable.map((r) => r.prediction.logits));
     // Per-image `logits` are always logit space (a softmax-baked export was converted per view in
     // predictAt), so the calibrated softmax applies uniformly here too.
-    const p = softmax(values, CONFIDENCE_TEMPERATURE);
+    const p = softmax(values, primaryModel.temperature);
     probs = {} as Record<LesionClass, number>;
     CLASS_ORDER.forEach((cls, i) => {
       probs[cls] = p[i];
@@ -494,10 +523,10 @@ export function composeSetResult(
     topClass,
     topConfidence,
     attempt,
-    modelVersion: MODEL_VERSION,
+    modelVersion: primaryModel.modelVersion,
     inputSize,
     normalization: NORMALIZATION,
-    temperature: CONFIDENCE_TEMPERATURE,
+    temperature: primaryModel.temperature,
     inferenceMs: usable.reduce((sum, r) => sum + r.inferenceMs, 0),
     // Only the images that actually produced the answer may set these flags.
     scaleUnstable: shouldPool ? usable.some((r) => r.scaleUnstable) : usable[0].scaleUnstable,

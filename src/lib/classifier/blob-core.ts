@@ -40,6 +40,13 @@ export type BlobScanOptions = {
    * LESION_HUE_MIN in image-quality-core.ts.
    */
   minHue?: number;
+  /**
+   * What makes a spot stand out. 'dark' (default): darker than its surroundings - moles,
+   * melanomas, dark crusts. 'bright': brighter - white scale, pale keratin. 'chroma': a different
+   * COLOUR at a similar brightness - yellow crusts, pink and red patches. The multi-spot picker scans
+   * all three; locateLesion only ever used 'dark'.
+   */
+  channel?: 'dark' | 'bright' | 'chroma';
 };
 
 export type BlobScan = {
@@ -94,6 +101,7 @@ export function scanLesionBlobs(
     skinWarmth = 8,
     skinMinSat = 6,
     minHue = -Infinity,
+    channel = 'dark',
   } = opts;
   const blobs: LesionBlob[] = [];
   const n = width * height;
@@ -103,6 +111,26 @@ export function scanLesionBlobs(
   for (let i = 0, p = 0; i < n; i++, p += 4) {
     // Rec. 601 luma - matches the PIL "L" conversion the recipe was validated against.
     gray[i] = (rgba[p] * 299 + rgba[p + 1] * 587 + rgba[p + 2] * 114) / 1000;
+  }
+  if (channel === 'bright') {
+    // Brighter-than-surroundings reads as darker, so the same "locally darker" DoG finds it.
+    for (let i = 0; i < n; i++) gray[i] = 255 - gray[i];
+  } else if (channel === 'chroma') {
+    // Distance of each pixel's colour (luma removed) from the photo's median skin colour; a large
+    // distance reads as dark. Opponent axes: red-green and yellow-blue.
+    const rg = new Float32Array(n);
+    const yb = new Float32Array(n);
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      rg[i] = rgba[p] - rgba[p + 1];
+      yb[i] = (rgba[p] + rgba[p + 1]) / 2 - rgba[p + 2];
+    }
+    const med = (a: Float32Array) => {
+      const c = Array.from(a).sort((x, y) => x - y);
+      return c[c.length >> 1];
+    };
+    const mrg = med(rg);
+    const myb = med(yb);
+    for (let i = 0; i < n; i++) gray[i] = 255 - Math.min(255, 2 * Math.hypot(rg[i] - mrg, yb[i] - myb));
   }
 
   // Separable box blur with clamped edges (a cheap Gaussian stand-in; the DoG only needs scale
@@ -144,21 +172,27 @@ export function scanLesionBlobs(
   const shortEdge = Math.min(width, height);
   const excluded = new Uint8Array(n);
 
+  // Window pixels strong enough to be a peak, strongest first; ties keep row-major order, which is
+  // the pixel a full scan with a strict '>' picks. Walking this list instead of rescanning the
+  // window on every try gives the same peaks - excluded pixels never come back - at a fraction of
+  // the cost on Android, where Hermes interprets this loop (the scans took ~1 s on a vivo).
+  const cand: number[] = [];
+  for (let y = y0; y < y1; y++) {
+    for (let x = x0; x < x1; x++) {
+      const i = y * width + x;
+      if (resp[i] >= minPeak) cand.push(i);
+    }
+  }
+  cand.sort((a, b) => resp[b] - resp[a] || a - b);
+  let next = 0;
+
   for (let attempt = 0; attempt < maxTries; attempt++) {
     // Strongest remaining response inside the central window.
-    let peak = -Infinity;
-    let peakIdx = -1;
-    for (let y = y0; y < y1; y++) {
-      for (let x = x0; x < x1; x++) {
-        const i = y * width + x;
-        if (!excluded[i] && resp[i] > peak) {
-          peak = resp[i];
-          peakIdx = i;
-        }
-      }
-    }
+    while (next < cand.length && excluded[cand[next]]) next++;
     // Nothing meaningfully darker than its surroundings is left.
-    if (peakIdx < 0 || peak < minPeak) return { blobs, endedBelowFloor: true };
+    if (next >= cand.length) return { blobs, endedBelowFloor: true };
+    const peakIdx = cand[next];
+    const peak = resp[peakIdx];
 
     // Flood-fill the blob containing that peak, down to relThr of it.
     const cut = peak * relThr;

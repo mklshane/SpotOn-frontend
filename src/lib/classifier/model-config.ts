@@ -445,11 +445,27 @@ import type { LesionClass } from '../triage/types';
 // which scores both models on the identical held-out split.
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
+// The demo model is eligible only in a development build and only for a recognized source photo
+// (demo-photo.ts). Every other image uses the regular screening model.
+export const DEMO_BCC_ENABLED = __DEV__ && process.env.EXPO_PUBLIC_DEMO_BCC_MODEL === '1';
+// === TRIAL 2026-10-19: subold_s2 (Shane is testing it on device). ===
+// D_next run `subold_s2`: sub-class training (15 sub-types merged to 5 logits in the export) on the
+// pre-Oct-14 stage1, seed 2. Same I/O contract (NCHW [1,3,260,260] in, 5 raw logits out; checked).
+// valid_calib: T 0.85, MALIGNANT_THRESHOLD 0.4821. Vs acne_s1: Asan AUROC 0.911->0.927, spec 0.64->0.74,
+// Hallym BCC 0.74->0.78, MILK AUROC 0.780->0.804; COST stage3 SCC recall 0.59->0.53, ACNE04 flagged 5->10%.
+// TO SWITCH BACK: set USE_SUBOLD_S2 = false (asset, version, T and threshold all follow).
+export const USE_SUBOLD_S2 = true;
+/* eslint-disable @typescript-eslint/no-require-imports */
+export const MODEL_ASSET = USE_SUBOLD_S2
+  ? require('../../../assets/models/spoton_subold_s2_fp32.tflite')
+  : require('../../../assets/models/spoton_acne_s1_fp32.tflite');
+/* eslint-enable @typescript-eslint/no-require-imports */
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-export const MODEL_ASSET = require('../../../assets/models/spoton_acne_s1_fp32.tflite');
+export const DEMO_BCC_MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_acne_s1_fp32';
+export const MODEL_VERSION = USE_SUBOLD_S2 ? 'spoton_subold_s2_fp32' : 'spoton_acne_s1_fp32';
+export const DEMO_BCC_MODEL_VERSION = 'spoton_dfe4tv_fp32_demo';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -808,7 +824,12 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
 // acne_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-09). Was 0.4147 for milk_s1, 0.4444 for dfe4tv.
-export const MALIGNANT_THRESHOLD = 0.4326;
+// subold_s2 (trial): 90%-sensitivity point on valid_calib at T 0.85 (2026-10-19).
+export const MALIGNANT_THRESHOLD = USE_SUBOLD_S2 ? 0.4821 : 0.4326;
+export const DEMO_BCC_MALIGNANT_THRESHOLD = 0.4444;
+export function malignantThresholdForModel(version: string): number {
+  return version === DEMO_BCC_MODEL_VERSION ? DEMO_BCC_MALIGNANT_THRESHOLD : MALIGNANT_THRESHOLD;
+}
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -1056,7 +1077,9 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
 // acne_s1: NLL-fitted on valid_calib (2026-10-09); same as milk_s1. Was 0.9432 for dfe4tv.
-export const CONFIDENCE_TEMPERATURE = 0.595;
+// subold_s2 (trial): NLL-fitted on valid_calib (2026-10-19).
+export const CONFIDENCE_TEMPERATURE = USE_SUBOLD_S2 ? 0.85 : 0.595;
+export const DEMO_BCC_CONFIDENCE_TEMPERATURE = 0.9432;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average

@@ -24,7 +24,7 @@ import { useScanHistory } from "@/lib/scan-history";
 import { useScreeningSession } from "@/lib/screening-session";
 import { summarizeLesionTrend } from "@/lib/triage/lesion-trend";
 import { QUESTIONS } from "@/lib/triage/questions";
-import { CLASS_DISPLAY, DISCLAIMER } from "@/lib/triage/recommendations";
+import { resultDisplay, DISCLAIMER } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
 import { TourTarget } from "@/lib/product-tour";
 import { useScanTips } from "@/lib/scan-tips";
@@ -400,7 +400,7 @@ export default function LesionDetailScreen() {
                       {t(
                         "The most likely pattern has changed across scans - it now reads as",
                       )}{" "}
-                      {CLASS_DISPLAY[latest.classification.topClass].name}.
+                      {resultDisplay(latest.classification.topClass, latest.classification.topConfidence, latest.triage).name}.
                     </ThemedText>
                   </View>
                 ) : null}

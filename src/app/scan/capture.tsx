@@ -64,7 +64,9 @@ import {
   STABLE_FRAMES,
   LOCK_SCORE,
 } from '@/lib/capture-core';
+import { Buffer } from 'buffer';
 import { DARK } from '@/lib/image-quality-core';
+import { readAsStringAsync } from '@/lib/fs';
 import {
   ANDROID_CAPTURE_WAIT_MS,
   acceptsAndroidResult,
@@ -77,6 +79,8 @@ import {
   userFocused,
   androidResultMaxAgeMs,
   isFreshAndroidResult,
+  jpegExifOrientation,
+  canSkipUpright,
   waitForCaptureIdle,
 } from '@/lib/android-capture-policy';
 import { PERF_LOG, perfLog, perfMark, perfSince } from '@/lib/perf-log';
@@ -97,7 +101,7 @@ import {
 } from '@/components/scan/detection-box';
 import { PerfHud, PERF_ENABLED, usePerfCounters } from '@/components/scan/perf-hud';
 import { useDeviceTier } from '@/lib/device-tier';
-import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
+import { getLesionModelForCamera, readLayout, type LesionModel } from '@/lib/lesion-model';
 import { loadSkinGateForCamera, readSkinGateLayout, type SkinGateModel } from '@/lib/skin-gate';
 import { SKIN_GATE_FACE_MAX, SKIN_GATE_MIN } from '@/lib/triage/scan-flow';
 import {
@@ -148,6 +152,13 @@ const BOX_MAX = 0.98;
 const BOX_MIN_PT = 72;
 /** How long local skin evidence for a spot survives that spot not being nominated (ms). */
 const LOCAL_SKIN_KEEP_MS = 1000;
+/**
+ * Android passes can be ~1 s apart, so a fixed 1 s let the evidence lapse between two nominations
+ * of the same spot and the streak never reached the 2 reads that show its box in a not-skin scene.
+ */
+function localSkinKeepMs(intervalMs?: number): number {
+  return intervalMs == null ? LOCAL_SKIN_KEEP_MS : Math.max(LOCAL_SKIN_KEEP_MS, 2.5 * intervalMs);
+}
 
 const LIVE_MARGIN = 0.04; // coach this much before the still gate would reject
 const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
@@ -372,7 +383,7 @@ export default function CaptureScreen() {
   const [detectorFailed, setDetectorFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    getLesionModel()
+    getLesionModelForCamera()
       .then((m) => {
         if (alive) setModel(m);
       })
@@ -601,6 +612,8 @@ export default function CaptureScreen() {
   const trackingSV = useWorkletValue(false);
   const sessionSV = useWorkletValue(0);
   const androidScheduleSV = useWorkletValue(initialAndroidSchedule(0));
+  // Android: the box is drawn and has settled, so detector passes can be spaced out.
+  const steadyTrackSV = useWorkletValue(false);
   const localSkinRequestedSV = useWorkletValue(0);
   const localSkinNeededSV = useWorkletValue(false);
   const localSkinCxSV = useWorkletValue(0.5);
@@ -627,6 +640,7 @@ export default function CaptureScreen() {
     localSkinStreakRef.current = 0;
     visibleRef.current = false;
     stableStreakRef.current = 0;
+    steadyTrackSV.value = false;
     resetDetectionBox(boxValues, { immediate: ANDROID_CAPTURE });
     metricsRef.current = null;
     lastCenter.current = null;
@@ -637,7 +651,7 @@ export default function CaptureScreen() {
     lastDetectAtRef.current = null;
     applyCoach();
   }, [applyCoach, boxValues, euro, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
-    pinnedCropSV, trackingSV]);
+    pinnedCropSV, steadyTrackSV, trackingSV]);
 
   // Expiry must also run when inference stops producing results altogether. It clears crop
   // metadata as well as the visible box; missed detections must not keep an old target alive.
@@ -730,7 +744,8 @@ export default function CaptureScreen() {
           const previous = localSkinBoxRef.current;
           const now = Date.now();
           if (!previous || decision.kind === 'handover' ||
-              now - localSkinSeenAtRef.current > LOCAL_SKIN_KEEP_MS ||
+              now - localSkinSeenAtRef.current > localSkinKeepMs(
+                ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined) ||
               Math.hypot(previous.cx - box.cx, previous.cy - box.cy) > 0.12) {
             localSkinGenerationRef.current += 1;
             localSkinStreakRef.current = 0;
@@ -788,6 +803,7 @@ export default function CaptureScreen() {
       )) {
         if (PERF_ENABLED) perf.rejection.value = 2;
         visibleRef.current = false;
+        steadyTrackSV.value = false;
         metricsRef.current = null;
         resetDetectionBox(boxValues, { immediate: true });
         applyCoach();
@@ -870,6 +886,7 @@ export default function CaptureScreen() {
         locked: target.score >= LOCK_SCORE,
         stable: stableStreakRef.current >= STABLE_FRAMES,
       };
+      steadyTrackSV.value = ANDROID_CAPTURE && stableStreakRef.current >= STABLE_FRAMES;
       if (ANDROID_CAPTURE && canFocusRef.current && !captureInFlightRef.current) {
         const nextFocus = nextAutoFocus(autoFocusRef.current, t, fx, fy, stableStreakRef.current);
         if (nextFocus) {
@@ -893,10 +910,11 @@ export default function CaptureScreen() {
     if (!acceptsSession(sessionRef.current, callbackSession)) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     gateRef.current = code;
     applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
   const livePassCountSV = useWorkletValue(0);
   const onLivePass = useRunOnJS((detMs: number, totalMs: number, intervalMs: number) => {
@@ -907,6 +925,7 @@ export default function CaptureScreen() {
     if (!acceptsSession(sessionRef.current, callbackSession)) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     const before = sceneRef.current.scene;
     sceneRef.current = stepScene(sceneRef.current, code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin');
@@ -919,17 +938,18 @@ export default function CaptureScreen() {
       resetDetectionBox(boxValues, { immediate: true });
       applyCoach();
     } else applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   const onLocalScene = useRunOnJS((code: number, callbackSession: number, generation: number, startedAt: number) => {
     if (!acceptsSession(sessionRef.current, callbackSession) || generation !== localSkinGenerationRef.current) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     const read = code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin';
     localSkinStreakRef.current = stepLocalSkin(localSkinStreakRef.current, read);
     if (localSkinStreakRef.current >= 2) localSkinNeededSV.value = false;
     applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   /* eslint-enable react-hooks/immutability */
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
@@ -977,6 +997,7 @@ export default function CaptureScreen() {
     visibleRef.current = false;
     targetRef.current = initialActiveTargetState;
     stableStreakRef.current = 0;
+    steadyTrackSV.value = false;
     lastCenter.current = null;
     lastSize.current = null;
     lastImgBox.current = null;
@@ -993,7 +1014,7 @@ export default function CaptureScreen() {
   }, [guide, guideSV, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
     lastSkinAtSV, lastLocalSkinAtSV, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
     perf.firstBoxMs, perf.searchCrop, perf.searchFraction, perf.candidateScore, perf.rejection,
-    pinnedCropSV, sessionSV, trackingSV, androidScheduleSV, targetFps, perf.intervalMs, perf.resultAgeMs]);
+    pinnedCropSV, sessionSV, trackingSV, androidScheduleSV, steadyTrackSV, targetFps, perf.intervalMs, perf.resultAgeMs]);
   useEffect(() => {
     restartSession();
   }, [deviceId, guide, isFocused, appActive, model, restartSession]);
@@ -1152,9 +1173,14 @@ export default function CaptureScreen() {
             const localGeneration = localSkinRequestedSV.value;
             const searching = !trackingSV.value;
             const interval = searching ? searchSkinMs : trackSkinMs;
-            const checkScene = t0 - lastSkinAtSV.value >= interval;
-            const checkLocal = !checkScene && localGeneration > 0 && localSkinNeededSV.value &&
+            const sceneDue = t0 - lastSkinAtSV.value >= interval;
+            const localDue = localGeneration > 0 && localSkinNeededSV.value &&
               (localSkinAttemptsSV.value < 2 || t0 - lastLocalSkinAtSV.value >= interval);
+            // Android: a pass is slower than the scene interval, so the scene read was due on every
+            // tick and the local reads a nominee needs never ran - in a not-skin scene its box could
+            // not show at all. There the local read goes first (it stops once two reads agree).
+            const checkLocal = localDue && (ANDROID_CAPTURE || !sceneDue);
+            const checkScene = !checkLocal && sceneDue;
             if (checkLocal || checkScene) {
               const skinRoi = checkLocal
                 ? localSkinRoi(frame.width, frame.height, {
@@ -1220,7 +1246,9 @@ export default function CaptureScreen() {
       if (ANDROID_CAPTURE) {
         const now = Date.now();
         const schedule = androidScheduleSV.value;
-        if (!androidDetectionDue(schedule, now, capturePausedSV.value, inferenceBusySV.value)) return;
+        if (!androidDetectionDue(
+          schedule, now, capturePausedSV.value, inferenceBusySV.value, steadyTrackSV.value,
+        )) return;
         androidScheduleSV.value = { ...schedule, lastStartedAt: now };
         detect();
       } else {
@@ -1268,6 +1296,7 @@ export default function CaptureScreen() {
       capturePausedSV,
       inferenceBusySV,
       androidScheduleSV,
+      steadyTrackSV,
       perf,
     ],
   );
@@ -1479,11 +1508,29 @@ export default function CaptureScreen() {
       if (Math.max(photo.width, photo.height) > PHOTO_LONG_EDGE) {
         actions.push({ resize: { height: PHOTO_LONG_EDGE } });
       }
-      const upright = await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
+      // Android: many HALs already write upright portrait pixels with no EXIF rotation. The pass
+      // below then only downscales, ~1 s on a vivo V2248, and crop.tsx cuts its square from the
+      // original just as well (see canSkipUpright). Decided from the file's own EXIF;
+      // photo.width/height are its raw pixel bounds (BitmapFactory, EXIF ignored).
+      let skipUpright = false;
+      let exifNote = '';
+      if (ANDROID_CAPTURE) {
+        try {
+          const head = await readAsStringAsync(raw, { encoding: 'base64', position: 0, length: 65536 });
+          const orientation = jpegExifOrientation(new Uint8Array(Buffer.from(head, 'base64')));
+          skipUpright = canSkipUpright(photo.width, photo.height, orientation, mirrored);
+          exifNote = `exif=${orientation}`;
+        } catch (e) {
+          exifNote = `exif read failed: ${String(e)}`;
+        }
+      }
+      const upright = skipUpright
+        ? { uri: raw, width: photo.width, height: photo.height }
+        : await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
       // The sensor still is the single biggest scratch file we produce (2-8 MB, full resolution)
       // and `upright` has now superseded it - nothing downstream ever reads photo.path again.
-      await discardScratch(raw);
-      perfLog('capture.upright', Date.now() - tUpright);
+      if (!skipUpright) await discardScratch(raw);
+      perfLog('capture.upright', Date.now() - tUpright, `${skipUpright ? 'skipped' : 'baked'} ${exifNote}`);
       // Carry the live detector's verdict + box forward. We can't re-run the model on the still
       // here - its interpreter is busy on the camera thread, and hitting it from JS crashes - so
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
@@ -1567,6 +1614,7 @@ export default function CaptureScreen() {
             // full ISP processing after the tap: 1.8-2.5 s of spinner on a vivo V2248 (2026-10-07).
             // Lesion auto-focus (nextAutoFocus) already focuses on the spot before the tap, so the
             // zero-shutter-lag frame is the focused one.
+            // 'speed' was measured too (2026-10-19, same phone): 1.34 s vs 1.43 s - not worth it.
             photoQualityBalance="balanced"
             animatedProps={animatedProps}
             /**

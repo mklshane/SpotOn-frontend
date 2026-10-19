@@ -1,8 +1,78 @@
+diff --git a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.cpp b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.cpp
+index 1a7a3c4..92e20ef 100644
+--- a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.cpp
++++ b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.cpp
+@@ -33,6 +33,10 @@ HybridTfliteModel::~HybridTfliteModel() {
+     TfLiteInterpreterDelete(_interpreter);
+     _interpreter = nullptr;
+   }
++  if (_cpuDelegate != nullptr && _cpuDelegateDeleter != nullptr) {
++    _cpuDelegateDeleter(_cpuDelegate);
++    _cpuDelegate = nullptr;
++  }
+   // _modelData (shared_ptr<ArrayBuffer>) is automatically freed
+ }
+ 
+diff --git a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.hpp b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.hpp
+index 8276520..de136a2 100644
+--- a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.hpp
++++ b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModel.hpp
+@@ -21,6 +21,12 @@ public:
+                              std::vector<TensorflowModelDelegate> delegates);
+   ~HybridTfliteModel();
+ 
++  // SpotOn patch: takes ownership of a CPU delegate (XNNPACK) that must outlive _interpreter.
++  void ownCpuDelegate(TfLiteDelegate* delegate, void (*deleter)(TfLiteDelegate*)) {
++    _cpuDelegate = delegate;
++    _cpuDelegateDeleter = deleter;
++  }
++
+   // Properties (from HybridTfliteModelSpec)
+   std::vector<TensorflowModelDelegate> getDelegates() override;
+   std::vector<Tensor> getInputs() override;
+@@ -40,6 +46,8 @@ private:
+ 
+ private:
+   TfLiteInterpreter* _interpreter = nullptr;
++  TfLiteDelegate* _cpuDelegate = nullptr;
++  void (*_cpuDelegateDeleter)(TfLiteDelegate*) = nullptr;
+   std::vector<TensorflowModelDelegate> _delegates;
+   std::shared_ptr<ArrayBuffer> _modelData;
+   std::unordered_map<std::string, std::shared_ptr<ArrayBuffer>> _outputBuffers;
 diff --git a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
-index 38c82d1..9ed2dd4 100644
+index 38c82d1..956a4ea 100644
 --- a/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
 +++ b/node_modules/react-native-fast-tflite/cpp/HybridTfliteModule.cpp
-@@ -40,6 +40,12 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+@@ -9,6 +9,28 @@
+ #error "Invalid Platform!"
+ #endif
+ 
++#ifdef __ANDROID__
++// SpotOn patch: LiteRT's libtensorflowlite_jni.so is built for the Java API, which applies XNNPACK
++// itself (Interpreter.Options useXNNPACK). Its C API therefore runs the reference CPU kernels:
++// the 768 lesion detector measured 606 ms on a Dimensity 700 (benchmark_model --use_xnnpack=false)
++// vs 245 ms with XNNPACK, and the app's own passes matched the slow number. The library exports
++// the XNNPACK C entry points but ships no header, so declare them here. Only the leading
++// num_threads/runtime_flags/flags fields are touched (stable since TF 2.x); the defaults are
++// written into an oversized buffer so a newer, larger options struct cannot overrun it.
++extern "C" {
++struct SpotOnXnnOptions {
++  int32_t num_threads;
++  uint32_t runtime_flags;
++  uint32_t flags;
++  unsigned char reserved[1024];
++};
++SpotOnXnnOptions TfLiteXNNPackDelegateOptionsDefault();
++TfLiteDelegate* TfLiteXNNPackDelegateCreate(const SpotOnXnnOptions* options);
++void TfLiteXNNPackDelegateDelete(TfLiteDelegate* delegate);
++}
++static constexpr int32_t SPOTON_CPU_THREADS = 4;
++#endif
++
+ namespace margelo::nitro::tflite {
+ 
+ /**
+@@ -40,6 +62,12 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
  
    // Configure interpreter via options
    TfLiteInterpreterOptions* options = TfLiteInterpreterOptionsCreate();
@@ -10,8 +80,76 @@ index 38c82d1..9ed2dd4 100644
 +  // SpotOn patch: the C API default leaves the CPU path (XNNPACK) effectively single-threaded.
 +  // On a Dimensity 700 the 768x768 lesion detector took ~1.2 s per pass that way. Four threads
 +  // covers the big cores plus two little ones on common 2+6 / 4+4 mid-range layouts.
-+  TfLiteInterpreterOptionsSetNumThreads(options, 4);
++  TfLiteInterpreterOptionsSetNumThreads(options, SPOTON_CPU_THREADS);
 +#endif
  
    // Add all hardware accelerated delegates (e.g. GPU, NPU, ...)
    // if any. The default CPU delegate will always be available.
+@@ -48,7 +76,29 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+     TfLiteInterpreterOptionsAddDelegate(options, delegate);
+   }
+ 
++#ifdef __ANDROID__
++  // Added last, so a hardware delegate above still claims the ops it supports first.
++  SpotOnXnnOptions xnnOptions = TfLiteXNNPackDelegateOptionsDefault();
++  xnnOptions.num_threads = SPOTON_CPU_THREADS;
++  TfLiteDelegate* xnnpack = TfLiteXNNPackDelegateCreate(&xnnOptions);
++  if (xnnpack != nullptr) TfLiteInterpreterOptionsAddDelegate(options, xnnpack);
++#endif
++
+   TfLiteInterpreter* interpreter = TfLiteInterpreterCreate(model, options);
++#ifdef __ANDROID__
++  if (interpreter == nullptr && xnnpack != nullptr) {
++    // Never let the speed-up cost a model: retry on the plain CPU kernels.
++    TfLiteXNNPackDelegateDelete(xnnpack);
++    xnnpack = nullptr;
++    TfLiteInterpreterOptionsDelete(options);
++    options = TfLiteInterpreterOptionsCreate();
++    TfLiteInterpreterOptionsSetNumThreads(options, SPOTON_CPU_THREADS);
++    for (const TensorflowModelDelegate& delegateType : delegates) {
++      TfLiteInterpreterOptionsAddDelegate(options, getDelegate(delegateType));
++    }
++    interpreter = TfLiteInterpreterCreate(model, options);
++  }
++#endif
+ 
+   // Options and model object can be deleted immediately after interpreter creation.
+   // (per TFLite C API docs — the model_data buffer must still outlive the interpreter,
+@@ -57,11 +107,19 @@ HybridTfliteModule::createModel(const std::shared_ptr<ArrayBuffer>& modelData,
+   TfLiteModelDelete(model);
+ 
+   if (interpreter == nullptr) {
++#ifdef __ANDROID__
++    if (xnnpack != nullptr) TfLiteXNNPackDelegateDelete(xnnpack);
++#endif
+     throw std::runtime_error("Failed to create TFLite interpreter!");
+   }
+ 
+   // Wrap in HybridTfliteModel — stores shared_ptr<ArrayBuffer> to keep model data bytes alive
+-  return std::make_shared<HybridTfliteModel>(interpreter, modelData, delegates);
++  auto hybrid = std::make_shared<HybridTfliteModel>(interpreter, modelData, delegates);
++#ifdef __ANDROID__
++  // The delegate must outlive the interpreter; the model deletes both, interpreter first.
++  if (xnnpack != nullptr) hybrid->ownCpuDelegate(xnnpack, &TfLiteXNNPackDelegateDelete);
++#endif
++  return hybrid;
+ }
+ 
+ } // namespace margelo::nitro::tflite
+diff --git a/node_modules/react-native-fast-tflite/cpp/TfliteHelpers.cpp b/node_modules/react-native-fast-tflite/cpp/TfliteHelpers.cpp
+index 9f931f9..5325bfc 100644
+--- a/node_modules/react-native-fast-tflite/cpp/TfliteHelpers.cpp
++++ b/node_modules/react-native-fast-tflite/cpp/TfliteHelpers.cpp
+@@ -163,6 +163,12 @@ TfLiteDelegate* getNNAPIDelegate() {
+ TfLiteDelegate* getAndroidGPUDelegate() {
+ #ifdef ANDROID
+   TfLiteGpuDelegateOptionsV2 delegateOptions = TfLiteGpuDelegateOptionsV2Default();
++  // SpotOn patch: fp16 compute. The default is full fp32, which kept the GPU busy ~205 ms per
++  // detector pass against ~117 ms in fp16 (benchmark_model, vivo V2248). On MediaTek phones
++  // CameraX draws the preview through the GPU too, so each pass stalls the preview for about that
++  // long. The detector already ships fp16 weights.
++  delegateOptions.is_precision_loss_allowed = 1;
++  delegateOptions.inference_priority1 = TFLITE_GPU_INFERENCE_PRIORITY_MIN_LATENCY;
+   TfLiteDelegate* gpuDelegate = TfLiteGpuDelegateV2Create(&delegateOptions);
+   return gpuDelegate;
+ #else // ANDROID

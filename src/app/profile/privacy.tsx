@@ -10,13 +10,13 @@ import { Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
 const LAST_UPDATED = "August 2026";
-const CONTACT_EMAIL = "help.spoton@gmail.com";
+const CONTACT_EMAIL = "help.spoton.dlsl@gmail.com";
 
 /** Committed turnaround for data-subject requests (section 15). */
 const RESPONSE_WINDOW = "15 working days";
 
 /** Close of the thesis evaluation period, after which retention winds down (section 11). */
-const PROJECT_END = "October 2026";
+const PROJECT_END = "November 2026";
 
 /**
  * Where the account database lives - read off the Supabase session-pooler host in

@@ -19,7 +19,7 @@ import { Icon } from '@/components/ui/icon';
 import { Colors, Radius, Space } from '@/constants/theme';
 import { cropSideForLesion, type Framing, framingFor } from '@/lib/classifier/candidate-core';
 import { findLesionCandidates, lastSpotSearchReport, type LesionCandidate } from '@/lib/classifier/lesion-candidates';
-import { LESION_TARGET_FILL } from '@/lib/classifier/model-config';
+import { DEMO_BCC_ENABLED, LESION_TARGET_FILL } from '@/lib/classifier/model-config';
 import { rememberUpscale } from '@/lib/capture-upscale';
 import { discardScratch } from '@/lib/scratch-files';
 import { StatusBar } from 'expo-status-bar';
@@ -38,7 +38,9 @@ const CROP_MIN_FRAC = 0.3; // smallest auto-crop side, as a fraction of the imag
 const GUIDE_PCT = `${Math.round(LESION_TARGET_FILL * 100)}%` as `${number}%`;
 const MAX_ZOOM = 4; // the pinch limit
 /** Give up on the spot search after this long (e.g. a slow first model load) and frame as before. */
-const FIND_TIMEOUT_MS = 8000;
+// A safety net only: the search stops starting detector runs at SEARCH_BUDGET_MS (3.5 s) and
+// finishes with what it has. 8 s here threw away a whole result on a vivo (Dimensity 700).
+const FIND_TIMEOUT_MS = 15000;
 /** Tallest the picker's photo may be, relative to the frame width. */
 const PICK_MAX_ASPECT = 1.5;
 /** Picker close-up thumbnail side, and room reserved for its heading and thumbnail strip. */
@@ -411,6 +413,12 @@ export default function CropScreen() {
         );
       }
       const tExport = Date.now();
+      const demoTools = fromGallery && DEMO_BCC_ENABLED
+        ? await import('@/lib/classifier/demo-photo')
+        : null;
+      const demoModel = demoTools?.cropTargetsDetectedSpot(
+        spots, img, { x: originX, y: originY, side: cropSize },
+      ) && await demoTools.recognizeDemoPhoto(uri).catch(() => false);
       const result = await transformToUri(uri, [
         { crop: { originX, originY, width: cropSize, height: cropSize } },
         { resize: { width: OUTPUT, height: OUTPUT } },
@@ -431,6 +439,7 @@ export default function CropScreen() {
       rememberUpscale(result.uri, Math.max(1, OUTPUT / cropSize));
       // Hand off to the review screen, which adds the photo to the set. The image checks run once,
       // on the whole set, when the user taps Proceed there - not after every capture.
+      if (demoModel) demoTools?.registerDemoCrop(result.uri);
       router.replace({ pathname: '/scan/review', params: { uri: result.uri } });
     } finally {
       setBusy(false);

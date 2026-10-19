@@ -125,7 +125,7 @@ type MapProps = {
   compass?: boolean;
   scaleBar?: boolean;
   onPress?: () => void;
-  onRegionDidChange?: (e: { nativeEvent: { zoom: number } }) => void;
+  onRegionDidChange?: (e: { nativeEvent: { zoom: number; center: LngLat } }) => void;
   children?: ReactNode;
 };
 
@@ -185,7 +185,10 @@ export function MapLibreMap({
   useEffect(() => {
     if (!map) return;
     const press = () => onPress?.();
-    const moved = () => onRegionDidChange?.({ nativeEvent: { zoom: map.getZoom() } });
+    const moved = () => {
+      const c = map.getCenter();
+      onRegionDidChange?.({ nativeEvent: { zoom: map.getZoom(), center: [c.lng, c.lat] } });
+    };
     map.on('click', press);
     map.on('moveend', moved);
     return () => {

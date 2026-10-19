@@ -89,6 +89,8 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'checkmark.seal.fill': { set: 'ionicons', name: 'checkmark-circle' },
   'arrow.triangle.turn.up.right.diamond.fill': { set: 'ionicons', name: 'navigate' },
   'arrow.up.right': { set: 'ionicons', name: 'open-outline' },
+  location: { set: 'ionicons', name: 'navigate-outline' },
+  'location.fill': { set: 'ionicons', name: 'navigate' },
   // learn
   'cross.case.fill': { set: 'ionicons', name: 'medkit' },
   'square.grid.2x2.fill': { set: 'ionicons', name: 'grid' },

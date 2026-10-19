@@ -1,5 +1,5 @@
 import { t, localizedCopy } from "../i18n/core";
-import type { LesionClass, TriageTier } from './types';
+import type { LesionClass, TriageResult, TriageTier } from './types';
 
 /**
  * All user-facing copy for triage results, keyed by tier - the single source for the
@@ -240,3 +240,33 @@ export const CLASS_DISPLAY = Object.fromEntries(
     },
   ]),
 ) as Record<LesionClass, ClassDisplay>;
+
+/**
+ * The result's display label. Usually the top class alone; for a combined malignant result (both of
+ * the top two are malignant and the runner-up holds >= 30% - see pickCombinedMalignant) it names
+ * both, higher probability first: "Melanoma or Basal Cell Carcinoma" (MEL/BCC). Clinical names stay
+ * English in every locale, like CLASS_DISPLAY; only the joining word is translated.
+ */
+export type ResultDisplay = {
+  name: string;
+  /** Model codes, e.g. "MEL" or "MEL/BCC". */
+  code: string;
+  /** Each named class with its probability, in display order (one entry, or two when combined). */
+  parts: { cls: LesionClass; p: number }[];
+};
+
+export function resultDisplay(
+  topClass: LesionClass,
+  topConfidence: number,
+  triage: Pick<TriageResult, 'secondClass' | 'secondConfidence'>,
+): ResultDisplay {
+  const parts = [{ cls: topClass, p: topConfidence }];
+  if (triage.secondClass && triage.secondConfidence != null) {
+    parts.push({ cls: triage.secondClass, p: triage.secondConfidence });
+  }
+  return {
+    name: parts.map((x) => CLASS_NAME[x.cls]).join(` ${t('or')} `),
+    code: parts.map((x) => x.cls).join('/'),
+    parts,
+  };
+}

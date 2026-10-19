@@ -44,9 +44,15 @@ export type DoctorsViewProps = {
   onRetrySync?: () => void;
   /** Owned by the directory screen so both tabs share one GPS request. */
   coords: Coords | null;
+  /** A deep link's chip (/directory?segment=doctors&filter=online), applied once per `linkKey`. */
+  linkFilter?: DoctorLinkFilter;
+  /** The link's `at` nonce: a new one re-applies `linkFilter` even after the user cleared it. */
+  linkKey?: string;
 };
 
 type DoctorFilter = "all" | "booking" | "online" | "today" | "weekend";
+export type DoctorLinkFilter = Extract<DoctorFilter, "booking" | "online">;
+export const isDoctorLinkFilter = (v: unknown): v is DoctorLinkFilter => v === "booking" || v === "online";
 
 /**
  * The "Dermatologists" tab: every listed (PDS board-certified) dermatologist, searchable by name.
@@ -62,10 +68,19 @@ export function DoctorsView({
   syncing = false,
   onRetrySync,
   coords,
+  linkFilter,
+  linkKey,
 }: DoctorsViewProps) {
   useLocale();
   const theme = useTheme();
-  const [filter, setFilter] = useState<DoctorFilter>("all");
+  const [filter, setFilter] = useState<DoctorFilter>(linkFilter ?? "all");
+  // Same adjust-during-render pattern as the directory screen's segment link.
+  const [appliedLink, setAppliedLink] = useState(`${linkFilter ?? ""}:${linkKey ?? ""}`);
+  const nextLink = `${linkFilter ?? ""}:${linkKey ?? ""}`;
+  if (nextLink !== appliedLink) {
+    setAppliedLink(nextLink);
+    if (linkFilter) setFilter(linkFilter);
+  }
   const [doctors, setDoctors] = useState<DoctorSync[] | null>(null);
   const [doctorDistance, setDoctorDistance] = useState<Map<string, number>>(new Map());
   const [info, setInfo] = useState<Map<string, DoctorCardInfo>>(new Map());

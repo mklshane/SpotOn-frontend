@@ -14,6 +14,7 @@ import { Colors, Radius, Space } from '@/constants/theme';
 import { useSurfaceWidth } from '@/hooks/use-surface-width';
 import { releaseBlobUri } from '@/lib/blob-uri';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
+import { takeDemoCrop } from '@/lib/classifier/demo-photo';
 import { useScreeningSession } from '@/lib/screening-session';
 import { discardScratch } from '@/lib/scratch-files';
 import { TourTarget } from '@/lib/product-tour';
@@ -50,7 +51,7 @@ export default function ReviewScreen() {
   // twice. The UI does not wait on this: it draws `uri` directly until the session catches up.
   useEffect(() => {
     if (!uri) return;
-    const index = session.addImage({ uri, source: session.source, qualityPassed: false });
+    const index = session.addImage({ uri, source: session.source, qualityPassed: false, demoModel: takeDemoCrop(uri) });
     if (index === 0) session.setImageUri(uri);
     // Classification starts now on iOS and web, exactly when the quality screen used to start it.
     // Android waits for the image checks to settle (quality.tsx): the classifier, skin gate and IQA

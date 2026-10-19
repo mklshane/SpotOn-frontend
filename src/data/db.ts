@@ -208,7 +208,9 @@ CREATE TABLE IF NOT EXISTS screenings (
   image_count          INTEGER NOT NULL DEFAULT 1,
   per_image_json       TEXT,
   image_disagreement   INTEGER NOT NULL DEFAULT 0,
-  aggregate_method     TEXT NOT NULL DEFAULT 'single'
+  aggregate_method     TEXT NOT NULL DEFAULT 'single',
+  second_class         TEXT,
+  second_confidence    REAL
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
@@ -219,7 +221,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -412,6 +414,14 @@ const MIGRATION_V18 = [
   "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
 ];
 
+// v19 - runner-up class of a combined malignant result ("Melanoma or Basal Cell Carcinoma"; see
+// pickCombinedMalignant in tps-core.ts). NULL on every pre-v19 row, which is correct: those results
+// were scored and labelled on the top class alone, and they keep that label and TPS.
+const MIGRATION_V19 = [
+  "ALTER TABLE screenings ADD COLUMN second_class TEXT",
+  "ALTER TABLE screenings ADD COLUMN second_confidence REAL",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -434,6 +444,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 16 ? MIGRATION_V16 : []),
     ...(version < 17 ? MIGRATION_V17 : []),
     ...(version < 18 ? MIGRATION_V18 : []),
+    ...(version < 19 ? MIGRATION_V19 : []),
   ];
   for (const stmt of pending) {
     try {

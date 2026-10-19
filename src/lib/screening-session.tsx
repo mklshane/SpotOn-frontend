@@ -131,7 +131,9 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     attempt: number;
     runs: Map<number, { uri: string; promise: Promise<SetPart> }>;
   }>({ attempt: 1, runs: new Map() });
-  const modelRef = useRef<Promise<LoadedModel> | null>(null);
+  const modelRef = useRef<{ regular: Promise<LoadedModel> | null; demo: Promise<LoadedModel> | null }>({
+    regular: null, demo: null,
+  });
 
   // The live inference promise + its resolved value. Refs on purpose: settling must not
   // re-render questionnaire consumers, and the analysis screen pulls the promise imperatively.
@@ -156,18 +158,19 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   }, []);
 
   /** Load the interpreter once per session; every image's run awaits the same promise. */
-  const loadModel = useCallback(() => {
-    if (!modelRef.current) {
-      modelRef.current = (async () => {
+  const loadModel = useCallback((demo = false) => {
+    const key = demo ? 'demo' : 'regular';
+    if (!modelRef.current[key]) {
+      modelRef.current[key] = (async () => {
         const { prepareModel } = await import('./classifier/classify');
-        return prepareModel();
+        return prepareModel(demo);
       })();
       // A load failure must not poison every later attempt.
-      modelRef.current.catch(() => {
-        modelRef.current = null;
+      modelRef.current[key].catch(() => {
+        modelRef.current[key] = null;
       });
     }
-    return modelRef.current;
+    return modelRef.current[key];
   }, []);
 
   const enqueueImage = useCallback(
@@ -195,8 +198,9 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       const promise = (async () => {
         await Promise.allSettled(previous);
         const { classifyImageAt } = await import('./classifier/classify');
-        const { model, inputSize } = await loadModel();
-        return classifyImageAt(uri, index, model, inputSize, attempt);
+        const demo = imagesRef.current.find((p) => p.uri === uri)?.demoModel === true;
+        const loaded = await loadModel(demo);
+        return classifyImageAt(uri, index, loaded, attempt);
       })();
       store.runs.set(index, { uri, promise });
       promise
@@ -223,7 +227,8 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     if (store.runs.size === 0) throw new Error('screening: classification never started');
     const { composeSetResult } = await import('./classifier/classify');
     const settled = await Promise.all([...store.runs.values()].map((r) => r.promise));
-    const { inputSize } = await loadModel();
+    const primary = imagesRef.current[0];
+    const { inputSize } = await loadModel(primary?.demoModel === true);
     const out = composeSetResult(settled, attempt, inputSize);
     lastOutputRef.current = out;
     return out;

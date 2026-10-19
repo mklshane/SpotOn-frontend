@@ -11,7 +11,7 @@ import { Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
 const LAST_UPDATED = "August 2026";
-const CONTACT_EMAIL = "help.spoton@gmail.com";
+const CONTACT_EMAIL = "help.spoton.dlsl@gmail.com";
 
 function Section({
   title,
@@ -148,8 +148,6 @@ export default function TermsScreen() {
           <SubHeading>{t("Do Not Rely on SpotOn for Medical Decisions")}</SubHeading>
           <Paragraph>{t("You should not use SpotOn to:")}</Paragraph>
           <Bullet>{t("diagnose skin cancer or any other medical condition;")}</Bullet>
-          <Bullet>{t("determine whether a lesion is malignant or benign;")}</Bullet>
-          <Bullet>{t("decide whether medical treatment is necessary;")}</Bullet>
           <Bullet>{t("delay, cancel, or avoid a consultation with a healthcare professional; or")}</Bullet>
           <Bullet>{t("replace examination by a dermatologist or other qualified healthcare professional.")}</Bullet>
           <Paragraph>{t("If you notice a lesion that is changing, bleeding, painful, rapidly growing, unusually appearing, or otherwise concerning, seek evaluation from a qualified healthcare professional regardless of the result provided by SpotOn.")}</Paragraph>

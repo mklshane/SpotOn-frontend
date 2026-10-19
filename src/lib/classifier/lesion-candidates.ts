@@ -12,6 +12,13 @@ import { detectorInputSize, detectTensor } from './lesion-detector';
 export type { LesionCandidate } from './candidate-core';
 
 /**
+ * Detector runs stop starting this long after the search began, so a slow phone still finishes
+ * well inside crop.tsx's timeout with the spots verified so far. An iPhone finishes in 1-3 s and
+ * never reaches it.
+ */
+export const SEARCH_BUDGET_MS = 3500;
+
+/**
  * A plain-text report of the most recent search - timings and every proposal's scores - for the
  * hidden diagnostics panel in scan/crop.tsx (long-press the header). Release builds send no logs
  * anywhere a tester can reach, so this is how a device run gets reported. Never alters results.
@@ -65,7 +72,16 @@ export async function findLesionCandidates(
   };
   const tModels = Date.now();
   const r = await findSpots(img, {
-    scan: scanLesionBlobs,
+    scan: (...a: Parameters<typeof scanLesionBlobs>) => {
+      const t = Date.now();
+      try {
+        return scanLesionBlobs(...a);
+      } finally {
+        const c = (cost.scan ??= [0, 0]);
+        c[0]++;
+        c[1] += Date.now() - t;
+      }
+    },
     detect: timed('detector', detectTensor),
     detectorSize,
     skinGate: skin ? timed('skin', skinGateOfTensor) : undefined,
@@ -73,11 +89,15 @@ export async function findLesionCandidates(
     faceDetect: face ? timed('face', detectFacesInTensor) : undefined,
     verify: verifier ? timed('verifier', lesionProbability) : undefined,
     verifierSize: verifier ? SPOT_VERIFIER_INPUT : undefined,
+    deadline: t0 + SEARCH_BUDGET_MS,
+    now: Date.now,
   });
   const timing =
     `decode ${tDecode}ms (${lastFastDecoder}), models loaded in ${tModels - t0 - tDecode}ms, ` +
     Object.entries(cost).map(([k, [n, ms]]) => `${k} ${n}x/${ms}ms`).join(', ') +
-    `, ${r.proposals} proposals -> ${r.spots.length} spots`;
+    `, other JS (downscale, crops) ${Date.now() - tModels - Object.values(cost).reduce((a, [, ms]) => a + ms, 0)}ms` +
+    `, ${r.proposals} proposals -> ${r.spots.length} spots` +
+    (r.budgetHit ? ` (time budget hit: detector stopped at ${SEARCH_BUDGET_MS}ms)` : '');
   perfLog('candidates.find', Date.now() - t0, timing);
   lastReport = [
     `total ${Date.now() - t0}ms | ${img.width}x${img.height}`,

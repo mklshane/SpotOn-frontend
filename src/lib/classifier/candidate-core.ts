@@ -30,6 +30,9 @@ export const MAX_PROPOSALS = 40;
  * budget goes to the finer scans.
  */
 export const PROPOSAL_QUOTAS = [6, 12, 22] as const;
+/** Extra proposals from each colour-based scan ('chroma', 'bright'), at these short sides. */
+export const COLOUR_QUOTA = 5;
+export const COLOUR_SCALES = [64, 128] as const;
 /** Most spots the picker shows. */
 export const MAX_SHOWN = 6;
 /** Detector confidence on the close-up crop for a proposal to count as a lesion. */
@@ -74,7 +77,35 @@ export const PROPOSAL_SCAN = {
 } as const;
 
 /** A proposed spot: centre as fractions of the image width/height, size as a fraction of the short side. */
-export type SpotProposal = { cx: number; cy: number; size: number; peak: number };
+export type SpotProposal = { cx: number; cy: number; size: number; peak: number; colour?: boolean };
+
+/**
+ * Printed panel letters in clinical figures are often solid, neutral black and placed in a corner.
+ * The letter in the supplied nose figure occupies over 7% of this small patch with near-black,
+ * nearly achromatic pixels. Restrict the rule to corners because a lesion can also be very dark.
+ */
+export function isCornerAnnotation(img: RgbaImage, p: SpotProposal): boolean {
+  const nearXEdge = p.cx < 0.18 || p.cx > 0.82;
+  const nearYEdge = p.cy < 0.18 || p.cy > 0.82;
+  if (!nearXEdge || !nearYEdge) return false;
+  const side = Math.max(24, Math.round(Math.min(img.width, img.height) * 0.12));
+  const x0 = Math.max(0, Math.round(p.cx * img.width - side / 2));
+  const y0 = Math.max(0, Math.round(p.cy * img.height - side / 2));
+  const x1 = Math.min(img.width, x0 + side);
+  const y1 = Math.min(img.height, y0 + side);
+  let black = 0;
+  let total = 0;
+  for (let y = y0; y < y1; y += 2) {
+    for (let x = x0; x < x1; x += 2) {
+      const i = (y * img.width + x) * 4;
+      const r = img.data[i], g = img.data[i + 1], b = img.data[i + 2];
+      const hi = Math.max(r, g, b), lo = Math.min(r, g, b);
+      if (hi < 40 && hi - lo < 22) black++;
+      total++;
+    }
+  }
+  return total > 0 && black / total >= 0.05;
+}
 
 /** A verified spot: the detector's box, as fractions of the image width/height. */
 export type LesionCandidate = { cx: number; cy: number; bw: number; bh: number; conf: number };
@@ -267,10 +298,30 @@ export const GROW_FACTOR = 2.2;
  * ones 0.00-0.36 (eye socket, nose underside, patches of spotted backs). Thin margin, 2026-10-18.
  */
 export const GROWN_DET_CONF = 0.45;
+/** Detector confidence a spot larger than UNSIZED_MAX needs on a WIDE photo (aspect ≥ WIDE_ASPECT). */
+export const LARGE_DET_MIN = 0.4;
+export const WIDE_ASPECT = 1.6;
+/** Spots at or above this verifier score are ranked by size, biggest first. */
+export const RANK_CONF = 0.9;
 /** Detector runs per search (the verifier's accepted spots, most likely first). */
 export const DETECT_CAP = 8;
 /** Whole-photo detector confidence for a lone spot to take the detector's (bigger) lesion box. */
 export const CLOSEUP_CONF = 0.6;
+/**
+ * A spot the detector was shown and drew NO box on is dropped when its crop also holds a lesion the
+ * detector did box at this confidence: the verifier was scoring the neighbour. Bare forehead skin
+ * beside a large lesion got the top ring this way on a vivo (2026-10-19). On 470 test photos this
+ * removed 2 such rings and no real lesion (35 no-box spots: ~20 real ones, all kept). A spot the
+ * time budget skipped is treated the same way, so a slow phone cannot keep that ring either.
+ */
+export const NEIGHBOUR_DET_CONF = 0.5;
+/**
+ * A spot the time budget left without its detector run must clear this verifier score instead: the
+ * detector is what turns away the weaker ones (a cheek beside a nose at 0.79 on a slow phone).
+ */
+export const UNCHECKED_MIN = 0.9;
+/** ...and be small: both false rings a slow phone kept on a face were proposals ~0.10 of the frame. */
+export const UNCHECKED_MAX_SIZE = 0.06;
 /** Whole-photo detector confidence to frame its box when no spot was found at all. */
 export const FALLBACK_CONF = 0.5;
 /**
@@ -435,26 +486,43 @@ function drawInto(
   dh: number,
 ): void {
   const { data, width: W, height: H } = img;
+  // Column lookups are the same for every row: computed once. Hermes (Android) interprets this
+  // loop without a JIT, so per-pixel work is what a mid-range phone pays for - the search spent
+  // ~3 s building crops on a vivo (2026-10-19). Same arithmetic, same order: identical output.
+  const xa = new Int32Array(dw);
+  const xb = new Int32Array(dw);
+  const xt = new Float64Array(dw);
+  for (let x = 0; x < dw; x++) {
+    const fx = Math.min(W - 1, Math.max(0, sx + ((x + 0.5) * sw) / dw - 0.5));
+    const x0 = Math.floor(fx);
+    xa[x] = x0 * 4;
+    xb[x] = Math.min(W - 1, x0 + 1) * 4;
+    xt[x] = fx - x0;
+  }
   for (let y = 0; y < dh; y++) {
     const fy = Math.min(H - 1, Math.max(0, sy + ((y + 0.5) * sh) / dh - 0.5));
     const y0 = Math.floor(fy);
     const y1 = Math.min(H - 1, y0 + 1);
     const ty = fy - y0;
+    const r0 = y0 * W * 4;
+    const r1 = y1 * W * 4;
+    let o = ((dy + y) * size + dx) * 3;
     for (let x = 0; x < dw; x++) {
-      const fx = Math.min(W - 1, Math.max(0, sx + ((x + 0.5) * sw) / dw - 0.5));
-      const x0 = Math.floor(fx);
-      const x1 = Math.min(W - 1, x0 + 1);
-      const tx = fx - x0;
-      const a = (y0 * W + x0) * 4;
-      const b = (y0 * W + x1) * 4;
-      const c = (y1 * W + x0) * 4;
-      const d = (y1 * W + x1) * 4;
-      const o = ((dy + y) * size + dx + x) * 3;
-      for (let k = 0; k < 3; k++) {
-        const top = data[a + k] + (data[b + k] - data[a + k]) * tx;
-        const bot = data[c + k] + (data[d + k] - data[c + k]) * tx;
-        tensor[o + k] = (top + (bot - top) * ty) / 255;
-      }
+      const tx = xt[x];
+      const a = r0 + xa[x];
+      const b = r0 + xb[x];
+      const c = r1 + xa[x];
+      const d = r1 + xb[x];
+      let top = data[a] + (data[b] - data[a]) * tx;
+      let bot = data[c] + (data[d] - data[c]) * tx;
+      tensor[o] = (top + (bot - top) * ty) / 255;
+      top = data[a + 1] + (data[b + 1] - data[a + 1]) * tx;
+      bot = data[c + 1] + (data[d + 1] - data[c + 1]) * tx;
+      tensor[o + 1] = (top + (bot - top) * ty) / 255;
+      top = data[a + 2] + (data[b + 2] - data[a + 2]) * tx;
+      bot = data[c + 2] + (data[d + 2] - data[c + 2]) * tx;
+      tensor[o + 2] = (top + (bot - top) * ty) / 255;
+      o += 3;
     }
   }
 }
@@ -485,6 +553,13 @@ export function letterboxToTensor(
   return { tensor: t, place: { x: x / size, y: y / size, w: w / size, h: h / size } };
 }
 
+/** One macrotask turn, so promise chains already queued (a model call) get to start. */
+function yieldToQueue(): Promise<void> {
+  // Through globalThis: this file is compiled without DOM or Node types (scripts/test-localizer.mjs).
+  const g = globalThis as unknown as { setImmediate?: (f: () => void) => void; setTimeout: (f: () => void, ms: number) => void };
+  return new Promise((resolve) => (g.setImmediate ? g.setImmediate(resolve) : g.setTimeout(resolve, 0)));
+}
+
 /** A normalized detector box, as detector-core.ts LesionBox. */
 type DetBox = { cx: number; cy: number; bw: number; bh: number; conf: number };
 
@@ -508,6 +583,8 @@ export type SpotSearch = {
    * lesion the verifier would not confirm. crop.tsx frames it instead of zooming blind.
    */
   fallback?: LesionCandidate;
+  /** Diagnostics: true when the time budget stopped detector runs early. */
+  budgetHit?: boolean;
   /** Diagnostics: where each verified proposal was, what the detector said (0 = no box) and the verifier (-1 = not run). */
   checked: { cx: number; cy: number; size: number; conf: number; pLesion: number }[];
 };
@@ -530,6 +607,14 @@ export type SpotModels = {
   /** The spot verifier on a verifierSize-square RGB 0..1 crop: P(centred on a lesion). Optional. */
   verify?: (tensor: Float32Array) => Promise<number>;
   verifierSize?: number;
+  /**
+   * Time budget: once `now()` passes `deadline`, no more detector runs start (the slow model -
+   * ~145 ms on an iPhone, ~0.5-1 s on a mid-range Android). Spots not yet sized keep their
+   * proposal ring; large ones, which need the detector, are dropped. A vivo (Dimensity 700) ran
+   * past crop.tsx's timeout and lost the whole result (2026-10-19). Optional; no budget if unset.
+   */
+  deadline?: number;
+  now?: () => number;
 };
 
 export type SpotSettings = {
@@ -591,8 +676,22 @@ export async function findSpots(
   settings: SpotSettings = SPOT_SETTINGS,
 ): Promise<SpotSearch> {
   const { width: W, height: H } = img;
-  const { scan, detect, detectorSize } = models;
+  const { scan, detectorSize } = models;
+  let budgetHit = false;
+  const inBudget = () => {
+    if (models.deadline === undefined || (models.now ?? Date.now)() < models.deadline) return true;
+    budgetHit = true;
+    return false;
+  };
+  const detect = models.detect;
   let grid: LumaGrid | null = null;
+  // Each scale is downscaled once and shared by the dark, colour and bright scans.
+  const smalls = new Map<number, RgbaImage>();
+  const downscaled = (short: number) => {
+    let d = smalls.get(short);
+    if (!d) smalls.set(short, (d = downscaleRgba(img, short)));
+    return d;
+  };
   // Coarse to fine, each scale with its own share of the slots. One pooled ranking let a fine scan's
   // many strong texture peaks INSIDE a large lesion outrank - and, as overlapping duplicates, erase -
   // the coarse scan's proposal for the lesion as a whole; every piece then failed verification (a
@@ -602,13 +701,33 @@ export async function findSpots(
   const share = Math.max(1, Math.floor(settings.maxProposals / settings.scales.length));
   const quotas = settings.scales.length === PROPOSAL_QUOTAS.length && settings.maxProposals === MAX_PROPOSALS ? PROPOSAL_QUOTAS : null;
   settings.scales.forEach((short, i) => {
-    const small = downscaleRgba(img, short);
+    const small = downscaled(short);
     if (!grid) grid = lumaGrid(small.data, small.width, small.height);
     const mine = blobsToProposals(scan(small.data, small.width, small.height, PROPOSAL_SCAN).blobs, small.width, small.height);
     const quota = quotas ? quotas[i] : i === settings.scales.length - 1 ? settings.maxProposals - kept.length : share;
-    const fresh = mergeProposals(mine, W, H, Infinity).filter((p) => mergeProposals([...kept, p], W, H, Infinity).length > kept.length);
+    const fresh = mergeProposals(mine, W, H, Infinity).filter(
+      (p) => !isCornerAnnotation(img, p) && mergeProposals([...kept, p], W, H, Infinity).length > kept.length,
+    );
     kept.push(...fresh.slice(0, Math.max(0, quota)));
   });
+  // Spots that stand out by COLOUR or by being BRIGHTER - yellow crusts, white scale - which the
+  // darkness scans above never propose (a palm photo's two biggest lesions were never even checked,
+  // 2026-10-19). A small extra budget at two scales; only where nothing is proposed already.
+  if (settings.maxProposals === MAX_PROPOSALS) {
+    for (const channel of ['chroma', 'bright'] as const) {
+      const extra: SpotProposal[] = [];
+      for (const short of COLOUR_SCALES) {
+        const small = downscaled(short);
+        extra.push(...blobsToProposals(scan(small.data, small.width, small.height, { ...PROPOSAL_SCAN, channel }).blobs, small.width, small.height));
+      }
+      // Small spots only: large colour blobs were cheeks, scalps, ears and eye areas (seen on 40 of
+      // 107 online photos when uncapped).
+      const fresh = mergeProposals(extra.filter((p) => p.size <= UNSIZED_MAX), W, H, Infinity)
+        .filter((p) => mergeProposals([...kept, p], W, H, Infinity).length > kept.length)
+        .map((p) => ({ ...p, colour: true }));
+      kept.push(...fresh.slice(0, COLOUR_QUOTA));
+    }
+  }
 
   const verified: LesionCandidate[] = [];
   const checked: SpotSearch['checked'] = [];
@@ -627,7 +746,7 @@ export async function findSpots(
       let r = verifyRect(p, W, H, settings.verifyMinFrac);
       let pLesion = await verify(squareToTensor(img, r, vSize));
       let grown = false;
-      if (pLesion >= GROW_MIN && pLesion < settings.verifierMinLarge && p.size * GROW_FACTOR < 1) {
+      if (!p.colour && pLesion >= GROW_MIN && pLesion < settings.verifierMinLarge && p.size * GROW_FACTOR < 1) {
         const r2 = verifyRect({ ...p, size: p.size * GROW_FACTOR }, W, H, settings.verifyMinFrac);
         const p2 = await verify(squareToTensor(img, r2, vSize));
         // Only a near-certain wider look counts: wider crops of eye sockets, mouths and patches of
@@ -644,10 +763,62 @@ export async function findSpots(
     // 2. The detector (~130 ms a run on an iPhone) only sizes the rings of accepted spots, and only
     //    the DETECT_CAP most likely ones: on a back covered in spots it ran 26 times (3.8 s).
     const accepted = looks.filter((l) => l.pLesion >= settings.verifierMin).sort((a, b) => b.pLesion - a.pLesion);
+    // Only on wide photos (a strip of forearm, a whole back): there the large crops are mostly skin
+    // and fooled the verifier. A near-square photo is usually a close-up whose large spot IS the
+    // lesion, where the detector is often weak (0.20-0.41 on ISIC close-ups) - the same range as the
+    // false rings, so the rule cannot be applied everywhere.
+    const wide = Math.max(W, H) / Math.min(W, H) >= WIDE_ASPECT;
+    // The detector on the whole photo, computed at most once, only if a large spot needs it.
+    let wholeCache: LesionCandidate | null | undefined;
+    const wholeBox = async () => {
+      if (wholeCache !== undefined) return wholeCache;
+      if (!inBudget()) return null;
+      const { tensor, place } = letterboxToTensor(img, detectorSize);
+      const wb = bestBox(await detect(tensor));
+      wholeCache = wb ? { cx: (wb.cx - place.x) / place.w, cy: (wb.cy - place.y) / place.h, bw: wb.bw / place.w, bh: wb.bh / place.h, conf: wb.conf } : null;
+      return wholeCache;
+    };
+    // Detector runs, in priority order: spots that cannot be kept without a detector box (large or
+    // grown) first, so a slow phone that hits the time budget loses ring sizing on small spots
+    // rather than losing a big lesion. Which spots get a run is unchanged (the DETECT_CAP most
+    // likely), so a phone that finishes inside the budget gets exactly the same result.
+    const boxes = new Map<number, DetBox | null>();
+    // Next come spots whose crop holds another accepted spot: the neighbour check below
+    // (NEIGHBOUR_DET_CONF) needs the detector's verdict on both.
+    const holds = (r: PixelRect, q: SpotProposal) => {
+      const x = q.cx * W;
+      const y = q.cy * H;
+      return x >= r.originX && x < r.originX + r.side && y >= r.originY && y < r.originY + r.side;
+    };
+    const order = accepted
+      .map((l, i) => ({
+        i,
+        rank: l.grown || l.p.size > UNSIZED_MAX ? 2 : accepted.some((o, j) => j !== i && j < DETECT_CAP && holds(l.r, o.p)) ? 1 : 0,
+      }))
+      .filter(({ i }) => i < DETECT_CAP)
+      .sort((x, y) => y.rank - x.rank || x.i - y.i);
+    // Each crop is built while the previous detector run is still going: the model runs on a
+    // native thread, and building a 768 crop is a large share of the search's JS time on Android.
+    const cropFor = (k: number) => squareToTensor(img, accepted[order[k].i].r, detectorSize);
+    let tensor = order.length && inBudget() ? cropFor(0) : null;
+    for (let k = 0; tensor; k++) {
+      const run = detect(tensor);
+      // Let the queued call reach the native interpreter before this thread gets busy again.
+      await yieldToQueue();
+      const following = k + 1 < order.length ? cropFor(k + 1) : null;
+      boxes.set(order[k].i, bestBox(await run));
+      tensor = following && inBudget() ? following : null;
+    }
+    // Spots the detector ran on but boxed nothing, and the box centres it did confirm - see
+    // NEIGHBOUR_DET_CONF.
+    const noBox: { v: LesionCandidate; r: PixelRect }[] = [];
+    const confirmed: { x: number; y: number }[] = [];
     for (let i = 0; i < accepted.length; i++) {
       const { p, r, pLesion, grown } = accepted[i];
-      const b = i < DETECT_CAP ? bestBox(await detect(squareToTensor(img, r, detectorSize))) : null;
-      checked.push({ cx: p.cx, cy: p.cy, size: p.size, conf: i < DETECT_CAP ? (b ? b.conf : 0) : -1, pLesion, ...(grown ? { grown: true, box: b ? (Math.max(b.bw, b.bh) * r.side) / se : 0, bx: b ? b.cx : -1, by: b ? b.cy : -1 } : {}) } as SpotSearch['checked'][number]);
+      const ran = boxes.has(i);
+      if (!ran && i < DETECT_CAP && (pLesion < UNCHECKED_MIN || p.size > UNCHECKED_MAX_SIZE)) continue; // skipped by the time budget
+      const b = ran ? (boxes.get(i) ?? null) : null;
+      checked.push({ cx: p.cx, cy: p.cy, size: p.size, conf: ran ? (b ? b.conf : 0) : -1, pLesion, ...(grown ? { grown: true, box: b ? (Math.max(b.bw, b.bh) * r.side) / se : 0, bx: b ? b.cx : -1, by: b ? b.cy : -1 } : {}) } as SpotSearch['checked'][number]);
       // The detector's box sizes the ring only when it is centred in the crop and no bigger than
       // the crop's lesion framing allows - otherwise it is the detector's default box (40-60% of
       // whatever it is shown), which drew rings over a whole foot or face.
@@ -663,15 +834,36 @@ export async function findSpots(
       // was tried and REJECTED - the detector boxed eye sockets and nose undersides too. Large real
       // lesions found only as pieces reach the bar through the wider second look above instead.
       if (ring > UNSIZED_MAX && pLesion < settings.verifierMinLarge) continue;
+      // Colour-scan spots need the near-certain bar too, and must stay small.
+      if (p.colour && (pLesion < settings.verifierMinLarge || ring > UNSIZED_MAX)) continue;
+      // ...and, on a wide photo, a detector that at least half-agrees. Huge crops of sun-damaged
+      // forearms scored 0.96-0.98 on the verifier (a lesion somewhere inside) with the detector at
+      // 0.28-0.34, and one swallowed a real nodule into its ring (2026-10-19, on device).
+      // Exempt: a close-up where the detector, shown the whole photo, boxes a lesion here - real
+      // large lesions on close-ups often score under 0.4 on their crop (requiring it everywhere cut
+      // ISIC close-ups with a spot from 56% to 39%).
+      if (wide && ring > UNSIZED_MAX && !(near && b && b.conf >= LARGE_DET_MIN)) {
+        const w = await wholeBox();
+        const backed = w && w.conf >= CLOSEUP_CONF && Math.abs(p.cx - w.cx) < w.bw / 2 && Math.abs(p.cy - w.cy) < w.bh / 2;
+        if (!backed) continue;
+      }
       // A spot accepted only on the wider second look must also be boxed confidently by the
       // detector: wider crops of an eye socket, a nose's underside and a patch of a spotted back
       // also reached 0.95, and without a detector box the ring is a guess the size of the crop.
       if (grown && !(near && b && b.conf >= GROWN_DET_CONF)) continue;
-      verified.push(
+      const v: LesionCandidate =
         near && b
           ? { cx: (r.originX + b.cx * r.side) / W, cy: (r.originY + b.cy * r.side) / H, bw: (b.bw * r.side) / W, bh: (b.bh * r.side) / H, conf: pLesion }
-          : { cx: p.cx, cy: p.cy, bw: (p.size * se * 1.3) / W, bh: (p.size * se * 1.3) / H, conf: pLesion },
-      );
+          : { cx: p.cx, cy: p.cy, bw: (p.size * se * 1.3) / W, bh: (p.size * se * 1.3) / H, conf: pLesion };
+      verified.push(v);
+      // No detector verdict for it (it drew nothing, or the time budget skipped it): kept only if
+      // its crop is not riding on a lesion the detector did confirm.
+      if ((ran && !b) || (!ran && i < DETECT_CAP)) noBox.push({ v, r });
+      if (near && b && b.conf >= NEIGHBOUR_DET_CONF) confirmed.push({ x: v.cx * W, y: v.cy * H });
+    }
+    for (const { v, r } of noBox) {
+      const riding = confirmed.some((c) => c.x >= r.originX && c.x < r.originX + r.side && c.y >= r.originY && c.y < r.originY + r.side);
+      if (riding) verified.splice(verified.indexOf(v), 1);
     }
   } else {
     for (const p of kept) {
@@ -749,7 +941,7 @@ export async function findSpots(
   // framed on its own, the viewfinder zooms INTO the lesion. One detector run on the whole photo -
   // the close-up it was trained on - settles it: if it confidently boxes a lesion that contains the
   // spot and is clearly bigger, the spot becomes that box, so the whole lesion is in frame.
-  if (useVerifier && spots.length === 1) {
+  if (useVerifier && spots.length === 1 && inBudget()) {
     const { tensor, place } = letterboxToTensor(img, detectorSize);
     const b = bestBox(await detect(tensor));
     const c = spots[0];
@@ -772,14 +964,18 @@ export async function findSpots(
   // verification, while joining merged separate moles in a shadowed back into one ring.
   if (grid && !useVerifier) spots = joinConnected(spots, grid);
   let fallback: LesionCandidate | undefined;
-  if (useVerifier && spots.length === 0) {
+  if (useVerifier && spots.length === 0 && inBudget()) {
     const { tensor, place } = letterboxToTensor(img, detectorSize);
     const b = bestBox(await detect(tensor));
     if (b && b.conf >= FALLBACK_CONF) {
       fallback = { cx: (b.cx - place.x) / place.w, cy: (b.cy - place.y) / place.h, bw: b.bw / place.w, bh: b.bh / place.h, conf: b.conf };
     }
   }
-  return { spots: spots.slice(0, MAX_SHOWN), proposals: kept.length, confs: verified.map((v) => v.conf), checked, fallback };
+  // Order: among confident spots (≥ RANK_CONF) the biggest first - an ulcer at 0.97 should lead,
+  // not a pinhead papule at 0.99 - then the rest by confidence. The first spot is pre-selected.
+  const rank = (c: LesionCandidate) => (c.conf >= RANK_CONF ? 1 + Math.max(c.bw * W, c.bh * H) / Math.min(W, H) : c.conf);
+  spots = [...spots].sort((a, b) => rank(b) - rank(a));
+  return { spots: spots.slice(0, MAX_SHOWN), proposals: kept.length, confs: verified.map((v) => v.conf), checked, fallback, budgetHit };
 }
 
 /** Pan/zoom for scan/crop.tsx's viewfinder: the same transform its gestures produce. */

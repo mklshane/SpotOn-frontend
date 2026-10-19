@@ -8,7 +8,7 @@ import { Icon } from "@/components/ui/icon";
 import { PressableScale } from "@/components/ui/pressable-scale";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
-import { CLASS_DISPLAY } from "@/lib/triage/recommendations";
+import { resultDisplay } from "@/lib/triage/recommendations";
 import type { ScreeningRecord, TriageTier } from "@/lib/triage/types";
 
 const TIER_LABEL: Record<TriageTier, string> = localizedCopy({
@@ -46,7 +46,7 @@ export function ScanTimeline({ screenings, onOpen }: ScanTimelineProps) {
       ) : null}
       {screenings.map((screening, index) => ({ screening, index })).reverse().map(({ screening, index }) => {
         const colors = tierColor(theme, screening.triage.tier);
-        const classification = CLASS_DISPLAY[screening.classification.topClass];
+        const classification = resultDisplay(screening.classification.topClass, screening.classification.topConfidence, screening.triage);
         return (
           <View key={screening.id} style={styles.row}>
             <View style={styles.railPointWrap}>

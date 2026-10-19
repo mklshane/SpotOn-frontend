@@ -145,6 +145,82 @@ export const SOURCES = localizedCopy({
     title: 'Solar lentigo',
     url: 'https://dermnetnz.org/topics/solar-lentigo',
   },
+  // Fetched on 2026-10-18 for the result screen's "Why it could be either" card (lib/triage/lookalike.ts).
+  // DermNet titles were read back from the live pages; every DOI was checked against Crossref
+  // (title, journal, year) and each cited claim was found in the source text.
+  villenaFilipinoBcc: {
+    org: 'Acta Medica Philippina (2024)',
+    title: 'Clinicodemographic and Dermoscopic Features of Basal Cell Carcinoma among Filipino Patients Seen in a Tertiary Care Clinic',
+    url: 'https://doi.org/10.47895/amp.v58i17.7486',
+  },
+  dermnetBccSkinOfColour: {
+    org: 'DermNet',
+    title: 'Basal cell carcinoma in skin of colour',
+    url: 'https://dermnetnz.org/topics/basal-cell-carcinoma-in-skin-of-colour',
+  },
+  /** Nodular melanoma: rapidly enlarging, dome-shaped firm lump, often black; may ulcerate or bleed. */
+  dermnetNodularMelanoma: {
+    org: 'DermNet',
+    title: 'Nodular melanoma',
+    url: 'https://dermnetnz.org/topics/nodular-melanoma',
+  },
+  /** Pigmented BCC: no pigment network, blue-grey ovoid nests, arborising vessels, leaf-like areas. */
+  dermnetBccDermoscopy: {
+    org: 'DermNet',
+    title: 'Basal cell carcinoma dermoscopy',
+    url: 'https://dermnetnz.org/topics/basal-cell-carcinoma-dermoscopy',
+  },
+  abuduPigmentedBcc: {
+    org: 'Cureus (2019)',
+    title: 'Pigmented Basal Cell Carcinoma Masquerading as a Melanoma',
+    url: 'https://doi.org/10.7759/cureus.4369',
+  },
+  dermnetBcc: {
+    org: 'DermNet',
+    title: 'Basal Cell Carcinoma: Symptoms, Causes, and Treatment',
+    url: 'https://dermnetnz.org/topics/basal-cell-carcinoma',
+  },
+  dermnetScc: {
+    org: 'DermNet',
+    title: 'Cutaneous squamous cell carcinoma: Symptoms, Causes, and Treatment',
+    url: 'https://dermnetnz.org/topics/cutaneous-squamous-cell-carcinoma',
+  },
+  /** Clinicians' naked-eye diagnoses were right 72.7% of the time for BCC and 49.4% for SCC. */
+  healClinicalAccuracy: {
+    org: 'British Journal of Dermatology (2008)',
+    title: 'Accuracy of clinical diagnosis of skin lesions',
+    url: 'https://doi.org/10.1111/j.1365-2133.2008.08715.x',
+  },
+  dinnesCochraneMelanoma: {
+    org: 'Cochrane Database of Systematic Reviews (2018)',
+    title: 'Dermoscopy, with and without visual inspection, for diagnosing melanoma in adults',
+    url: 'https://doi.org/10.1002/14651858.CD011902.pub2',
+  },
+  dinnesCochraneKeratinocyte: {
+    org: 'Cochrane Database of Systematic Reviews (2018)',
+    title: 'Visual inspection and dermoscopy, alone or in combination, for diagnosing keratinocyte skin cancers in adults',
+    url: 'https://doi.org/10.1002/14651858.CD011901.pub2',
+  },
+  dermnetAmelanoticMelanoma: {
+    org: 'DermNet',
+    title: 'Amelanotic melanoma: Appearances, Symptoms and Treatment',
+    url: 'https://dermnetnz.org/topics/amelanotic-melanoma',
+  },
+  sohailAmelanoticSeries: {
+    org: 'Oxford Medical Case Reports (2024)',
+    title: 'Identifying the clinical and histopathological characteristics of amelanotic melanoma: a case series',
+    url: 'https://doi.org/10.1093/omcr/omae029',
+  },
+  inouePigmentedBowen: {
+    org: 'Dermatology Research and Practice (2010)',
+    title: 'Dermoscopic Features of Pigmented Bowen\u2019s Disease in a Japanese Female Mimicking Malignant Melanoma',
+    url: 'https://doi.org/10.1155/2010/543091',
+  },
+  freemanSkinCancerApps: {
+    org: 'BMJ (2020)',
+    title: 'Algorithm based smartphone apps to assess risk of skin cancer in adults: systematic review of diagnostic accuracy studies',
+    url: 'https://doi.org/10.1136/bmj.m127',
+  },
 } as const satisfies Record<string, SourceRef>);
 
 export type SourceId = keyof typeof SOURCES;

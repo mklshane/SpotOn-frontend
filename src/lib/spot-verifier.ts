@@ -10,10 +10,13 @@ import { loadTensorflowModel } from '@/lib/tflite';
  * when perfectly framed. Hand-made rules (darkness, contrast, hue, size) each failed on the next
  * photo. This model was trained for exactly the picker's question.
  *
- * MobileNetV3-small, trained by SpotOn-synthetic/synth/spot_verifier/ (v3, 2026-10-17): lesion crops
+ * MobileNetV3-small, trained by SpotOn-synthetic/synth/spot_verifier/ (v4, 2026-10-18; the file keeps
+ * its v1 name): lesion crops
  * from retrain/base_pool/DDI/Fitzpatrick17k/DermaCon/PAD-UFES framed like a picker proposal, against
  * face anatomy (LFW, CelebA-HQ 1024px, Wikimedia Commons ear/nostril/closed-eye close-ups - as the
- * app's own blob scan proposes them) and non-lesion proposals on skin. Held-out photos (ISIC holdout,
+ * app's own blob scan proposes them), hands/nails/feet (Commons), letters, watermarks and censor bars drawn
+ * on skin (v4: polished fingernails and a figure-panel letter were ringed on device), and non-lesion
+ * proposals on skin. Held-out photos (ISIC holdout,
  * dataset_real, the picker's online/user test sets) were never trained on.
  *
  * Contract (checked on load): input [1,128,128,3] float32 NHWC RGB 0..1 (normalisation in the graph),

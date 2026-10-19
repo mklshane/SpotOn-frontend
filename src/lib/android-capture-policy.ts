@@ -16,12 +16,20 @@ export function initialAndroidSchedule(sessionId: number): AndroidDetectionSched
   return { sessionId, lastStartedAt: null, meanMs: 1000 / 12, intervalMs: 1000 / 6 };
 }
 
+/**
+ * Pass spacing while a box is locked on and steady. On phones whose CameraX preview is drawn
+ * through GL (MediaTek, e.g. vivo V2248), every GPU detector pass stalls the preview by ~80 ms;
+ * with nothing moving there is little to track, so half as many passes halve the stutter. Any
+ * movement clears the steady flag and the next pass runs at the full rate again.
+ */
+export const ANDROID_STEADY_INTERVAL_MS = 600;
+
 export function androidDetectionDue(
-  state: AndroidDetectionSchedule, now: number, paused: boolean, busy: boolean,
+  state: AndroidDetectionSchedule, now: number, paused: boolean, busy: boolean, steady = false,
 ): boolean {
   'worklet';
-  return !paused && !busy &&
-    (state.lastStartedAt === null || now - state.lastStartedAt >= state.intervalMs);
+  const gap = steady ? Math.max(state.intervalMs, ANDROID_STEADY_INTERVAL_MS) : state.intervalMs;
+  return !paused && !busy && (state.lastStartedAt === null || now - state.lastStartedAt >= gap);
 }
 
 export function completeAndroidDetection(
@@ -129,4 +137,60 @@ export function resetAutoFocus(state: AutoFocusState): AutoFocusState {
 
 export function userFocused(state: AutoFocusState, now: number): AutoFocusState {
   return { ...state, userUntil: now + AUTOFOCUS_USER_HOLD_MS };
+}
+
+/**
+ * EXIF orientation (1-8) from the start of a JPEG, or null when there is none or the header is
+ * not one this reads. Only the APP1/TIFF IFD0 Orientation tag (0x0112) is read.
+ */
+export function jpegExifOrientation(bytes: Uint8Array): number | null {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+  let p = 2;
+  while (p + 4 <= bytes.length) {
+    if (bytes[p] !== 0xff) return null;
+    const marker = bytes[p + 1];
+    if (marker === 0xda || marker === 0xd9) return null; // image data: no EXIF before it
+    const len = (bytes[p + 2] << 8) | bytes[p + 3];
+    if (len < 2) return null;
+    const seg = p + 4;
+    if (marker === 0xe1 && seg + 14 <= bytes.length &&
+        bytes[seg] === 0x45 && bytes[seg + 1] === 0x78 && bytes[seg + 2] === 0x69 && bytes[seg + 3] === 0x66) {
+      const tiff = seg + 6;
+      const little = bytes[tiff] === 0x49;
+      const u16 = (o: number) => little ? bytes[o] | (bytes[o + 1] << 8) : (bytes[o] << 8) | bytes[o + 1];
+      const u32 = (o: number) => little
+        ? (bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16) | (bytes[o + 3] << 24)) >>> 0
+        : ((bytes[o] << 24) | (bytes[o + 1] << 16) | (bytes[o + 2] << 8) | bytes[o + 3]) >>> 0;
+      const ifd = tiff + u32(tiff + 4);
+      if (ifd + 2 > bytes.length) return null;
+      const count = u16(ifd);
+      for (let i = 0; i < count; i++) {
+        const entry = ifd + 2 + i * 12;
+        if (entry + 12 > bytes.length) return null;
+        if (u16(entry) === 0x0112) {
+          const value = u16(entry + 8);
+          return value >= 1 && value <= 8 ? value : null;
+        }
+      }
+      return null;
+    }
+    p = seg + len - 2;
+  }
+  return null;
+}
+
+/**
+ * Whether the Android post-capture "upright" pass (decode, rotate, downscale to PHOTO_LONG_EDGE,
+ * re-encode at q0.92) can be skipped and the sensor still handed to the crop screen as-is.
+ *
+ * Capture is portrait-locked. When the still already has portrait pixels with no EXIF rotation
+ * and no mirror to bake, the pass only downscales - ~1 s on a vivo V2248 (3060x4080) - and the
+ * crop screen then decodes that copy again to cut its 1024 square. Cropping the original instead
+ * decodes the same full frame once (same peak memory as the pass itself) and cuts from real
+ * pixels. Anything else keeps the pass: downstream decoders (jpeg-js) ignore EXIF.
+ */
+export function canSkipUpright(
+  width: number, height: number, orientation: number | null, mirrored: boolean,
+): boolean {
+  return height >= width && (orientation === null || orientation === 1) && !mirrored;
 }

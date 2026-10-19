@@ -25,7 +25,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/lib/auth';
 import { TourTarget } from '@/lib/product-tour';
 import { useScanHistory } from '@/lib/scan-history';
-import { CLASS_DISPLAY, TIER_CONTENT } from '@/lib/triage/recommendations';
+import { resultDisplay, TIER_CONTENT } from '@/lib/triage/recommendations';
 import type { ScreeningRecord, TriageTier } from '@/lib/triage/types';
 
 /** "Good morning" / "Good afternoon" / "Good evening" based on the device clock. */
@@ -78,7 +78,7 @@ function RecentScreeningCard({ item }: { item: ScreeningRecord }) {
   useLocale();
   const theme = useTheme();
   const tierColors = getTierColors(theme, item.triage.tier);
-  const cls = CLASS_DISPLAY[item.classification.topClass];
+  const cls = resultDisplay(item.classification.topClass, item.classification.topConfidence, item.triage);
   // The classified type is what the card is about; the body region is context for it, so it
   // rides in the caption next to the date and simply drops out when the spot was never marked.
   const location = item.mark?.region ? t(item.mark.region) : null;

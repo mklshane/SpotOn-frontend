@@ -30,7 +30,7 @@ import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
 import {
   IMAGE_AGREEMENT_CHECK_ENABLED,
-  MALIGNANT_THRESHOLD,
+  malignantThresholdForModel,
 } from '@/lib/classifier/model-config';
 import { RESCAN_PROMPT } from '@/lib/triage/recommendations';
 import { decideAnalysis } from '@/lib/triage/scan-flow';
@@ -39,6 +39,7 @@ import {
   computeMalignantScore,
   computeTriage,
   evaluateImageAgreement,
+  pickCombinedMalignant,
   evaluateSafetyFloor,
   evaluateScaleConsistency,
 } from '@/lib/triage/tps-core';
@@ -216,7 +217,8 @@ export default function AnalysisScreen() {
         {
           applyFloor,
           malignantScore: computeMalignantScore(output.probs),
-          malignantThreshold: MALIGNANT_THRESHOLD,
+          malignantThreshold: malignantThresholdForModel(output.modelVersion),
+          second: pickCombinedMalignant(output.probs) ?? undefined,
         },
       );
       payload = {

@@ -50,6 +50,12 @@ export type TriageResult = {
   malignantScore: number;
   /** True when the Malignant Gate raised the tier above the computed TPS tier. */
   malignantGateApplied: boolean;
+  /**
+   * Runner-up malignant class, set only for a combined result (see pickCombinedMalignant) -
+   * e.g. MEL .60 / BCC .40 reads "Melanoma or Basal Cell Carcinoma" and its CS counts both.
+   */
+  secondClass?: LesionClass;
+  secondConfidence?: number;
 };
 
 /** NICE NG12 referral-urgency weights. The 2-point gap BENIGN→OTHER is deliberate. */
@@ -108,6 +114,16 @@ export const SAFETY_FLOOR_CONFIDENCE = 0.4;
 /** Half-open tier lower bounds: [0,2) low, [2,4) moderate, [4,6) high, [6,8] critical. */
 export const TIER_THRESHOLDS = { moderate: 2, high: 4, critical: 6 } as const;
 export const TPS_MAX = 8;
+/**
+ * Combined malignant result: when the top two classes are BOTH malignant and the runner-up holds at
+ * least this much probability, the result names both ("Melanoma or Basal Cell Carcinoma") and the CS
+ * scores their combined mass at the more urgent of the two weights: max(W1, W2) × (C1 + C2). Argmax
+ * alone throws away the runner-up, so BCC .46 / MEL .43 - 89% malignant, much of it melanoma - scored
+ * as a 46% BCC (CS 1.38) and even a per-class sum (3.53) stayed Moderate; it is now 5 × .89 = 4.45,
+ * High. Classification alone still tops out at 5 < 6, so Critical still needs reported symptoms.
+ * Inclusive (>=).
+ */
+export const COMBINED_SECOND_MIN = 0.3;
 
 const ALL_QUESTIONS: readonly QuestionId[] = [...MAJOR_QUESTIONS, ...MINOR_QUESTIONS];
 
@@ -134,17 +150,30 @@ export function computeSymptomScore(answers: SymptomAnswers): { raw: number; sca
   return { raw, scaled: round4((raw / SS_RAW_MAX) * SS_SCALE) };
 }
 
-/** Classification Score = class weight × top softmax confidence. */
+function checkClassConfidence(cls: LesionClass, confidence: number): number {
+  const w = CLASS_WEIGHTS[cls];
+  if (w === undefined) throw new Error(`tps: unknown class "${cls}"`);
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+    throw new Error(`tps: confidence out of range (${confidence})`);
+  }
+  return w;
+}
+
+/**
+ * Classification Score = class weight × top softmax confidence. For a combined malignant result it
+ * is max(W1, W2) × (C1 + C2), and `classWeight` records that effective weight (see
+ * COMBINED_SECOND_MIN).
+ */
 export function computeCS(
   topClass: LesionClass,
   topConfidence: number,
+  second?: { cls: LesionClass; confidence: number },
 ): { classWeight: number; cs: number } {
-  const classWeight = CLASS_WEIGHTS[topClass];
-  if (classWeight === undefined) throw new Error(`tps: unknown class "${topClass}"`);
-  if (!Number.isFinite(topConfidence) || topConfidence < 0 || topConfidence > 1) {
-    throw new Error(`tps: confidence out of range (${topConfidence})`);
-  }
-  return { classWeight, cs: round4(classWeight * topConfidence) };
+  const topWeight = checkClassConfidence(topClass, topConfidence);
+  if (!second) return { classWeight: topWeight, cs: round4(topWeight * topConfidence) };
+  const classWeight = Math.max(topWeight, checkClassConfidence(second.cls, second.confidence));
+  const mass = Math.min(1, topConfidence + second.confidence);
+  return { classWeight, cs: round4(classWeight * mass) };
 }
 
 export function computeTPS(cs: number, symptomScoreScaled: number): number {
@@ -294,9 +323,15 @@ export function computeTriage(
   topClass: LesionClass,
   topConfidence: number,
   answers: SymptomAnswers,
-  opts: { applyFloor?: boolean; malignantScore?: number; malignantThreshold?: number } = {},
+  opts: {
+    applyFloor?: boolean;
+    malignantScore?: number;
+    malignantThreshold?: number;
+    /** Runner-up of a combined malignant result, from pickCombinedMalignant. */
+    second?: { cls: LesionClass; confidence: number };
+  } = {},
 ): TriageResult {
-  const { classWeight, cs } = computeCS(topClass, topConfidence);
+  const { classWeight, cs } = computeCS(topClass, topConfidence, opts.second);
   const { raw, scaled } = computeSymptomScore(answers);
   const tps = computeTPS(cs, scaled);
   let result: TriageResult = {
@@ -311,6 +346,7 @@ export function computeTriage(
     confidenceQualifier: false,
     malignantScore: opts.malignantScore ?? 0,
     malignantGateApplied: false,
+    ...(opts.second ? { secondClass: opts.second.cls, secondConfidence: opts.second.confidence } : {}),
   };
   // A malignant argmax (MEL/SCC/BCC) never reads as Low: showing "Basal Cell Carcinoma" next to
   // "No strong signs of concern" is contradictory. Only reachable in the narrow band where the top
@@ -345,6 +381,28 @@ export function pickTopClass(probs: Record<LesionClass, number>): {
     }
   }
   return { topClass, topConfidence };
+}
+
+/**
+ * The runner-up for a combined malignant result, or null. Both of the top two classes must be
+ * malignant and the runner-up must hold >= COMBINED_SECOND_MIN. Ranking uses pickTopClass's
+ * tie-break (higher weight wins), so the first class always matches pickTopClass.
+ */
+export function pickCombinedMalignant(
+  probs: Record<LesionClass, number>,
+): { cls: LesionClass; confidence: number } | null {
+  const { topClass } = pickTopClass(probs);
+  if (!MALIGNANT_CLASSES.includes(topClass)) return null;
+  let second: LesionClass | null = null;
+  for (const cls of Object.keys(CLASS_WEIGHTS) as LesionClass[]) {
+    if (cls === topClass) continue;
+    const p = probs[cls];
+    if (second === null || p > probs[second] || (p === probs[second] && CLASS_WEIGHTS[cls] > CLASS_WEIGHTS[second])) {
+      second = cls;
+    }
+  }
+  if (second === null || !MALIGNANT_CLASSES.includes(second)) return null;
+  return probs[second] >= COMBINED_SECOND_MIN ? { cls: second, confidence: probs[second] } : null;
 }
 
 /* ---------------------------------------------------------------------------------------------

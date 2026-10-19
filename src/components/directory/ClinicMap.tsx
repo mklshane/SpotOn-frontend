@@ -1,4 +1,4 @@
-import { t, useLocale } from '@/lib/i18n';
+import { t, useLocale } from "@/lib/i18n";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
@@ -69,6 +69,9 @@ const DEVICE_LOCATION_ZOOM = 13;
  * the measurement fixed the gap is a real gap again, and positive.
  */
 const FLOATING_CONTROLS_GAP = Space.base;
+// How far the map centre can drift from the device before the locate button reads "away"
+// (outline arrow) instead of "here" (filled arrow), Apple Maps style.
+const OFF_CENTER_METERS = 75;
 
 export function ClinicMap({
   facilities,
@@ -114,6 +117,14 @@ export function ClinicMap({
   const [zoom, setZoom] = useState(
     coords ? DEVICE_LOCATION_ZOOM : MAP_DEFAULT.zoom,
   );
+  // Last settled map centre, for the locate button's here/away state. null until the first
+  // region change, which reads as "centered" since the camera seeds on `coords` when it has them.
+  const [center, setCenter] = useState<[number, number] | null>(null);
+  const isCenteredOnUser =
+    !!coords &&
+    (!center ||
+      distanceMeters(coords.latitude, coords.longitude, center[1], center[0]) <
+        OFF_CENTER_METERS);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -232,18 +243,36 @@ export function ClinicMap({
     let best: { f: (typeof facilities)[number]; d: number } | null = null;
     for (const f of facilities) {
       const d = coords
-        ? distanceMeters(coords.latitude, coords.longitude, f.latitude, f.longitude)
+        ? distanceMeters(
+            coords.latitude,
+            coords.longitude,
+            f.latitude,
+            f.longitude,
+          )
         : "distance_m" in f
           ? (f as { distance_m: number }).distance_m
           : Infinity;
       if (!best || d < best.d) best = { f, d };
     }
-    return best && Number.isFinite(best.d) ? `${best.f.city}, ${best.f.province}` : null;
+    return best && Number.isFinite(best.d)
+      ? `${best.f.city}, ${best.f.province}`
+      : null;
   }, [facilities, coords]);
 
   const applyZoom = (delta: number) => {
     const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom + delta));
     cameraRef.current?.zoomTo(next, { duration: 200 });
+    setZoom(next);
+  };
+
+  const recenterOnUser = () => {
+    if (!coords) return;
+    const next = Math.max(zoom, DEVICE_LOCATION_ZOOM);
+    cameraRef.current?.easeTo({
+      center: [coords.longitude, coords.latitude],
+      zoom: next,
+      duration: 500,
+    });
     setZoom(next);
   };
 
@@ -256,7 +285,8 @@ export function ClinicMap({
           themeColor="muted"
           style={styles.fallbackText}
         >
-          {t("The map needs a dev build to render - clinics still list below.")}</ThemedText>
+          {t("The map needs a dev build to render - clinics still list below.")}
+        </ThemedText>
       </View>
     );
   }
@@ -286,9 +316,12 @@ export function ClinicMap({
           }
           onSelectFacility(null);
         }}
-        onRegionDidChange={(e: { nativeEvent: { zoom: number } }) =>
-          setZoom(e.nativeEvent.zoom)
-        }
+        onRegionDidChange={(e: {
+          nativeEvent: { zoom: number; center?: [number, number] };
+        }) => {
+          setZoom(e.nativeEvent.zoom);
+          if (e.nativeEvent.center) setCenter(e.nativeEvent.center);
+        }}
       >
         <Camera
           ref={cameraRef}
@@ -343,7 +376,11 @@ export function ClinicMap({
             <View style={{ width: Math.min(SCREEN_W - 32, 320) }}>
               <ClinicPreviewCard
                 facility={selectedFacility}
-                derm={dermSummary ? dermSummary.get(selectedFacility.id) ?? NO_DERMS : undefined}
+                derm={
+                  dermSummary
+                    ? (dermSummary.get(selectedFacility.id) ?? NO_DERMS)
+                    : undefined
+                }
                 onClose={() => onSelectFacility(null)}
               />
             </View>
@@ -351,32 +388,45 @@ export function ClinicMap({
         ) : null}
       </MapLibreMap>
 
-      <Animated.View
-        style={[
-          styles.zoomStack,
-          floatingControlsStyle,
-          { backgroundColor: theme.surface },
-        ]}
-      >
-        <Pressable
-          onPress={() => applyZoom(1)}
-          style={styles.zoomBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t("Zoom in")}
-        >
-          <Icon name="plus" size={18} tintColor={theme.text} />
-        </Pressable>
-        <View
-          style={[styles.zoomDivider, { backgroundColor: theme.hairline }]}
-        />
-        <Pressable
-          onPress={() => applyZoom(-1)}
-          style={styles.zoomBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t("Zoom out")}
-        >
-          <Icon name="minus" size={18} tintColor={theme.text} />
-        </Pressable>
+      <Animated.View style={[styles.controlsColumn, floatingControlsStyle]}>
+        {coords ? (
+          <Pressable
+            onPress={recenterOnUser}
+            style={({ pressed }) => [
+              styles.locateBtn,
+              { backgroundColor: theme.surface, opacity: pressed ? 0.7 : 1 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={t("Show my location")}
+          >
+            <Icon
+              name={isCenteredOnUser ? "location.fill" : "location"}
+              size={18}
+              tintColor={theme.brand}
+            />
+          </Pressable>
+        ) : null}
+        <View style={[styles.zoomStack, { backgroundColor: theme.surface }]}>
+          <Pressable
+            onPress={() => applyZoom(1)}
+            style={styles.zoomBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t("Zoom in")}
+          >
+            <Icon name="plus" size={18} tintColor={theme.text} />
+          </Pressable>
+          <View
+            style={[styles.zoomDivider, { backgroundColor: theme.hairline }]}
+          />
+          <Pressable
+            onPress={() => applyZoom(-1)}
+            style={styles.zoomBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t("Zoom out")}
+          >
+            <Icon name="minus" size={18} tintColor={theme.text} />
+          </Pressable>
+        </View>
       </Animated.View>
 
       {nearestArea ? (
@@ -412,9 +462,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xxxl,
   },
   fallbackText: { textAlign: "center" },
-  zoomStack: {
+  controlsColumn: {
     position: "absolute",
     right: Space.base,
+    gap: Space.sm,
+  },
+  locateBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Elevation.md,
+  },
+  zoomStack: {
     borderRadius: Radius.md,
     overflow: "hidden",
     ...Elevation.md,

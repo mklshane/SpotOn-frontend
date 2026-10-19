@@ -36,7 +36,7 @@ export function openDirections(opts: {
 }
 
 /** Where directory corrections go (the clinic and doctor pages' "Report incorrect info"). */
-export const DIRECTORY_SUPPORT_EMAIL = 'help.spoton@gmail.com';
+export const DIRECTORY_SUPPORT_EMAIL = 'help.spoton.dlsl@gmail.com';
 
 /** The official PDS "Find a Dermatologist" directory our dermatologist listings come from. */
 export const PDS_DIRECTORY_URL = 'https://pds.org.ph/search-doctor/';

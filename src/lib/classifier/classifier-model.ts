@@ -2,12 +2,15 @@ import { assetFileUri } from '@/lib/asset-uri';
 import { loadTensorflowModel } from '@/lib/tflite';
 
 import { ClassifierError } from './errors';
-import { FALLBACK_INPUT_SIZE, MODEL_ASSET } from './model-config';
+import { DEMO_BCC_MODEL_ASSET, FALLBACK_INPUT_SIZE, MODEL_ASSET } from './model-config';
 
 /** The loaded TFLite classifier handle (5-class lesion classifier). */
 export type ClassifierModel = Awaited<ReturnType<typeof loadTensorflowModel>>;
 
-let modelPromise: Promise<ClassifierModel> | null = null;
+const modelPromises: { regular: Promise<ClassifierModel> | null; demo: Promise<ClassifierModel> | null } = {
+  regular: null,
+  demo: null,
+};
 
 /**
  * Load the classifier once and cache it (same pattern as lesion-model.ts). `assetFileUri`
@@ -16,17 +19,18 @@ let modelPromise: Promise<ClassifierModel> | null = null;
  * res/raw identifier that fast-tflite's loader cannot open (see asset-uri.ts). Call early
  * (e.g. on quality-screen mount) to overlap the load with UI time the user is already spending.
  */
-export function getClassifierModel(): Promise<ClassifierModel> {
-  if (!modelPromise) {
-    modelPromise = (async () => {
-      const uri = await assetFileUri(MODEL_ASSET);
+export function getClassifierModel(demo = false): Promise<ClassifierModel> {
+  const key = demo ? 'demo' : 'regular';
+  if (!modelPromises[key]) {
+    modelPromises[key] = (async () => {
+      const uri = await assetFileUri(demo ? DEMO_BCC_MODEL_ASSET : MODEL_ASSET);
       return loadTensorflowModel({ url: uri }, []);
     })().catch((e) => {
-      modelPromise = null; // allow a retry on the next call
+      modelPromises[key] = null; // allow a retry on the next call
       throw new ClassifierError('model-load', 'failed to load classifier model', e);
     });
   }
-  return modelPromise;
+  return modelPromises[key];
 }
 
 /** How the graph wants its pixels: interleaved [1,H,W,3] or channel-planar [1,3,H,W]. */

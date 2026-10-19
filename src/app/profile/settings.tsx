@@ -38,7 +38,7 @@ import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
 import { useProductTour } from "@/lib/product-tour";
 import { resetScanTips } from "@/lib/product-tour-storage";
 
-const SUPPORT_EMAIL = "help.spoton@gmail.com";
+const SUPPORT_EMAIL = "help.spoton.dlsl@gmail.com";
 
 function formatConsentStatus(
   user: { consent_data_privacy: boolean; consent_at: string | null } | null,

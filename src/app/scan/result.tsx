@@ -1,7 +1,7 @@
 import { t, useLocale } from "@/lib/i18n";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,8 +27,14 @@ import {
   Screen,
 } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
+import { SOURCES } from "@/data/learn-sources";
+import {
+  FREEMAN_APPS,
+  lookalikeClosing,
+  lookalikeFor,
+} from "@/lib/triage/lookalike";
 import { SettingsRow } from "@/components/ui/settings-row";
-import { NearbyDerms } from "@/components/directory/NearbyDerms";
+import { BookOnlineDerms, NearbyDerms, useDermOptions } from "@/components/directory/NearbyDerms";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useAndroidBack } from "@/hooks/use-android-back";
 import { useTheme } from "@/hooks/use-theme";
@@ -42,6 +48,7 @@ import { useScanHistory } from "@/lib/scan-history";
 import { QUESTIONS } from "@/lib/triage/questions";
 import {
   CLASS_DISPLAY,
+  resultDisplay,
   CONFIDENCE_QUALIFIER,
   AVOID_SELF_MEDICATION_WARNING,
   malignantGateCopy,
@@ -95,6 +102,8 @@ const LEARN_ARTICLE: Record<
 export default function ResultScreen() {
   useLocale();
   const theme = useTheme();
+  // Loaded once for both dermatologist cards (clinics near you, book online).
+  const derms = useDermOptions();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
   const { getById, loading, storageIsEphemeral, deleteEntry } =
@@ -176,7 +185,17 @@ export default function ResultScreen() {
   // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
-  const cls = CLASS_DISPLAY[classification.topClass];
+  const result = resultDisplay(
+    classification.topClass,
+    classification.topConfidence,
+    triage,
+  );
+  const combined = result.parts.length > 1;
+  // Sum of the rounded shares, so the ring always equals what the legend adds up to.
+  const combinedPct = result.parts.reduce(
+    (sum, x) => sum + Math.round(x.p * 100),
+    0,
+  );
   const learnArticle = LEARN_ARTICLE[classification.topClass];
   const pct = Math.round(displayConfidence(classification, triage) * 100);
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
@@ -245,9 +264,22 @@ export default function ResultScreen() {
                 {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
                     "% match to a pattern with features similar to…" line right below, and in the
                     disclaimer - not in the label the user repeats to a clinician. */}
-                <ThemedText type="title1" style={styles.heroTitle}>
-                  {cls.name}
-                </ThemedText>
+                {/* A combined result steps down to title2, one name per line with "or" stepped
+                    back - at title1 two names wrap into three ragged lines beside the pill. */}
+                {combined ? (
+                  <ThemedText type="title2" style={styles.heroTitle}>
+                    {CLASS_DISPLAY[result.parts[0].cls].name}
+                    {"\n"}
+                    <ThemedText type="title2" themeColor="textSecondary">
+                      {t("or")}{" "}
+                    </ThemedText>
+                    {CLASS_DISPLAY[result.parts[1].cls].name}
+                  </ThemedText>
+                ) : (
+                  <ThemedText type="title1" style={styles.heroTitle}>
+                    {result.name}
+                  </ThemedText>
+                )}
                 <View style={[styles.tierBadge, { backgroundColor: colors.bg }]}>
                   <View
                     style={[styles.tierDot, { backgroundColor: colors.fg }]}
@@ -257,19 +289,92 @@ export default function ResultScreen() {
                   </ThemedText>
                 </View>
               </View>
-              <TourTarget id="resultConfidence" style={styles.heroConf}>
-                <ConfidenceRing pct={pct} color={colors.fg} />
-                <View style={styles.heroConfText}>
-                  <ThemedText type="subhead" themeColor="textSecondary">
-                    {t("AI confidence")}
-                  </ThemedText>
-                  {/* `topClass` is the raw model enum - this printed "78% probability for MEL
-                      pattern" in the most important sentence on the screen. */}
-                  <ThemedText type="callout">
-                    {pct}
-                    {t("% match to")} {cls.lay}.
-                  </ThemedText>
-                </View>
+              <TourTarget
+                id="resultConfidence"
+                style={combined ? styles.heroConfStack : styles.heroConf}
+              >
+                {combined ? (
+                  // The ring carries the combined malignant match (what the tier is scored on);
+                  // the split bar + legend show how it divides. Real calibrated values -
+                  // displayConfidence only sharpens a BENIGN top class, which this never is.
+                  // Legend sits below at full width: beside the ring, "Basal Cell Carcinoma" wraps.
+                  <>
+                    <View style={styles.heroConf}>
+                      <ConfidenceRing pct={combinedPct} color={colors.fg} />
+                      <View style={styles.heroConfText}>
+                        <ThemedText type="subhead" themeColor="textSecondary">
+                          {t("Match to skin-cancer patterns")}
+                        </ThemedText>
+                        <View
+                          style={[
+                            styles.splitTrack,
+                            { backgroundColor: theme.elementBg },
+                          ]}
+                        >
+                          {result.parts.map((x, i) => (
+                            <View
+                              key={x.cls}
+                              style={{
+                                flex: x.p,
+                                backgroundColor:
+                                  i === 0
+                                    ? colors.fg
+                                    : withAlpha(colors.fg, 0.45),
+                              }}
+                            />
+                          ))}
+                          <View
+                            style={{ flex: Math.max(0, 1 - combinedPct / 100) }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.splitLegend,
+                        { backgroundColor: theme.elementBg },
+                      ]}
+                    >
+                      {result.parts.map((x, i) => (
+                        <View key={x.cls} style={styles.splitRow}>
+                          <View
+                            style={[
+                              styles.tierDot,
+                              {
+                                backgroundColor:
+                                  i === 0
+                                    ? colors.fg
+                                    : withAlpha(colors.fg, 0.45),
+                              },
+                            ]}
+                          />
+                          <ThemedText type="callout" style={styles.splitName}>
+                            {CLASS_DISPLAY[x.cls].name}
+                          </ThemedText>
+                          <ThemedText type="callout" style={styles.splitPct}>
+                            {Math.round(x.p * 100)}%
+                          </ThemedText>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <ConfidenceRing pct={pct} color={colors.fg} />
+                    <View style={styles.heroConfText}>
+                      <ThemedText type="subhead" themeColor="textSecondary">
+                        {t("AI confidence")}
+                      </ThemedText>
+                      {/* `topClass` is the raw model enum - this printed "78% probability for MEL
+                          pattern" in the most important sentence on the screen. */}
+                      <ThemedText type="callout">
+                        {pct}
+                        {t("% match to")}{" "}
+                        {CLASS_DISPLAY[classification.topClass].lay}.
+                      </ThemedText>
+                    </View>
+                  </>
+                )}
               </TourTarget>
             </View>
             <TourTarget id="resultPriority" style={[styles.priority, { backgroundColor: colors.bg }]}>
@@ -406,8 +511,11 @@ export default function ResultScreen() {
               >
                 {t("This result suggests a")}{" "}
                 <ThemedText type="callout" style={styles.emphasis}>
-                  {PATTERN_WORD[classification.topClass]} {t("pattern (")}
-                  {classification.topClass})
+                  {result.parts
+                    .map((x) => PATTERN_WORD[x.cls])
+                    .join(` ${t("or")} `)}{" "}
+                  {t("pattern (")}
+                  {result.code})
                 </ThemedText>{" "}
                 {t("based on your photo.")}{" "}
                 <ThemedText type="callout" style={styles.emphasis}>
@@ -419,12 +527,22 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 5 · About the classified type (factual) + full probability breakdown */}
+        {/* 5 · Why it could be either - cited look-alike explanation, combined results only */}
+        {combined ? (
+          <Animated.View entering={FadeInDown.delay(185)}>
+            <WhyEither
+              first={result.parts[0].cls}
+              second={result.parts[1].cls}
+            />
+          </Animated.View>
+        ) : null}
+
+        {/* 6 · About the classified type (factual) + full probability breakdown */}
         <Animated.View entering={FadeInDown.delay(210)}>
           <AboutType record={record} />
         </Animated.View>
 
-        {/* 6 · Symptom recap */}
+        {/* 7 · Symptom recap */}
         <Animated.View entering={FadeInDown.delay(260)}>
           <Card style={styles.section}>
             <View style={styles.sectionHead}>
@@ -477,7 +595,7 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 7 · Next steps */}
+        {/* 8 · Next steps */}
         <Animated.View entering={FadeInDown.delay(310)} style={styles.actions}>
           <ThemedText type="title2">{t("Next steps")}</ThemedText>
           {/* One filled CTA so the main next step is unmistakable; everything else is a quieter
@@ -501,6 +619,7 @@ export default function ResultScreen() {
             // The nearest places to get the spot checked, not just a link to the directory.
             <TourTarget id="resultDerms">
               <NearbyDerms
+                data={derms}
                 onSeeAll={() =>
                   router.push({
                     pathname: "/(tabs)/directory",
@@ -523,7 +642,9 @@ export default function ResultScreen() {
                     label={
                       learnArticle.label
                         ? t(learnArticle.label)
-                        : t("About {{name}}", { name: cls.full })
+                        : t("About {{name}}", {
+                            name: CLASS_DISPLAY[classification.topClass].full,
+                          })
                     }
                     sublabel={t("What it looks like and when to get it checked")}
                     onPress={() =>
@@ -568,6 +689,19 @@ export default function ResultScreen() {
                 ))}
             </Card>
           </TourTarget>
+          {tier.showDirectory ? (
+            // Below the scan's own follow-ups: an alternative to calling the clinics above.
+            <BookOnlineDerms
+              data={derms}
+              onSeeAll={(filter) =>
+                router.push({
+                  pathname: "/(tabs)/directory",
+                  // Dermatologists tab with the Books online / Online consult chip on.
+                  params: { segment: "doctors", filter, at: String(Date.now()) },
+                })
+              }
+            />
+          ) : null}
           <Pressable
             onPress={() => setConfirmDeleteVisible(true)}
             accessibilityRole="button"
@@ -737,23 +871,139 @@ function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+/**
+ * Why a combined result names two cancers: a short cited paragraph on how the pair look alike, the
+ * shared "only a dermatologist can tell" closing line, and the numbered sources it cites. Copy and
+ * citations live in lib/triage/lookalike.ts; the source rows match the Learn articles' SourcesBlock.
+ */
+function WhyEither({
+  first,
+  second,
+}: {
+  first: LesionClass;
+  second: LesionClass;
+}) {
+  useLocale();
+  const theme = useTheme();
+  // Collapsed by default: six full citation titles outweigh the paragraph they support.
+  const [open, setOpen] = useState(false);
+  const copy = lookalikeFor(first, second);
+  if (!copy) return null;
+  const sources = [...copy.sources, FREEMAN_APPS];
+  const paragraph = `${copy.body} ${lookalikeClosing(sources.length)}`;
+
+  return (
+    <Card style={styles.section}>
+      <ThemedText type="headline">{t("Why it could be either")}</ThemedText>
+      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
+        {/* Citation markers in the brand colour, so they read as references, not as prose. */}
+        {paragraph.split(/(\[\d+\])/g).map((part, i) =>
+          /^\[\d+\]$/.test(part) ? (
+            <ThemedText
+              key={i}
+              type="footnote"
+              style={{ color: theme.brandPressed }}
+            >
+              {part}
+            </ThemedText>
+          ) : (
+            part
+          ),
+        )}
+      </ThemedText>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.expandRow}
+      >
+        <ThemedText type="subhead" themeColor="brand">
+          {open
+            ? t("Hide sources")
+            : t("See {{n}} sources", { n: sources.length })}
+        </ThemedText>
+        <Icon
+          name={open ? "chevron.up" : "chevron.down"}
+          tintColor={theme.brand}
+          size={14}
+        />
+      </Pressable>
+      {open ? (
+        <Animated.View entering={FadeInDown} style={styles.citeList}>
+          {sources.map((id, i) => {
+            const source = SOURCES[id];
+            return (
+              <Pressable
+                key={id}
+                onPress={() => Linking.openURL(source.url)}
+                accessibilityRole="link"
+                accessibilityLabel={`${i + 1}. ${source.title}, ${source.org}. Opens in your browser.`}
+                style={({ pressed }) => [
+                  styles.citeRow,
+                  {
+                    backgroundColor: theme.elementBg,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <ThemedText
+                  type="footnote"
+                  style={[styles.citeNum, { color: theme.brandPressed }]}
+                >
+                  {i + 1}
+                </ThemedText>
+                <View style={styles.citeText}>
+                  <ThemedText type="caption" themeColor="muted">
+                    {source.org}
+                  </ThemedText>
+                  <ThemedText type="footnote" style={styles.emphasis}>
+                    {source.title}
+                  </ThemedText>
+                </View>
+                <Icon
+                  name="arrow.up.right"
+                  size={13}
+                  tintColor={theme.brandPressed}
+                />
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+      ) : null}
+    </Card>
+  );
+}
+
 /** Factual, non-alarming description of the classified type + expandable per-class probabilities. */
 function AboutType({ record }: { record: ScreeningRecord }) {
   useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
   const { classification } = record;
-  const cls = CLASS_DISPLAY[classification.topClass];
+  const named = resultDisplay(
+    classification.topClass,
+    classification.topConfidence,
+    record.triage,
+  ).parts.map((x) => x.cls);
   const probs = displayProbs(classification, record.triage);
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">
-        {t("About {{name}}", { name: cls.full })}
-      </ThemedText>
-      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
-        {cls.about}
-      </ThemedText>
+      {/* A combined result explains both named types. */}
+      {named.map((c) => (
+        <Fragment key={c}>
+          <ThemedText type="headline">
+            {t("About {{name}}", { name: CLASS_DISPLAY[c].full })}
+          </ThemedText>
+          <ThemedText
+            type="callout"
+            themeColor="textSecondary"
+            style={styles.para}
+          >
+            {CLASS_DISPLAY[c].about}
+          </ThemedText>
+        </Fragment>
+      ))}
       <LayoutAnimationConfig skipEntering={false}>
         <Pressable
           onPress={() => setOpen((v) => !v)}
@@ -774,7 +1024,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
           <Animated.View entering={FadeInDown} style={styles.bars}>
             {CLASS_BY_URGENCY.map((c) => {
               const p = probs[c] ?? 0;
-              const top = c === classification.topClass;
+              const top = named.includes(c);
               return (
                 <View key={c} style={styles.barRow}>
                   <ThemedText
@@ -1061,6 +1311,34 @@ const styles = StyleSheet.create({
     marginTop: Space.xs,
   },
   heroConfText: { flex: 1, gap: 2 },
+  splitTrack: {
+    flexDirection: "row",
+    height: 8,
+    borderRadius: Radius.pill,
+    overflow: "hidden",
+    marginTop: Space.sm,
+  },
+  heroConfStack: { gap: Space.md },
+  citeList: { gap: Space.sm, marginTop: Space.xs },
+  citeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.base,
+    borderRadius: Radius.md,
+  },
+  citeNum: { fontWeight: "700", minWidth: 16, fontVariant: ["tabular-nums"] },
+  citeText: { flex: 1, minWidth: 0, gap: 2 },
+  splitLegend: {
+    borderRadius: Radius.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.base,
+    gap: Space.sm,
+  },
+  splitRow: { flexDirection: "row", alignItems: "center", gap: Space.sm },
+  splitName: { flex: 1 },
+  splitPct: { fontWeight: "600", fontVariant: ["tabular-nums"] },
   // Keep the photo inset inside the white card so the media and details read as one framed
   // record, matching the tracked-spot card treatment.
   photoCard: {

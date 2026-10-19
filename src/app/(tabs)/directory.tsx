@@ -9,7 +9,7 @@ import {
   DirectorySegments,
   type DirectorySegment,
 } from "@/components/directory/DirectorySegments";
-import { DoctorsView } from "@/components/directory/DoctorsView";
+import { DoctorsView, isDoctorLinkFilter } from "@/components/directory/DoctorsView";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
 import { Entrance, EntranceProvider } from "@/components/ui/entrance";
@@ -32,7 +32,7 @@ export default function DirectoryScreen() {
 
   // One GPS request for both tabs (each used to run its own).
   const location = useLocation();
-  const params = useLocalSearchParams<{ segment?: string; concern?: string; at?: string }>();
+  const params = useLocalSearchParams<{ segment?: string; concern?: string; filter?: string; at?: string }>();
   // /directory?concern=skin_cancer_mole_check&at=<ms> - a scan result opens the directory
   // pre-filtered; `at` differs per visit so the concern re-applies even after being cleared.
   const initialConcern = isConcern(params.concern) ? params.concern : null;
@@ -190,6 +190,8 @@ export default function DirectoryScreen() {
           topInset={overlayH}
           header={header}
           coords={location.coords}
+          linkFilter={isDoctorLinkFilter(params.filter) ? params.filter : undefined}
+          linkKey={params.at}
         />
       </View>
       </View>

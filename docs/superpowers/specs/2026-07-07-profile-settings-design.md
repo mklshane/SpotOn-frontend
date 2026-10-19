@@ -179,7 +179,7 @@ Four `ThemedText type="headline"` section headers, each with a stack of
 - App version row (read-only), from `Constants.expoConfig?.version ?? 'Unknown'`
   (`expo-constants`) - falls back since this can be `undefined` at runtime
   in some build configurations.
-- "Help & support" → opens `mailto:help.spoton@gmail.com` via
+- "Help & support" → opens `mailto:help.spoton.dlsl@gmail.com` via
   `Linking.openURL`.
 - "Terms of Service" / "Privacy Policy" → each pushes a stub screen
   (`profile/terms.tsx`, `profile/privacy.tsx`) - kept as real routes so the

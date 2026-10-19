@@ -26,6 +26,42 @@ try {
   ], { cwd: ROOT, stdio: 'inherit' });
   const p = await import(pathToFileURL(join(out, 'android-capture-policy.js')).href);
 
+  await test('jpegExifOrientation reads IFD0 Orientation in both byte orders, else null', () => {
+    const jpeg = (orientation, little) => {
+      const u16 = (v) => little ? [v & 255, v >> 8] : [v >> 8, v & 255];
+      const u32 = (v) => little ? [v & 255, (v >> 8) & 255, (v >> 16) & 255, v >>> 24] : [v >>> 24, (v >> 16) & 255, (v >> 8) & 255, v & 255];
+      const tiff = [...(little ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8),
+        ...u16(2), ...u16(0x010f), ...u16(2), ...u32(4), 0x76, 0x69, 0x76, 0,
+        ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0, ...u32(0)];
+      const app1 = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+      const app0 = [0xff, 0xe0, 0, 6, 0x4a, 0x46, 0x49, 0x46];
+      return new Uint8Array([0xff, 0xd8, ...app0, 0xff, 0xe1, (app1.length + 2) >> 8, (app1.length + 2) & 255, ...app1, 0xff, 0xda]);
+    };
+    assert.equal(p.jpegExifOrientation(jpeg(6, true)), 6);
+    assert.equal(p.jpegExifOrientation(jpeg(1, false)), 1);
+    assert.equal(p.jpegExifOrientation(new Uint8Array([0xff, 0xd8, 0xff, 0xda])), null);
+    assert.equal(p.jpegExifOrientation(new Uint8Array([0x89, 0x50])), null);
+    assert.equal(p.jpegExifOrientation(jpeg(6, true).slice(0, 30)), null);
+  });
+
+  await test('upright pass is skipped only for portrait, unrotated, unmirrored stills', () => {
+    assert.equal(p.canSkipUpright(3060, 4080, 1, false), true);
+    assert.equal(p.canSkipUpright(3060, 4080, null, false), true);
+    assert.equal(p.canSkipUpright(4080, 3060, 1, false), false);
+    assert.equal(p.canSkipUpright(3060, 4080, 6, false), false);
+    assert.equal(p.canSkipUpright(3060, 4080, 1, true), false);
+  });
+
+  await test('a steady lock spaces passes to ANDROID_STEADY_INTERVAL_MS, never below the measured rate', () => {
+    const started = { ...p.initialAndroidSchedule(1), lastStartedAt: 0, intervalMs: 300 };
+    assert.equal(p.androidDetectionDue(started, 300, false, false, false), true);
+    assert.equal(p.androidDetectionDue(started, 300, false, false, true), false);
+    assert.equal(p.androidDetectionDue(started, p.ANDROID_STEADY_INTERVAL_MS, false, false, true), true);
+    const slow = { ...started, intervalMs: 900 };
+    assert.equal(p.androidDetectionDue(slow, 899, false, false, true), false);
+    assert.equal(p.androidDetectionDue(slow, 900, false, false, true), true);
+  });
+
   await test('starts at 6 Hz; pause/busy gates do not consume a scheduling slot', () => {
     const state = p.initialAndroidSchedule(1);
     assert.equal(state.intervalMs, 1000 / 6);

@@ -399,8 +399,10 @@ export default function QualityScreen() {
 
   const all = photos.map((_, i) => i);
 
-  // A first-time tip holds the auto-advance too: it explains this screen, so it must not vanish under the user.
-  const tips = useScanTips('quality');
+  // A first-time tip holds the auto-advance too: it explains this screen, so it must not vanish under
+  // the user. It waits for the checks to finish: they run the models, and a tip opened mid-check
+  // could not measure its target on a busy phone (it showed late, with no spotlight).
+  const tips = useScanTips('quality', { enabled: !analyzing });
 
   // A clean set moves on by itself. A hair tip holds it: that advice is the whole point of
   // surfacing it on a passing photo, and it cannot be read on a screen that leaves in under a second.

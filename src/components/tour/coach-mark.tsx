@@ -251,6 +251,12 @@ export function CoachMarkOverlay({
     : 0;
   const showCard = !measuring && !skipping;
   const holeRadius = spot ? radiusFor(step.shape, spot) : 0;
+  // Nothing is drawn, and touches pass through, until the first card is ready. A dim with no card
+  // reads as a frozen screen (and lands on the outgoing screen during a transition). Once shown,
+  // the dim stays up between steps so moving on doesn't flicker.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => { if (showCard) setRevealed(true); }, [showCard]);
+  const active = showCard || revealed;
   const onCardLayout = (e: LayoutChangeEvent) => setCardHeight(e.nativeEvent.layout.height);
 
   return (
@@ -258,12 +264,15 @@ export function CoachMarkOverlay({
       ref={overlayRef}
       style={[StyleSheet.absoluteFill, styles.clip]}
       onLayout={(e) => setSize(e.nativeEvent.layout)}
-      accessibilityViewIsModal
-      importantForAccessibility="yes">
-      {size.width > 0 ? (
-        <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width={size.width} height={size.height}>
-          <Path d={veilPath(size.width, size.height, showCard ? spot : null, holeRadius)} fill={DIM} fillRule="evenodd" />
-        </Svg>
+      pointerEvents={active ? 'auto' : 'none'}
+      accessibilityViewIsModal={active}
+      importantForAccessibility={active ? 'yes' : 'no-hide-descendants'}>
+      {size.width > 0 && active ? (
+        <Animated.View entering={FADE} pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <Svg width={size.width} height={size.height}>
+            <Path d={veilPath(size.width, size.height, showCard ? spot : null, holeRadius)} fill={DIM} fillRule="evenodd" />
+          </Svg>
+        </Animated.View>
       ) : null}
       {showCard && spot ? (
         <Animated.View
@@ -275,7 +284,7 @@ export function CoachMarkOverlay({
         </Animated.View>
       ) : null}
       {/* Catches taps everywhere, including on the spotlight, so the tour can't be left mid-step. */}
-      <Pressable style={StyleSheet.absoluteFill} accessible={false} onPress={() => {}} />
+      {active ? <Pressable style={StyleSheet.absoluteFill} accessible={false} onPress={() => {}} /> : null}
       {showCard && step.intro && renderIntro ? (
         <View key={stepKey} style={StyleSheet.absoluteFill} pointerEvents="box-none">
           {renderIntro({ width: cardWidth, top: centered, left: cardLeft, onLayout: onCardLayout })}

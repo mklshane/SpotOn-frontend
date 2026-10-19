@@ -8,6 +8,7 @@ import { displayConfidence, displayProbs } from '../triage/display-confidence';
 import { QUESTIONS } from '../triage/questions';
 import {
   CLASS_DISPLAY,
+  resultDisplay,
   AVOID_SELF_MEDICATION_WARNING,
   confidenceBand,
   CONFIDENCE_QUALIFIER,
@@ -69,7 +70,8 @@ export type ReportModel = {
   patient: ReportPatient;
 
   /** 'MEL' */
-  classificationCode: LesionClass;
+  /** "MEL", or "MEL/BCC" for a combined malignant result. */
+  classificationCode: string;
   /** "Melanoma" - the disease name, for the report's "Melanoma (MEL)" line. */
   classificationFull: string;
   /** Same clinical name as `classificationFull`; kept for the in-app surfaces that read it. */
@@ -159,6 +161,9 @@ export function buildReportModel(
   const topClass = record.classification.topClass;
   const confidencePct = displayConfidence(record.classification, record.triage) * 100;
   const roundedPct = Math.round(confidencePct);
+  // "Melanoma or Basal Cell Carcinoma" (MEL/BCC) for a combined malignant result, else the top class.
+  const result = resultDisplay(topClass, record.classification.topConfidence, record.triage);
+  const combined = result.parts.length > 1;
 
   const symptoms: ReportSymptom[] = QUESTIONS.map((q) => ({
     id: q.id,
@@ -178,7 +183,7 @@ export function buildReportModel(
   const leadValues: Record<string, RichRun> = {
     urgency: { text: urgencyLabel, bold: true },
     confidence: { text: confidenceBand(roundedPct), bold: true },
-    classification: { text: CLASS_DISPLAY[topClass].full, bold: true },
+    classification: { text: result.name, bold: true },
     burden: { text: symptomBurden(yesCount), bold: true },
     count: { text: String(yesCount) },
   };
@@ -195,11 +200,14 @@ export function buildReportModel(
 
     patient: buildPatient(profile),
 
-    classificationCode: topClass,
-    classificationFull: CLASS_DISPLAY[topClass].full,
-    classificationName: CLASS_DISPLAY[topClass].name,
+    classificationCode: result.code,
+    classificationFull: result.name,
+    classificationName: result.name,
     confidencePct: roundedPct,
-    confidenceLabel: `${confidencePct.toFixed(1)}%`,
+    // A combined result reports each named class's share ("60.2% / 38.1%"), not just the first.
+    confidenceLabel: combined
+      ? result.parts.map((x) => `${(x.p * 100).toFixed(1)}%`).join(' / ')
+      : `${confidencePct.toFixed(1)}%`,
     probs: Object.entries(displayProbs(record.classification, record.triage)).map(([cls, p]) => ({
       label: CLASS_DISPLAY[cls as LesionClass].name,
       pct: Math.round(p * 100),

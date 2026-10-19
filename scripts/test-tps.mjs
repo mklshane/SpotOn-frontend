@@ -47,6 +47,8 @@ const {
   evaluateMalignantGate,
   evaluateScaleConsistency,
   combineReadability,
+  pickCombinedMalignant,
+  COMBINED_SECOND_MIN,
 } = core;
 
 let pass = 0;
@@ -352,6 +354,44 @@ const merged = { ...cf.prefilled };
 for (const q of cf.mustAsk) merged[q] = 'no';
 check('carry: merged answers score without throwing', computeSymptomScore(merged).raw === 3);
 
+
+// ---- Combined malignant result (both of the top two malignant, runner-up >= 0.30) ----
+check('combined runner-up min is 0.30', COMBINED_SECOND_MIN === 0.3);
+const dist = (o) => ({ MEL: 0, SCC: 0, BCC: 0, OTHER: 0, BENIGN: 0, ...o });
+let pair = pickCombinedMalignant(dist({ MEL: 0.6, BCC: 0.4 }));
+check('combined: MEL .6 / BCC .4 pairs with BCC', pair?.cls === 'BCC' && close(pair.confidence, 0.4));
+r = computeTriage('MEL', 0.6, allNo, { malignantScore: 1, malignantThreshold: THR, second: pair });
+check('combined: MEL .6 / BCC .4 CS = 5 × 1.0', close(r.cs, 5) && r.classWeight === 5);
+check('combined: MEL .6 / BCC .4 no symptoms is High (was Moderate)', r.tier === 'high');
+// The on-device case that motivated max-weight: BCC on top, melanoma close behind.
+pair = pickCombinedMalignant(dist({ BCC: 0.46, MEL: 0.43, BENIGN: 0.11 }));
+r = computeTriage('BCC', 0.46, allNo, { malignantScore: 0.89, malignantThreshold: THR, second: pair });
+check('combined: BCC .46 / MEL .43 CS = 5 × .89', pair?.cls === 'MEL' && close(r.cs, 4.45) && r.classWeight === 5);
+check('combined: BCC .46 / MEL .43 no symptoms is High', r.tier === 'high');
+check('combined: classification alone never reaches Critical',
+  computeTriage('MEL', 0.5, allNo, { second: { cls: 'SCC', confidence: 0.5 } }).tier === 'high');
+check('combined: second class recorded', r.secondClass === 'MEL' && close(r.secondConfidence, 0.43));
+pair = pickCombinedMalignant(dist({ BCC: 0.6, SCC: 0.35, BENIGN: 0.05 }));
+check('combined: BCC .6 / SCC .35 CS = 4 × .95', pair?.cls === 'SCC' &&
+  close(computeCS('BCC', 0.6, pair).cs, 3.8));
+pair = pickCombinedMalignant(dist({ MEL: 0.75, BCC: 0.2, BENIGN: 0.05 }));
+check('combined: runner-up below 0.30 stays single', pair === null);
+check('combined: single CS unchanged (MEL .75 → 3.75)', close(computeTriage('MEL', 0.75, allNo).cs, 3.75));
+check('combined: malignant top + BENIGN runner-up stays single',
+  pickCombinedMalignant(dist({ MEL: 0.5, BENIGN: 0.4, BCC: 0.1 })) === null);
+check('combined: BENIGN top never combines',
+  pickCombinedMalignant(dist({ BENIGN: 0.4, MEL: 0.35, BCC: 0.25 })) === null);
+check('combined: runner-up exactly 0.30 is inclusive',
+  pickCombinedMalignant(dist({ MEL: 0.5, SCC: 0.3, BENIGN: 0.2 }))?.cls === 'SCC');
+pair = pickCombinedMalignant(dist({ MEL: 0.4, SCC: 0.35, BCC: 0.25 }));
+check('combined: three malignant → top two only', pair?.cls === 'SCC');
+pair = pickCombinedMalignant(dist({ MEL: 0.35, SCC: 0.35, BCC: 0.3 }));
+check('combined: runner-up tie-break matches pickTopClass (MEL first, SCC second)',
+  pickTopClass(dist({ MEL: 0.35, SCC: 0.35, BCC: 0.3 })).topClass === 'MEL' && pair?.cls === 'SCC');
+check('combined: CS stays within [0, 5]', computeCS('MEL', 0.5, { cls: 'SCC', confidence: 0.5 }).cs <= 5);
+check('combined: no second → no secondClass field', computeTriage('MEL', 0.9, allNo).secondClass === undefined);
+check('combined: invalid second confidence throws',
+  throws(() => computeCS('MEL', 0.6, { cls: 'BCC', confidence: 1.4 })));
 
 if (fails.length) {
   console.error(`\ntps core: ${pass} passed, ${fails.length} FAILED`);
