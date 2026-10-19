@@ -1,14 +1,15 @@
 import { t, useLocale } from '@/lib/i18n';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import type { FacilitySync } from '@/api/types';
 import { ThemedText } from '@/components/themed-text';
-import { Badge } from '@/components/ui/badge';
+import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { Icon } from '@/components/ui/icon';
+import { Icon, type IconName } from '@/components/ui/icon';
 import { IconCircle } from '@/components/ui/icon-circle';
+import { PressableScale } from '@/components/ui/pressable-scale';
 import { Radius, Space } from '@/constants/theme';
 import {
   distanceMeters,
@@ -107,6 +108,7 @@ export function useDermOptions(): DermOptions {
 /**
  * The result screen's "see a dermatologist" step, made concrete: the nearest places where a
  * dermatologist does mole/skin-cancer checks, each with Call and Directions, plus a link to the map.
+ * Distance leads each row so "which is closest" reads at a glance.
  */
 export function NearbyDerms({ data, onSeeAll }: { data: DermOptions; onSeeAll: () => void }) {
   useLocale();
@@ -117,65 +119,64 @@ export function NearbyDerms({ data, onSeeAll }: { data: DermOptions; onSeeAll: (
 
   return (
     <Card padded={false} style={styles.card}>
-      <View style={styles.head}>
-        <ThemedText type="headline">{t('Dermatologists near you')}</ThemedText>
-        {!coords ? (
-          <ThemedText type="footnote" themeColor="textSecondary">
-            {t('Turn on location in the directory to see the nearest ones here.')}
-          </ThemedText>
-        ) : null}
-      </View>
+      <CardHead
+        icon="mappin.circle.fill"
+        title={t('Dermatologists near you')}
+        subtitle={
+          coords
+            ? t('Clinics where a dermatologist can check this spot.')
+            : t('Turn on location in the directory to see the nearest ones here.')
+        }
+      />
 
       {(places ?? []).map((p) => {
         const name = facilityDisplayName(p.facility);
         const derm = dermSummaryLine(p.derm, todayBit);
         return (
           <View key={p.facility.id} style={[styles.row, { borderTopColor: theme.hairline }]}>
-            <Pressable
+            <PressableScale
               style={styles.rowMain}
               onPress={() => router.push({ pathname: '/directory/clinic', params: { id: p.facility.id } })}
               accessibilityRole="button"
               accessibilityLabel={[name, formatDistance(p.distance), derm].filter(Boolean).join(', ')}
             >
-              <ThemedText type="callout" style={styles.bold} numberOfLines={2}>
-                {name}
-              </ThemedText>
-              <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
-                {[formatDistance(p.distance), derm].filter(Boolean).join(' · ')}
-              </ThemedText>
-            </Pressable>
-            {hasPhone(p.facility.phone) ? (
-              <Pressable
-                onPress={() => phone.call(p.facility.phone)}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel={t('Call {{name}}', { name })}
-                style={[styles.iconBtn, { backgroundColor: theme.elementBg }]}
-              >
-                <Icon name="phone.fill" size={16} tintColor={theme.brand} />
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() =>
-                openDirections({
-                  googleMapsUrl: p.facility.google_maps_url,
-                  latitude: p.facility.latitude,
-                  longitude: p.facility.longitude,
-                })
-              }
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel={t('Directions to {{name}}', { name })}
-              style={[styles.iconBtn, { backgroundColor: theme.elementBg }]}
-            >
-              <Icon name="arrow.triangle.turn.up.right.diamond.fill" size={16} tintColor={theme.brand} />
-            </Pressable>
+              <DistanceTile meters={p.distance} />
+              <View style={styles.rowText}>
+                <ThemedText type="callout" style={styles.bold} numberOfLines={2}>
+                  {name}
+                </ThemedText>
+                {derm ? (
+                  <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
+                    {derm}
+                  </ThemedText>
+                ) : null}
+              </View>
+            </PressableScale>
+            <View style={styles.actions}>
+              {hasPhone(p.facility.phone) ? (
+                <RoundAction
+                  icon="phone.fill"
+                  label={t('Call {{name}}', { name })}
+                  onPress={() => phone.call(p.facility.phone)}
+                />
+              ) : null}
+              <RoundAction
+                icon="arrow.triangle.turn.up.right.diamond.fill"
+                label={t('Directions to {{name}}', { name })}
+                onPress={() =>
+                  openDirections({
+                    googleMapsUrl: p.facility.google_maps_url,
+                    latitude: p.facility.latitude,
+                    longitude: p.facility.longitude,
+                  })
+                }
+              />
+            </View>
           </View>
         );
       })}
 
       <SeeAllRow
-        icon="mappin.circle.fill"
         label={places?.length ? t('See all clinics on the map') : t('Find a clinic near you')}
         onPress={onSeeAll}
       />
@@ -210,34 +211,28 @@ export function BookOnlineDerms({
           distance: formatDistance(places[0].distance),
         })
       : t('These dermatologists see patients by video call.');
+  // Say the platform once, not under every Book button, unless the rows mix platforms.
+  const platforms = new Set(booking.map((o) => o.platformName));
+  const sharedPlatform = platforms.size === 1 ? booking[0].platformName : null;
 
   return (
     <Card padded={false} style={styles.card}>
-      <View style={styles.bookHead}>
-        <IconCircle icon={far ? 'video.fill' : 'calendar'} size={44} />
-        <View style={styles.flex}>
-          <ThemedText type="headline">{far ? t('Consult online') : t('Book a dermatologist online')}</ThemedText>
-          <ThemedText type="footnote" themeColor="textSecondary">
-            {subtitle}
-          </ThemedText>
-        </View>
-      </View>
+      <CardHead icon={far ? 'video.fill' : 'calendar'} title={far ? t('Consult online') : t('Book a dermatologist online')} subtitle={subtitle} />
 
       {booking.map((o) => (
-        <BookingRow key={o.doctor.id} option={o} isOnline={isOnline} />
+        <BookingRow key={o.doctor.id} option={o} isOnline={isOnline} showPlatform={!sharedPlatform} />
       ))}
 
-      {!isOnline ? (
-        <View style={[styles.offline, { borderTopColor: theme.hairline }]}>
-          <Icon name="wifi.slash" size={14} tintColor={theme.muted} />
-          <ThemedText type="footnote" themeColor="muted" style={styles.flex}>
-            {t('Connect to the internet to book.')}
+      {!isOnline || sharedPlatform ? (
+        <View style={[styles.note, { borderTopColor: theme.hairline }]}>
+          <Icon name={isOnline ? 'arrow.up.right' : 'wifi.slash'} size={12} tintColor={theme.muted} />
+          <ThemedText type="caption" themeColor="muted" style={styles.flex}>
+            {isOnline ? t('Booking opens on {{platform}}.', { platform: sharedPlatform ?? '' }) : t('Connect to the internet to book.')}
           </ThemedText>
         </View>
       ) : null}
 
       <SeeAllRow
-        icon={far ? 'video.fill' : 'calendar'}
         label={far ? t('See all online consults') : t('See all dermatologists who book online')}
         onPress={() => onSeeAll(far ? 'online' : 'booking')}
       />
@@ -246,7 +241,15 @@ export function BookOnlineDerms({
 }
 
 /** A bookable dermatologist: tap the row for the profile, the Book pill for the platform. */
-function BookingRow({ option: o, isOnline }: { option: OnlineBookingOption; isOnline: boolean }) {
+function BookingRow({
+  option: o,
+  isOnline,
+  showPlatform,
+}: {
+  option: OnlineBookingOption;
+  isOnline: boolean;
+  showPlatform: boolean;
+}) {
   const theme = useTheme();
   const visit = o.online ? t('Video call or clinic') : t('Clinic visit');
   const meta = [
@@ -256,17 +259,31 @@ function BookingRow({ option: o, isOnline }: { option: OnlineBookingOption; isOn
     .filter(Boolean)
     .join(' · ');
   return (
-    <Pressable
+    <PressableScale
       onPress={() => router.push({ pathname: '/directory/doctor', params: { id: o.doctor.id } })}
       accessibilityRole="button"
       accessibilityLabel={[o.doctor.name, visit, meta].filter(Boolean).join(', ')}
-      style={({ pressed }) => [styles.bookRow, { borderTopColor: theme.hairline }, pressed && styles.pressed]}
+      style={[styles.row, { borderTopColor: theme.hairline }]}
     >
-      <View style={styles.bookMain}>
-        <ThemedText type="callout" style={styles.bold} numberOfLines={1}>
+      <Avatar name={o.doctor.name.replace(/^dr\.?\s+/i, '')} size={48} />
+      <View style={styles.rowText}>
+        <ThemedText type="callout" style={styles.bold} numberOfLines={2}>
           {o.doctor.name}
         </ThemedText>
-        <Badge label={visit} tone={o.online ? 'brand' : 'neutral'} />
+        <View style={styles.visit}>
+          <Icon
+            name={o.online ? 'video.fill' : 'building.2.fill'}
+            size={12}
+            tintColor={o.online ? theme.brandPressed : theme.textSecondary}
+          />
+          <ThemedText
+            type="footnote"
+            numberOfLines={1}
+            style={[styles.flexText, { color: o.online ? theme.brandPressed : theme.textSecondary }, o.online && styles.bold]}
+          >
+            {visit}
+          </ThemedText>
+        </View>
         {meta ? (
           <ThemedText type="footnote" themeColor="textSecondary" numberOfLines={1}>
             {meta}
@@ -274,65 +291,93 @@ function BookingRow({ option: o, isOnline }: { option: OnlineBookingOption; isOn
         ) : null}
       </View>
       <View style={styles.bookSide}>
-        <Pressable
+        <PressableScale
           onPress={() => openWebsite(o.url)}
           disabled={!isOnline}
-          hitSlop={6}
+          hitSlop={Space.sm}
           accessibilityRole="link"
           accessibilityLabel={t('Book with {{name}} on {{platform}}', { name: o.doctor.name, platform: o.platformName })}
-          style={({ pressed }) => [
-            styles.pill,
-            { backgroundColor: pressed ? theme.brand : theme.brandTint },
-            !isOnline && styles.disabled,
-          ]}
+          style={[styles.pill, { backgroundColor: theme.brand }, !isOnline && styles.disabled]}
         >
-          {({ pressed }) => (
-            <>
-              <ThemedText type="subhead" style={[styles.bold, { color: pressed ? theme.onBrand : theme.brandPressed }]}>
-                {t('Book')}
-              </ThemedText>
-              <Icon name="arrow.up.right" size={12} tintColor={pressed ? theme.onBrand : theme.brandPressed} />
-            </>
-          )}
-        </Pressable>
-        <ThemedText type="caption" themeColor="muted" numberOfLines={1}>
-          {t('on {{platform}}', { platform: o.platformName })}
-        </ThemedText>
+          <ThemedText type="subhead" style={[styles.bold, { color: theme.onBrand }]}>
+            {t('Book')}
+          </ThemedText>
+          <Icon name="arrow.up.right" size={12} tintColor={theme.onBrand} />
+        </PressableScale>
+        {showPlatform ? (
+          <ThemedText type="caption" themeColor="muted" numberOfLines={1}>
+            {t('on {{platform}}', { platform: o.platformName })}
+          </ThemedText>
+        ) : null}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 
-function SeeAllRow({ icon, label, onPress }: { icon: 'mappin.circle.fill' | 'video.fill' | 'calendar'; label: string; onPress: () => void }) {
+/** Shared card header: icon, title and one line of context, so both cards read as a pair. */
+function CardHead({ icon, title, subtitle }: { icon: IconName; title: string; subtitle: string }) {
+  return (
+    <View style={styles.head}>
+      <IconCircle icon={icon} size={40} />
+      <View style={styles.flex}>
+        <ThemedText type="headline">{title}</ThemedText>
+        <ThemedText type="footnote" themeColor="textSecondary">
+          {subtitle}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+/** "1.8 / km" stacked in a soft tile: the number is what people compare down the list. */
+function DistanceTile({ meters }: { meters: number }) {
+  const theme = useTheme();
+  const [value, unit] = formatDistance(meters).split(' ');
+  return (
+    <View style={[styles.tile, { backgroundColor: theme.brandTint }]}>
+      <ThemedText type="subhead" style={[styles.tileValue, { color: theme.brandPressed }]} numberOfLines={1}>
+        {value}
+      </ThemedText>
+      <ThemedText type="caption" style={{ color: theme.brandPressed }}>
+        {unit}
+      </ThemedText>
+    </View>
+  );
+}
+
+function RoundAction({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
   const theme = useTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={[styles.seeAll, { borderTopColor: theme.hairline }]}>
-      <Icon name={icon} size={16} tintColor={theme.brandPressed} />
-      <ThemedText type="callout" style={[styles.bold, styles.flex, { color: theme.brandPressed }]}>
+    <PressableScale
+      onPress={onPress}
+      hitSlop={Space.xs}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.iconBtn, { backgroundColor: theme.elementBg }]}
+    >
+      <Icon name={icon} size={18} tintColor={theme.brand} />
+    </PressableScale>
+  );
+}
+
+function SeeAllRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <PressableScale onPress={onPress} accessibilityRole="button" style={[styles.seeAll, { borderTopColor: theme.hairline }]}>
+      <ThemedText type="subhead" style={[styles.bold, { color: theme.brandPressed }]}>
         {label}
       </ThemedText>
-      <Icon name="chevron.right" size={14} tintColor={theme.textSecondary} />
-    </Pressable>
+      <Icon name="chevron.right" size={12} tintColor={theme.brandPressed} />
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
   card: { overflow: 'hidden' },
-  head: { padding: Space.base, gap: Space.xs },
+  head: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md, padding: Space.base, paddingBottom: Space.md },
   flex: { flex: 1, gap: Space.xs },
+  flexText: { flexShrink: 1 },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    paddingHorizontal: Space.base,
-    paddingVertical: Space.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  rowMain: { flex: 1, gap: 2 },
-  bold: { fontWeight: '600' },
-  iconBtn: { width: 36, height: 36, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
-  bookHead: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md, padding: Space.base },
-  bookRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
@@ -340,17 +385,24 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  bookMain: { flex: 1, gap: Space.xs },
-  bookSide: { alignItems: 'flex-end', gap: Space.xs },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  rowText: { flex: 1, gap: 2 },
+  bold: { fontWeight: '600' },
+  tile: { width: 48, height: 48, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  tileValue: { fontWeight: '700', lineHeight: 18 },
+  actions: { flexDirection: 'row', gap: Space.sm },
+  iconBtn: { width: 40, height: 40, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  visit: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  bookSide: { alignItems: 'center', gap: Space.xs },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.xs,
-    minHeight: 36,
+    minHeight: 40,
     paddingHorizontal: Space.base,
     borderRadius: Radius.pill,
   },
-  offline: {
+  note: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
@@ -361,11 +413,11 @@ const styles = StyleSheet.create({
   seeAll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.sm,
+    justifyContent: 'center',
+    gap: Space.xs,
+    minHeight: 48,
     paddingHorizontal: Space.base,
-    paddingVertical: Space.md,
     borderTopWidth: StyleSheet.hairlineWidth,
   },
-  pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
 });

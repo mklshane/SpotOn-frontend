@@ -4,6 +4,8 @@ import { getIntlLocale, t, useLocale } from '@/lib/i18n';
 import { ApiError } from "@/api/client";
 import { ThemedText } from "@/components/themed-text";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ResearchConsentSheet } from "@/components/research-consent-sheet";
+import { BackupPasswordDialog } from "@/components/backup-password-dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -13,7 +15,7 @@ import { TextField } from "@/components/ui/text-field";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -36,9 +38,48 @@ import {
 } from "@/lib/notifications";
 import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
 import { useProductTour } from "@/lib/product-tour";
+import {
+  countMySharedSamples,
+  deleteMySharedSamples,
+  setResearchConsent,
+} from "@/lib/research-sharing";
 import { resetScanTips } from "@/lib/product-tour-storage";
+import {
+  BackupError,
+  buildBackup,
+  countBackupItems,
+  readBackup,
+  restoreBackup,
+} from "@/lib/backup/backup";
+import type { BackupContents } from "@/lib/backup/core";
+import { pickBackupFile, saveBackupFile } from "@/lib/backup/io";
+import { useScanHistory } from "@/lib/scan-history";
+import { isDatabaseEphemeral } from "@/data/db";
 
 const SUPPORT_EMAIL = "help.spoton.dlsl@gmail.com";
+
+/** iOS can't present a Modal (or the share sheet) while another is still animating away. */
+const MODAL_SETTLE_MS = 400;
+const settle = () => new Promise((resolve) => setTimeout(resolve, MODAL_SETTLE_MS));
+
+function backupErrorMessage(e: unknown): string {
+  switch (e instanceof BackupError ? e.code : null) {
+    case "bad_file":
+      return t("This file isn't a SpotOn backup, or it's damaged.");
+    case "wrong_password":
+      return t("Wrong password, or the file is damaged.");
+    case "newer_version":
+      return t("This backup was made with a newer version of SpotOn. Update the app, then try again.");
+    case "empty":
+      return t("There's nothing to back up yet.");
+    case "ephemeral_db":
+      return t("This browser can't save your history, so a restore here would be lost. Use the SpotOn app or another browser.");
+    case "sharing_unavailable":
+      return t("Sharing isn't available on this device.");
+    default:
+      return t("Something went wrong. Please try again.");
+  }
+}
 
 function formatConsentStatus(
   user: { consent_data_privacy: boolean; consent_at: string | null } | null,
@@ -52,8 +93,9 @@ function formatConsentStatus(
 export default function SettingsScreen() {
   useLocale();
   const theme = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, signOut, setUser } = useAuth();
   const { startReplay } = useProductTour();
+  const { reload: reloadHistory } = useScanHistory();
   // Replays the screening tips by starting a screening: the body screen opens on the overview.
   const handleReplayScanTips = () => {
     if (!user) return;
@@ -102,6 +144,234 @@ export default function SettingsScreen() {
     if (!reminderDueAt) return t("On - set after your next low-risk result");
     const due = new Date(reminderDueAt);
     return `${t("Next reminder on")} ${due.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" })}`;
+  })();
+
+  // Help improve SpotOn (optional research sharing). The whole block is hidden while the server
+  // flag is off. `researchOptimistic` holds the switch position while a change is in flight.
+  const researchAvailable = user?.research_sharing_enabled === true;
+  const [researchOptimistic, setResearchOptimistic] = useState<boolean | null>(null);
+  const researchOn = researchOptimistic ?? user?.research_consent === true;
+  const [researchInfoVisible, setResearchInfoVisible] = useState(false);
+  const [researchDialog, setResearchDialog] = useState<
+    { kind: "withdraw" | "delete"; count: number | null } | null
+  >(null);
+  const [researchBusy, setResearchBusy] = useState(false);
+
+  /** Shared-photo count for the confirm copy. Null when offline - the dialog still works. */
+  async function fetchSharedCount(): Promise<number | null> {
+    return countMySharedSamples().catch((e) => {
+      console.warn("[research] could not count shared photos", e);
+      return null;
+    });
+  }
+
+  async function handleToggleResearch(next: boolean) {
+    if (!user || researchBusy) return;
+    if (!next) {
+      // Withdrawal deletes what was shared, so say so - and how much - before doing it (NPC 2023-04).
+      setResearchBusy(true);
+      const count = await fetchSharedCount();
+      setResearchBusy(false);
+      setResearchDialog({ kind: "withdraw", count });
+      return;
+    }
+    setResearchOptimistic(true); // optimistic
+    try {
+      const res = await setResearchConsent(user, true);
+      setUser(res.user);
+    } catch (e) {
+      Alert.alert(
+        t("Couldn't turn on sharing"),
+        e instanceof ApiError ? e.detail : t("Check your connection and try again."),
+      );
+    } finally {
+      setResearchOptimistic(null); // the profile, updated or not, is the truth again
+    }
+  }
+
+  async function handleDeleteSharedPress() {
+    if (researchBusy) return;
+    setResearchBusy(true);
+    const count = await fetchSharedCount();
+    setResearchBusy(false);
+    if (count === 0) {
+      Alert.alert(t("Nothing to delete"), t("You haven't shared any photos yet."));
+      return;
+    }
+    setResearchDialog({ kind: "delete", count });
+  }
+
+  async function handleConfirmResearchDialog() {
+    if (!user || !researchDialog) return;
+    const { kind } = researchDialog;
+    setResearchBusy(true);
+    if (kind === "withdraw") setResearchOptimistic(false);
+    try {
+      if (kind === "withdraw") {
+        const res = await setResearchConsent(user, false);
+        setUser(res.user);
+      } else {
+        await deleteMySharedSamples(user.id);
+      }
+      setResearchDialog(null);
+    } catch (e) {
+      // Close the dialog before alerting: an Alert stacked on an open Modal is unreliable on iOS.
+      setResearchDialog(null);
+      Alert.alert(
+        kind === "withdraw" ? t("Couldn't turn off sharing") : t("Couldn't delete your shared photos"),
+        e instanceof ApiError ? e.detail : t("Check your connection and try again."),
+      );
+    } finally {
+      setResearchOptimistic(null);
+      setResearchBusy(false);
+    }
+  }
+
+  const researchDialogMessage = (() => {
+    if (!researchDialog) return "";
+    const { kind, count } = researchDialog;
+    const what = count == null
+      ? t("Any photos you've shared will be deleted from the research dataset.")
+      : count === 1
+        ? t("Your 1 shared photo will be deleted from the research dataset.")
+        : t("Your {{count}} shared photos will be deleted from the research dataset.", { count });
+    const tail = kind === "withdraw"
+      ? t("New scans won't be shared. Models already trained with your photos can't un-learn them. Every feature keeps working the same.")
+      : t("Sharing stays on for new scans. Models already trained with your photos can't un-learn them.");
+    return `${what} ${tail}`;
+  })();
+
+  // Back up / restore. Screening history lives only on this phone, so this file is the user's way
+  // to carry it across a reinstall, a new phone, or a deleted-and-recreated account.
+  const [backupMode, setBackupMode] = useState<"create" | "enter" | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<string | null>(null);
+  const [backupError, setBackupError] = useState<string | null>(null);
+  const pickedBackup = useRef<Uint8Array | null>(null);
+  const [restorePreview, setRestorePreview] = useState<BackupContents | null>(null);
+  const [restoring, setRestoring] = useState(false);
+
+  const progressStatus = (label: string) => (p: number) =>
+    setBackupStatus(`${label} ${Math.round(p * 10) * 10}%`);
+
+  function closeBackupDialog() {
+    setBackupMode(null);
+    setBackupBusy(false);
+    setBackupStatus(null);
+    setBackupError(null);
+    pickedBackup.current = null;
+  }
+
+  async function handleBackupPress() {
+    if (!user || backupBusy) return;
+    const count = await countBackupItems(user.id).catch(() => 0);
+    if (count === 0) {
+      Alert.alert(t("Nothing to back up yet"), t("Your screenings, tracked spots and saved dermatologists will appear in a backup once you have some."));
+      return;
+    }
+    setBackupMode("create");
+  }
+
+  async function handleRestorePress() {
+    if (!user || backupBusy) return;
+    if (isDatabaseEphemeral()) {
+      Alert.alert(t("Can't restore here"), backupErrorMessage(new BackupError("ephemeral_db", "")));
+      return;
+    }
+    try {
+      const file = await pickBackupFile();
+      if (!file) return;
+      pickedBackup.current = file;
+      setBackupMode("enter");
+    } catch (e) {
+      Alert.alert(t("Couldn't open the file"), backupErrorMessage(e));
+    }
+  }
+
+  async function handleBackupPassword(password: string) {
+    if (!user) return;
+    setBackupBusy(true);
+    setBackupError(null);
+    if (backupMode === "create") {
+      try {
+        setBackupStatus(t("Locking your backup…"));
+        const { bytes, fileName } = await buildBackup(user, password, progressStatus(t("Locking your backup…")));
+        closeBackupDialog();
+        await settle();
+        await saveBackupFile(bytes, fileName);
+      } catch (e) {
+        closeBackupDialog();
+        Alert.alert(t("Couldn't create the backup"), backupErrorMessage(e));
+      }
+      return;
+    }
+    const file = pickedBackup.current;
+    if (!file) return closeBackupDialog();
+    try {
+      setBackupStatus(t("Unlocking…"));
+      const contents = await readBackup(file, password, progressStatus(t("Unlocking…")));
+      closeBackupDialog();
+      await settle();
+      setRestorePreview(contents);
+    } catch (e) {
+      if (e instanceof BackupError && e.code === "wrong_password") {
+        // Stay open so they can try again; the file is still in hand.
+        setBackupBusy(false);
+        setBackupStatus(null);
+        setBackupError(backupErrorMessage(e));
+        return;
+      }
+      closeBackupDialog();
+      Alert.alert(t("Couldn't open the backup"), backupErrorMessage(e));
+    }
+  }
+
+  async function handleConfirmRestore() {
+    if (!user || !restorePreview) return;
+    setRestoring(true);
+    try {
+      const res = await restoreBackup(restorePreview, user.id);
+      await reloadHistory().catch((e) => console.warn("[backup] history reload failed", e));
+      setRestorePreview(null);
+      setRestoring(false);
+      await settle();
+      const added = t("Added {{screenings}} screenings and {{spots}} tracked spots to your history.", {
+        screenings: res.added.screenings,
+        spots: res.added.lesions,
+      });
+      const skipped = res.skipped.screenings + res.skipped.lesions;
+      Alert.alert(
+        t("Backup restored"),
+        skipped > 0
+          ? `${added} ${t("{{count}} items were already on this phone and were left as they are.", { count: skipped })}`
+          : added,
+      );
+    } catch (e) {
+      setRestorePreview(null);
+      setRestoring(false);
+      await settle();
+      Alert.alert(t("Couldn't restore the backup"), backupErrorMessage(e));
+    }
+  }
+
+  const restoreMessage = (() => {
+    if (!restorePreview) return "";
+    const { manifest, data } = restorePreview;
+    const date = new Date(manifest.exportedAt);
+    const summary = t("Backup from {{date}}: {{screenings}} screenings, {{spots}} tracked spots and {{saved}} saved dermatologists.", {
+      date: Number.isNaN(date.getTime())
+        ? manifest.exportedAt
+        : date.toLocaleDateString(getIntlLocale(), { year: "numeric", month: "short", day: "numeric" }),
+      screenings: data.screenings.length,
+      spots: data.lesions.length,
+      saved: data.savedItems.length,
+    });
+    const otherAccount = manifest.sourceAccountId !== user?.id
+      ? ` ${t("It was made by another SpotOn account ({{email}}), and will be added to the account you're signed in to now.", {
+          email: manifest.sourceEmail ?? t("unknown email"),
+        })}`
+      : "";
+    return `${summary}${otherAccount} ${t("Nothing already on this phone is changed or removed.")}`;
   })();
 
   // Change password (inline form)
@@ -222,7 +492,7 @@ export default function SettingsScreen() {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.sectionHead}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
+          <View style={[styles.sectionHead, styles.sectionHeadFirst]}><ThemedText type="title2">{t("Preferences")}</ThemedText></View>
           <View style={styles.preferenceCards}>
             <Card style={styles.section}><LanguagePicker /></Card>
             <Card style={styles.section}><BodyFigurePicker /></Card>
@@ -336,6 +606,54 @@ export default function SettingsScreen() {
             />
           </Card>
 
+          <Card style={[styles.section, styles.sectionSpaced]}>
+            <SettingsRow
+              icon="arrow.up.doc.fill"
+              label={t("Back up my data")}
+              sublabel={t("Save your screenings and photos to a password-protected file")}
+              onPress={backupBusy ? undefined : handleBackupPress}
+            />
+            <SettingsRow
+              icon="arrow.down.doc.fill"
+              label={t("Restore from a backup")}
+              sublabel={t("Bring back screenings from a SpotOn backup file")}
+              onPress={backupBusy ? undefined : handleRestorePress}
+            />
+          </Card>
+          <ThemedText type="footnote" themeColor="textSecondary" style={styles.footnote}>
+            {t("Your screenings are stored only on this phone. Back them up before you delete the app, delete your account, or switch phones.")}
+          </ThemedText>
+
+          {researchAvailable ? (
+            <Card style={[styles.section, styles.sectionSpaced]}>
+              <SettingsRow
+                icon="person.2.fill"
+                label={t("Help improve SpotOn")}
+                sublabel={
+                  researchOn
+                    ? t("On - new scans are shared with the research team, without your name")
+                    : t("Off - share new scans to help SpotOn work better for Filipino skin")
+                }
+                accessory="switch"
+                switchValue={researchOn}
+                onSwitchChange={handleToggleResearch}
+              />
+              <SettingsRow
+                icon="questionmark.circle.fill"
+                label={t("What's shared?")}
+                onPress={() => setResearchInfoVisible(true)}
+              />
+              {user?.research_consent ? (
+                <SettingsRow
+                  icon="trash.fill"
+                  label={t("Delete my shared photos")}
+                  destructive
+                  onPress={researchBusy ? undefined : handleDeleteSharedPress}
+                />
+              ) : null}
+            </Card>
+          ) : null}
+
           <View style={styles.sectionHead}>
             <ThemedText type="title2">{t("About & Support")}</ThemedText>
           </View>
@@ -381,13 +699,58 @@ export default function SettingsScreen() {
         destructive
         loading={deleting}
         title={t("Delete your account?")}
-        message={t(
+        message={`${t(
           "This can't be undone. Your account is removed for good, and the screening history and photos saved on this device are deleted with it.",
-        )}
+        )} ${t("To keep them, use Back up my data first.")}`}
         confirmLabel={deleting ? t("Deleting…") : t("Delete account")}
         cancelLabel={t("Keep my account")}
         onConfirm={handleDeleteAccount}
         onCancel={() => setConfirmDeleteVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={researchDialog != null}
+        icon={researchDialog?.kind === "delete" ? "trash.fill" : "person.2.fill"}
+        destructive
+        loading={researchBusy}
+        title={
+          researchDialog?.kind === "delete"
+            ? t("Delete your shared photos?")
+            : t("Stop sharing and delete shared photos?")
+        }
+        message={researchDialogMessage}
+        confirmLabel={researchDialog?.kind === "delete" ? t("Delete photos") : t("Stop sharing")}
+        cancelLabel={researchDialog?.kind === "delete" ? t("Keep them") : t("Keep sharing")}
+        onConfirm={handleConfirmResearchDialog}
+        onCancel={() => setResearchDialog(null)}
+      />
+
+      <BackupPasswordDialog
+        visible={backupMode != null}
+        mode={backupMode ?? "create"}
+        loading={backupBusy}
+        status={backupStatus}
+        error={backupError}
+        onEdit={() => setBackupError(null)}
+        onSubmit={handleBackupPassword}
+        onCancel={closeBackupDialog}
+      />
+
+      <ConfirmDialog
+        visible={restorePreview != null}
+        icon="arrow.down.doc.fill"
+        loading={restoring}
+        title={t("Restore this backup?")}
+        message={restoreMessage}
+        confirmLabel={t("Restore")}
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setRestorePreview(null)}
+      />
+
+      <ResearchConsentSheet
+        visible={researchInfoVisible}
+        mode="info"
+        onClose={() => setResearchInfoVisible(false)}
       />
     </Screen>
   );
@@ -427,10 +790,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  // The first title sits right under the header; the big gap is for separating sections.
+  sectionHeadFirst: { marginTop: Space.sm },
   preferenceCards: { gap: Space.base },
   section: { gap: 0, paddingVertical: Space.sm },
   sectionSpaced: { marginTop: Space.base },
   passwordForm: { gap: Space.base, paddingVertical: Space.base },
+  footnote: { marginTop: Space.sm, paddingHorizontal: Space.xs },
   pressed: {
     opacity: 0.84,
   },

@@ -13,10 +13,6 @@ export async function deleteAccount(): Promise<void> {
   await api.delete('/me');
 }
 
-export async function requestDataExport(): Promise<void> {
-  await api.post('/me/export');
-}
-
 /**
  * True when the failure means "this endpoint isn't deployed yet" rather than a real error.
  *

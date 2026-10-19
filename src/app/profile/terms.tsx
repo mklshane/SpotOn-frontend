@@ -10,7 +10,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
-const LAST_UPDATED = "August 2026";
+const LAST_UPDATED = "October 2026";
 const CONTACT_EMAIL = "help.spoton.dlsl@gmail.com";
 
 function Section({
@@ -194,7 +194,8 @@ export default function TermsScreen() {
 
         <Section title={t("7. On-Device Image Processing")}>
           <Paragraph>{t("Where supported by the current application implementation, skin-lesion image analysis is performed directly on your device.")}</Paragraph>
-          <Paragraph>{t("Your lesion photographs and associated screening images are not routinely uploaded to SpotOn's application servers solely for machine-learning classification.")}</Paragraph>
+          <Paragraph>{t("Your lesion photographs and associated screening images are never uploaded to SpotOn's servers for machine-learning classification.")}</Paragraph>
+          <Paragraph>{t("A cropped copy of a lesion photograph leaves your device only if you turn on the optional “Help improve SpotOn” research sharing, which is off by default and described in section 9.")}</Paragraph>
           <Paragraph>{t("Images may remain within the application's private storage on your device while they are part of your screening history.")}</Paragraph>
           <Paragraph>{t("The specific handling of images may depend on the application version and features you use. The ")}<PolicyLink />{t(" provides further information regarding image storage and processing.")}</Paragraph>
         </Section>
@@ -211,6 +212,8 @@ export default function TermsScreen() {
           <Paragraph>{t("Information collected through SpotOn may be used for academic research and evaluation associated with the thesis project, subject to applicable ethical and privacy requirements.")}</Paragraph>
           <Paragraph>{t("Research use does not mean that your personal information will be sold or used for advertising.")}</Paragraph>
           <Paragraph>{t("Where research analysis permits, information is de-identified or aggregated so that individual users are not unnecessarily identified.")}</Paragraph>
+          <Paragraph>{t("Optional research sharing (“Help improve SpotOn”) is separate from your acceptance of these Terms and is off unless you turn it on. If you turn it on, screenings you save afterwards are shared with the research team as a cropped photograph without metadata, together with your age range, sex, skin type, body area, questionnaire answers and the application's result, under a random code rather than your account. Declining or withdrawing has no effect on any feature of SpotOn.")}</Paragraph>
+          <Paragraph>{t("You may turn sharing off at any time in Settings, which deletes the samples you have shared. Models already trained using them cannot un-learn them. The ")}<PolicyLink />{t(" describes what is shared, how it is protected, and how long it is kept.")}</Paragraph>
         </Section>
 
         <Section title={t("10. No Sale of Personal Information")}>

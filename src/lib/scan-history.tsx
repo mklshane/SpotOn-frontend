@@ -1,5 +1,7 @@
 import * as FileSystem from '@/lib/fs';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 
 import {
   deleteLesion as deleteLesionRow,
@@ -15,7 +17,15 @@ import {
   setScreeningLesion,
 } from '@/data/screening-repo';
 import { claimLegacyHistory, isDatabaseEphemeral } from '@/data/db';
+import {
+  cancelResearchRetry,
+  drainResearchQueue,
+  enqueueResearchSample,
+  setResearchContext,
+} from '@/data/research-queue';
 import { useAuth } from '@/lib/auth';
+import { canShareResearch } from '@/lib/research-core';
+import { flushPendingResearchConsent } from '@/lib/research-sharing';
 import { syncSelfCheckReminder } from '@/lib/notifications';
 import type { BodyMark, Lesion, ScreeningImage, ScreeningRecord } from '@/lib/triage/types';
 
@@ -72,6 +82,8 @@ type ScanHistoryContextValue = {
   deleteLesion: (id: string) => Promise<void>;
   /** Permanently delete one screening and its photo files from this device. */
   deleteEntry: (id: string) => Promise<void>;
+  /** Re-read history from SQLite after something other than this context wrote it (a restore). */
+  reload: () => Promise<void>;
 };
 
 const ScanHistoryContext = createContext<ScanHistoryContextValue | undefined>(undefined);
@@ -125,8 +137,52 @@ async function persistImage(userId: string, id: string, uri: string): Promise<st
 }
 
 export function ScanHistoryProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const accountId = user?.id ?? null;
+  const shareResearch = canShareResearch(user);
+
+  // Research sharing reads the live profile before every upload, so a withdrawal in Settings or a
+  // sign-out stops the queue at the next sample. Drains on sign-in / app start and whenever sharing
+  // is switched on; screenings queued in an earlier session (offline, app killed) go out here.
+  useEffect(() => {
+    setResearchContext(user, setUser);
+  }, [user, setUser]);
+  useEffect(() => {
+    if (!accountId) return;
+    if (shareResearch) drainResearchQueue(accountId);
+    else cancelResearchRetry();
+  }, [accountId, shareResearch]);
+  // Offline is a normal state, not an error: nothing about sharing is ever shown to the user when
+  // it fails. Whenever the connection comes back or the app returns to the foreground, send a Share
+  // that was tapped offline (the setUser flips shareResearch, which drains above) and upload
+  // whatever is still pending.
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+  useEffect(() => {
+    if (!accountId) return;
+    const sync = () => {
+      const current = userRef.current;
+      if (!current || current.id !== accountId) return;
+      if (canShareResearch(current)) {
+        drainResearchQueue(accountId);
+        return;
+      }
+      flushPendingResearchConsent(current)
+        .then((updated) => { if (updated && userRef.current?.id === accountId) setUser(updated); })
+        .catch((e) => console.warn('[research] could not send pending consent', e));
+    };
+    sync();
+    let wasOnline: boolean | null = null;
+    const offNet = NetInfo.addEventListener((state) => {
+      const online = state.isConnected !== false && state.isInternetReachable !== false;
+      if (online && wasOnline === false) sync();
+      wasOnline = online;
+    });
+    const appState = AppState.addEventListener('change', (next) => { if (next === 'active') sync(); });
+    return () => { offNet(); appState.remove(); };
+  }, [accountId, setUser]);
   const [entries, setEntries] = useState<ScreeningRecord[]>([]);
   const [lesions, setLesions] = useState<Lesion[]>([]);
   const [ephemeral, setEphemeral] = useState(false);
@@ -229,9 +285,17 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       // A retried save reuses the id (INSERT OR REPLACE) - replace the cached entry, don't add a twin.
       setEntries((prev) => [full, ...prev.filter((e) => e.id !== full.id)]);
       mergeLesion(lesion);
+      // Optional research sharing: only a screening saved WHILE the account consents is queued
+      // (history is never backfilled). Fire-and-forget - the save has already succeeded and
+      // nothing here may fail it or hold up the result screen.
+      if (shareResearch) {
+        enqueueResearchSample(id, accountId)
+          .then(() => drainResearchQueue(accountId))
+          .catch((e) => console.warn('[research] could not queue sample', e));
+      }
       return full;
     },
-    [accountId, mergeLesion],
+    [accountId, mergeLesion, shareResearch],
   );
 
   const renameLesion = useCallback<ScanHistoryContextValue['renameLesion']>(async (id, label) => {
@@ -306,6 +370,16 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
     setLesions(await listLesions(accountId, { includeArchived: true }));
   }, [accountId]);
 
+  const reload = useCallback<ScanHistoryContextValue['reload']>(async () => {
+    if (!accountId) return;
+    const [records, ls] = await Promise.all([
+      listScreenings(accountId),
+      listLesions(accountId, { includeArchived: true }),
+    ]);
+    setEntries(records);
+    setLesions(ls);
+  }, [accountId]);
+
   const value = useMemo<ScanHistoryContextValue>(
     () => ({
       entries: scopedEntries,
@@ -320,6 +394,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       trackScreening,
       deleteLesion,
       deleteEntry,
+      reload,
       getById: (id) => scopedEntries.find((e) => e.id === id),
       getLesionById: (id) => scopedLesions.find((l) => l.id === id),
       screeningsForLesion: (lesionId) =>
@@ -341,6 +416,7 @@ export function ScanHistoryProvider({ children }: { children: React.ReactNode })
       trackScreening,
       deleteLesion,
       deleteEntry,
+      reload,
     ],
   );
 

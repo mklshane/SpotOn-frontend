@@ -128,7 +128,7 @@ function asStorageError(e: unknown, uri: string): Error {
   });
 }
 
-async function writeBlob(uri: string, blob: Blob): Promise<void> {
+export async function writeBlob(uri: string, blob: Blob): Promise<void> {
   await ensureFsReady();
   try {
     const fh = await fileFor(uri, true);
@@ -144,7 +144,7 @@ async function writeBlob(uri: string, blob: Blob): Promise<void> {
  * Read any source the app might copy *from*: an /_fs/ path, a blob: URL from the camera canvas,
  * a data: URI, or an http(s) asset. fetch() handles all four - /_fs/ included, via the worker.
  */
-async function fetchBlob(uri: string): Promise<Blob> {
+export async function fetchBlob(uri: string): Promise<Blob> {
   if (isOwned(uri)) await ensureFsReady();
   const res = await fetch(unscheme(uri));
   if (!res.ok) throw new Error(`could not read ${uri}: ${res.status}`);

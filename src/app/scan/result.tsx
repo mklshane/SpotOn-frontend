@@ -27,6 +27,7 @@ import {
   Screen,
 } from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
+import { ResearchConsentSheet } from "@/components/research-consent-sheet";
 import { SOURCES } from "@/data/learn-sources";
 import {
   FREEMAN_APPS,
@@ -45,6 +46,12 @@ import {
   scheduleSelfCheckReminder,
 } from "@/lib/notifications";
 import { useScanHistory } from "@/lib/scan-history";
+import { useAuth } from "@/lib/auth";
+import {
+  markResearchPromptAnswered,
+  needsResearchPrompt,
+  shareFromAsk,
+} from "@/lib/research-sharing";
 import { QUESTIONS } from "@/lib/triage/questions";
 import {
   CLASS_DISPLAY,
@@ -161,8 +168,48 @@ export default function ResultScreen() {
           ? { fg: theme.riskHigh, bg: theme.riskHighBg }
           : { fg: theme.riskCritical, bg: theme.riskCriticalBg };
 
-  useScanTips('result', { enabled: Boolean(record) });
+  const { blocking: tipsBlocking } = useScanTips('result', { enabled: Boolean(record) });
   const tipsScroller = useScanTipsScroller();
+
+  // Optional research sharing: asked once, at the end of a completed scan (never from a list), and
+  // only after the screening tips are out of the way. needsResearchPrompt is false whenever the
+  // server flag is off, so with RESEARCH_SHARING_ENABLED unset this never shows.
+  const { user, setUser } = useAuth();
+  const [researchAsk, setResearchAsk] = useState(false);
+  const recordId = record?.id;
+  useEffect(() => {
+    if (!flowTerminal || !recordId || tipsBlocking || !user) return;
+    let alive = true;
+    // A beat after the result lands, so the user reads their result before being asked anything.
+    const timer = setTimeout(() => {
+      needsResearchPrompt(user)
+        .then((need) => { if (alive && need) setResearchAsk(true); })
+        .catch((e) => console.warn("[research] could not read prompt state", e));
+    }, 1200);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [flowTerminal, recordId, tipsBlocking, user]);
+
+  function handleResearchNotNow() {
+    setResearchAsk(false);
+    if (user) {
+      markResearchPromptAnswered(user.id).catch((e) => console.warn("[research] could not save answer", e));
+    }
+  }
+
+  async function handleResearchShare() {
+    if (!user) return;
+    // Offline, the choice is kept on the phone and sent when the connection returns, so the sheet
+    // just closes - a result screen never shows a sharing failure. A real refusal (sharing switched
+    // off server-side) is logged and treated as answered; Settings is where sharing errors surface.
+    try {
+      const updated = await shareFromAsk(user);
+      if (updated) setUser(updated);
+    } catch (e) {
+      console.warn("[research] share refused", e);
+      markResearchPromptAnswered(user.id).catch(() => {});
+    }
+    setResearchAsk(false);
+  }
 
   if (!record) {
     if (deleted) return <Screen>{null}</Screen>;
@@ -615,23 +662,6 @@ export default function ResultScreen() {
               />
             </TourTarget>
           ) : null}
-          {tier.showDirectory ? (
-            // The nearest places to get the spot checked, not just a link to the directory.
-            <TourTarget id="resultDerms">
-              <NearbyDerms
-                data={derms}
-                onSeeAll={() =>
-                  router.push({
-                    pathname: "/(tabs)/directory",
-                    // Every scan is about a spot, so land on the places that do mole/skin-cancer
-                    // checks. `at` makes every visit a new request: the directory stays mounted, so
-                    // without it a second scan couldn't re-apply a chip the user had cleared.
-                    params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
-                  })
-                }
-              />
-            </TourTarget>
-          ) : null}
           <TourTarget id="resultMore">
             <Card padded={false} style={styles.actionList}>
               {[
@@ -690,7 +720,24 @@ export default function ResultScreen() {
             </Card>
           </TourTarget>
           {tier.showDirectory ? (
-            // Below the scan's own follow-ups: an alternative to calling the clinics above.
+            // The nearest places to get the spot checked, not just a link to the directory.
+            <TourTarget id="resultDerms">
+              <NearbyDerms
+                data={derms}
+                onSeeAll={() =>
+                  router.push({
+                    pathname: "/(tabs)/directory",
+                    // Every scan is about a spot, so land on the places that do mole/skin-cancer
+                    // checks. `at` makes every visit a new request: the directory stays mounted, so
+                    // without it a second scan couldn't re-apply a chip the user had cleared.
+                    params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
+                  })
+                }
+              />
+            </TourTarget>
+          ) : null}
+          {tier.showDirectory ? (
+            // Right under the clinics: the no-phone-call way to see a dermatologist.
             <BookOnlineDerms
               data={derms}
               onSeeAll={(filter) =>
@@ -736,6 +783,13 @@ export default function ResultScreen() {
         visible={viewerUri != null}
         uri={viewerUri ?? ""}
         onClose={() => setViewerUri(null)}
+      />
+      <ResearchConsentSheet
+        visible={researchAsk}
+        mode="ask"
+        onShare={handleResearchShare}
+        onNotNow={handleResearchNotNow}
+        onClose={() => setResearchAsk(false)}
       />
     </Screen>
   );

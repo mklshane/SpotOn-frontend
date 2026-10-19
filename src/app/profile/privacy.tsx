@@ -3,20 +3,23 @@ import { ThemedText } from "@/components/themed-text";
 import { DocumentHeader } from "@/components/ui/document-header";
 import { Screen } from "@/components/ui/screen";
 import { ContactLink } from "@/components/ui/settings-row";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
+import { useRef } from "react";
 import { Linking, ScrollView, StyleSheet, View } from "react-native";
 
 import { Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { RESEARCH_RETENTION_END } from "@/lib/research-core";
 
-const LAST_UPDATED = "August 2026";
+const LAST_UPDATED = "October 2026";
 const CONTACT_EMAIL = "help.spoton.dlsl@gmail.com";
 
 /** Committed turnaround for data-subject requests (section 15). */
 const RESPONSE_WINDOW = "15 working days";
 
 /** Close of the thesis evaluation period, after which retention winds down (section 11). */
-const PROJECT_END = "November 2026";
+// One end date for the whole study: account data and shared research samples alike.
+const PROJECT_END = RESEARCH_RETENTION_END;
 
 /**
  * Where the account database lives - read off the Supabase session-pooler host in
@@ -131,6 +134,15 @@ function TermsLink() {
 
 export default function PrivacyPolicyScreen() {
   useLocale();
+  // "Learn more" on the research-sharing sheet opens this policy at section 6 (`section=research`).
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrolledToSection = useRef(false);
+  const onResearchLayout = (y: number) => {
+    if (section !== "research" || scrolledToSection.current) return;
+    scrolledToSection.current = true;
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false }));
+  };
   return (
     <Screen padded={false}>
       <DocumentHeader title={t("Privacy Policy")} />
@@ -140,6 +152,7 @@ export default function PrivacyPolicyScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -242,6 +255,7 @@ export default function PrivacyPolicyScreen() {
           <Paragraph>{t("Where consent is the applicable legal basis, we obtain your consent before processing begins. Consent is freely given, specific, informed, and recorded together with the date it was given.")}</Paragraph>
         </Section>
 
+        <View onLayout={(e) => onResearchLayout(e.nativeEvent.layout.y)}>
         <Section title={t("6. How Your Skin Images Are Processed")}>
           <SubHeading>{t("On-Device Processing")}</SubHeading>
           <Paragraph>{t("SpotOn's machine-learning image classification is designed to run directly on your device. When an image is analyzed:")}</Paragraph>
@@ -249,11 +263,25 @@ export default function PrivacyPolicyScreen() {
           <Bullet>{t("the machine-learning model processes the image locally;")}</Bullet>
           <Bullet>{t("the application generates the screening output; and")}</Bullet>
           <Bullet>{t("the image and screening history may remain within SpotOn's private application storage on the device.")}</Bullet>
-          <Paragraph>{t("Lesion photographs are not routinely uploaded to SpotOn's application servers solely to perform machine-learning classification. This means that SpotOn's server does not need to receive your lesion photograph in order to perform the core classification process.")}</Paragraph>
+          <Paragraph>{t("Lesion photographs are never uploaded to SpotOn's servers to perform machine-learning classification. SpotOn's server does not need your lesion photograph for the core classification process. The only way a lesion photograph leaves your device is the optional research sharing described below, which is off unless you turn it on.")}</Paragraph>
 
           <SubHeading>{t("Important Distinction")}</SubHeading>
           <Paragraph>{t("Your lesion images may still exist in the application's local storage after analysis if the screening history feature saves them. Local storage on your device is separate from the server-side account database.")}</Paragraph>
+
+          <SubHeading>{t("Optional Research Sharing (“Help improve SpotOn”)")}</SubHeading>
+          <Paragraph>{t("After your first completed screening, SpotOn asks once whether you want to share future screenings with the research team to retrain and check its model, especially for Filipino skin tones that are under-represented in its training data. You can change your answer at any time under Settings > Privacy & Data. Saying no has no effect on any feature.")}</Paragraph>
+          <Paragraph>{t("Sharing is off by default. If you turn it on, only screenings saved after that point are shared; your earlier screening history is never uploaded. For each shared screening, SpotOn sends:")}</Paragraph>
+          <Bullet>{t("a cropped photograph of the spot, reduced to at most 512 pixels on its longest side;")}</Bullet>
+          <Bullet>{t("your age range (for example, 30-39), never your date of birth;")}</Bullet>
+          <Bullet>{t("your sex and Fitzpatrick skin type, if you provided them;")}</Bullet>
+          <Bullet>{t("the body area you marked;")}</Bullet>
+          <Bullet>{t("your questionnaire answers;")}</Bullet>
+          <Bullet>{t("the application's result, including the model's probabilities, urgency level and model version; and")}</Bullet>
+          <Bullet>{t("the month of the screening, not the exact date or time.")}</Bullet>
+          <Paragraph>{t("SpotOn never sends your name, email address, telephone number, date of birth, face, location, or the full original photograph as part of research sharing.")}</Paragraph>
+          <Paragraph>{t("Before anything is sent, your device re-encodes the photograph, which removes location (GPS), camera and capture-time metadata. Screenings marked on the head or face, and photographs that SpotOn's on-device skin check recognizes as a face or as not showing skin, are not sent at all.")}</Paragraph>
         </Section>
+        </View>
 
         <Section title={t("7. Where Your Data Is Stored")}>
           <Paragraph>{t("SpotOn uses two general categories of storage.")}</Paragraph>
@@ -273,6 +301,7 @@ export default function PrivacyPolicyScreen() {
           <Bullet>{t("account information;")}</Bullet>
           <Bullet>{t("profile photograph; and")}</Bullet>
           <Bullet>{t("screening-related metadata or results where applicable.")}</Bullet>
+          <Paragraph>{t("If you turn on optional research sharing, the shared samples described in section 6 are stored in the same database, in a separate research table. Samples are filed under a random contributor code rather than under your account, name or email. The only link between that code and your account is used solely to delete your samples when you withdraw or delete your account.")}</Paragraph>
           <Paragraph>{t("The exact categories stored server-side may change as the research prototype is updated.")}</Paragraph>
         </Section>
 
@@ -322,6 +351,7 @@ export default function PrivacyPolicyScreen() {
         <Section title={t("10. Research Data and De-Identification")}>
           <Paragraph>{t("SpotOn may use pseudonymization or de-identification techniques when analyzing research data. For example, a record may be associated with a randomized identifier rather than displaying a user's name.")}</Paragraph>
           <Paragraph>{t("However, pseudonymization does not necessarily make information anonymous. If information can still reasonably be linked to an identifiable user through additional information, it continues to be treated as personal information and protected accordingly.")}</Paragraph>
+          <Paragraph>{t("Samples shared through optional research sharing are pseudonymized in this way: they are stored under a random code that is not derived from your account, and details that could single you out are coarsened on your device (an age range instead of your date of birth, the month instead of the date, a cropped photograph without metadata). Only approved members of the research team can view shared samples, and every view, label, export and deletion is recorded in an audit log. Exported research data replaces age range, sex, skin type and body area with a blank for any group of fewer than five samples.")}</Paragraph>
           <Paragraph>{t("Research results may be reported in aggregate form so that individual participants are not unnecessarily identified.")}</Paragraph>
         </Section>
 
@@ -330,6 +360,9 @@ export default function PrivacyPolicyScreen() {
 
           <SubHeading>{t("Local Screening Data")}</SubHeading>
           <Paragraph>{t("Screening images and history stored locally on your device remain there until they are deleted through the application's available controls, removed as part of application data deletion, or otherwise removed from the device. Uninstalling the application may remove locally stored application data, depending on the operating system and device configuration.")}</Paragraph>
+
+          <SubHeading>{t("Shared Research Samples")}</SubHeading>
+          <Paragraph>{t("Samples shared through optional research sharing are kept until the study ends ({{date}}) and then deleted. You can delete them earlier at any time, as described in section 16.", { date: t(RESEARCH_RETENTION_END) })}</Paragraph>
 
           <SubHeading>{t("Server-Side Account Data")}</SubHeading>
           <Paragraph>{t("Account information stored on SpotOn's backend will be retained for the duration necessary to operate the research prototype and fulfill legitimate academic, security, and legal requirements. The evaluation period is expected to conclude in ")}{t(PROJECT_END)}.
@@ -378,6 +411,7 @@ export default function PrivacyPolicyScreen() {
         <Section title={t("16. Withdrawal from Research")}>
           <Paragraph>{t("Participation in the SpotOn research evaluation is voluntary. You may stop participating or request withdrawal from the research activity subject to applicable research-ethics procedures and limitations.")}</Paragraph>
           <Paragraph>{t("Withdrawal from research does not affect the lawfulness of processing that occurred before your withdrawal.")}</Paragraph>
+          <Paragraph>{t("For optional research sharing, you can withdraw in the app at any time: turning off “Help improve SpotOn” in Settings deletes every sample you have shared, and “Delete my shared photos” deletes them while keeping sharing on for future screenings. Deleting your account also deletes your shared samples. Models that were already trained using your samples cannot un-learn them, but your samples are not used for any further training.")}</Paragraph>
           <Paragraph>{t("If you wish to withdraw your data from the research dataset, contact the project team using the information above. If the data has already been irreversibly aggregated or anonymized so that it can no longer reasonably be associated with you, it may no longer be possible to identify and remove it.")}</Paragraph>
         </Section>
 

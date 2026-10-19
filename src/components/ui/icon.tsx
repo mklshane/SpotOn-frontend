@@ -129,6 +129,9 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'video.fill': { set: 'ionicons', name: 'videocam' },
   flag: { set: 'ionicons', name: 'flag-outline' },
   'slider.horizontal.3': { set: 'ionicons', name: 'options-outline' },
+  // settings: back up / restore
+  'arrow.up.doc.fill': { set: 'ionicons', name: 'save' },
+  'arrow.down.doc.fill': { set: 'ionicons', name: 'download' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

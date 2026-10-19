@@ -33,6 +33,9 @@ const REMINDER_HOUR = 9;
 /** Marks a notification as ours, so a tap can be told apart from anything else the OS delivers. */
 const REMINDER_KIND = 'self-check-reminder';
 
+/** The one-off confirmation posted when reminders are switched on; tapping it just opens the app. */
+const REMINDERS_ENABLED_KIND = 'reminders-enabled';
+
 export type ReminderOutcome =
   /** Handed to the OS; it will fire on the due date. */
   | 'scheduled'
@@ -198,7 +201,27 @@ export async function setRemindersEnabled(enabled: boolean): Promise<boolean> {
   }
   await writeEnabled(true);
   await syncSelfCheckReminder();
+  await confirmRemindersEnabled().catch((e) => console.warn('[notifications] confirmation failed', e));
   return true;
+}
+
+/**
+ * An immediate "reminders are on" notification after the settings toggle is switched on. Besides
+ * acknowledging the choice, it is the user's proof that notifications actually reach this device -
+ * the real reminder is 30 days out, far too late to discover they are being silenced.
+ */
+async function confirmRemindersEnabled(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  await ensureChannel();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: t("Re-screening reminders are on"),
+      body: t("SpotOn will remind you to re-check a spot 30 days after a low-risk result."),
+      data: { kind: REMINDERS_ENABLED_KIND },
+      sound: 'default',
+    },
+    trigger: { channelId: ANDROID_CHANNEL_ID },
+  });
 }
 
 /**

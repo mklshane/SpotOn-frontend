@@ -163,6 +163,16 @@ export interface UserProfile {
   is_verified: boolean;
   consent_data_privacy: boolean;
   consent_at: string | null;
+  /**
+   * Optional "Help improve SpotOn" research sharing (server migration 021). Separate from the
+   * sign-up consent above. Optional because a profile cached from an older server lacks them -
+   * read through lib/research-core.ts `canShareResearch`, which treats missing as off.
+   */
+  research_consent?: boolean;
+  research_consent_at?: string | null;
+  research_consent_version?: string | null;
+  /** Server feature flag (RESEARCH_SHARING_ENABLED). False hides the ask and the Settings row. */
+  research_sharing_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

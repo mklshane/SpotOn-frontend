@@ -224,7 +224,7 @@ export default function ProfileScreen() {
           <View style={styles.actions}>
             <Button
               label={t("Sign out")}
-              variant="outline"
+              variant="brand"
               loading={signingOut}
               onPress={handleSignOut}
             />

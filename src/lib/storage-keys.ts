@@ -11,4 +11,14 @@ export const STORAGE_KEYS = {
   selfCheckReminderNotificationId: 'self_check_reminder_notification_id',
   /** Lesion the pending reminder points at, so a re-arm after a restart keeps the deep link. */
   selfCheckReminderLesionId: 'self_check_reminder_lesion_id',
+  /**
+   * The research-consent version this account last saw the "Help improve SpotOn" ask for. Kept
+   * locally because "Not now" never reaches the server; a new consent version re-asks.
+   */
+  researchPromptVersion: 'research_prompt_version',
+  /**
+   * The consent version of a "Share" tapped while offline. Sent to the server as soon as there is
+   * a connection; nothing is uploaded until the server has recorded it.
+   */
+  researchPendingGrant: 'research_pending_grant',
 } as const;

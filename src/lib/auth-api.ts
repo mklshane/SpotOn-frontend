@@ -154,6 +154,16 @@ export async function clearAllLocalData(): Promise<void> {
     }
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.reengagementRemindersEnabled), '');
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.productTourStatus), '').catch(() => {});
+    // Research sharing: the screenings rows (and so the upload queue) went with deleteAllForUser;
+    // the server deletes shared samples with the account. Forget the "already asked" marker too.
+    await setMeta(accountStorageKey(accountId, STORAGE_KEYS.researchPromptVersion), '').catch(() => {});
+    await setMeta(accountStorageKey(accountId, STORAGE_KEYS.researchPendingGrant), '').catch(() => {});
+    try {
+      const { cancelResearchRetry } = await import('@/data/research-queue');
+      cancelResearchRetry();
+    } catch {
+      // Nothing was scheduled, or the module never loaded - either way nothing to cancel.
+    }
   }
   await setMeta(STORAGE_KEYS.hasSeenOnboarding, '');
   await clearTokens();

@@ -210,7 +210,10 @@ CREATE TABLE IF NOT EXISTS screenings (
   image_disagreement   INTEGER NOT NULL DEFAULT 0,
   aggregate_method     TEXT NOT NULL DEFAULT 'single',
   second_class         TEXT,
-  second_confidence    REAL
+  second_confidence    REAL,
+  research_status      TEXT,
+  research_shared_at   TEXT,
+  research_attempts    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
@@ -221,7 +224,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -422,6 +425,16 @@ const MIGRATION_V19 = [
   "ALTER TABLE screenings ADD COLUMN second_confidence REAL",
 ];
 
+// v20 - optional research sharing ("Help improve SpotOn", data/research-queue.ts). The upload queue
+// is these columns on the screening itself: `research_status` is NULL (never queued - every pre-v20
+// row, and every row saved without consent), 'pending', 'sent', 'skipped' or 'failed'. NULL on old
+// rows is the point, not a gap: history from before consent is never shared, so nothing backfills.
+const MIGRATION_V20 = [
+  "ALTER TABLE screenings ADD COLUMN research_status TEXT",
+  "ALTER TABLE screenings ADD COLUMN research_shared_at TEXT",
+  "ALTER TABLE screenings ADD COLUMN research_attempts INTEGER NOT NULL DEFAULT 0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -445,6 +458,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 17 ? MIGRATION_V17 : []),
     ...(version < 18 ? MIGRATION_V18 : []),
     ...(version < 19 ? MIGRATION_V19 : []),
+    ...(version < 20 ? MIGRATION_V20 : []),
   ];
   for (const stmt of pending) {
     try {

@@ -146,14 +146,14 @@ const TIP_SETS: Record<ScanTipsId, CoachStep[]> = {
       body: 'A one-page report of this result to save, share, or show your doctor.',
     },
     {
-      target: 'resultDerms', shape: 'card', optional: true, icon: 'building.2',
-      title: 'Dermatologists near you',
-      body: 'Places nearby that can check this spot. With location on, you can call or get directions from here.',
-    },
-    {
       target: 'resultMore', shape: 'card', optional: true, icon: 'book.fill',
       title: 'More you can do',
       body: 'Read about this type of spot, and follow how it changes over time.',
+    },
+    {
+      target: 'resultDerms', shape: 'card', optional: true, icon: 'building.2',
+      title: 'Dermatologists near you',
+      body: 'Places nearby that can check this spot. With location on, you can call or get directions from here.',
     },
   ],
   report: [
