@@ -448,23 +448,36 @@ import type { LesionClass } from '../triage/types';
 // The demo model is eligible only in a development build and only for a recognized source photo
 // (demo-photo.ts). Every other image uses the regular screening model.
 export const DEMO_BCC_ENABLED = __DEV__ && process.env.EXPO_PUBLIC_DEMO_BCC_MODEL === '1';
-// === TRIAL 2026-10-19: subold_s2 (Shane is testing it on device). ===
-// D_next run `subold_s2`: sub-class training (15 sub-types merged to 5 logits in the export) on the
-// pre-Oct-14 stage1, seed 2. Same I/O contract (NCHW [1,3,260,260] in, 5 raw logits out; checked).
-// valid_calib: T 0.85, MALIGNANT_THRESHOLD 0.4821. Vs acne_s1: Asan AUROC 0.911->0.927, spec 0.64->0.74,
-// Hallym BCC 0.74->0.78, MILK AUROC 0.780->0.804; COST stage3 SCC recall 0.59->0.53, ACNE04 flagged 5->10%.
-// TO SWITCH BACK: set USE_SUBOLD_S2 = false (asset, version, T and threshold all follow).
-export const USE_SUBOLD_S2 = true;
+// === TRIAL 2026-10-19: Shane is testing the sub-class models on device. ===
+// D_next runs `subold_s1` / `subold_s2`: sub-class training (15 sub-types merged to 5 logits in the
+// export) on the pre-Oct-14 stage1, seeds 1 and 2. Same I/O contract as acne_s1 (NCHW [1,3,260,260]
+// in, [1,5] float32 logits out; checked with the LiteRT interpreter).
+// subold_s1 vs acne_s1: SK flagged Asan 0.34->0.26, FLUO 0.28->0.18, picker 0.36->0.14; held-out MEL
+//   flagged 0.90->0.92 (called benign 25->14); COST Asan SCC flagged 0.93->0.87, MILK benign 0.41->0.50.
+// subold_s2 vs acne_s1: Asan AUROC 0.911->0.927, spec 0.64->0.74, Hallym BCC 0.74->0.78, MILK AUROC
+//   0.780->0.804; COST stage3 SCC recall 0.59->0.53, ACNE04 flagged 5->10%.
+// sub_s2 (new stage1, seed 2) vs acne_s1: macro-F1 stage3 0.724->0.750, Asan AUROC 0.911->0.934, spec
+//   0.64->0.74, FLUO AUROC 0.842->0.914, MILK 0.780->0.827, Hallym BCC 0.74->0.81, SK Asan 0.35->0.24;
+//   MEL held-out/nodular unchanged (0.90/0.92); stage3 SK + picker SK not fixed (0.30, 0.36).
+// TO SWITCH: set ACTIVE_MODEL (asset, version, T and threshold all follow). 'acne_s1' = last shipped.
+type ModelChoice = 'acne_s1' | 'subold_s1' | 'subold_s2' | 'sub_s2';
+export const ACTIVE_MODEL: ModelChoice = 'subold_s1';
+// T = NLL-fitted on valid_calib; threshold = 90%-sensitivity point on valid_calib at that T.
+// Both come from synth.eval.seed_summary.calibrate on the same frozen split, for every model.
 /* eslint-disable @typescript-eslint/no-require-imports */
-export const MODEL_ASSET = USE_SUBOLD_S2
-  ? require('../../../assets/models/spoton_subold_s2_fp32.tflite')
-  : require('../../../assets/models/spoton_acne_s1_fp32.tflite');
+const MODELS: Record<ModelChoice, { asset: number; version: string; T: number; threshold: number }> = {
+  acne_s1: { asset: require('../../../assets/models/spoton_acne_s1_fp32.tflite'), version: 'spoton_acne_s1_fp32', T: 0.595, threshold: 0.4326 }, // 2026-10-09
+  subold_s1: { asset: require('../../../assets/models/spoton_subold_s1_fp32.tflite'), version: 'spoton_subold_s1_fp32', T: 0.8, threshold: 0.4701 }, // 2026-10-19
+  subold_s2: { asset: require('../../../assets/models/spoton_subold_s2_fp32.tflite'), version: 'spoton_subold_s2_fp32', T: 0.85, threshold: 0.4821 }, // 2026-10-19
+  sub_s2: { asset: require('../../../assets/models/spoton_sub_s2_fp32.tflite'), version: 'spoton_sub_s2_fp32', T: 0.88, threshold: 0.4173 }, // 2026-10-20
+};
 /* eslint-enable @typescript-eslint/no-require-imports */
+export const MODEL_ASSET = MODELS[ACTIVE_MODEL].asset;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 export const DEMO_BCC_MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = USE_SUBOLD_S2 ? 'spoton_subold_s2_fp32' : 'spoton_acne_s1_fp32';
+export const MODEL_VERSION = MODELS[ACTIVE_MODEL].version;
 export const DEMO_BCC_MODEL_VERSION = 'spoton_dfe4tv_fp32_demo';
 
 /**
@@ -824,8 +837,8 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
 // acne_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-09). Was 0.4147 for milk_s1, 0.4444 for dfe4tv.
-// subold_s2 (trial): 90%-sensitivity point on valid_calib at T 0.85 (2026-10-19).
-export const MALIGNANT_THRESHOLD = USE_SUBOLD_S2 ? 0.4821 : 0.4326;
+// Trial models: per-model values live in MODELS (near ACTIVE_MODEL).
+export const MALIGNANT_THRESHOLD = MODELS[ACTIVE_MODEL].threshold;
 export const DEMO_BCC_MALIGNANT_THRESHOLD = 0.4444;
 export function malignantThresholdForModel(version: string): number {
   return version === DEMO_BCC_MODEL_VERSION ? DEMO_BCC_MALIGNANT_THRESHOLD : MALIGNANT_THRESHOLD;
@@ -1077,8 +1090,8 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
 // acne_s1: NLL-fitted on valid_calib (2026-10-09); same as milk_s1. Was 0.9432 for dfe4tv.
-// subold_s2 (trial): NLL-fitted on valid_calib (2026-10-19).
-export const CONFIDENCE_TEMPERATURE = USE_SUBOLD_S2 ? 0.85 : 0.595;
+// Trial models: per-model values live in MODELS (near ACTIVE_MODEL).
+export const CONFIDENCE_TEMPERATURE = MODELS[ACTIVE_MODEL].T;
 export const DEMO_BCC_CONFIDENCE_TEMPERATURE = 0.9432;
 
 /**

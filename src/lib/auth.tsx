@@ -9,7 +9,7 @@ import type { UserProfile } from '@/api/types';
 import * as authApi from './auth-api';
 import { fetchProfile, syncPendingProfile } from './profile';
 import { applyPendingProfile, readPendingProfile } from './profile-pending';
-import { markProductTourPending } from './product-tour-storage';
+import { markDataRightsPending, markProductTourPending } from './product-tour-storage';
 
 type AuthResult = { error: string | null };
 
@@ -160,6 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const tokens = await authApi.register(input);
           await markProductTourPending(tokens.user.id).catch((e) =>
             console.warn('[tour] could not save first-run state:', e),
+          );
+          await markDataRightsPending(tokens.user.id).catch((e) =>
+            console.warn('[rights] could not save first-run state:', e),
           );
           setUserState(tokens.user);
           return { error: null };

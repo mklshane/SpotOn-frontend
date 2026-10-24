@@ -1,9 +1,13 @@
-import { router, usePathname } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView,
+  type StyleProp, type ViewStyle,
+} from 'react-native';
 
 import { CoachMarkOverlay, IntroCard, type CoachStep } from '@/components/tour/coach-mark';
 import { TabContentInset } from '@/components/ui/tab-bar';
+import { useAuth } from './auth';
 import { markProductTourSeen } from './product-tour-storage';
 
 /** Any element a tour can spotlight: the app tour's ids and the scan tips' ids share one registry. */
@@ -14,7 +18,12 @@ type TourOrigin = 'first-run' | 'settings';
  * `skipped` drops those steps from the progress count.
  */
 type TourSession = { userId: string; origin: TourOrigin; step: number; dir: 1 | -1; skipped: number[] };
-type TourStep = CoachStep & { route: '/home' | '/directory' | '/learn' | '/profile' };
+type TourRoute = '/home' | '/directory' | '/learn' | '/profile' | typeof SETTINGS;
+type TourUser = ReturnType<typeof useAuth>['user'];
+/** `shownIf` drops a step up front, instead of waiting out the missing-target timeout on screen. */
+type TourStep = CoachStep & { route: TourRoute; shownIf?: (user: TourUser) => boolean };
+/** The one stop outside the tabs. It is pushed over them, so its overlay lives in the profile stack. */
+const SETTINGS = '/profile/settings';
 
 const STEPS: TourStep[] = [
   {
@@ -52,7 +61,38 @@ const STEPS: TourStep[] = [
     title: 'Your spots on a 3D body',
     body: 'Every screening is pinned to where it is on your body.',
   },
+  {
+    // The row only exists when the server has research sharing on for this account.
+    route: SETTINGS, target: 'settingsResearch', shape: 'card', optional: true, icon: 'person.2.fill',
+    shownIf: (user) => user?.research_sharing_enabled === true,
+    title: 'Help improve SpotOn',
+    body: "Off unless you turn it on. When it's on, each new scan shares a small cropped photo of the spot with your age range, sex, skin type, body area, answers and result, never your name, face or location. Turn it off anytime and your shared photos are deleted.",
+  },
+  {
+    route: SETTINGS, target: 'settingsBackup', shape: 'card', icon: 'arrow.up.doc.fill',
+    title: 'Back up your screenings',
+    body: 'Screenings and photos are saved only on this phone. Back up my data puts them in a file locked with a password you choose, then you save it to Files, Drive or email. Restore from a backup adds them back on any phone.',
+  },
+  {
+    route: SETTINGS, target: 'settingsDelete', shape: 'card', icon: 'trash.fill',
+    title: 'Delete your account',
+    body: "Removes your account and any photos you shared for research from our server, and erases the history on this phone. It can't be undone, so back up first. You'll be asked to confirm.",
+  },
 ];
+
+/**
+ * Settings is pushed over the tabs and popped back to them, so its Back button still works when
+ * the tour ends there. Tab-to-tab moves replace, as before.
+ */
+function goTo(from: TourRoute | null, to: TourRoute) {
+  if (from === to) return;
+  if (to === SETTINGS) router.push(SETTINGS);
+  else if (from === SETTINGS && router.canDismiss()) router.dismissTo(to);
+  else router.replace(to);
+}
+
+/** Scrolls the focused screen's content by `dy`; returns false if it can't. */
+type Scroller = (dy: number) => boolean;
 
 type TourContextValue = {
   session: TourSession | null;
@@ -67,12 +107,18 @@ type TourContextValue = {
   registerTarget: (id: TargetId, view: View) => () => void;
   refreshTarget: () => void;
   getTargets: (id: TargetId) => View[];
+  isShown: (step: number) => boolean;
+  /** Returns the unregister function. */
+  registerScroller: (scroller: Scroller) => () => void;
+  scrollBy: Scroller;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
 
 export function ProductTourProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [session, setSession] = useState<TourSession | null>(null);
+  const isShown = useCallback((step: number) => STEPS[step].shownIf?.(user) ?? true, [user]);
   const [targetEpoch, setTargetEpoch] = useState(0);
   const targets = useRef(new Map<TargetId, Set<View>>());
 
@@ -89,24 +135,29 @@ export function ProductTourProvider({ children }: { children: React.ReactNode })
   }, []);
   const refreshTarget = useCallback(() => setTargetEpoch((value) => value + 1), []);
   const getTargets = useCallback((id: TargetId) => [...(targets.current.get(id) ?? [])], []);
+  const scroller = useRef<Scroller | null>(null);
+  const registerScroller = useCallback((next: Scroller) => {
+    scroller.current = next;
+    return () => { if (scroller.current === next) scroller.current = null; };
+  }, []);
+  const scrollBy = useCallback((dy: number) => scroller.current?.(dy) ?? false, []);
 
   const startFirstRun = useCallback((userId: string) => {
     setSession((current) => current ?? { userId, origin: 'first-run', step: 0, dir: 1, skipped: [] });
   }, []);
   const startReplay = useCallback((userId: string) => {
     setSession({ userId, origin: 'settings', step: 0, dir: 1, skipped: [] });
-    router.replace('/home');
+    goTo(SETTINGS, '/home');
   }, []);
   const move = useCallback((direction: 1 | -1, skip = false) => {
     if (!session) return;
-    const nextStep = Math.max(0, Math.min(STEPS.length - 1, session.step + direction));
-    if (nextStep === session.step) return;
+    let nextStep = session.step + direction;
+    while (nextStep >= 0 && nextStep < STEPS.length && !isShown(nextStep)) nextStep += direction;
+    if (nextStep < 0 || nextStep >= STEPS.length) return;
     const skipped = skip ? [...session.skipped, session.step] : session.skipped;
     setSession({ ...session, step: nextStep, dir: direction, skipped });
-    if (STEPS[nextStep].route !== STEPS[session.step].route) {
-      router.replace(STEPS[nextStep].route);
-    }
-  }, [session]);
+    goTo(STEPS[session.step].route, STEPS[nextStep].route);
+  }, [isShown, session]);
   const dismiss = useCallback(() => {
     if (!session) return;
     if (session.origin === 'first-run') {
@@ -115,7 +166,7 @@ export function ProductTourProvider({ children }: { children: React.ReactNode })
       );
     }
     setSession(null);
-    router.replace(session.origin === 'settings' ? '/profile/settings' : '/home');
+    goTo(STEPS[session.step].route, session.origin === 'settings' ? SETTINGS : '/home');
   }, [session]);
   const next = useCallback(() => {
     if (session?.step === STEPS.length - 1) dismiss();
@@ -134,8 +185,8 @@ export function ProductTourProvider({ children }: { children: React.ReactNode })
 
   const value = useMemo(() => ({
     session, targetEpoch, startFirstRun, startReplay, next, back, skipStep, dismiss,
-    registerTarget, refreshTarget, getTargets,
-  }), [session, targetEpoch, startFirstRun, startReplay, next, back, skipStep, dismiss, registerTarget, refreshTarget, getTargets]);
+    registerTarget, refreshTarget, getTargets, isShown, registerScroller, scrollBy,
+  }), [session, targetEpoch, startFirstRun, startReplay, next, back, skipStep, dismiss, registerTarget, refreshTarget, getTargets, isShown, registerScroller, scrollBy]);
 
   return <TourContext.Provider value={value}>{children}</TourContext.Provider>;
 }
@@ -155,15 +206,48 @@ export function TourTarget({ id, children, style }: { id: TargetId; children: Re
   return <View ref={ref} collapsable={false} onLayout={onLayout} style={style}>{children}</View>;
 }
 
-export function ProductTourOverlay() {
+/**
+ * Lets the tour scroll this screen's ScrollView to a target below the fold. Spread the result
+ * onto the ScrollView: `<ScrollView {...useProductTourScroller()}>`.
+ */
+export function useProductTourScroller() {
+  const { registerScroller } = useProductTour();
+  const ref = useRef<ScrollView>(null);
+  const offset = useRef(0);
+  useFocusEffect(
+    useCallback(() => registerScroller((dy) => {
+      if (!ref.current) return false;
+      ref.current.scrollTo({ y: Math.max(0, offset.current + dy), animated: true });
+      return true;
+    }), [registerScroller]),
+  );
+  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    offset.current = e.nativeEvent.contentOffset.y;
+  }, []);
+  return { ref, onScroll, scrollEventThrottle: 32 };
+}
+
+/** True while the tour is showing a step on Settings, so the profile stack can hide its content from a11y. */
+export function useTourOnSettings() {
+  const { session } = useProductTour();
+  return session ? STEPS[session.step].route === SETTINGS : false;
+}
+
+/**
+ * `scope` says which layout this copy is mounted in: the tabs draw the tab-route steps, and the
+ * profile stack draws the Settings ones (the tabs' copy would sit under the pushed screen).
+ */
+export function ProductTourOverlay({ scope }: { scope: 'tabs' | 'settings' }) {
   const pathname = usePathname();
-  const { session, targetEpoch, getTargets, next, back, skipStep, dismiss } = useProductTour();
+  const { session, targetEpoch, getTargets, isShown, next, back, skipStep, dismiss, scrollBy } = useProductTour();
   const step = session ? STEPS[session.step] : null;
   if (!session || !step || pathname !== step.route) return null;
+  const onSettings = step.route === SETTINGS;
+  if (onSettings !== (scope === 'settings')) return null;
 
   // Count only the stops that will show: not the intro, and not optional ones without a target.
   const counted = STEPS.flatMap((s, i) =>
-    s.intro || session.skipped.includes(i) || (s.optional && s.target && !getTargets(s.target).length) ? [] : [i]);
+    s.intro || !isShown(i) || session.skipped.includes(i) || (s.optional && s.target && !getTargets(s.target).length) ? [] : [i]);
 
   return (
     <CoachMarkOverlay
@@ -173,13 +257,14 @@ export function ProductTourOverlay() {
       canGoBack={session.step > 0}
       isLast={session.step === STEPS.length - 1}
       doneLabel="Done"
-      bottomBand={TabContentInset}
+      bottomBand={onSettings ? 0 : TabContentInset}
       getTargets={getTargets}
       targetEpoch={targetEpoch}
       onNext={next}
       onBack={back}
       onDismiss={dismiss}
       onSkipMissing={skipStep}
+      onOffscreen={onSettings ? scrollBy : undefined}
       renderIntro={(layout) => (
         <IntroCard
           {...layout}

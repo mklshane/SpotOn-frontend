@@ -40,7 +40,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ---------------------------------------------------------------- consent gating
 const V = R.RESEARCH_CONSENT_VERSION;
-check('version is the contract version', V === '2026-10-v1');
+check('version is the contract version', V === '2026-10-v2');
 const on = { research_sharing_enabled: true, research_consent: true, research_consent_version: V };
 check('canShare: flag + consent + current version', R.canShareResearch(on));
 check('canShare: null user', !R.canShareResearch(null));

@@ -16,9 +16,10 @@ export type ResearchConsentSheetProps = {
   visible: boolean;
   /**
    * `'ask'` - the one-time choice after a first result: Share / Not now, equal weight.
+   * `'confirm'` - the Settings switch being turned on: the same choice, worded for Settings.
    * `'info'` - the same explainer from Settings ("What's shared?"), with a single Close.
    */
-  mode: 'ask' | 'info';
+  mode: 'ask' | 'confirm' | 'info';
   /** Ask mode: record the yes. A rejection is shown on the sheet and the sheet stays open. */
   onShare?: () => Promise<void>;
   /** Ask mode: "Not now", a backdrop tap or Android back. Counts as an answer - we don't re-nag. */
@@ -64,7 +65,7 @@ export function ResearchConsentSheet({ visible, mode, onShare, onNotNow, onClose
   const insets = useSafeAreaInsets();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ask = mode === 'ask';
+  const ask = mode !== 'info'; // ask + confirm both end in Share / Not now
   const dismiss = saving ? () => {} : ask ? () => onNotNow?.() : () => onClose?.();
 
   async function handleShare() {
@@ -101,9 +102,11 @@ export function ResearchConsentSheet({ visible, mode, onShare, onNotNow, onClose
             <View style={styles.head}>
               <ThemedText type="title2">{t('Help improve SpotOn (optional)')}</ThemedText>
               <ThemedText type="callout" themeColor="textSecondary">
-                {ask
-                  ? t('You can share scans like this one with the SpotOn research team. If you say yes, only scans you make from now on are shared - not this one, and not your past history.')
-                  : t('Sharing is off unless you turn it on. When it is on, only scans you make after saying yes are shared - never your past history.')}
+                {mode === 'ask'
+                  ? t('You can share scans like this one with the SpotOn research team. If you say yes, this scan and the ones you make from now on are shared - never your past history.')
+                  : mode === 'confirm'
+                    ? t('Before you turn this on, here is exactly what is shared. Only scans you make from now on are shared - never your past history.')
+                    : t('Sharing is off unless you turn it on. When it is on, only scans you make after saying yes are shared - never your past history.')}
               </ThemedText>
             </View>
 

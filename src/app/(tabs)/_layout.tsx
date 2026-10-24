@@ -1,4 +1,4 @@
-import { Redirect, Tabs, usePathname } from 'expo-router';
+import { Redirect, router, Tabs, usePathname } from 'expo-router';
 import { useEffect } from 'react';
 import { InteractionManager, Platform, View } from 'react-native';
 
@@ -7,7 +7,7 @@ import { needsInitialSync, runSync } from '@/data/sync';
 import { useAuth } from '@/lib/auth';
 import { prewarmBody } from '@/lib/body-variant';
 import { ProductTourOverlay, useProductTour } from '@/lib/product-tour';
-import { readProductTourStatus } from '@/lib/product-tour-storage';
+import { isDataRightsPending, readProductTourStatus } from '@/lib/product-tour-storage';
 
 export default function TabsLayout() {
   const { user, loading } = useAuth();
@@ -17,9 +17,14 @@ export default function TabsLayout() {
   useEffect(() => {
     if (!user?.id || pathname !== '/home' || session) return;
     let cancelled = false;
-    readProductTourStatus(user.id)
-      .then((status) => { if (!cancelled && status === 'pending') startFirstRun(user.id); })
-      .catch((e) => console.warn('[tour] could not read first-run state:', e));
+    // New sign-ups see their data rights first (required), then the tour once they're back on Home.
+    (async () => {
+      if (await isDataRightsPending(user.id)) {
+        if (!cancelled) router.push('/profile/rights?first=1');
+        return;
+      }
+      if (!cancelled && (await readProductTourStatus(user.id)) === 'pending') startFirstRun(user.id);
+    })().catch((e) => console.warn('[tour] could not read first-run state:', e));
     return () => { cancelled = true; };
   }, [user?.id, pathname, session, startFirstRun]);
 
@@ -59,7 +64,7 @@ export default function TabsLayout() {
           <Tabs.Screen name="profile" />
         </Tabs>
       </View>
-      <ProductTourOverlay />
+      <ProductTourOverlay scope="tabs" />
     </View>
   );
 }

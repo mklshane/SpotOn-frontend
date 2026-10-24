@@ -1,7 +1,7 @@
 import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { NitroModules } from 'react-native-nitro-modules';
 import { FlipType, manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { router, useIsFocused } from 'expo-router';
+import { router, useFocusEffect, useIsFocused, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, type LayoutChangeEvent, Platform, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -359,6 +359,20 @@ export default function CaptureScreen() {
   // Without this gate the preview and the detector keep running through all of them, competing
   // with the classifier for exactly the CPU it needs.
   const isFocused = useIsFocused();
+
+  // No swipe-back on the camera, in EITHER stack. `gestureEnabled: false` in scan/_layout only
+  // silences the scan stack; on iOS 26 the root stack's full-screen pop gesture then picks up the
+  // same rightward drag (a zoom-in on the slider) and pops the whole scan flow instead. So the
+  // parent's gesture is switched off while this screen is focused, and back on when it isn't -
+  // body, history, result etc. keep their swipe. The close button is the way out.
+  const navigation = useNavigation();
+  useFocusEffect(
+    useCallback(() => {
+      const parent = navigation.getParent();
+      parent?.setOptions({ gestureEnabled: false });
+      return () => parent?.setOptions({ gestureEnabled: true });
+    }, [navigation]),
+  );
   const [appActive, setAppActive] = useState(true);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => setAppActive(s === 'active'));

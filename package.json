@@ -88,6 +88,7 @@
     "test:lookalike": "node --no-warnings scripts/test-lookalike.mjs",
     "test:tps": "node scripts/test-tps.mjs",
     "test:research": "node scripts/test-research-core.mjs",
+    "test:api-retry": "node --no-warnings scripts/test-api-retry.mjs",
     "test:migration": "node --no-warnings scripts/test-migration.mjs",
     "test:db-guards": "node --no-warnings scripts/test-db-guards.mjs",
     "test:accounts": "node --no-warnings scripts/test-account-isolation.mjs",

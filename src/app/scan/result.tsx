@@ -202,7 +202,7 @@ export default function ResultScreen() {
     // just closes - a result screen never shows a sharing failure. A real refusal (sharing switched
     // off server-side) is logged and treated as answered; Settings is where sharing errors surface.
     try {
-      const updated = await shareFromAsk(user);
+      const updated = await shareFromAsk(user, record?.id);
       if (updated) setUser(updated);
     } catch (e) {
       console.warn("[research] share refused", e);

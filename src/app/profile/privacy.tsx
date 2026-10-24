@@ -134,12 +134,13 @@ function TermsLink() {
 
 export default function PrivacyPolicyScreen() {
   useLocale();
-  // "Learn more" on the research-sharing sheet opens this policy at section 6 (`section=research`).
+  // "Learn more" on the research-sharing sheet opens this policy at section 6 (`section=research`);
+  // the data-rights screen opens it at section 19 (`section=contact`).
   const { section } = useLocalSearchParams<{ section?: string }>();
   const scrollRef = useRef<ScrollView>(null);
   const scrolledToSection = useRef(false);
-  const onResearchLayout = (y: number) => {
-    if (section !== "research" || scrolledToSection.current) return;
+  const onSectionLayout = (name: string, y: number) => {
+    if (section !== name || scrolledToSection.current) return;
     scrolledToSection.current = true;
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y, animated: false }));
   };
@@ -255,7 +256,7 @@ export default function PrivacyPolicyScreen() {
           <Paragraph>{t("Where consent is the applicable legal basis, we obtain your consent before processing begins. Consent is freely given, specific, informed, and recorded together with the date it was given.")}</Paragraph>
         </Section>
 
-        <View onLayout={(e) => onResearchLayout(e.nativeEvent.layout.y)}>
+        <View onLayout={(e) => onSectionLayout("research", e.nativeEvent.layout.y)}>
         <Section title={t("6. How Your Skin Images Are Processed")}>
           <SubHeading>{t("On-Device Processing")}</SubHeading>
           <Paragraph>{t("SpotOn's machine-learning image classification is designed to run directly on your device. When an image is analyzed:")}</Paragraph>
@@ -270,7 +271,7 @@ export default function PrivacyPolicyScreen() {
 
           <SubHeading>{t("Optional Research Sharing (“Help improve SpotOn”)")}</SubHeading>
           <Paragraph>{t("After your first completed screening, SpotOn asks once whether you want to share future screenings with the research team to retrain and check its model, especially for Filipino skin tones that are under-represented in its training data. You can change your answer at any time under Settings > Privacy & Data. Saying no has no effect on any feature.")}</Paragraph>
-          <Paragraph>{t("Sharing is off by default. If you turn it on, only screenings saved after that point are shared; your earlier screening history is never uploaded. For each shared screening, SpotOn sends:")}</Paragraph>
+          <Paragraph>{t("Sharing is off by default. If you turn it on, the screenings you save from then on are shared - plus, when you agree on a result screen, the screening shown there. Your earlier screening history is never uploaded. For each shared screening, SpotOn sends:")}</Paragraph>
           <Bullet>{t("a cropped photograph of the spot, reduced to at most 512 pixels on its longest side;")}</Bullet>
           <Bullet>{t("your age range (for example, 30-39), never your date of birth;")}</Bullet>
           <Bullet>{t("your sex and Fitzpatrick skin type, if you provided them;")}</Bullet>
@@ -425,6 +426,7 @@ export default function PrivacyPolicyScreen() {
           <Paragraph>{t("When material changes are made, the “Last Updated” date will be revised. Where appropriate, users will be notified through the application or another reasonable communication method. Previous versions may be retained for research, compliance, and documentation purposes.")}</Paragraph>
         </Section>
 
+        <View onLayout={(e) => onSectionLayout("contact", e.nativeEvent.layout.y)}>
         <Section title={t("19. Contact Us")}>
           <Paragraph>{t("For questions, concerns, data requests, or privacy complaints relating to SpotOn, contact the SpotOn Project Team:")}</Paragraph>
           <View style={styles.contactRow}>
@@ -437,6 +439,7 @@ export default function PrivacyPolicyScreen() {
             <Paragraph>{t("For institutional privacy concerns, you may also contact the De La Salle Lipa Data Protection Officer through the University's official channels.")}</Paragraph>
           )}
         </Section>
+        </View>
 
         <Section title={t("20. National Privacy Commission")}>
           <Paragraph>{t("If you believe that your personal data has been processed unlawfully or that your rights under Philippine data privacy law have been violated, you may seek assistance from or lodge a complaint with the National Privacy Commission of the Philippines. Official NPC information regarding data-subject rights and complaints is available through the Commission's website at")}{" "}

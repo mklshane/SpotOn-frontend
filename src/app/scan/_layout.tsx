@@ -7,7 +7,10 @@ export default function ScanLayout() {
     <ScanTipsProvider>
       <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
         <Stack.Screen name="body" />
-        <Stack.Screen name="capture" options={{ animation: 'fade' }} />
+        {/* No swipe-back: zooming in is a rightward drag on the zoom slider, which is exactly the
+            back gesture (iOS 26 accepts it from anywhere, not just the edge), so the screen slid
+            away mid-zoom. The camera's own close button is the way out; Android back is unaffected. */}
+        <Stack.Screen name="capture" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="crop" options={{ animation: 'fade' }} />
         {/* No transition: review draws the photo where crop framed it, so it reads as one screen. */}
         <Stack.Screen name="review" options={{ animation: 'none' }} />

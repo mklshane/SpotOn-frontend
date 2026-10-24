@@ -67,16 +67,34 @@ export async function setResearchConsent(
  * records consent and returns the new profile. Offline, it remembers the choice on the phone and
  * returns null; `flushPendingResearchConsent` sends it once there is a connection. Nothing is
  * queued or uploaded until the server has recorded consent. Throws only for a real refusal.
+ *
+ * `screeningId` is the scan the ask was shown on: the sheet says "this scan and the ones you make
+ * from now on", so it is queued as soon as consent is recorded (now, or at the offline flush).
  */
-export async function shareFromAsk(user: UserProfile): Promise<UserProfile | null> {
+export async function shareFromAsk(user: UserProfile, screeningId?: string): Promise<UserProfile | null> {
   try {
-    return (await setResearchConsent(user, true)).user;
+    const updated = (await setResearchConsent(user, true)).user;
+    await queueAskedScreening(user.id, screeningId);
+    return updated;
   } catch (e) {
     if (!unreachable(e)) throw e;
-    await setMeta(pendingKey(user.id), RESEARCH_CONSENT_VERSION);
+    // "<version>|<screening id>" - the id rides along so that scan is still shared after the flush.
+    await setMeta(pendingKey(user.id), `${RESEARCH_CONSENT_VERSION}|${screeningId ?? ''}`);
     await markResearchPromptAnswered(user.id).catch(() => {});
     return null;
   }
+}
+
+/**
+ * Queue the scan the ask was answered on. Must run BEFORE the caller's setUser: setUser flips
+ * sharing on, which drains the queue, and the row has to be pending by then.
+ */
+async function queueAskedScreening(userId: string, screeningId: string | undefined): Promise<void> {
+  if (!screeningId) return;
+  const { enqueueResearchSample } = await import('@/data/research-queue');
+  await enqueueResearchSample(screeningId, userId).catch((e) =>
+    console.warn('[research] could not queue the asked scan', e),
+  );
 }
 
 /**
@@ -86,7 +104,8 @@ export async function shareFromAsk(user: UserProfile): Promise<UserProfile | nul
 export async function flushPendingResearchConsent(user: UserProfile): Promise<UserProfile | null> {
   const pending = await getMeta(pendingKey(user.id)).catch(() => null);
   if (!pending) return null;
-  const stale = pending !== RESEARCH_CONSENT_VERSION || !user.research_sharing_enabled;
+  const [version, screeningId] = pending.split('|');
+  const stale = version !== RESEARCH_CONSENT_VERSION || !user.research_sharing_enabled;
   if (stale || canShareResearch(user)) {
     // Copy changed since, the feature was switched off, or consent is already on: nothing to send.
     // A stale choice was for different wording, so the ask will simply come up again.
@@ -95,7 +114,9 @@ export async function flushPendingResearchConsent(user: UserProfile): Promise<Us
     return null;
   }
   try {
-    return (await setResearchConsent(user, true)).user;
+    const updated = (await setResearchConsent(user, true)).user;
+    await queueAskedScreening(user.id, screeningId || undefined);
+    return updated;
   } catch (e) {
     if (unreachable(e)) return null; // try again on the next reconnect
     console.warn('[research] pending consent refused', e);

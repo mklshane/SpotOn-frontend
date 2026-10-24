@@ -28,6 +28,30 @@ export async function markProductTourSeen(userId: string): Promise<void> {
   await setMeta(key(userId), 'seen');
 }
 
+// Data-rights screen: shown once to new sign-ups, before the tour. Bump the version when its
+// content changes materially; only accounts still 'pending' see it, so existing users aren't re-asked.
+export const DATA_RIGHTS_VERSION = '2026-10-22';
+const dataRightsSession = new Map<string, boolean>();
+
+function dataRightsKey(userId: string) {
+  return accountStorageKey(userId, STORAGE_KEYS.dataRightsStatus);
+}
+
+export async function isDataRightsPending(userId: string): Promise<boolean> {
+  if (dataRightsSession.has(userId)) return dataRightsSession.get(userId) ?? false;
+  return (await getMeta(dataRightsKey(userId))) === 'pending';
+}
+
+export async function markDataRightsPending(userId: string): Promise<void> {
+  dataRightsSession.set(userId, true);
+  await setMeta(dataRightsKey(userId), 'pending');
+}
+
+export async function markDataRightsSeen(userId: string): Promise<void> {
+  dataRightsSession.set(userId, false);
+  await setMeta(dataRightsKey(userId), JSON.stringify({ version: DATA_RIGHTS_VERSION, at: new Date().toISOString() }));
+}
+
 // Scan-flow tips: one JSON list per account of the tip sets already shown.
 const scanTipsSession = new Map<string, string[]>();
 

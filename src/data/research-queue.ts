@@ -4,7 +4,8 @@
  * The queue is three columns on `screenings` (schema v20): research_status NULL | 'pending' |
  * 'sent' | 'skipped' | 'failed', research_shared_at, research_attempts. A row is only ever marked
  * 'pending' by `enqueueResearchSample`, which the save path calls for a screening saved while the
- * account has consented - so history from before consent is never uploaded, by construction.
+ * account has consented, plus the one screening a result-screen "Share" was answered on
+ * (research-sharing shareFromAsk) - so older history is never uploaded, by construction.
  *
  * Everything here is fire-and-forget from the scan flow's point of view: no function the save path
  * calls may throw into it or make it wait on the network. Failures are logged and retried later.

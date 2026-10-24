@@ -3,6 +3,11 @@ export const STORAGE_KEYS = {
   hasSeenOnboarding: 'has_seen_onboarding',
   /** The remaining keys are passed through accountStorageKey before persistence. */
   productTourStatus: 'product_tour_status',
+  /**
+   * 'pending' from sign-up until the user taps "Got it" on the data-rights screen, then a JSON
+   * `{ version, at }` record of which version of that screen they acknowledged and when.
+   */
+  dataRightsStatus: 'data_rights_status',
   /** JSON array of scan-flow tip sets (`ScanTipsId`) the account has seen. */
   scanTipsSeen: 'scan_tips_seen',
   reengagementRemindersEnabled: 'reengagement_reminders_enabled',

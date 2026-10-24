@@ -58,12 +58,13 @@ for (const file of walk('src')) {
 for (const key of INDIRECT) if (!has(key)) missing.set(key, 'src/lib/form-validation.ts (indirect)');
 
 // Tour and tip copy lives in step objects and reaches t() as a variable, so read those fields too:
-// `title:` / `body:` in the steps, the intro card's label props, and scan-tips' FLOW_STEPS list.
-const TOUR_FILES = ['src/lib/product-tour.tsx', 'src/lib/scan-tips.tsx'];
+// `title:` / `body:` in the steps, the intro card's label props, scan-tips' FLOW_STEPS list, and the
+// data-rights screen's `label:` / `sublabel:` rows.
+const TOUR_FILES = ['src/lib/product-tour.tsx', 'src/lib/scan-tips.tsx', 'src/app/profile/rights.tsx'];
 for (const file of TOUR_FILES) {
   const src = readFileSync(join(ROOT, file), 'utf8');
   const keys = [
-    ...[...src.matchAll(/\b(?:title|body): (["'])((?:\\.|(?!\1).)*)\1/g)].map((m) => m[2]),
+    ...[...src.matchAll(/\b(?:title|body|label|sublabel): (["'])((?:\\.|(?!\1).)*)\1/g)].map((m) => m[2]),
     ...[...src.matchAll(/\b(?:startLabel|skipLabel|skipAccessibilityLabel|doneLabel)="([^"]+)"/g)].map((m) => m[1]),
     ...[...(src.match(/const FLOW_STEPS = \[([\s\S]*?)\];/)?.[1] ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1]),
   ];

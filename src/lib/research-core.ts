@@ -16,7 +16,7 @@ import type { Answer, LesionClass, QuestionId, TriageTier } from './triage/tps-c
  * who agreed to an older version is asked again, and uploads pause until they answer - the server
  * rejects a sample whose version differs from the user's current consent (409).
  */
-export const RESEARCH_CONSENT_VERSION = '2026-10-v1';
+export const RESEARCH_CONSENT_VERSION = '2026-10-v2';
 
 /**
  * When shared samples are deleted. PLACEHOLDER - confirm with the adviser / ethics board and keep

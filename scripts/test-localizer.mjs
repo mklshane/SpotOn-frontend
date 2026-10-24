@@ -335,6 +335,20 @@ function multiScene() {
   check('faces: letterbox mapping', near(lb[0].eyes[0].y, (ey - 0.25) / 0.5, 1e-6));
 }
 
+// ---- boxContrast: a large weak spot must stand out from the skin around it ----
+{
+  const W = 200, H = 200;
+  const flat = new Uint8Array(W * H * 4);
+  for (let i = 0; i < W * H; i++) flat.set([200, 160, 140, 255], i * 4);
+  const img = { width: W, height: H, data: flat };
+  check('boxContrast: bare uniform skin reads ~0', Math.abs(cand.boxContrast(img, 100, 100, 30)) < 1);
+  const spot = new Uint8Array(flat);
+  for (let y = 85; y < 115; y++) for (let x = 85; x < 115; x++) spot.set([90, 60, 50, 255], (y * W + x) * 4);
+  const dark = cand.boxContrast({ width: W, height: H, data: spot }, 100, 100, 30);
+  check('boxContrast: a dark lesion inside the box clears LARGE_MIN_CONTRAST', dark >= cand.LARGE_MIN_CONTRAST);
+  check('boxContrast: a box off the image edge still measures', Number.isFinite(cand.boxContrast(img, 5, 5, 30)));
+}
+
 if (fails.length) {
   console.error(`\nlocalizer: ${pass} passed, ${fails.length} FAILED`);
   for (const f of fails) console.error('  FAIL:', f);

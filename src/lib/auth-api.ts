@@ -1,6 +1,6 @@
 import * as SecureStore from './secure-store';
 
-import { api, ApiError, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
+import { api, ApiError, isTransportError, setAuthRefreshHandler, setAuthTokenProvider } from '@/api/client';
 import type { UserProfile } from '@/api/types';
 import { setMeta } from '@/data/db';
 
@@ -154,6 +154,7 @@ export async function clearAllLocalData(): Promise<void> {
     }
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.reengagementRemindersEnabled), '');
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.productTourStatus), '').catch(() => {});
+    await setMeta(accountStorageKey(accountId, STORAGE_KEYS.dataRightsStatus), '').catch(() => {});
     // Research sharing: the screenings rows (and so the upload queue) went with deleteAllForUser;
     // the server deletes shared samples with the account. Forget the "already asked" marker too.
     await setMeta(accountStorageKey(accountId, STORAGE_KEYS.researchPromptVersion), '').catch(() => {});
@@ -170,13 +171,36 @@ export async function clearAllLocalData(): Promise<void> {
 }
 
 export async function register(input: RegisterInput): Promise<TokenOut> {
-  const tokens = await api.post<TokenOut>('/auth/register', input, false);
+  let tokens: TokenOut;
+  try {
+    tokens = await api.post<TokenOut>('/auth/register', input, false);
+  } catch (e) {
+    // A dropped connection on the first request after a quiet spell (see isTransportError).
+    // Resend it here rather than making the user tap Create account again.
+    if (!isTransportError(e)) throw e;
+    await new Promise((r) => setTimeout(r, 800));
+    try {
+      tokens = await api.post<TokenOut>('/auth/register', input, false);
+    } catch (e2) {
+      // The first attempt may have created the account before its response was lost, so the
+      // resend reports it as taken. Signing in with the same credentials tells "it was ours"
+      // from a real duplicate; if that fails, the 409 stands.
+      const identifier = input.email ?? input.phone;
+      if (!(e2 instanceof ApiError && e2.status === 409) || !identifier) throw e2;
+      tokens = await api
+        .post<TokenOut>('/auth/login', { identifier, password: input.password }, false, true)
+        .catch(() => {
+          throw e2;
+        });
+    }
+  }
   await persist(tokens);
   return tokens;
 }
 
 export async function login(identifier: string, password: string): Promise<TokenOut> {
-  const tokens = await api.post<TokenOut>('/auth/login', { identifier, password }, false);
+  // Safe to resend: a duplicate only mints a second refresh token, which expires unused.
+  const tokens = await api.post<TokenOut>('/auth/login', { identifier, password }, false, true);
   await persist(tokens);
   return tokens;
 }

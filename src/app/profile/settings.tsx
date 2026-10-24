@@ -37,7 +37,7 @@ import {
   setRemindersEnabled,
 } from "@/lib/notifications";
 import { deleteAccount, isNotDeployed } from "@/lib/settings-api";
-import { useProductTour } from "@/lib/product-tour";
+import { TourTarget, useProductTour, useProductTourScroller } from "@/lib/product-tour";
 import {
   countMySharedSamples,
   deleteMySharedSamples,
@@ -95,6 +95,7 @@ export default function SettingsScreen() {
   const theme = useTheme();
   const { user, signOut, setUser } = useAuth();
   const { startReplay } = useProductTour();
+  const tourScroller = useProductTourScroller();
   const { reload: reloadHistory } = useScanHistory();
   // Replays the screening tips by starting a screening: the body screen opens on the overview.
   const handleReplayScanTips = () => {
@@ -152,6 +153,7 @@ export default function SettingsScreen() {
   const [researchOptimistic, setResearchOptimistic] = useState<boolean | null>(null);
   const researchOn = researchOptimistic ?? user?.research_consent === true;
   const [researchInfoVisible, setResearchInfoVisible] = useState(false);
+  const [researchConfirmVisible, setResearchConfirmVisible] = useState(false);
   const [researchDialog, setResearchDialog] = useState<
     { kind: "withdraw" | "delete"; count: number | null } | null
   >(null);
@@ -175,18 +177,17 @@ export default function SettingsScreen() {
       setResearchDialog({ kind: "withdraw", count });
       return;
     }
-    setResearchOptimistic(true); // optimistic
-    try {
-      const res = await setResearchConsent(user, true);
-      setUser(res.user);
-    } catch (e) {
-      Alert.alert(
-        t("Couldn't turn on sharing"),
-        e instanceof ApiError ? e.detail : t("Check your connection and try again."),
-      );
-    } finally {
-      setResearchOptimistic(null); // the profile, updated or not, is the truth again
-    }
+    // Turning it on is consent, so it goes through the same explainer + Share as the one-time ask.
+    // The switch stays off until they tap Share; Not now or a backdrop tap leaves it off.
+    setResearchConfirmVisible(true);
+  }
+
+  async function handleConfirmResearchShare() {
+    if (!user) return;
+    // A failure throws to the sheet, which shows it and stays open so they can retry or close.
+    const res = await setResearchConsent(user, true);
+    setUser(res.user);
+    setResearchConfirmVisible(false);
   }
 
   async function handleDeleteSharedPress() {
@@ -489,6 +490,7 @@ export default function SettingsScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
+          {...tourScroller}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
@@ -551,16 +553,18 @@ export default function SettingsScreen() {
             ) : null}
           </Card>
 
-          <Card style={[styles.section, styles.sectionSpaced]}>
-            <SettingsRow
-              icon="trash.fill"
-              label={deleting ? t("Deleting…") : t("Delete account")}
-              destructive
-              onPress={
-                deleting ? undefined : () => setConfirmDeleteVisible(true)
-              }
-            />
-          </Card>
+          <TourTarget id="settingsDelete" style={styles.sectionSpaced}>
+            <Card style={styles.section}>
+              <SettingsRow
+                icon="trash.fill"
+                label={deleting ? t("Deleting…") : t("Delete account")}
+                destructive
+                onPress={
+                  deleting ? undefined : () => setConfirmDeleteVisible(true)
+                }
+              />
+            </Card>
+          </TourTarget>
 
           <View style={styles.sectionHead}>
             <ThemedText type="title2">{t("Notifications")}</ThemedText>
@@ -604,54 +608,64 @@ export default function SettingsScreen() {
               sublabel={formatConsentStatus(user)}
               accessory={null}
             />
+            <SettingsRow
+              icon="lock.shield.fill"
+              label={t("Your data rights")}
+              sublabel={t("What you can see, copy, correct or delete")}
+              onPress={() => router.push("/profile/rights")}
+            />
           </Card>
 
-          <Card style={[styles.section, styles.sectionSpaced]}>
-            <SettingsRow
-              icon="arrow.up.doc.fill"
-              label={t("Back up my data")}
-              sublabel={t("Save your screenings and photos to a password-protected file")}
-              onPress={backupBusy ? undefined : handleBackupPress}
-            />
-            <SettingsRow
-              icon="arrow.down.doc.fill"
-              label={t("Restore from a backup")}
-              sublabel={t("Bring back screenings from a SpotOn backup file")}
-              onPress={backupBusy ? undefined : handleRestorePress}
-            />
-          </Card>
+          <TourTarget id="settingsBackup" style={styles.sectionSpaced}>
+            <Card style={styles.section}>
+              <SettingsRow
+                icon="arrow.up.doc.fill"
+                label={t("Back up my data")}
+                sublabel={t("Save your screenings and photos to a password-protected file")}
+                onPress={backupBusy ? undefined : handleBackupPress}
+              />
+              <SettingsRow
+                icon="arrow.down.doc.fill"
+                label={t("Restore from a backup")}
+                sublabel={t("Bring back screenings from a SpotOn backup file")}
+                onPress={backupBusy ? undefined : handleRestorePress}
+              />
+            </Card>
+          </TourTarget>
           <ThemedText type="footnote" themeColor="textSecondary" style={styles.footnote}>
             {t("Your screenings are stored only on this phone. Back them up before you delete the app, delete your account, or switch phones.")}
           </ThemedText>
 
           {researchAvailable ? (
-            <Card style={[styles.section, styles.sectionSpaced]}>
-              <SettingsRow
-                icon="person.2.fill"
-                label={t("Help improve SpotOn")}
-                sublabel={
-                  researchOn
-                    ? t("On - new scans are shared with the research team, without your name")
-                    : t("Off - share new scans to help SpotOn work better for Filipino skin")
-                }
-                accessory="switch"
-                switchValue={researchOn}
-                onSwitchChange={handleToggleResearch}
-              />
-              <SettingsRow
-                icon="questionmark.circle.fill"
-                label={t("What's shared?")}
-                onPress={() => setResearchInfoVisible(true)}
-              />
-              {user?.research_consent ? (
+            <TourTarget id="settingsResearch" style={styles.sectionSpaced}>
+              <Card style={styles.section}>
                 <SettingsRow
-                  icon="trash.fill"
-                  label={t("Delete my shared photos")}
-                  destructive
-                  onPress={researchBusy ? undefined : handleDeleteSharedPress}
+                  icon="person.2.fill"
+                  label={t("Help improve SpotOn")}
+                  sublabel={
+                    researchOn
+                      ? t("On - new scans are shared with the research team, without your name")
+                      : t("Off - share new scans to help SpotOn work better for Filipino skin")
+                  }
+                  accessory="switch"
+                  switchValue={researchOn}
+                  onSwitchChange={handleToggleResearch}
                 />
-              ) : null}
-            </Card>
+                <SettingsRow
+                  icon="questionmark.circle.fill"
+                  label={t("What's shared?")}
+                  onPress={() => setResearchInfoVisible(true)}
+                />
+                {user?.research_consent ? (
+                  <SettingsRow
+                    icon="trash.fill"
+                    label={t("Delete my shared photos")}
+                    destructive
+                    onPress={researchBusy ? undefined : handleDeleteSharedPress}
+                  />
+                ) : null}
+              </Card>
+            </TourTarget>
           ) : null}
 
           <View style={styles.sectionHead}>
@@ -751,6 +765,13 @@ export default function SettingsScreen() {
         visible={researchInfoVisible}
         mode="info"
         onClose={() => setResearchInfoVisible(false)}
+      />
+      <ResearchConsentSheet
+        visible={researchConfirmVisible}
+        mode="confirm"
+        onShare={handleConfirmResearchShare}
+        onNotNow={() => setResearchConfirmVisible(false)}
+        onClose={() => setResearchConfirmVisible(false)}
       />
     </Screen>
   );
