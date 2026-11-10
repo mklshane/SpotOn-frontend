@@ -1013,7 +1013,7 @@ function WhyEither({
       <Pressable
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         style={styles.expandRow}
       >
         <ThemedText type="subhead" themeColor="brand">
@@ -1111,7 +1111,7 @@ function AboutType({
         <Pressable
           onPress={() => setOpen((v) => !v)}
           accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
+          aria-expanded={open}
           style={styles.expandRow}
         >
           <ThemedText type="subhead" themeColor="brand">
@@ -1191,7 +1191,7 @@ function ConditionDetails({ label }: { label: LesionClass }) {
       <Pressable
         onPress={() => setOpen((value) => !value)}
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         style={styles.expandRow}
       >
         <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
