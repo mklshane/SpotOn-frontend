@@ -62,7 +62,6 @@ import {
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
 import { getConditionGuide } from "@/lib/triage/condition-guides";
-import { reportedPriorityFinding } from "@/lib/triage/priority-findings";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -228,12 +227,6 @@ export default function ResultScreen() {
 
   const { triage, questionnaire, classification, mark } = record;
   const tier = TIER_CONTENT[triage.tier];
-  const priorityFinding = reportedPriorityFinding(questionnaire.answers);
-  const contactForFinding = triage.tier === "low" && Boolean(priorityFinding);
-  const priorityTiming = contactForFinding
-    ? t("Contact a dermatologist about the sign you reported")
-    : tier.priorityAction;
-  const recommendation = contactForFinding ? priorityTiming : tier.recommendation;
   const colors = tierColor(triage.tier);
   const qualifier = triage.confidenceQualifier;
   // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
@@ -248,9 +241,6 @@ export default function ResultScreen() {
       : {},
   );
   const combined = result.parts.length > 1;
-  const priorityLabels = CLASS_BY_URGENCY.filter((label) =>
-    result.parts.some(({ cls }) => cls === label),
-  );
   // Sum of the rounded shares, so the ring always equals what the legend adds up to.
   const combinedPct = result.parts.reduce(
     (sum, x) => sum + Math.round(x.p * 100),
@@ -453,25 +443,7 @@ export default function ResultScreen() {
                 <ThemedText type="caption" themeColor="textSecondary">
                   {t("Priority action:").replace(/:$/, "")}
                 </ThemedText>
-                <ThemedText type="headline" accessibilityRole="header">
-                  {priorityFinding?.headline ?? priorityTiming}
-                </ThemedText>
-                {priorityFinding ? (
-                  <>
-                    <ThemedText type="subhead">{priorityTiming}</ThemedText>
-                    <ThemedText type="callout" themeColor="textSecondary">
-                      {priorityFinding.message}
-                    </ThemedText>
-                  </>
-                ) : null}
-                {priorityLabels.map((label) => {
-                  const guide = getConditionGuide(label);
-                  return guide ? (
-                    <ThemedText key={label} type="callout" themeColor="textSecondary">
-                      {t(guide.priorityAction)}
-                    </ThemedText>
-                  ) : null;
-                })}
+                <ThemedText type="headline">{tier.priorityAction}</ThemedText>
               </View>
             </TourTarget>
           </View>
@@ -576,11 +548,11 @@ export default function ResultScreen() {
                 themeColor="textSecondary"
                 style={styles.para}
               >
-                {CONFIDENCE_QUALIFIER.body} {recommendation}
+                {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
               </ThemedText>
             ) : !knownClass ? (
               <ThemedText type="callout" themeColor="textSecondary">
-                {recommendation}
+                {tier.recommendation}
               </ThemedText>
             ) : gated ? (
               <ThemedText
@@ -589,7 +561,7 @@ export default function ResultScreen() {
                 style={styles.para}
               >
                 {malignantGateCopy(classification.topClass).body}{" "}
-                {recommendation}
+                {tier.recommendation}
               </ThemedText>
             ) : (
               <ThemedText
@@ -609,7 +581,7 @@ export default function ResultScreen() {
                 <ThemedText type="callout" style={styles.emphasis}>
                   {t("It is not a confirmed diagnosis.")}
                 </ThemedText>{" "}
-                {recommendation}
+                {tier.recommendation}
               </ThemedText>
             )}
           </Card>
@@ -1013,7 +985,7 @@ function WhyEither({
       <Pressable
         onPress={() => setOpen((v) => !v)}
         accessibilityRole="button"
-        aria-expanded={open}
+        accessibilityState={{ expanded: open }}
         style={styles.expandRow}
       >
         <ThemedText type="subhead" themeColor="brand">
@@ -1111,7 +1083,7 @@ function AboutType({
         <Pressable
           onPress={() => setOpen((v) => !v)}
           accessibilityRole="button"
-          aria-expanded={open}
+          accessibilityState={{ expanded: open }}
           style={styles.expandRow}
         >
           <ThemedText type="subhead" themeColor="brand">
@@ -1191,7 +1163,7 @@ function ConditionDetails({ label }: { label: LesionClass }) {
       <Pressable
         onPress={() => setOpen((value) => !value)}
         accessibilityRole="button"
-        aria-expanded={open}
+        accessibilityState={{ expanded: open }}
         style={styles.expandRow}
       >
         <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
@@ -1530,12 +1502,12 @@ const styles = StyleSheet.create({
   photoCaptionText: { flex: 1, gap: 2 },
   priority: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingVertical: Space.base,
   },
-  priorityText: { flex: 1, gap: Space.xs },
+  priorityText: { flex: 1, gap: 2 },
   warningBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
