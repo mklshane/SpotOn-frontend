@@ -31,7 +31,7 @@ import {
   MALIGNANT_GATE,
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
-import { displayConfidence } from "@/lib/triage/display-confidence";
+import { getConditionGuide } from "@/lib/triage/condition-guides";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -107,8 +107,13 @@ export default function ResultScreen() {
   // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
-  const cls = CLASS_DISPLAY[classification.topClass];
-  const pct = Math.round(displayConfidence(classification, triage) * 100);
+  const guide = getConditionGuide(classification.topClass);
+  const cls = guide ? CLASS_DISPLAY[classification.topClass] : undefined;
+  const score = classification.topConfidence;
+  const pct =
+    cls && Number.isFinite(score) && score >= 0 && score <= 1
+      ? Math.round(score * 100)
+      : undefined;
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -168,11 +173,11 @@ export default function ResultScreen() {
         <Animated.View entering={FadeInDown}>
           <View style={[styles.hero, { backgroundColor: colors.bg }]}>
             <View style={styles.heroTop}>
-              {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
-                  "% match to a pattern with features similar to…" line right below, and in the
-                  disclaimer - not in the label the user repeats to a clinician. */}
-              <ThemedText type="title1" style={styles.heroTitle}>
-                {cls.name}
+              <ThemedText type="subhead" themeColor="textSecondary">
+                {t("Detected skin condition")}
+              </ThemedText>
+              <ThemedText type="title1" accessibilityRole="header">
+                {cls?.name ?? t("Unrecognized result")}
               </ThemedText>
               <View style={[styles.tierBadge, { backgroundColor: colors.fg }]}>
                 <ThemedText type="subhead" style={{ color: theme.onBrand }}>
@@ -180,18 +185,21 @@ export default function ResultScreen() {
                 </ThemedText>
               </View>
             </View>
-            <View style={styles.heroBottom}>
-              <ConfidenceRing pct={pct} color={colors.fg} />
-              <View style={styles.heroConfText}>
-                <ThemedText type="headline">{t("AI confidence")}</ThemedText>
-                {/* `topClass` is the raw model enum - this printed "78% probability for MEL
-                    pattern" in the most important sentence on the screen. */}
-                <ThemedText type="subhead" themeColor="textSecondary">
-                  {pct}
-                  {t("% match to")} {cls.lay}.
-                </ThemedText>
+            {pct !== undefined && cls ? (
+              <View style={styles.heroBottom}>
+                <ConfidenceRing pct={pct} color={colors.fg} />
+                <View style={styles.heroConfText}>
+                  <ThemedText type="headline">{t("Model confidence")}</ThemedText>
+                  <ThemedText type="subhead" themeColor="textSecondary">
+                    {pct}
+                    {t("% match to")} {cls.lay}.
+                  </ThemedText>
+                </View>
               </View>
-            </View>
+            ) : null}
+            <ThemedText type="footnote" themeColor="textSecondary">
+              {t("AI-assisted screening does not confirm a diagnosis or replace a consultation with a dermatologist.")}
+            </ThemedText>
           </View>
         </Animated.View>
 
@@ -310,7 +318,7 @@ export default function ResultScreen() {
               <ThemedText type="body" themeColor="textSecondary">
                 {MALIGNANT_GATE.body} {tier.recommendation}
               </ThemedText>
-            ) : (
+            ) : cls ? (
               <ThemedText type="body" themeColor="textSecondary">
                 {t("This result suggests a")}{" "}
                 <ThemedText type="body" style={{ color: colors.fg }}>
@@ -323,13 +331,17 @@ export default function ResultScreen() {
                 </ThemedText>{" "}
                 {tier.recommendation}
               </ThemedText>
+            ) : (
+              <ThemedText type="body" themeColor="textSecondary">
+                {tier.recommendation}
+              </ThemedText>
             )}
           </Card>
         </Animated.View>
 
         {/* 5 · About the classified type (factual) + full probability breakdown */}
         <Animated.View entering={FadeInDown.delay(210)}>
-          <AboutType record={record} />
+          <AboutType key={record.id} record={record} guide={guide} />
         </Animated.View>
 
         {/* 6 · Symptom recap */}
@@ -586,22 +598,70 @@ function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
 }
 
 /** Factual, non-alarming description of the classified type + expandable per-class probabilities. */
-function AboutType({ record }: { record: ScreeningRecord }) {
+function AboutType({
+  record,
+  guide,
+}: {
+  record: ScreeningRecord;
+  guide: ReturnType<typeof getConditionGuide>;
+}) {
   useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { classification } = record;
+  if (!guide) {
+    return (
+      <Card>
+        <ThemedText type="body" themeColor="textSecondary">
+          {t("Condition details are unavailable for this result. Ask a dermatologist to assess the spot, especially if it changes, bleeds, or does not heal.")}
+        </ThemedText>
+      </Card>
+    );
+  }
   const cls = CLASS_DISPLAY[classification.topClass];
+  const scores = CLASS_BY_URGENCY.flatMap((label) => {
+    const score = classification.probs?.[label];
+    return Number.isFinite(score) && score >= 0 && score <= 1
+      ? [{ label, score }]
+      : [];
+  });
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline">
+      <ThemedText type="headline" accessibilityRole="header">
         {t("About {{name}}", { name: cls.full })}
       </ThemedText>
       <ThemedText type="body" themeColor="textSecondary">
-        {cls.about}
+        {t(guide.description)}
       </ThemedText>
-      <LayoutAnimationConfig skipEntering={false}>
+      <Pressable
+        onPress={() => setDetailsOpen((value) => !value)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: detailsOpen }}
+        style={styles.expandRow}
+      >
+        <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
+          {detailsOpen
+            ? t("Hide condition details")
+            : t("See signs, risk factors, and care guidance")}
+        </ThemedText>
+        <Icon
+          name={detailsOpen ? "chevron.up" : "chevron.down"}
+          tintColor={theme.brand}
+          size={14}
+        />
+      </Pressable>
+      {detailsOpen ? (
+        <View style={styles.section}>
+          <GuideSection title={t("Common signs and symptoms")} body={guide.signs} />
+          <GuideSection title={t("Possible contributing factors")} body={guide.factors} />
+          <GuideSection title={t("Recommended next steps")} body={guide.nextSteps} />
+          <GuideSection title={t("When to consult a dermatologist")} body={guide.consult} />
+          <GuideSection title={t("Important reminders")} body={guide.reminder} />
+        </View>
+      ) : null}
+      {scores.length > 0 ? <LayoutAnimationConfig skipEntering={false}>
         <Pressable
           onPress={() => setOpen((v) => !v)}
           accessibilityRole="button"
@@ -619,8 +679,7 @@ function AboutType({ record }: { record: ScreeningRecord }) {
         </Pressable>
         {open ? (
           <Animated.View entering={FadeInDown} style={styles.bars}>
-            {CLASS_BY_URGENCY.map((c) => {
-              const p = classification.probs[c] ?? 0;
+            {scores.map(({ label: c, score: p }) => {
               const top = c === classification.topClass;
               return (
                 <View key={c} style={styles.barRow}>
@@ -664,8 +723,17 @@ function AboutType({ record }: { record: ScreeningRecord }) {
             </ThemedText>
           </Animated.View>
         ) : null}
-      </LayoutAnimationConfig>
+      </LayoutAnimationConfig> : null}
     </Card>
+  );
+}
+
+function GuideSection({ title, body }: { title: string; body: string }) {
+  return (
+    <View style={styles.guideSection}>
+      <ThemedText type="headline" accessibilityRole="header">{title}</ThemedText>
+      <ThemedText type="body" themeColor="textSecondary">{t(body)}</ThemedText>
+    </View>
   );
 }
 
@@ -892,12 +960,11 @@ const styles = StyleSheet.create({
     ...Elevation.sm,
   },
   heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Space.md,
+    alignItems: "flex-start",
+    gap: Space.sm,
   },
-  heroTitle: { flex: 1 },
+  guideSection: { gap: Space.xs },
+  expandLabel: { flexShrink: 1 },
   tierBadge: {
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
@@ -982,10 +1049,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Space.xs,
     paddingVertical: Space.xs,
+    minHeight: 44,
   },
   bars: { gap: Space.md },
   barRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
-  barLabel: { width: 132 },
+  barLabel: { width: "45%" },
   barTrack: {
     flex: 1,
     height: 8,
