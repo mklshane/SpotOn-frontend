@@ -32,7 +32,8 @@ import { useTheme } from '@/hooks/use-theme';
 import { useScreeningSession } from '@/lib/screening-session';
 import { ANSWER_OPTIONS, QUESTIONS, type QuestionDef } from '@/lib/triage/questions';
 import { REFERENCE_CAPTIONS, REFERENCE_IMAGES } from '@/lib/triage/reference-images';
-import type { Answer, QuestionId } from '@/lib/triage/types';
+import { canFinishPriorityQuestionnaire } from '@/lib/triage/tps-core';
+import type { Answer, ClassificationOutput, QuestionId } from '@/lib/triage/types';
 import { TourTarget } from '@/lib/product-tour';
 import { useScanTips } from '@/lib/scan-tips';
 
@@ -71,6 +72,8 @@ export default function QuestionnaireScreen() {
     questionsToReask,
     images,
     imageUri,
+    getClassification,
+    acceptedLowConfidence,
   } = useScreeningSession();
 
   /**
@@ -117,6 +120,11 @@ export default function QuestionnaireScreen() {
    */
   const [listHeight, setListHeight] = useState(0);
   const [skipOpen, setSkipOpen] = useState(false);
+  const [preview, setPreview] = useState<{
+    photo: string | null;
+    images: typeof images;
+    prediction: ClassificationOutput;
+  } | null>(null);
 
   const isLast = index === questions.length - 1;
   const current = questions[index];
@@ -128,6 +136,20 @@ export default function QuestionnaireScreen() {
     () => QUESTIONS.filter((q) => answers[q.id] === undefined).length,
     [answers],
   );
+  useEffect(() => {
+    if (!hasPhoto || followUp || acceptedLowConfidence) return;
+    let active = true;
+    void getClassification().then((prediction) => {
+      if (active) setPreview({ photo: imageUri, images, prediction });
+    }).catch(() => {
+      // Analysis still handles inference failures and retry.
+    });
+    return () => { active = false; };
+  }, [getClassification, hasPhoto, imageUri, images, followUp, acceptedLowConfidence]);
+
+  const canFinishEarly = unanswered > 0 && !followUp && !acceptedLowConfidence &&
+    preview != null && preview.photo === imageUri && preview.images === images &&
+    canFinishPriorityQuestionnaire(preview.prediction, answers);
 
   const goTo = useCallback((i: number) => {
     listRef.current?.scrollToIndex({ index: i, animated: true });
@@ -280,6 +302,15 @@ export default function QuestionnaireScreen() {
           onPress={next}
           style={styles.cta}
         />
+        {canFinishEarly ? (
+          <>
+            <ThemedText type="footnote" themeColor="textSecondary" style={styles.reassure}>
+              {t("Your answers already indicate the highest screening priority. You can see your result now or finish answering.")}
+              {" "}{t("Unanswered items will be recorded as “I’m not sure.”")}
+            </ThemedText>
+            <Button label={t("See priority result")} variant="outline" onPress={confirmSkip} />
+          </>
+        ) : null}
         {unanswered > 0 ? (
           <TourTarget id="questionSkip">
             <Pressable
@@ -303,11 +334,9 @@ export default function QuestionnaireScreen() {
         visible={skipOpen}
         icon="questionmark.circle.fill"
         title={t("Skip the questions?")}
-        message={`We’ll record your ${unanswered} remaining ${
-          unanswered === 1 ? 'answer' : 'answers'
-        } as “I’m not sure.” That’s okay - but the more you can answer, the more accurate your result.`}
-        confirmLabel="Skip anyway"
-        cancelLabel="Keep answering"
+        message={t("We’ll record the remaining {{count}} as “I’m not sure.” The answers you already gave will be kept.", { count: unanswered })}
+        confirmLabel={t("Skip anyway")}
+        cancelLabel={t("Keep answering")}
         onConfirm={confirmSkip}
         onCancel={() => setSkipOpen(false)}
       />

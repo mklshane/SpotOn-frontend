@@ -188,6 +188,33 @@ export function assignTier(tps: number): TriageTier {
   return 'low';
 }
 
+/** A lower bound using only confirmed findings. Unanswered items are never scored as
+ * negative in the saved record. This only decides whether further answers can affect
+ * the tier, and deliberately waits for a readable, stable prediction. */
+export function canFinishPriorityQuestionnaire(
+  prediction: {
+    topClass: LesionClass;
+    topConfidence: number;
+    probs: Record<LesionClass, number>;
+    scaleUnstable: boolean;
+    imageDisagreement?: boolean;
+  },
+  answers: Partial<SymptomAnswers>,
+): boolean {
+  if (prediction.scaleUnstable || prediction.imageDisagreement ||
+    evaluateSafetyFloor(prediction.topConfidence, 1) !== 'ok') return false;
+  if (MAJOR_QUESTIONS.some((question) => answers[question] === undefined)) return false;
+  const { cs } = computeCS(
+    prediction.topClass, prediction.topConfidence, pickCombinedMalignant(prediction.probs) ?? undefined,
+  );
+  const confirmed = ALL_QUESTIONS.reduce((sum, question) => {
+    if (answers[question] !== 'yes') return sum;
+    return sum + (MAJOR_QUESTIONS.includes(question) ? MAJOR_SCORE.yes : MINOR_SCORE.yes);
+  }, 0);
+  const minimumSymptoms = round4((confirmed / SS_RAW_MAX) * SS_SCALE);
+  return assignTier(computeTPS(cs, minimumSymptoms)) === 'critical';
+}
+
 /**
  * Safety Floor Rule (rescan-first, two-strike). Confidence < 40% (strict) means the
  * model is spreading probability across classes and the output is not clinically
