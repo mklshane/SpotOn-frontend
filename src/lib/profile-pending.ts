@@ -1,6 +1,6 @@
 import * as FileSystem from '@/lib/fs';
 import * as SecureStore from '@/lib/secure-store';
-import type { Sex, UserProfile } from '@/api/types';
+import type { Sex, UserProfile, YesNoUnsure } from '@/api/types';
 
 export type PendingAvatar = { kind: 'upload'; uri: string } | { kind: 'remove' };
 export type PendingProfile = {
@@ -10,6 +10,9 @@ export type PendingProfile = {
     date_of_birth: string;
     sex: Sex;
     fitzpatrick_skin_type?: number;
+    personal_skin_cancer_history?: YesNoUnsure;
+    family_skin_cancer_history?: YesNoUnsure;
+    high_sun_exposure?: boolean;
     phone?: string;
   };
   avatar?: PendingAvatar;

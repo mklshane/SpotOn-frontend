@@ -1,5 +1,5 @@
 import { api, ApiError } from "@/api/client";
-import type { Sex, UserProfile } from "@/api/types";
+import type { Sex, UserProfile, YesNoUnsure } from "@/api/types";
 import * as FileSystem from '@/lib/fs';
 import { cacheProfile, getAccessToken, refresh } from '@/lib/auth-api';
 import { getActiveAccountId } from '@/lib/account-scope';
@@ -27,6 +27,10 @@ export type ProfileInput = {
   sex: Sex;
   phone?: string;
   fitzpatrickSkinType?: number; // 1-6
+  /** Optional risk factors (022). Like skin type, an unanswered field is left as-is on the server. */
+  personalSkinCancerHistory?: YesNoUnsure;
+  familySkinCancerHistory?: YesNoUnsure;
+  highSunExposure?: boolean;
   /**
    * `undefined` - not touched, leave the stored avatar as-is.
    * `null` - the user removed their photo, clear it.
@@ -131,6 +135,9 @@ export async function saveProfile({
   sex,
   phone,
   fitzpatrickSkinType,
+  personalSkinCancerHistory,
+  familySkinCancerHistory,
+  highSunExposure,
   avatarUri,
 }: ProfileInput, currentUser: UserProfile): Promise<SaveProfileResult> {
   const previous = await readPendingProfile(currentUser.id);
@@ -147,6 +154,9 @@ export async function saveProfile({
       date_of_birth: dateOfBirth,
       sex,
       ...(fitzpatrickSkinType != null ? { fitzpatrick_skin_type: fitzpatrickSkinType } : {}),
+      ...(personalSkinCancerHistory != null ? { personal_skin_cancer_history: personalSkinCancerHistory } : {}),
+      ...(familySkinCancerHistory != null ? { family_skin_cancer_history: familySkinCancerHistory } : {}),
+      ...(highSunExposure != null ? { high_sun_exposure: highSunExposure } : {}),
       ...(phone?.trim() ? { phone: phone.trim() } : {}),
     },
     avatar,

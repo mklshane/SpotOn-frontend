@@ -149,6 +149,8 @@ export type Sex =
   | "other"
   | "prefer_not_to_say";
 
+export type YesNoUnsure = "yes" | "no" | "unsure";
+
 // Mirrors backend UserOut (GET /me).
 export interface UserProfile {
   id: string;
@@ -158,6 +160,14 @@ export interface UserProfile {
   date_of_birth: string | null; // ISO date "YYYY-MM-DD"
   sex: string | null;
   fitzpatrick_skin_type: number | null;
+  /**
+   * Optional skin-cancer risk factors (server migration 022). They personalise the result screen's
+   * "For you" notes (lib/triage/personal-notes.ts) and never change the triage tier. Optional
+   * because a profile cached from an older server lacks them.
+   */
+  personal_skin_cancer_history?: YesNoUnsure | null;
+  family_skin_cancer_history?: YesNoUnsure | null;
+  high_sun_exposure?: boolean | null;
   avatar_url: string | null;
   is_active: boolean;
   is_verified: boolean;

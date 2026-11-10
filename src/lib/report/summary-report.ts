@@ -3,7 +3,7 @@ import { t, getLocale, type Locale } from '../i18n/core';
 
 // Relative, not `@/`-aliased: scripts/test-report-html.mjs compiles this module with the
 // project's tsc but without the tsconfig path map, the same way test-tps.mjs does.
-import { computeAge, formatLongDate, sexLabel } from '../profile-format';
+import { computeAge, formatLongDate, sexLabel, skinTypeLabel } from '../profile-format';
 import { displayConfidence, displayProbs } from '../triage/display-confidence';
 import { QUESTIONS } from '../triage/questions';
 import {
@@ -44,6 +44,13 @@ export type ReportPatient = {
   sex: string | null;
   /** phone, falling back to email. */
   contact: string | null;
+  /** "Type IV", or null when not set. */
+  skinType: string | null;
+  /**
+   * The optional risk-factor answers (server 022), for the clinician: "Family history of skin
+   * cancer; High sun exposure", "None reported", or null when none was answered.
+   */
+  riskFactors: string | null;
   /** True when any of name/dob/sex/contact is missing - drives the in-app nudge. */
   incomplete: boolean;
 };
@@ -131,12 +138,26 @@ export type ReportModel = {
 
 const DASH = null;
 
+function riskFactorLine(profile: UserProfile | null | undefined): string | null {
+  const answers: [string, 'yes' | 'no' | 'unsure' | null | undefined][] = [
+    [t('Personal history of skin cancer'), profile?.personal_skin_cancer_history],
+    [t('Family history of skin cancer'), profile?.family_skin_cancer_history],
+    [t('High sun exposure'), profile?.high_sun_exposure == null ? null : profile.high_sun_exposure ? 'yes' : 'no'],
+  ];
+  if (answers.every(([, a]) => a == null)) return DASH;
+  const listed = answers
+    .filter(([, a]) => a === 'yes' || a === 'unsure')
+    .map(([label, a]) => (a === 'unsure' ? `${label} (${t('unsure')})` : label));
+  return listed.length ? listed.join('; ') : t('None reported');
+}
+
 function buildPatient(profile: UserProfile | null | undefined): ReportPatient {
   const name = profile?.full_name?.trim() || DASH;
   const dobDisplay = formatLongDate(profile?.date_of_birth);
   const age = computeAge(profile?.date_of_birth);
   const sex = sexLabel(profile?.sex);
   const contact = profile?.phone?.trim() || profile?.email?.trim() || DASH;
+  const skin = skinTypeLabel(profile?.fitzpatrick_skin_type);
   return {
     name,
     dobDisplay,
@@ -144,6 +165,8 @@ function buildPatient(profile: UserProfile | null | undefined): ReportPatient {
     dobLine: dobDisplay ? (age != null ? `${dobDisplay} (${t('{{age}} y/o', { age })})` : dobDisplay) : null,
     sex,
     contact,
+    skinType: skin === '-' ? DASH : t(skin),
+    riskFactors: riskFactorLine(profile),
     incomplete: !name || !dobDisplay || !sex || !contact,
   };
 }

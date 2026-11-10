@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 
-import type { Sex } from "@/api/types";
+import type { Sex, YesNoUnsure } from "@/api/types";
 import { ThemedText } from "@/components/themed-text";
 import { Accordion } from "@/components/ui/accordion";
 import { AvatarPicker } from "@/components/ui/avatar-picker";
@@ -58,6 +58,19 @@ const SKIN_TYPE_OPTIONS: {
   { value: "6", label: "Type VI", description: "Never burns" },
 ]);
 
+// Optional risk factors (server 022). They tailor the result screen's "For you" notes and never
+// change a result's urgency, so every one can be left blank.
+const HISTORY_OPTIONS: { value: YesNoUnsure; label: string }[] = localizedCopy([
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" },
+  { value: "unsure", label: "Not sure" },
+]);
+
+const SUN_OPTIONS: { value: "yes" | "no"; label: string; description: string }[] = localizedCopy([
+  { value: "yes", label: "Yes", description: "I work or spend long hours outdoors, or I sunburn easily" },
+  { value: "no", label: "No", description: "Mostly indoors, and I rarely burn" },
+]);
+
 export default function EditProfileScreen() {
   useLocale();
   const theme = useTheme();
@@ -71,6 +84,15 @@ export default function EditProfileScreen() {
     user?.fitzpatrick_skin_type != null
       ? String(user.fitzpatrick_skin_type)
       : null,
+  );
+  const [personalHistory, setPersonalHistory] = useState<YesNoUnsure | null>(
+    user?.personal_skin_cancer_history ?? null,
+  );
+  const [familyHistory, setFamilyHistory] = useState<YesNoUnsure | null>(
+    user?.family_skin_cancer_history ?? null,
+  );
+  const [sunExposure, setSunExposure] = useState<"yes" | "no" | null>(
+    user?.high_sun_exposure == null ? null : user.high_sun_exposure ? "yes" : "no",
   );
   const [avatarUri, setAvatarUri] = useState<string | null>(
     user?.avatar_url ?? null,
@@ -108,6 +130,9 @@ export default function EditProfileScreen() {
         dateOfBirth: dob,
         sex,
         fitzpatrickSkinType: skinType ? Number(skinType) : undefined,
+        personalSkinCancerHistory: personalHistory ?? undefined,
+        familySkinCancerHistory: familyHistory ?? undefined,
+        highSunExposure: sunExposure == null ? undefined : sunExposure === "yes",
         avatarUri: avatarDirty ? avatarUri : undefined,
       }, user);
       setUser(result.user);
@@ -216,6 +241,36 @@ export default function EditProfileScreen() {
             />
           </View>
 
+          <View style={styles.form}>
+            <View style={styles.groupHead}>
+              <ThemedText type="headline">{t("Skin health background")}</ThemedText>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {t("Optional. These help tailor the advice on your results. They never change how urgent a result is.")}
+              </ThemedText>
+            </View>
+            <Accordion
+              label={t("Have you had skin cancer before?")}
+              placeholder={t("Select")}
+              value={personalHistory}
+              options={HISTORY_OPTIONS}
+              onChange={setPersonalHistory}
+            />
+            <Accordion
+              label={t("Has a parent, sibling, or child had skin cancer?")}
+              placeholder={t("Select")}
+              value={familyHistory}
+              options={HISTORY_OPTIONS}
+              onChange={setFamilyHistory}
+            />
+            <Accordion
+              label={t("Do you get a lot of sun?")}
+              placeholder={t("Select")}
+              value={sunExposure}
+              options={SUN_OPTIONS}
+              onChange={setSunExposure}
+            />
+          </View>
+
           <View style={styles.actions}>
             {formError ? (
               <ThemedText
@@ -249,6 +304,7 @@ const styles = StyleSheet.create({
   },
   header: { flexDirection: "row", alignItems: "center", gap: Space.base },
   form: { gap: Space.xl },
+  groupHead: { gap: Space.xs },
   actions: { marginTop: "auto", gap: Space.sm, paddingTop: Space.xl },
   center: { textAlign: "center" },
 });

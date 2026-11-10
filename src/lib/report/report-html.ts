@@ -81,6 +81,10 @@ export function buildReportHtml(
       <td class="k">${t('Sex')}</td><td class="v">${value(model.patient.sex)}</td>
       <td class="k">${t('Contact')}</td><td class="v">${value(model.patient.contact)}</td>
     </tr>
+    <tr>
+      <td class="k">${t('Skin Type')}</td><td class="v">${value(model.patient.skinType)}</td>
+      <td class="k">${t('Risk Factors')}</td><td class="v">${value(model.patient.riskFactors)}</td>
+    </tr>
   </table>
 
   <div class="sec">${t('Lesion Image and Classification Result')}</div>

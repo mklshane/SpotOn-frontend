@@ -63,6 +63,8 @@ import {
 } from "@/lib/triage/recommendations";
 import { getConditionGuide } from "@/lib/triage/condition-guides";
 import { reportedPriorityFinding } from "@/lib/triage/priority-findings";
+import { personalNotesFor } from "@/lib/triage/personal-notes";
+import { useCurrentConditions } from "@/hooks/use-current-conditions";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -615,6 +617,13 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
+        {/* 4b · For you - the per-account layer. The tier above is the same for everyone with this
+            scan; these notes say why it matters to *this* person (risk factors, age, skin type, where
+            the spot is, how it has changed). They never change the urgency. */}
+        <Animated.View entering={FadeInDown.delay(172)}>
+          <ForYouCard record={record} />
+        </Animated.View>
+
         {/* 5 · Why it could be either - cited look-alike explanation, combined results only */}
         {combined ? (
           <Animated.View entering={FadeInDown.delay(185)}>
@@ -905,6 +914,63 @@ function Header({ onBack }: { onBack?: () => void }) {
   );
 }
 
+/**
+ * "For you": personal notes from lib/triage/personal-notes.ts. Its own component so its hooks
+ * (profile, this spot's history, today's UV) sit outside ResultScreen's early returns.
+ */
+function ForYouCard({ record }: { record: ScreeningRecord }) {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const { screeningsForLesion } = useScanHistory();
+  const conditions = useCurrentConditions();
+  const sameSpot = record.lesionId ? screeningsForLesion(record.lesionId) : [];
+  const uv = conditions.status === "ready" ? conditions.data?.uvMaxToday ?? conditions.data?.uv : null;
+  const notes = personalNotesFor(record, user, sameSpot, uv);
+  // Nudge toward the optional background questions until any one is answered.
+  const askBackground =
+    user != null &&
+    user.personal_skin_cancer_history == null &&
+    user.family_skin_cancer_history == null &&
+    user.high_sun_exposure == null;
+  if (notes.length === 0 && !askBackground) return null;
+
+  return (
+    <Card style={styles.section}>
+      <View style={styles.forYouHead}>
+        <Icon name="person.fill" tintColor={theme.brand} size={18} />
+        <ThemedText type="headline" accessibilityRole="header">
+          {t("For you")}
+        </ThemedText>
+      </View>
+      {notes.map((note) => (
+        <View key={note.id} style={styles.forYouNote}>
+          <ThemedText type="caption" themeColor="brand" style={styles.emphasis}>
+            {note.reason}
+          </ThemedText>
+          <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
+            {note.text}
+          </ThemedText>
+        </View>
+      ))}
+      {askBackground ? (
+        <Pressable
+          onPress={() => router.push("/profile/edit")}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.expandRow, pressed && styles.pressed]}
+        >
+          <ThemedText type="subhead" themeColor="brand" style={styles.forYouLink}>
+            {t("Add your skin health background for advice that fits you better")}
+          </ThemedText>
+          <Icon name="chevron.right" tintColor={theme.brand} size={14} />
+        </Pressable>
+      ) : null}
+      <ThemedText type="footnote" themeColor="muted">
+        {t("Based on your profile and past checks. These notes do not change how urgent this result is.")}
+      </ThemedText>
+    </Card>
+  );
+}
+
 function WarningBanner() {
   useLocale();
   const theme = useTheme();
@@ -1175,11 +1241,11 @@ function AboutType({
 }
 
 function ConditionDetails({ label }: { label: LesionClass }) {
-  const [open, setOpen] = useState(false);
-  const theme = useTheme();
   const guide = getConditionGuide(label);
   if (!guide) return null;
 
+  // Always shown: the signs and care guidance are the point of this card, so they
+  // shouldn't sit behind a tap.
   return (
     <View style={styles.guideSection}>
       <ThemedText type="headline" accessibilityRole="header">
@@ -1188,26 +1254,13 @@ function ConditionDetails({ label }: { label: LesionClass }) {
       <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
         {t(guide.description)}
       </ThemedText>
-      <Pressable
-        onPress={() => setOpen((value) => !value)}
-        accessibilityRole="button"
-        aria-expanded={open}
-        style={styles.expandRow}
-      >
-        <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
-          {open ? t("Hide condition details") : t("See signs, risk factors, and care guidance")}
-        </ThemedText>
-        <Icon name={open ? "chevron.up" : "chevron.down"} tintColor={theme.brand} size={14} />
-      </Pressable>
-      {open ? (
-        <View style={styles.section}>
-          <GuideSection title={t("Common signs and symptoms")} body={guide.signs} />
-          <GuideSection title={t("Possible contributing factors")} body={guide.factors} />
-          <GuideSection title={t("Recommended next steps")} body={guide.nextSteps} />
-          <GuideSection title={t("When to consult a dermatologist")} body={guide.consult} />
-          <GuideSection title={t("Important reminders")} body={guide.reminder} />
-        </View>
-      ) : null}
+      <View style={styles.section}>
+        <GuideSection title={t("Common signs and symptoms")} body={guide.signs} />
+        <GuideSection title={t("Possible contributing factors")} body={guide.factors} />
+        <GuideSection title={t("Recommended next steps")} body={guide.nextSteps} />
+        <GuideSection title={t("When to consult a dermatologist")} body={guide.consult} />
+        <GuideSection title={t("Important reminders")} body={guide.reminder} />
+      </View>
     </View>
   );
 }
@@ -1566,8 +1619,10 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     minHeight: 44,
   },
-  expandLabel: { flexShrink: 1 },
   guideSection: { gap: Space.xs },
+  forYouHead: { flexDirection: "row", alignItems: "center", gap: Space.sm },
+  forYouNote: { gap: 2 },
+  forYouLink: { flexShrink: 1 },
   bars: { gap: Space.md },
   barRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
   barLabel: { width: "45%" },
