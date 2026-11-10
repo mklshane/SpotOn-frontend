@@ -62,6 +62,7 @@ import {
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
 import { getConditionGuide } from "@/lib/triage/condition-guides";
+import { reportedPriorityFinding } from "@/lib/triage/priority-findings";
 import { CLASS_WEIGHTS } from "@/lib/triage/tps-core";
 import type {
   LesionClass,
@@ -227,6 +228,12 @@ export default function ResultScreen() {
 
   const { triage, questionnaire, classification, mark } = record;
   const tier = TIER_CONTENT[triage.tier];
+  const priorityFinding = reportedPriorityFinding(questionnaire.answers);
+  const contactForFinding = triage.tier === "low" && Boolean(priorityFinding);
+  const priorityTiming = contactForFinding
+    ? t("Contact a dermatologist about the sign you reported")
+    : tier.priorityAction;
+  const recommendation = contactForFinding ? priorityTiming : tier.recommendation;
   const colors = tierColor(triage.tier);
   const qualifier = triage.confidenceQualifier;
   // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
@@ -446,7 +453,17 @@ export default function ResultScreen() {
                 <ThemedText type="caption" themeColor="textSecondary">
                   {t("Priority action:").replace(/:$/, "")}
                 </ThemedText>
-                <ThemedText type="headline">{tier.priorityAction}</ThemedText>
+                <ThemedText type="headline" accessibilityRole="header">
+                  {priorityFinding?.headline ?? priorityTiming}
+                </ThemedText>
+                {priorityFinding ? (
+                  <>
+                    <ThemedText type="subhead">{priorityTiming}</ThemedText>
+                    <ThemedText type="callout" themeColor="textSecondary">
+                      {priorityFinding.message}
+                    </ThemedText>
+                  </>
+                ) : null}
                 {priorityLabels.map((label) => {
                   const guide = getConditionGuide(label);
                   return guide ? (
@@ -559,11 +576,11 @@ export default function ResultScreen() {
                 themeColor="textSecondary"
                 style={styles.para}
               >
-                {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
+                {CONFIDENCE_QUALIFIER.body} {recommendation}
               </ThemedText>
             ) : !knownClass ? (
               <ThemedText type="callout" themeColor="textSecondary">
-                {tier.recommendation}
+                {recommendation}
               </ThemedText>
             ) : gated ? (
               <ThemedText
@@ -572,7 +589,7 @@ export default function ResultScreen() {
                 style={styles.para}
               >
                 {malignantGateCopy(classification.topClass).body}{" "}
-                {tier.recommendation}
+                {recommendation}
               </ThemedText>
             ) : (
               <ThemedText
@@ -592,7 +609,7 @@ export default function ResultScreen() {
                 <ThemedText type="callout" style={styles.emphasis}>
                   {t("It is not a confirmed diagnosis.")}
                 </ThemedText>{" "}
-                {tier.recommendation}
+                {recommendation}
               </ThemedText>
             )}
           </Card>
