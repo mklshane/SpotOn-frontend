@@ -1,6 +1,7 @@
 import type { LesionClass } from "./types";
 
 type ConditionGuide = {
+  priorityAction: string;
   description: string;
   signs: string;
   factors: string;
@@ -12,6 +13,8 @@ type ConditionGuide = {
 const CONDITION_GUIDES: Record<LesionClass, ConditionGuide> = {
   // https://www.aad.org/public/diseases/skin-cancer/types/common/melanoma/symptoms and /causes
   MEL: {
+    priorityAction:
+      "Bring earlier photos of the spot so the dermatologist can compare its size, shape, and color. If a mole is changing or a new spot looks unlike your others, contact a dermatologist promptly.",
     description:
       "Melanoma starts in the cells that give skin its color and can spread to other parts of the body.",
     signs:
@@ -27,6 +30,8 @@ const CONDITION_GUIDES: Record<LesionClass, ConditionGuide> = {
   },
   // https://www.aad.org/public/diseases/skin-cancer/squamous-cell-carcinoma/
   SCC: {
+    priorityAction:
+      "Point out any rough or scaly patch that persists or a sore that keeps crusting without healing. Ask for an earlier appointment if it grows quickly or starts bleeding repeatedly.",
     description:
       "Squamous cell carcinoma starts in cells in the outer layer of the skin.",
     signs:
@@ -42,6 +47,8 @@ const CONDITION_GUIDES: Record<LesionClass, ConditionGuide> = {
   },
   // https://www.aad.org/public/diseases/skin-cancer/basal-cell-carcinoma/
   BCC: {
+    priorityAction:
+      "Tell the dermatologist if a shiny bump is slowly growing or a sore closes and then opens again. A sore that keeps coming back needs assessment even if it is painless. Ask to be seen sooner if it starts bleeding repeatedly.",
     description:
       "Basal cell carcinoma starts in basal cells in the outer layer of the skin and can damage nearby tissue as it grows.",
     signs:
@@ -57,6 +64,8 @@ const CONDITION_GUIDES: Record<LesionClass, ConditionGuide> = {
   },
   // https://dermnetnz.org/topics/benign-skin-lesions and https://www.aad.org/public/diseases/a-z/moles-treatment
   BENIGN: {
+    priorityAction:
+      "Keep a dated photo to help you notice changes in a familiar spot. A benign-looking spot can still need assessment. Contact a dermatologist promptly if it changes shape or color, starts itching, or bleeds.",
     description:
       "This broad category includes noncancerous growths such as ordinary moles and seborrheic keratoses.",
     signs:
@@ -72,6 +81,8 @@ const CONDITION_GUIDES: Record<LesionClass, ConditionGuide> = {
   },
   // https://www.aad.org/public/diseases/skin-cancer/actinic-keratosis-causes
   OTHER: {
+    priorityAction:
+      "The scan cannot tell what kind of spot this is. Have a persistent rough patch or a sore that does not heal examined in person. Contact a dermatologist promptly if the spot grows or begins to bleed.",
     description:
       "Other is a broad model category. The scan cannot identify a specific condition within it.",
     signs:

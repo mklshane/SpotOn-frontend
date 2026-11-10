@@ -241,6 +241,9 @@ export default function ResultScreen() {
       : {},
   );
   const combined = result.parts.length > 1;
+  const priorityLabels = CLASS_BY_URGENCY.filter((label) =>
+    result.parts.some(({ cls }) => cls === label),
+  );
   // Sum of the rounded shares, so the ring always equals what the legend adds up to.
   const combinedPct = result.parts.reduce(
     (sum, x) => sum + Math.round(x.p * 100),
@@ -444,6 +447,14 @@ export default function ResultScreen() {
                   {t("Priority action:").replace(/:$/, "")}
                 </ThemedText>
                 <ThemedText type="headline">{tier.priorityAction}</ThemedText>
+                {priorityLabels.map((label) => {
+                  const guide = getConditionGuide(label);
+                  return guide ? (
+                    <ThemedText key={label} type="callout" themeColor="textSecondary">
+                      {t(guide.priorityAction)}
+                    </ThemedText>
+                  ) : null;
+                })}
               </View>
             </TourTarget>
           </View>
@@ -1502,12 +1513,12 @@ const styles = StyleSheet.create({
   photoCaptionText: { flex: 1, gap: 2 },
   priority: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: Space.md,
     paddingHorizontal: Space.xl,
     paddingVertical: Space.base,
   },
-  priorityText: { flex: 1, gap: 2 },
+  priorityText: { flex: 1, gap: Space.xs },
   warningBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
