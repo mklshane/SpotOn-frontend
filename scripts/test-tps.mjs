@@ -393,6 +393,29 @@ check('combined: no second → no secondClass field', computeTriage('MEL', 0.9, 
 check('combined: invalid second confidence throws',
   throws(() => computeCS('MEL', 0.6, { cls: 'BCC', confidence: 1.4 })));
 
+const priorityPrediction = {
+  topClass: 'MEL', topConfidence: 0.97, probs: dist({ MEL: 0.97, BENIGN: 0.03 }),
+  scaleUnstable: false,
+};
+const confirmedMajors = Object.fromEntries(MAJOR_QUESTIONS.map((id) => [id, 'yes']));
+const shortcut = core.canFinishPriorityQuestionnaire;
+check('priority shortcut needs confirmed symptoms, even for MEL', !shortcut(priorityPrediction, {}));
+check('priority shortcut requires all major questions to be answered', !shortcut({
+  ...priorityPrediction, topConfidence: 0.999,
+}, { evolution: 'yes', bleeding_nonhealing: 'yes' }));
+check('priority shortcut does not count unconfirmed major answers', !shortcut(priorityPrediction, {
+  evolution: 'yes', bleeding_nonhealing: 'yes', irregular_border: 'unsure',
+}));
+check('priority shortcut accepts confirmed major findings', shortcut(priorityPrediction, confirmedMajors));
+check('priority shortcut rejects unstable or disagreeing photos',
+  !shortcut({ ...priorityPrediction, scaleUnstable: true }, confirmedMajors) &&
+  !shortcut({ ...priorityPrediction, imageDisagreement: true }, confirmedMajors));
+const minimum = Object.fromEntries([...MAJOR_QUESTIONS, ...MINOR_QUESTIONS].map((id) => [id, confirmedMajors[id] ?? 'no']));
+const recorded = Object.fromEntries([...MAJOR_QUESTIONS, ...MINOR_QUESTIONS].map((id) => [id, confirmedMajors[id] ?? 'unsure']));
+check('priority remains Critical at both the lower bound and recorded unsure answers',
+  computeTriage('MEL', 0.97, minimum).tier === 'critical' &&
+  computeTriage('MEL', 0.97, recorded).tier === 'critical');
+
 if (fails.length) {
   console.error(`\ntps core: ${pass} passed, ${fails.length} FAILED`);
   for (const f of fails) console.error('  FAIL:', f);

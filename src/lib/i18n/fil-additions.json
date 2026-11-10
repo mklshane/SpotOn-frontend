@@ -1,4 +1,10 @@
 {
+  "Unanswered items will be recorded as “I’m not sure.”": "Itatala bilang “Hindi ako sigurado” ang mga tanong na hindi nasagutan.",
+  "Your answers already indicate the highest screening priority. You can see your result now or finish answering.": "Batay sa mga sagot mo, nasa pinakamataas na prayoridad ang screening na ito. Maaari mong tingnan ang resulta ngayon o tapusin ang pagsagot.",
+  "See priority result": "Tingnan ang resulta na may mataas na prayoridad",
+  "We’ll record the remaining {{count}} as “I’m not sure.” The answers you already gave will be kept.": "Itatala namin bilang “Hindi ako sigurado” ang natitirang {{count}}. Mananatili ang mga sagot na ibinigay mo na.",
+  "Skip anyway": "Laktawan pa rin",
+  "Keep answering": "Magpatuloy sa pagsagot",
   "Get ongoing bleeding, crusting, or slow healing checked": "Ipasuri ang matagal na pagdurugo, paglalangib, o mabagal na paggaling",
   "Get bleeding without injury checked": "Ipasuri ang markang dumudugo kahit hindi ito nasugatan",
   "Get the changing spot checked": "Ipasuri ang nagbabagong marka sa balat",
