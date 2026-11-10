@@ -2,7 +2,6 @@ import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { router } from "expo-router";
 import { useState } from "react";
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -76,6 +75,7 @@ export default function EditProfileScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(
     user?.avatar_url ?? null,
   );
+  const [avatarDirty, setAvatarDirty] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{
     fullName?: string;
@@ -100,33 +100,30 @@ export default function EditProfileScreen() {
 
   async function handleSubmit() {
     setFormError(null);
-    if (!validate() || !dob || !sex) return;
+    if (!validate() || !dob || !sex || !user) return;
     setSubmitting(true);
     try {
-      const { user: saved, failedFields } = await saveProfile({
+      const result = await saveProfile({
         fullName,
         dateOfBirth: dob,
         sex,
         fitzpatrickSkinType: skinType ? Number(skinType) : undefined,
-        // NOTE: `saveProfile` needs to accept and persist this field (e.g.
-        // upload the local file URI and store the resulting remote URL).
-        // Keep `null` distinct from `undefined` here: `null` means "the user
-        // removed their photo, clear it," while `undefined` would typically
-        // mean "field not touched" on a partial-update API - collapsing the
-        // two would make photo removal silently fail to persist.
-        avatarUri,
-      });
-      setUser(saved);
-      if (failedFields.length > 0) {
-        Alert.alert(
-          "Profile saved",
-          "Profile saved, but some fields could not be updated.",
-        );
+        avatarUri: avatarDirty ? avatarUri : undefined,
+      }, user);
+      setUser(result.user);
+      if (result.status === 'rejected') {
+        if (avatarDirty && result.user.avatar_url?.startsWith('file:')) {
+          setAvatarUri(result.user.avatar_url);
+          setAvatarDirty(false);
+        }
+        setFormError(result.error || t("Some changes couldn't be saved. Please try again."));
+        return;
       }
       router.back();
-    } catch {
+    } catch (error) {
+      console.warn('[profile] save failed before it could be queued:', error);
       setFormError(
-        "Couldn't save your details. Check your connection and try again.",
+        error instanceof Error ? error.message : t("Couldn't save your details. Check your connection and try again."),
       );
     } finally {
       setSubmitting(false);
@@ -159,7 +156,10 @@ export default function EditProfileScreen() {
           <AvatarPicker
             uri={avatarUri}
             name={fullName}
-            onChange={setAvatarUri}
+            onChange={(uri) => {
+              setAvatarUri(uri);
+              setAvatarDirty(true);
+            }}
           />
 
           <View style={styles.form}>

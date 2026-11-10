@@ -241,7 +241,7 @@ export function VisualBlock({ block }: { block: Extract<ArticleBlock, { kind: 'v
 
         <ClinicalImage
           id={block.photo}
-          caption="Possible appearance. Appearance alone cannot confirm a diagnosis."
+          caption={t('Possible appearance. Appearance alone cannot confirm a diagnosis.')}
         />
 
         <View style={styles.traits}>
@@ -269,6 +269,45 @@ export function VisualBlock({ block }: { block: Extract<ArticleBlock, { kind: 'v
  * flow uses for tracked spots. A list of place names would read as filler; the
  * silhouettes are what make the pattern land.
  */
+/**
+ * A two-column grid of real photographs, for showing range: one condition on
+ * different skin tones, or the places it tends to appear. An odd final photo
+ * keeps half width beside an empty cell rather than stretching, so every frame
+ * in the grid stays the same size. A gallery of one is a single figure, so it
+ * takes the full width instead.
+ */
+export function GalleryBlock({ block }: { block: Extract<ArticleBlock, { kind: 'gallery' }> }) {
+  useLocale();
+  const theme = useTheme();
+  const rows: (typeof block.items)[] = [];
+  for (let i = 0; i < block.items.length; i += 2) rows.push(block.items.slice(i, i + 2));
+
+  return (
+    <Card padded={false} style={[styles.card, { borderColor: theme.hairline }]}>
+      <View style={styles.section}>
+        <BlockHeading title={block.heading} intro={block.intro} />
+
+        {rows.map((row) => (
+          <View key={row[0].photo} style={styles.compareRow}>
+            {row.map((item) => (
+              <ClinicalImage key={item.photo} id={item.photo} caption={item.caption} />
+            ))}
+            {row.length === 1 && block.items.length > 1 ? (
+              <View style={styles.galleryFiller} />
+            ) : null}
+          </View>
+        ))}
+
+        {block.footnote ? (
+          <ThemedText type="footnote" themeColor="muted">
+            {block.footnote}
+          </ThemedText>
+        ) : null}
+      </View>
+    </Card>
+  );
+}
+
 export function BodyAreasBlock({ block }: { block: Extract<ArticleBlock, { kind: 'bodyAreas' }> }) {
   useLocale();
   const theme = useTheme();
@@ -360,7 +399,7 @@ export function SubtypesBlock({ block }: { block: Extract<ArticleBlock, { kind: 
                 </ThemedText>
                 <View style={styles.subtypeMore}>
                   <ThemedText type="caption" style={{ color: theme.brandPressed }}>
-                    {open ? 'Show less' : 'View details'}
+                    {open ? t('Show less') : t('View details')}
                   </ThemedText>
                   <Icon name={open ? 'chevron.up' : 'chevron.down'} size={11} tintColor={theme.brandPressed} />
                 </View>
@@ -500,7 +539,7 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
         // one of them.
         credit.url ? (
           <PressableScale
-            key={credit.org}
+            key={`${credit.org}|${credit.url ?? ""}`}
             onPress={() => Linking.openURL(credit.url as string)}
             accessibilityRole="link"
             accessibilityLabel={`Image source ${credit.org}. Opens in your browser.`}
@@ -511,7 +550,7 @@ export function ImageCreditsBlock({ imageIds }: { imageIds: readonly ClinicalIma
             <Icon name="arrow.up.right" size={11} tintColor={theme.brandPressed} />
           </PressableScale>
         ) : (
-          <View key={credit.org} style={styles.creditRow}>
+          <View key={`${credit.org}|${credit.url ?? ""}`} style={styles.creditRow}>
             <ThemedText type="caption" themeColor="textSecondary">
               {t("Image source:")} {credit.org} ({credit.licence})
             </ThemedText>
@@ -548,6 +587,7 @@ const styles = StyleSheet.create({
   // alignItems flex-start so a one-line caption beside a two-line one does not
   // stretch its sibling's frame, which is what made the halves unequal.
   compareRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md },
+  galleryFiller: { flex: 1 },
 
   stepRow: { flexDirection: 'row', gap: Space.md },
   stepGutter: { width: 28, alignItems: 'center' },

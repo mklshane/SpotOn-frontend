@@ -68,11 +68,13 @@ core.applyLocale('fil');
 assert.equal(core.t(error), 'Ilagay ang buong pangalan mo.');
 assert.equal(identity.id,'Yes'); assert.equal(identity.value,'No'); assert.equal(identity.kind,'Other');
 assert.equal(identity.title,'Oo'); assert.equal(identity.labels[0],'Oo');
-assert.ok(core.t(recommendations.DISCLAIMER).startsWith('Pantulong sa screening ang SpotOn'));
+assert.ok(core.t(recommendations.DISCLAIMER).startsWith('Tulong ang SpotOn sa pag-check ng balat'));
 assert.ok(core.t(recommendations.REPORT_DISCLAIMER).startsWith('Ang Screening Summary Report na ito'));
 assert.equal(core.t('  1. Introduction '), '  1. Panimula ');
 assert.equal(core.t('Missing message'), 'Missing message');
 assert.equal(core.t('{{age}} y/o', {age: 30}), '30 taong gulang');
+assert.equal(core.t('You answered yes to {{count}} of {{total}} questions.', {count: 2, total: 8}), 'Oo ang sagot mo sa 2 sa 8 tanong.');
+assert.equal(core.t('Unsure'), 'Hindi sigurado');
 const filipino = buildReportModel(record, {full_name:'Male', date_of_birth:'1985-03-14', sex:'male',phone:'09123456789'});
 assert.equal(filipino.patient.name, 'Male'); // User values are never translated.
 assert.equal(filipino.patient.sex, 'Lalaki');

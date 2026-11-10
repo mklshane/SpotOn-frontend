@@ -22,6 +22,7 @@ import { initNotifications } from '@/lib/notifications';
 import { ScanHistoryProvider } from '@/lib/scan-history';
 import { sweepScratchFiles } from '@/lib/scratch-files';
 import { ScreeningSessionProvider } from '@/lib/screening-session';
+import { ProductTourProvider } from '@/lib/product-tour';
 
 // Runs at module evaluation - before the router mounts and rewrites the URL, which is the only
 // moment `?debug=1` is still readable. See lib/debug-flag.ts.
@@ -118,25 +119,27 @@ export default function RootLayout() {
     >
       <SafeAreaProvider>
         <LanguageGate>
-        <AuthProvider>
-          <ScanHistoryProvider>
-          <ScreeningSessionProvider>
-            <ThemeProvider value={DefaultTheme}>
-              <StatusBar style="dark" />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF9F4' } }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(onboarding)" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="scan" />
-                <Stack.Screen name="profile" />
-                <Stack.Screen name="directory" />
-                <Stack.Screen name="learn" />
-              </Stack>
-            </ThemeProvider>
-          </ScreeningSessionProvider>
-          </ScanHistoryProvider>
-        </AuthProvider>
+          <AuthProvider>
+            <ProductTourProvider>
+              <ScanHistoryProvider>
+                <ScreeningSessionProvider>
+                  <ThemeProvider value={DefaultTheme}>
+                    <StatusBar style="dark" />
+                    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFF9F4' } }}>
+                      <Stack.Screen name="index" />
+                      <Stack.Screen name="(onboarding)" />
+                      <Stack.Screen name="(auth)" />
+                      <Stack.Screen name="(tabs)" />
+                      <Stack.Screen name="scan" />
+                      <Stack.Screen name="profile" />
+                      <Stack.Screen name="directory" />
+                      <Stack.Screen name="learn" />
+                    </Stack>
+                  </ThemeProvider>
+                </ScreeningSessionProvider>
+              </ScanHistoryProvider>
+            </ProductTourProvider>
+          </AuthProvider>
         </LanguageGate>
       </SafeAreaProvider>
     </GestureHandlerRootView>

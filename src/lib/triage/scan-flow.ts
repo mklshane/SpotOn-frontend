@@ -54,6 +54,22 @@ export const SKIN_GATE_MIN = 0.5;
 /** pFace at or above this = a whole face, which gets its own "move closer" message. */
 export const SKIN_GATE_FACE_MAX = 0.5;
 
+/**
+ * pSkin at or above this lets the learned gate overrule the hand-built colour-skin rule (2026-10-18).
+ *
+ * Pale skin under a phone flash comes out neutral-to-bluish grey: the reported photos had mean cr
+ * 125-133 (neutral grey is 128) and scored 5-12% skin-coloured pixels against SKIN_MIN 0.30. No
+ * colour threshold can pass them without passing a grey wall too (see SKIN_CR_MIN), so the colour
+ * rule stays a veto only when the model is unsure. Scenes and walls are the model's job; the
+ * colour rule never caught anything the model passed with confidence on the held-out sets.
+ */
+export const SKIN_GATE_OVERRULES_COLOUR = 0.85;
+
+/** The colour-skin term as the gate uses it: the pixel rule, unless the model is confident it is skin. */
+export function colourSkinOk(coverageOk: boolean, pSkin: number | null | undefined): boolean {
+  return coverageOk || (pSkin ?? 0) >= SKIN_GATE_OVERRULES_COLOUR;
+}
+
 /** The skin gate's softmax -> a verdict. Face is checked first: its message is the actionable one. */
 export function skinGateVerdict(p: { skin: number; notSkin: number; face: number }): SkinGateVerdict {
   if (p.face >= SKIN_GATE_FACE_MAX) return 'face';
@@ -64,8 +80,10 @@ export function skinGateVerdict(p: { skin: number; notSkin: number; face: number
 export type IqaVerdict = {
   /** True when every blocking image check passed. */
   pass: boolean;
-  /** What the third row ("Lesion in frame") reports. */
+  /** What the third row ("Skin in frame") reports: skin, with or without a visible spot. */
   lesionRowOk: boolean;
+  /** Skin AND the presence check found a spot - what `detected` records on the stored image. */
+  lesionSeen: boolean;
 };
 
 /**
@@ -103,11 +121,21 @@ export type IqaVerdict = {
  * SpotOn-synthetic/synth/skin_gate/SKIN_GATE.md. The detector still owns the classifier's CROP
  * (classify.ts); it just no longer vetoes. The hand-built terms stay: `skin` is a cheap backstop,
  * and `presence` still answers the question the model does not - is there a spot on this skin.
+ *
+ * LESION *OR* SKIN PASSES (2026-09-29). `presence` no longer vetoes: a faint or flat lesion (a
+ * pale macule, an early BCC) often has too little centre-surround contrast to register, and users
+ * were blocked from uploading a genuine photo of the spot they were worried about. A lesion can
+ * only be in a skin frame, so "lesion or skin" is just "skin" - the two skin terms still block
+ * streets, t-shirts and selfies exactly as before. What this gives up: bare skin with no spot now
+ * passes (presence used to stop ~82% of those). The classifier's Safety Floor still catches a
+ * photo it cannot read, and a missing spot is surfaced as a tip rather than a block. Presence is
+ * still recorded (`lesionSeen`), just not enforced.
  */
 export function decideIqa(input: IqaTerms): IqaVerdict {
-  const lesionRowOk = input.skinOk && input.presenceOk && input.skinGate === 'skin';
+  const lesionRowOk = input.skinOk && input.skinGate === 'skin';
   return {
     lesionRowOk,
+    lesionSeen: lesionRowOk && input.presenceOk,
     pass: !input.error && input.brightnessOk && input.sharpOk && lesionRowOk,
   };
 }
@@ -146,7 +174,41 @@ export function decideQuality(input: {
   };
 }
 
-/** Where the user goes after accepting a photo. */
+export type SetQuality = {
+  /** Every photo passed its image checks. */
+  allPass: boolean;
+  /** No photo passed. */
+  nonePass: boolean;
+  /** Positions (in the set as given) of the photos that passed, in order. */
+  passing: number[];
+  /** Positions of the photos that failed. */
+  failing: number[];
+};
+
+/**
+ * The image checks over the whole set (2026-10-07).
+ *
+ * IQA used to run after every capture, so a three-photo screening sat through the check three
+ * times. It now runs once, on the set the user chose to proceed with, and this is the one place
+ * that turns the per-photo verdicts into what the quality screen offers:
+ *   - all pass  -> advance (after the readability check);
+ *   - some pass -> "Continue with N photos" keeps only the passing ones, or "Use anyway" keeps all;
+ *   - none pass -> retake, or "Use anyway".
+ * Dropping the failures may drop the primary; the first passing photo then becomes images[0]
+ * (removeImage re-indexes), so the photo the classifier reads is always one that passed.
+ */
+export function decideSetQuality(perPhoto: readonly Pick<IqaVerdict, 'pass'>[]): SetQuality {
+  const passing: number[] = [];
+  const failing: number[] = [];
+  perPhoto.forEach((v, i) => (v.pass ? passing : failing).push(i));
+  return {
+    allPass: perPhoto.length > 0 && failing.length === 0,
+    nonePass: passing.length === 0,
+    passing,
+    failing,
+  };
+}
+
 /**
  * The quality screen's read of the first classification pass. Only a Safety Floor PROMPT makes a
  * photo "unreadable" here: on the rescan (attempt 2) the verdict is 'apply-floor', which analysis
@@ -171,9 +233,8 @@ export type ScanStep = { kind: 'questionnaire' } | { kind: 'analysis' };
 /**
  * Routing after a photo is accepted.
  *
- * One photo per pass, from either source, and no detour: a second photo is offered inline on the
- * quality screen and routes straight back to the camera or picker, so nothing queues and there is
- * no review step to pass through.
+ * Photos are collected on the review screen (1 to MAX_IMAGES_PER_SCREENING) and the quality screen
+ * checks the whole set once, so by the time this runs the set is final.
  *
  * The only branch left is whether the questionnaire still needs asking - it doesn't on a
  * Safety-Floor rescan, or on a follow-up whose answers were carried forward, and re-asking there

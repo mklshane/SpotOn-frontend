@@ -1,7 +1,7 @@
 import { t, useLocale } from '@/lib/i18n';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -33,6 +33,8 @@ import { useScreeningSession } from '@/lib/screening-session';
 import { ANSWER_OPTIONS, QUESTIONS, type QuestionDef } from '@/lib/triage/questions';
 import { REFERENCE_CAPTIONS, REFERENCE_IMAGES } from '@/lib/triage/reference-images';
 import type { Answer, QuestionId } from '@/lib/triage/types';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 /**
  * The 8-item symptom questionnaire. One question per page (progressive disclosure);
@@ -88,9 +90,17 @@ export default function QuestionnaireScreen() {
   // `carryForwardAnswers`). `questionnaireComplete` still requires all 8 answers - the carried ones
   // are already in `answers`, so computeSymptomScore keeps scoring a complete questionnaire and the
   // TPS engine is untouched. Only the asked subset changes.
+  //
+  // `?mode=all` comes from the follow-up screen's "Update these answers": the user wants to correct
+  // a CARRIED answer (e.g. the border is now irregular), so every question is shown, pre-filled
+  // with the carried answers. Without it the carried items were unreachable and a stale "no" on a
+  // Major question kept scoring.
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const reviewAll = mode === 'all';
   const questions = useMemo(
-    () => (followUp ? QUESTIONS.filter((q) => questionsToReask.includes(q.id)) : QUESTIONS),
-    [followUp, questionsToReask],
+    () =>
+      followUp && !reviewAll ? QUESTIONS.filter((q) => questionsToReask.includes(q.id)) : QUESTIONS,
+    [followUp, questionsToReask, reviewAll],
   );
 
   const listRef = useRef<FlatList<QuestionDef>>(null);
@@ -198,28 +208,31 @@ export default function QuestionnaireScreen() {
   // ask before discarding the run. Without this it would pop to the capture screen mid-questionnaire
   // - which is exactly what `gestureEnabled: false` already forbids on iOS.
   useAndroidBack(() => (index > 0 ? goTo(index - 1) : confirmExit()));
+  useScanTips('questionnaire');
 
   return (
     <Screen variant="gradient" gradient="dawn" padded={false} edges={['top']}>
       {/* Header: back through questions · progress · exit */}
-      <View style={styles.header}>
-        {index > 0 ? (
-          <Pressable hitSlop={12} onPress={() => goTo(index - 1)} accessibilityRole="button" accessibilityLabel={t("Previous question")}>
-            <Icon name="chevron.left" tintColor={theme.brand} size={20} />
+      <TourTarget id="questionProgress">
+        <View style={styles.header}>
+          {index > 0 ? (
+            <Pressable hitSlop={12} onPress={() => goTo(index - 1)} accessibilityRole="button" accessibilityLabel={t("Previous question")}>
+              <Icon name="chevron.left" tintColor={theme.brand} size={20} />
+            </Pressable>
+          ) : (
+            <View style={styles.headerSpacer} />
+          )}
+          <ThemedText type="headline" themeColor="textSecondary">
+            {t('Question {{n}} of {{total}}', { n: index + 1, total: questions.length })}
+          </ThemedText>
+          <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel={t("Exit questionnaire")}>
+            <Icon name="xmark" tintColor={theme.muted} size={18} />
           </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
-        <ThemedText type="headline" themeColor="textSecondary">
-          {t('Question {{n}} of {{total}}', { n: index + 1, total: questions.length })}
-        </ThemedText>
-        <Pressable hitSlop={12} onPress={confirmExit} accessibilityRole="button" accessibilityLabel={t("Exit questionnaire")}>
-          <Icon name="xmark" tintColor={theme.muted} size={18} />
-        </Pressable>
-      </View>
+        </View>
 
-      {/* Progress: thin brand bar under the header, filled to the current question */}
-      <ProgressBar progress={(index + 1) / questions.length} />
+        {/* Progress: thin brand bar under the header, filled to the current question */}
+        <ProgressBar progress={(index + 1) / questions.length} />
+      </TourTarget>
 
       <FlatList
         ref={listRef}
@@ -268,19 +281,21 @@ export default function QuestionnaireScreen() {
           style={styles.cta}
         />
         {unanswered > 0 ? (
-          <Pressable
-            hitSlop={10}
-            onPress={() => setSkipOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={t("Skip the remaining questions")}>
-            {({ pressed }) => (
-              <ThemedText
-                type="subhead"
-                themeColor="textSecondary"
-                style={[styles.skip, pressed && styles.skipPressed]}>
-                {t("Skip these questions")}</ThemedText>
-            )}
-          </Pressable>
+          <TourTarget id="questionSkip">
+            <Pressable
+              hitSlop={10}
+              onPress={() => setSkipOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t("Skip the remaining questions")}>
+              {({ pressed }) => (
+                <ThemedText
+                  type="subhead"
+                  themeColor="textSecondary"
+                  style={[styles.skip, pressed && styles.skipPressed]}>
+                  {t("Skip these questions")}</ThemedText>
+              )}
+            </Pressable>
+          </TourTarget>
         ) : null}
       </View>
 

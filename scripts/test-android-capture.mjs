@@ -26,6 +26,42 @@ try {
   ], { cwd: ROOT, stdio: 'inherit' });
   const p = await import(pathToFileURL(join(out, 'android-capture-policy.js')).href);
 
+  await test('jpegExifOrientation reads IFD0 Orientation in both byte orders, else null', () => {
+    const jpeg = (orientation, little) => {
+      const u16 = (v) => little ? [v & 255, v >> 8] : [v >> 8, v & 255];
+      const u32 = (v) => little ? [v & 255, (v >> 8) & 255, (v >> 16) & 255, v >>> 24] : [v >>> 24, (v >> 16) & 255, (v >> 8) & 255, v & 255];
+      const tiff = [...(little ? [0x49, 0x49] : [0x4d, 0x4d]), ...u16(42), ...u32(8),
+        ...u16(2), ...u16(0x010f), ...u16(2), ...u32(4), 0x76, 0x69, 0x76, 0,
+        ...u16(0x0112), ...u16(3), ...u32(1), ...u16(orientation), 0, 0, ...u32(0)];
+      const app1 = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+      const app0 = [0xff, 0xe0, 0, 6, 0x4a, 0x46, 0x49, 0x46];
+      return new Uint8Array([0xff, 0xd8, ...app0, 0xff, 0xe1, (app1.length + 2) >> 8, (app1.length + 2) & 255, ...app1, 0xff, 0xda]);
+    };
+    assert.equal(p.jpegExifOrientation(jpeg(6, true)), 6);
+    assert.equal(p.jpegExifOrientation(jpeg(1, false)), 1);
+    assert.equal(p.jpegExifOrientation(new Uint8Array([0xff, 0xd8, 0xff, 0xda])), null);
+    assert.equal(p.jpegExifOrientation(new Uint8Array([0x89, 0x50])), null);
+    assert.equal(p.jpegExifOrientation(jpeg(6, true).slice(0, 30)), null);
+  });
+
+  await test('upright pass is skipped only for portrait, unrotated, unmirrored stills', () => {
+    assert.equal(p.canSkipUpright(3060, 4080, 1, false), true);
+    assert.equal(p.canSkipUpright(3060, 4080, null, false), true);
+    assert.equal(p.canSkipUpright(4080, 3060, 1, false), false);
+    assert.equal(p.canSkipUpright(3060, 4080, 6, false), false);
+    assert.equal(p.canSkipUpright(3060, 4080, 1, true), false);
+  });
+
+  await test('a steady lock spaces passes to ANDROID_STEADY_INTERVAL_MS, never below the measured rate', () => {
+    const started = { ...p.initialAndroidSchedule(1), lastStartedAt: 0, intervalMs: 300 };
+    assert.equal(p.androidDetectionDue(started, 300, false, false, false), true);
+    assert.equal(p.androidDetectionDue(started, 300, false, false, true), false);
+    assert.equal(p.androidDetectionDue(started, p.ANDROID_STEADY_INTERVAL_MS, false, false, true), true);
+    const slow = { ...started, intervalMs: 900 };
+    assert.equal(p.androidDetectionDue(slow, 899, false, false, true), false);
+    assert.equal(p.androidDetectionDue(slow, 900, false, false, true), true);
+  });
+
   await test('starts at 6 Hz; pause/busy gates do not consume a scheduling slot', () => {
     const state = p.initialAndroidSchedule(1);
     assert.equal(state.intervalMs, 1000 / 6);
@@ -45,18 +81,20 @@ try {
       state = p.completeAndroidDetection(state, 1, 20);
       assert.ok(state.intervalMs >= 1000 / 12);
       assert.ok(state.intervalMs >= previous.intervalMs * 0.9);
-      assert.ok(state.intervalMs >= 2 * state.meanMs);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * state.meanMs);
     }
     assert.equal(state.intervalMs, 1000 / 12);
   });
 
   await test('slow inference and skin processing back off immediately without a forced minimum FPS', () => {
     const state = p.completeAndroidDetection(p.initialAndroidSchedule(1), 1, 350);
-    assert.equal(state.intervalMs, 700);
+    assert.equal(state.intervalMs, 350 * p.ANDROID_DUTY_FACTOR);
     const slower = p.completeAndroidDetection(state, 1, 1400);
-    assert.equal(slower.intervalMs, 2800);
+    assert.equal(slower.intervalMs, 1400 * p.ANDROID_DUTY_FACTOR);
     const recovered = p.completeAndroidDetection(slower, 1, 20);
-    assert.equal(recovered.intervalMs, 2520);
+    assert.equal(recovered.intervalMs, 1400 * p.ANDROID_DUTY_FACTOR * 0.9);
+    // Vivo V2248 regression: a 1.2 s pass must not idle another 1.2 s before the next one.
+    assert.ok(p.completeAndroidDetection(p.initialAndroidSchedule(1), 1, 1200).intervalMs <= 1500);
   });
 
   await test('thermal slowdown then recovery respects average cost and gradual recovery', () => {
@@ -66,8 +104,8 @@ try {
       assert.ok(p.androidDetectionDue(state, now, false, false));
       state = { ...state, lastStartedAt: now };
       state = p.completeAndroidDetection(state, 4, cost);
-      assert.ok(state.intervalMs >= 2 * cost);
-      assert.ok(state.intervalMs >= 2 * state.meanMs);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * cost);
+      assert.ok(state.intervalMs >= p.ANDROID_DUTY_FACTOR * state.meanMs);
       assert.equal(p.androidDetectionDue(state, now + state.intervalMs - 1, false, false), false);
       now += Math.ceil(state.intervalMs);
     }
@@ -183,9 +221,13 @@ try {
     assert.ok(platformBranch);
     assert.ok(measuredFinally);
     // Full-quality stills on Android only; iOS keeps the 'balanced' it shipped with.
-    assert.ok(source.includes("photoQualityBalance={ANDROID_CAPTURE ? 'quality' : 'balanced'}"));
+    // Zero-shutter-lag on both platforms; 'quality' cost 1.8-2.5 s per tap on Android.
+    assert.ok(source.includes('photoQualityBalance="balanced"'));
     // No format: 12 MP forces CameraX stream sharing on LIMITED devices and misaligns the box.
     assert.ok(!/\bformat=\{/.test(source), 'capture must stay format-unconstrained');
+    // Guide toggle must not detach the Android frame processor (that rebinds CameraX: black flash).
+    assert.ok(source.includes('frameProcessor={(ANDROID_CAPTURE || guide) && isFocused ? frameProcessor : undefined}'));
+    assert.ok(source.includes('capturePausedSV.value || !guideSV.value) return;'));
     // Auto-focus is Android-gated and never fires while a capture owns the camera.
     assert.ok(source.includes('if (ANDROID_CAPTURE && canFocusRef.current && !captureInFlightRef.current)'));
     // Capture must pause new work before waiting, and cannot bypass the idle check.

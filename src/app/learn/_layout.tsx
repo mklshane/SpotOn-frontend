@@ -16,7 +16,6 @@ export default function LearnDetailLayout() {
       }}>
       <Stack.Screen name="topic" />
       <Stack.Screen name="article" />
-      <Stack.Screen name="questionnaire" />
     </Stack>
   );
 }

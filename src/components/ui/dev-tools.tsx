@@ -16,6 +16,7 @@ import {
   MAJOR_QUESTIONS,
   MINOR_QUESTIONS,
   computeMalignantScore,
+  pickCombinedMalignant,
   computeTriage,
 } from '@/lib/triage/tps-core';
 import type { Answer, LesionClass, QuestionId, SymptomAnswers } from '@/lib/triage/types';
@@ -41,11 +42,20 @@ const JUMPS: Jump[] = [
 const TEST_PHOTO = require('../../../assets/dev/test-lesion.jpg');
 
 // Mock screenings so every result variant is reachable without running the model.
-const MOCKS: { label: string; topClass: LesionClass; conf: number; answer: Answer; floor?: boolean }[] = [
+const MOCKS: {
+  label: string;
+  topClass: LesionClass;
+  conf: number;
+  answer: Answer;
+  floor?: boolean;
+  /** Runner-up class + probability, for a combined malignant result. */
+  second?: [LesionClass, number];
+}[] = [
   { label: 'Result: Low', topClass: 'BENIGN', conf: 0.92, answer: 'no' },
   { label: 'Result: Moderate', topClass: 'BCC', conf: 0.75, answer: 'no' },
   { label: 'Result: High', topClass: 'MEL', conf: 0.91, answer: 'no' },
   { label: 'Result: Critical', topClass: 'MEL', conf: 0.97, answer: 'yes' },
+  { label: 'Result: MEL or BCC', topClass: 'MEL', conf: 0.6, answer: 'no', second: ['BCC', 0.38] },
   { label: 'Result: Safety floor', topClass: 'OTHER', conf: 0.32, answer: 'unsure', floor: true },
 ];
 
@@ -79,11 +89,12 @@ export function DevTools() {
 
   async function openMockResult(mock: (typeof MOCKS)[number]) {
     const answers = mockAnswers(mock.answer);
-    const rest = (1 - mock.conf) / 4;
+    const [secondCls, secondP] = mock.second ?? [null, 0];
+    const rest = (1 - mock.conf - secondP) / (mock.second ? 3 : 4);
     const probs = Object.fromEntries(
       (['MEL', 'SCC', 'BCC', 'OTHER', 'BENIGN'] as LesionClass[]).map((c) => [
         c,
-        c === mock.topClass ? mock.conf : rest,
+        c === mock.topClass ? mock.conf : c === secondCls ? secondP : rest,
       ]),
     ) as Record<LesionClass, number>;
     // Seed the bundled photo rather than '' - otherwise every mock result (and the Screening
@@ -113,6 +124,7 @@ export function DevTools() {
         applyFloor: mock.floor,
         malignantScore: computeMalignantScore(probs),
         malignantThreshold: MALIGNANT_THRESHOLD,
+        second: pickCombinedMalignant(probs) ?? undefined,
       }),
     });
     router.replace({ pathname: '/scan/result', params: { id: entry.id, from: 'scan' } });

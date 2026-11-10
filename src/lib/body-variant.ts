@@ -33,9 +33,17 @@ export function defaultVariantForSex(sex: string | null | undefined): BodyVarian
 /** Persisted override key. Null/absent means "follow the profile". */
 const KEY = 'body_figure';
 
+/**
+ * The override as last read or written this session. `undefined` = not read yet. Lets a body
+ * screen opened a second time (or after prewarmBody) skip the database round trip and render the
+ * mesh on its first frame.
+ */
+let cachedOverride: BodyVariant | null | undefined;
+
 export async function readBodyVariantOverride(): Promise<BodyVariant | null> {
   const stored = await getMeta(KEY);
-  return isBodyVariant(stored) ? stored : null;
+  cachedOverride = isBodyVariant(stored) ? stored : null;
+  return cachedOverride;
 }
 
 /**
@@ -47,6 +55,7 @@ const listeners = new Set<(variant: BodyVariant | null) => void>();
 export async function writeBodyVariantOverride(variant: BodyVariant | null): Promise<void> {
   // setMeta has no delete; the empty string is the "no override" sentinel and fails isBodyVariant.
   await setMeta(KEY, variant ?? '');
+  cachedOverride = variant;
   for (const listener of listeners) listener(variant);
 }
 
@@ -57,8 +66,8 @@ export async function writeBodyVariantOverride(variant: BodyVariant | null): Pro
  */
 export function useBodyVariant(): { variant: BodyVariant; override: BodyVariant | null; ready: boolean } {
   const { user } = useAuth();
-  const [override, setOverride] = useState<BodyVariant | null>(null);
-  const [ready, setReady] = useState(false);
+  const [override, setOverride] = useState<BodyVariant | null>(cachedOverride ?? null);
+  const [ready, setReady] = useState(cachedOverride !== undefined);
 
   useEffect(() => {
     let alive = true;
@@ -83,4 +92,24 @@ export function useBodyVariant(): { variant: BodyVariant; override: BodyVariant 
   }, []);
 
   return { variant: override ?? defaultVariantForSex(user?.sex), override, ready };
+}
+
+/**
+ * Android: build the body mesh in the background once the user is signed in, so the body screen
+ * opens straight onto the model instead of "Loading 3D model…". Hermes takes ~0.5-0.8 s to decode
+ * the baked mesh and compute normals on a mid-range phone (both cached for the process lifetime by
+ * getBodyGeometry); iOS does it fast enough that the screen never shows the label. Lazy-imports the
+ * three.js module so app start does not pay for it.
+ */
+export function prewarmBody(sex: string | null | undefined): void {
+  readBodyVariantOverride()
+    .catch(() => null)
+    .then((override) =>
+      import('@/components/scan/body-model').then((m) => {
+        m.getBodyGeometry(override ?? defaultVariantForSex(sex));
+      }),
+    )
+    .catch(() => {
+      // Best-effort: the body screen builds it on open as before.
+    });
 }

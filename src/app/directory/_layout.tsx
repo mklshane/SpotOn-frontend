@@ -5,6 +5,7 @@ export default function DirectoryDetailLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
       <Stack.Screen name="clinic" />
       <Stack.Screen name="doctor" />
+      <Stack.Screen name="report" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
     </Stack>
   );
 }

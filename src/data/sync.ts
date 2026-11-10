@@ -7,9 +7,10 @@
  * Upserts are idempotent, so re-seeing a row across pages is harmless. When all
  * collections are drained, store the response's `synced_at` as the next `since`.
  *
- * Change timestamps: doctors/facilities/booking_links use updated_at; platforms
- * use created_at (no updated_at on that table). Hard deletes aren't tracked by
- * the server, so a FULL sync additionally sweeps local rows the server did not
+ * Change timestamps: every collection pages by updated_at (platforms gained one
+ * in migration 014). Since 014 the server also sends soft-delete tombstones
+ * (deleted_at), which remove the local row. Rows hard-deleted BEFORE 014 left no
+ * tombstone, so a FULL sync additionally sweeps local rows the server did not
  * return - see runSync/sweepDeleted.
  */
 import { api } from "../api/client";
@@ -32,7 +33,13 @@ const LAST_SYNC_KEY = "last_synced_at";
 // before a row was removed server-side kept showing it forever, and no
 // incremental sync could ever clear it.
 const RECONCILE_KEY = "sync_reconcile_version";
-const RECONCILE_VERSION = "1";
+//
+// "2" (2026-10-05): /sync used to end a page inside a group of rows sharing one updated_at, and
+// the next page's `> since` skipped the rest - 663 of 1921 doctors never reached any install.
+// Incremental syncs can't recover them (their timestamp is older than every stored cursor), and
+// installs migrated past columns added by ALTER (booking_url, facility_type, department_info,
+// doctors.status) still hold NULLs for rows the server never re-stamped. One full pass fixes both.
+const RECONCILE_VERSION = "2";
 
 const bit = (v: boolean | null | undefined): number | null =>
   v === null || v === undefined ? null : v ? 1 : 0;
@@ -85,15 +92,18 @@ async function upsertFacilities(items: FacilitySync[]): Promise<void> {
          (id,name,type,facility_type,address,city,province,region,latitude,longitude,
           services,has_philhealth,fee_min,fee_max,status,phone,website,booking_url,
           google_maps_url,google_rating,weekday_hours,weekend_hours,description,
-          photo_url,photo_attribution,department_info,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          photo_url,photo_attribution,department_info,derm_status,concerns,
+          pds_skin_cancer_center,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           f.id, f.name, f.type, f.facility_type, f.address, f.city, f.province,
           f.region, f.latitude, f.longitude, json(f.services), bit(f.has_philhealth),
           f.fee_min, f.fee_max, f.status, f.phone, f.website, f.booking_url,
           f.google_maps_url, f.google_rating, json(f.weekday_hours),
           json(f.weekend_hours), f.description, f.photo_url, f.photo_attribution,
-          json(f.department_info), f.updated_at,
+          json(f.department_info), f.derm_status ?? null,
+          // `?? []`: a server from before migration 016 omits these, and the column is NOT NULL.
+          json(f.concerns ?? []), bit(f.pds_skin_cancer_center ?? null), f.updated_at,
         ],
       );
     }
@@ -108,12 +118,12 @@ async function upsertDoctors(items: DoctorSync[]): Promise<void> {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctors
          (id,name,title,pds_certified,specialties,specialties_display,status,city,region,
-          phone,website,google_maps_url,photo_url,description,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          phone,website,google_maps_url,photo_url,description,concerns,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           d.id, d.name, d.title, bit(d.pds_certified), json(d.specialties),
           d.specialties_display, d.status, d.city, d.region, d.phone, d.website,
-          d.google_maps_url, d.photo_url, d.description, d.updated_at,
+          d.google_maps_url, d.photo_url, d.description, json(d.concerns ?? []), d.updated_at,
         ],
       );
     }
@@ -129,12 +139,12 @@ async function upsertBookingLinks(items: BookingLinkSync[]): Promise<void> {
         `INSERT OR REPLACE INTO booking_links
          (id,doctor_id,platform_id,url,consultation_fee,rating,review_count,
           is_introductory_fee,available_text,is_active,last_verified,
-          next_available,created_at,updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          next_available,offers_online,created_at,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           b.id, b.doctor_id, b.platform_id, b.url, b.consultation_fee, b.rating,
           b.review_count, bit(b.is_introductory_fee), b.available_text,
-          bit(b.is_active), b.last_verified, b.next_available, b.created_at,
+          bit(b.is_active), b.last_verified, b.next_available, bit(b.offers_online ?? null), b.created_at,
           b.updated_at,
         ],
       );
@@ -149,9 +159,14 @@ async function upsertDoctorFacilities(items: DoctorFacilitySync[]): Promise<void
     for (const l of items) {
       await db.runAsync(
         `INSERT OR REPLACE INTO doctor_facility
-         (id,doctor_id,facility_id,is_primary,schedule,updated_at)
-         VALUES (?,?,?,?,?,?)`,
-        [l.id, l.doctor_id, l.facility_id, bit(l.is_primary), l.schedule, l.updated_at],
+         (id,doctor_id,facility_id,is_primary,schedule,schedule_days,room,phone,
+          source_url,verified_at,consultation_fee,updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          l.id, l.doctor_id, l.facility_id, bit(l.is_primary), l.schedule,
+          l.schedule_days ?? null, l.room ?? null, l.phone ?? null, l.source_url ?? null,
+          l.verified_at ?? null, l.consultation_fee ?? null, l.updated_at,
+        ],
       );
     }
   });
@@ -241,10 +256,11 @@ export interface SyncResult {
  * Run an incremental sync. Pass `full: true` to ignore the stored cursor,
  * re-pull everything, and sweep away rows the server no longer has.
  *
- * The sweep exists because /sync carries no tombstones: a hard-deleted row was
- * simply never mentioned again, and since every write here is INSERT OR REPLACE,
- * it survived on the device forever. That is not hypothetical - pathology labs
- * deleted server-side were still listed in the app's Clinics tab.
+ * The sweep exists because /sync carried no tombstones before migration 014: a
+ * hard-deleted row was simply never mentioned again, and since every write here is
+ * INSERT OR REPLACE, it survived on the device forever. That is not hypothetical -
+ * pathology labs deleted server-side were still listed in the app's Clinics tab.
+ * Tombstones now cover new deletions; the sweep still clears the pre-014 ones.
  *
  * Mark-and-sweep rather than clear-then-refill: the ids seen during the pass are
  * collected, and the delete only runs once every collection has drained. A sync
@@ -334,14 +350,20 @@ async function runSyncOnce(opts: { full?: boolean }): Promise<SyncResult> {
       for (const p of plat.live) seen.telemedicine_platforms.add(p.id);
     }
 
-    const more = [
+    const collections = [
       resp.facilities,
       resp.doctors,
       resp.doctor_facilities,
       resp.booking_links,
       resp.telemedicine_platforms,
-    ]
-      .filter((c) => c.has_more && c.next_cursor)
+    ];
+    // `has_more` without a cursor means paging cannot continue, NOT that it finished. Treating it
+    // as drained would let the full-sync sweep below delete every row the server never got to send.
+    if (collections.some((c) => c.has_more && !c.next_cursor)) {
+      throw new Error("sync: server reported more rows but no cursor to continue from");
+    }
+    const more = collections
+      .filter((c) => c.has_more)
       .map((c) => c.next_cursor as string);
 
     if (more.length === 0) {

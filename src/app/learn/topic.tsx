@@ -65,7 +65,7 @@ export default function LearnTopicScreen() {
                 <EducationCard
                   key={article.id}
                   icon={article.icon}
-                  tag={`${getArticleReadMinutes(article)} min read`}
+                  tag={t('{{count}} min read', { count: getArticleReadMinutes(article) })}
                   title={article.title}
                   description={article.summary}
                   onPress={() =>

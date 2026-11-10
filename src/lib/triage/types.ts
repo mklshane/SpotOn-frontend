@@ -74,6 +74,8 @@ export type ScreeningImage = {
   uri: string;
   index: number;
   source: 'camera' | 'gallery';
+  /** Development-only model selection made from the original gallery photo before cropping. */
+  demoModel?: boolean;
   /** The image-quality gate's verdict. False means the user chose "use anyway". */
   qualityPassed: boolean;
   /** Live-detector verdict carried over from capture; undefined for gallery uploads. */

@@ -83,6 +83,7 @@
       "./plugins/withDisableScriptSandboxing",
       "./plugins/withAndroidAccentColor",
       "./plugins/withAndroidKeepRawAssets",
+      "./plugins/withNoCloudBackup",
       "expo-router",
       [
         "expo-splash-screen",
@@ -136,7 +137,12 @@
           }
         }
       ],
-      "react-native-fast-tflite",
+      [
+        "react-native-fast-tflite",
+        {
+          "enableAndroidGpuLibraries": true
+        }
+      ],
       "expo-sharing",
       "./plugins/withoutPushEntitlement",
       [
@@ -145,6 +151,12 @@
           "icon": "./assets/images/notification-icon.png",
           "color": "#FF8A4C",
           "defaultChannel": "self-check"
+        }
+      ],
+      [
+        "expo-sensors",
+        {
+          "motionPermission": false
         }
       ]
     ],

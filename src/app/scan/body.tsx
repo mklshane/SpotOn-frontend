@@ -14,7 +14,11 @@ import { Space } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { prewarmLesionModel } from '@/lib/lesion-model';
 import { prewarmSkinGate } from '@/lib/skin-gate';
+import { prewarmFaceModel } from '@/lib/face-model';
+import { prewarmSpotVerifier } from '@/lib/spot-verifier';
 import { useScreeningSession } from '@/lib/screening-session';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 export default function BodyAreaScreen() {
   useLocale();
@@ -32,6 +36,10 @@ export default function BodyAreaScreen() {
     // the camera at a lesion waiting for a box. Fire-and-forget; capture.tsx still owns the load.
     prewarmLesionModel();
     prewarmSkinGate();
+    // The upload's multi-spot search (scan/crop.tsx) needs these two as well; loading them here
+    // keeps their load and first-invoke cost out of the "Finding spots..." wait.
+    prewarmSpotVerifier();
+    prewarmFaceModel();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -52,6 +60,8 @@ export default function BodyAreaScreen() {
     router.push({ pathname: '/scan/crop', params: { uri: result.assets[0].uri, source: 'gallery' } });
   }
 
+  useScanTips('body');
+
   return (
     <Screen padded={false}>
       <View style={styles.header}>
@@ -63,9 +73,9 @@ export default function BodyAreaScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.viewer}>
+      <TourTarget id="scanBodyViewer" style={styles.viewer}>
         <BodyViewer mark={bodyMark} onPick={setBodyMark} />
-      </View>
+      </TourTarget>
 
       <View style={styles.copy}>
         {bodyMark ? (
@@ -80,7 +90,7 @@ export default function BodyAreaScreen() {
           {t("Drag to rotate · pinch to zoom · tap to place the marker")}</ThemedText>
       </View>
 
-      <View style={styles.footer}>
+      <TourTarget id="scanBodyFooter" style={styles.footer}>
         <Button
           label={bodyMark ? 'Next' : 'Mark a spot to continue'}
           variant="brand"
@@ -91,7 +101,7 @@ export default function BodyAreaScreen() {
           <ThemedText type="headline" themeColor="brand">
             {t("Skip")}</ThemedText>
         </Pressable>
-      </View>
+      </TourTarget>
 
       <ActionSheet
         visible={sheetOpen}
@@ -101,13 +111,20 @@ export default function BodyAreaScreen() {
           {
             key: 'camera',
             label: t("Camera"),
+            description: t("Take a new photo with on-screen guidance"),
             icon: 'camera.fill',
             onPress: () => {
               setSource('camera');
               router.push('/scan/capture');
             },
           },
-          { key: 'gallery', label: t("Photo gallery"), icon: 'photo.on.rectangle', onPress: pickFromGallery },
+          {
+            key: 'gallery',
+            label: t("Photo gallery"),
+            description: t("Use a photo you already have. We'll find the spots in it."),
+            icon: 'photo.on.rectangle',
+            onPress: pickFromGallery,
+          },
         ]}
       />
     </Screen>

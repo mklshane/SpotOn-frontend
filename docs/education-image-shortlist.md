@@ -290,3 +290,78 @@ Three ways out, in order of effort:
 
 Until one of those happens, this is fine for a thesis demo and not fine for a
 public release or anything commercial.
+
+## 2026-10-13: benign look-alikes and actinic keratosis
+
+Four slots for the new "Spots That Are Usually Harmless" and "Actinic Keratosis"
+articles. Chosen on Fitzpatrick III to VI skin where the archive records a type,
+since almost everything above is lighter skin. All square-cropped to 640×640.
+
+| Slot | Source | Licence | Fitzpatrick |
+| --- | --- | --- | --- |
+| `benign-mole` | ISIC_6928664 (UFES, via ISIC) | CC BY | III |
+| `benign-seborrheic-keratosis` | ISIC_1684376 (UFES, via ISIC) | CC BY | VI |
+| `ak-example` | ISIC_6973828 (UFES, via ISIC) | CC BY | IV |
+| `benign-cherry-angioma` | Wikimedia Commons, *Angioma cereza en hombro.jpg* by JOAN, cropped to the cluster | CC BY 4.0 | not recorded |
+
+Rejected or unavailable:
+- Every ISIC clinical photo of dermatofibroma (52), solar lentigo (63), and
+  hemangioma (34) is CC BY-NC, which the CC0/CC BY rule above excludes. So both
+  dermatofibroma and age spots are described in text only, with no photo.
+- The two CC BY 2.0 Commons "dermatofibroma" files (Ed Uthman) are microscope
+  slides, not skin.
+- Commons solar lentigo photos are all CC BY-SA.
+- Most Fitzpatrick III ISIC nevi carry surgical ink marks. ISIC_8704933 was
+  rejected because at full size it looks purple and textured, not like a
+  reassuring common mole.
+
+## 2026-10-13: gallery photographs
+
+Rendered by the new `gallery` block (two-column grid with captions). Captions
+state only what the source records, plus the Fitzpatrick type where ISIC has it.
+
+| Slot | Source | Licence | Used in |
+| --- | --- | --- | --- |
+| `bcc-brown-pigmented` | ISIC_7837478 (UFES), Fitz V | CC BY | BCC |
+| `bcc-brown-bump` | ISIC_4676550 (UFES), Fitz V | CC BY | BCC |
+| `scc-brown-crusted` | ISIC_4848137 (UFES), Fitz IV | CC BY | SCC |
+| `scc-brown-plaque` | ISIC_5598808 (UFES), Fitz V | CC BY | SCC |
+| `melanoma-brown-flat` | ISIC_2494666 (UFES), Fitz IV | CC BY | Melanoma |
+| `melanoma-brown-dark` | ISIC_6782019 (UFES), Fitz IV | CC BY | Melanoma |
+| `ak-thick` | ISIC_1944843 (UFES), Fitz IV | CC BY | Actinic keratosis |
+| `ak-raised` | ISIC_7796428 (UFES), Fitz V | CC BY | Actinic keratosis |
+| `acral-sole-small` | Commons *Melanoma (1).jpg*, NCI / Kelly Nelson, cropped | Public domain | Melanoma, Brown skin |
+| `acral-sole-large` | Commons, Xavier-Júnior et al., Diagn Pathol 2015, cropped | CC BY 4.0 | Melanoma, Brown skin |
+| `nail-melanoma` | Commons *Melanoma of thumb.jpg* by Wawjak, cropped | CC BY 4.0 | Brown skin |
+| `nail-streak` | Commons, Lee & Eun, J Clin Med 2024, cropped | CC BY 4.0 | Brown skin |
+
+`nail-streak`: the source paper does not say the streak was melanoma, so the
+caption only describes it and the gallery footnote says so. No ISIC melanoma at
+Fitzpatrick V or VI is CC BY. The ISIC search API rejects `palms/soles` site
+queries, which is why the acral photos come from Commons.
+
+## 2026-10-13: lifestyle photographs
+
+Non-clinical photos for the articles that had only a hero image. Stored in
+`assets/images/learn/lifestyle/`, 640×640, registered in `learn-images.ts`
+without `photoRequired`. Same CC0 / CC BY / public-domain rule, all from
+Wikimedia Commons, with Philippine settings where Commons had them.
+
+| Slot | Source | Licence | Article |
+| --- | --- | --- | --- |
+| `life-umbrella-street` | *2173Poblacion, Lingayen, Pangasinan 62.jpg*, Judgefloro | CC0 | UV Protection |
+| `life-sun-hat` | *Young Woman in Sun Hat.jpg*, Daniel Atun | CC BY 2.0 | UV Protection |
+| `life-sunscreen-face` | *Staying safe throughout summer (6696970).jpg*, U.S. Air Force | Public domain | UV Protection |
+| `life-sunscreen-label` | *New Sunscreen Labeling (5829848553).jpg*, U.S. FDA, cropped to the bottle | Public domain | UV Protection |
+| `life-rice-farmers` | *Rice farmers at work in the Philippines.jpg*, IRRI Images | CC BY 2.0 | Risk Factors |
+| `life-corn-farmers` | *Corn Farming in the Philippines.jpg*, Ranieljosecastaneda | CC BY 4.0 | Risk Factors |
+| `life-derm-screening` | *Clinic hosts skin cancer screening 160804-F-GK203-004.jpg*, U.S. Air Force | Public domain | When to See a Doctor |
+| `life-dermatoscope` | *US Navy 081023-N-2959L-063 …*, U.S. Navy | Public domain | When to See a Doctor |
+| `life-back-check` | *US Navy 081023-N-2959L-029 …*, U.S. Navy | Public domain | How to Check Your Skin |
+
+The FDA example label reads SPF 15. The gallery footnote says the article's
+advice is SPF 30+.
+
+Open question: the three existing hero photos (`article-self-check.jpg`,
+`recommended-sun-protection.jpg`, `article-consultation.jpg`) have no recorded
+source or licence anywhere in the repo. Trace them before release.

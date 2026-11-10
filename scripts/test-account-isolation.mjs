@@ -32,7 +32,7 @@ const profile = read('src/lib/profile.ts');
 const completion = read('src/app/(auth)/complete-profile.tsx');
 const login = read('src/app/(auth)/login.tsx');
 check('profile completion requires DOB and sex', /date_of_birth != null && user\.sex != null/.test(profile));
-check('profile completion installs the server-authoritative user', /setUser\(saved\)/.test(completion));
+check('profile completion installs the saved or locally queued user', /setUser\(result\.user\)/.test(completion));
 check('login installs the server-authoritative retrieved profile', /routeAfterAuth\(setUser\)/.test(login));
 
 const auth = read('src/lib/auth-api.ts');
@@ -98,6 +98,21 @@ check(
   sqlite.prepare('SELECT id FROM lesions WHERE user_id = ?').all('account-a').length === 0,
 );
 check('the surviving account keeps its screenings', idsFor('account-b').join(',') === 'b-1,b-2');
+
+// Saved clinics/doctors ("My dermatologists", saved-repo.ts) are per account too.
+const savedRepo = read('src/data/saved-repo.ts');
+const savedListSql = /FROM saved_items s\s+WHERE s\.user_id = \?/.test(savedRepo);
+check('saved items are listed per account', savedListSql);
+check('saved writes reject a missing account', /while signed out/.test(savedRepo));
+const wipeSavedSql = /"(DELETE FROM saved_items WHERE user_id = \?)"/.exec(screeningRepo)?.[1];
+check('account deletion wipes saved items', Boolean(wipeSavedSql));
+sqlite.exec('CREATE TABLE saved_items (user_id TEXT, kind TEXT, item_id TEXT, PRIMARY KEY (user_id, kind, item_id))');
+sqlite.prepare('INSERT INTO saved_items VALUES (?, ?, ?)').run('account-a', 'facility', 'f-1');
+sqlite.prepare('INSERT INTO saved_items VALUES (?, ?, ?)').run('account-b', 'doctor', 'd-1');
+sqlite.prepare(wipeSavedSql).run('account-a');
+const savedFor = (u) => sqlite.prepare('SELECT item_id FROM saved_items WHERE user_id = ?').all(u).map((r) => r.item_id);
+check('deleted account keeps no saved items', savedFor('account-a').length === 0);
+check('the surviving account keeps its saved items', savedFor('account-b').join(',') === 'd-1');
 check(
   'the surviving account keeps its lesions',
   sqlite.prepare('SELECT id FROM lesions WHERE user_id = ?').all('account-b').length === 1,

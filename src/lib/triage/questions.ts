@@ -27,7 +27,12 @@ export type QuestionDef = {
   showUglyDucklingExample?: boolean;
 };
 
-export const QUESTIONS: readonly QuestionDef[] = localizedCopy([
+/**
+ * Untranslated source copy. The Learn hub's questionnaire article reads this so
+ * its wording cannot drift from what the scan actually asks; display code uses
+ * QUESTIONS, whose fields translate on read.
+ */
+export const QUESTION_SOURCE: readonly QuestionDef[] = [
   {
     id: 'evolution',
     kind: 'major',
@@ -104,7 +109,9 @@ export const QUESTIONS: readonly QuestionDef[] = localizedCopy([
     helper: 'Insect bites and minor irritations usually fade within four to eight weeks.',
     icon: 'clock.fill',
   },
-]);
+];
+
+export const QUESTIONS: readonly QuestionDef[] = localizedCopy(QUESTION_SOURCE);
 
 export const ANSWER_OPTIONS: readonly { value: Answer; title: string; subtitle?: string }[] = localizedCopy([
   { value: 'yes', title: 'Yes' },

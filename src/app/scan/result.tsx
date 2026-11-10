@@ -2,7 +2,15 @@ import { t, useLocale } from "@/lib/i18n";
 import { Image } from "expo-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import Animated, {
   FadeInDown,
   LayoutAnimationConfig,
@@ -11,8 +19,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle } from "react-native-svg";
 
 import { ThemedText } from "@/components/themed-text";
-import { Button, Card, ImageViewer, Screen } from "@/components/ui";
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  ImageViewer,
+  Screen,
+} from "@/components/ui";
 import { Icon } from "@/components/ui/icon";
+import { ResearchConsentSheet } from "@/components/research-consent-sheet";
+import { SOURCES } from "@/data/learn-sources";
+import {
+  FREEMAN_APPS,
+  lookalikeClosing,
+  lookalikeFor,
+} from "@/lib/triage/lookalike";
+import { SettingsRow } from "@/components/ui/settings-row";
+import { BookOnlineDerms, NearbyDerms, useDermOptions } from "@/components/directory/NearbyDerms";
 import { Elevation, Radius, Space } from "@/constants/theme";
 import { useAndroidBack } from "@/hooks/use-android-back";
 import { useTheme } from "@/hooks/use-theme";
@@ -23,12 +46,19 @@ import {
   scheduleSelfCheckReminder,
 } from "@/lib/notifications";
 import { useScanHistory } from "@/lib/scan-history";
+import { useAuth } from "@/lib/auth";
+import {
+  markResearchPromptAnswered,
+  needsResearchPrompt,
+  shareFromAsk,
+} from "@/lib/research-sharing";
 import { QUESTIONS } from "@/lib/triage/questions";
 import {
   CLASS_DISPLAY,
+  resultDisplay,
   CONFIDENCE_QUALIFIER,
   AVOID_SELF_MEDICATION_WARNING,
-  MALIGNANT_GATE,
+  malignantGateCopy,
   TIER_CONTENT,
 } from "@/lib/triage/recommendations";
 import { getConditionGuide } from "@/lib/triage/condition-guides";
@@ -38,6 +68,8 @@ import type {
   ScreeningRecord,
   TriageTier,
 } from "@/lib/triage/types";
+import { TourTarget } from "@/lib/product-tour";
+import { useScanTips, useScanTipsScroller } from "@/lib/scan-tips";
 
 /** Order the probability breakdown by clinical urgency, matching the spec tables. */
 const CLASS_BY_URGENCY = (Object.keys(CLASS_WEIGHTS) as LesionClass[]).sort(
@@ -53,12 +85,36 @@ const PATTERN_WORD: Record<LesionClass, string> = {
   BENIGN: "benign",
 };
 
+/**
+ * The Learn article that explains each classified pattern. `label` is only set
+ * where "About <class name>" would read oddly ("About Benign").
+ */
+const LEARN_ARTICLE: Record<
+  LesionClass,
+  { params: { topicId: string; articleId?: string }; label?: string }
+> = {
+  MEL: { params: { topicId: "types-of-skin-cancer", articleId: "melanoma" } },
+  SCC: { params: { topicId: "types-of-skin-cancer", articleId: "scc" } },
+  BCC: { params: { topicId: "types-of-skin-cancer", articleId: "bcc" } },
+  OTHER: {
+    params: { topicId: "actinic-keratosis" },
+    label: "About precancerous and unusual spots",
+  },
+  BENIGN: {
+    params: { topicId: "harmless-spots" },
+    label: "About spots that are usually harmless",
+  },
+};
+
 export default function ResultScreen() {
   useLocale();
   const theme = useTheme();
+  // Loaded once for both dermatologist cards (clinics near you, book online).
+  const derms = useDermOptions();
   const insets = useSafeAreaInsets();
   const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
-  const { getById, loading, storageIsEphemeral } = useScanHistory();
+  const { getById, loading, storageIsEphemeral, deleteEntry } =
+    useScanHistory();
   const record = id ? getById(id) : undefined;
   // Arrived by finishing a scan, rather than by tapping a row in a list. The two need opposite
   // back behaviour, so the caller says which it is (analysis.tsx passes from='scan').
@@ -77,6 +133,31 @@ export default function ResultScreen() {
   // ends a scan; reached from a list, the default pop is what should happen.
   useAndroidBack(flowTerminal ? goBack : null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Set once the delete lands, so the pop animation shows a blank screen rather than
+  // "This result could not be found." for the record we just removed.
+  const [deleted, setDeleted] = useState(false);
+
+  async function handleDelete() {
+    if (!record) return;
+    setDeleting(true);
+    try {
+      await deleteEntry(record.id);
+      setDeleted(true);
+      setConfirmDeleteVisible(false);
+      goBack();
+    } catch (e) {
+      console.warn("[result] delete failed", e);
+      // Close the dialog before alerting: an Alert stacked on an open Modal is unreliable on iOS.
+      setDeleting(false);
+      setConfirmDeleteVisible(false);
+      Alert.alert(
+        t("Could not delete this scan"),
+        t("Something went wrong. Please try again."),
+      );
+    }
+  }
 
   const tierColor = (tier: TriageTier) =>
     tier === "low"
@@ -87,7 +168,51 @@ export default function ResultScreen() {
           ? { fg: theme.riskHigh, bg: theme.riskHighBg }
           : { fg: theme.riskCritical, bg: theme.riskCriticalBg };
 
+  const { blocking: tipsBlocking } = useScanTips('result', { enabled: Boolean(record) });
+  const tipsScroller = useScanTipsScroller();
+
+  // Optional research sharing: asked once, at the end of a completed scan (never from a list), and
+  // only after the screening tips are out of the way. needsResearchPrompt is false whenever the
+  // server flag is off, so with RESEARCH_SHARING_ENABLED unset this never shows.
+  const { user, setUser } = useAuth();
+  const [researchAsk, setResearchAsk] = useState(false);
+  const recordId = record?.id;
+  useEffect(() => {
+    if (!flowTerminal || !recordId || tipsBlocking || !user) return;
+    let alive = true;
+    // A beat after the result lands, so the user reads their result before being asked anything.
+    const timer = setTimeout(() => {
+      needsResearchPrompt(user)
+        .then((need) => { if (alive && need) setResearchAsk(true); })
+        .catch((e) => console.warn("[research] could not read prompt state", e));
+    }, 1200);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [flowTerminal, recordId, tipsBlocking, user]);
+
+  function handleResearchNotNow() {
+    setResearchAsk(false);
+    if (user) {
+      markResearchPromptAnswered(user.id).catch((e) => console.warn("[research] could not save answer", e));
+    }
+  }
+
+  async function handleResearchShare() {
+    if (!user) return;
+    // Offline, the choice is kept on the phone and sent when the connection returns, so the sheet
+    // just closes - a result screen never shows a sharing failure. A real refusal (sharing switched
+    // off server-side) is logged and treated as answered; Settings is where sharing errors surface.
+    try {
+      const updated = await shareFromAsk(user, record?.id);
+      if (updated) setUser(updated);
+    } catch (e) {
+      console.warn("[research] share refused", e);
+      markResearchPromptAnswered(user.id).catch(() => {});
+    }
+    setResearchAsk(false);
+  }
+
   if (!record) {
+    if (deleted) return <Screen>{null}</Screen>;
     return (
       <Screen>
         <Header onBack={goBack} />
@@ -107,13 +232,23 @@ export default function ResultScreen() {
   // The gate raising the tier is only worth explaining when the photo *was* readable - otherwise
   // the precautionary copy already covers why the urgency outruns the headline pattern.
   const gated = triage.malignantGateApplied && !qualifier;
-  const guide = getConditionGuide(classification.topClass);
-  const cls = guide ? CLASS_DISPLAY[classification.topClass] : undefined;
+  const knownClass = Boolean(getConditionGuide(classification.topClass));
+  const result = resultDisplay(
+    classification.topClass,
+    classification.topConfidence,
+    knownClass && triage.secondClass && getConditionGuide(triage.secondClass)
+      ? triage
+      : {},
+  );
+  const combined = result.parts.length > 1;
+  // Sum of the rounded shares, so the ring always equals what the legend adds up to.
+  const combinedPct = result.parts.reduce(
+    (sum, x) => sum + Math.round(x.p * 100),
+    0,
+  );
+  const learnArticle = knownClass ? LEARN_ARTICLE[classification.topClass] : undefined;
   const score = classification.topConfidence;
-  const pct =
-    cls && Number.isFinite(score) && score >= 0 && score <= 1
-      ? Math.round(score * 100)
-      : undefined;
+  const pct = isModelScore(score) ? Math.round(score * 100) : undefined;
   const date = new Date(record.createdAt).toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -135,6 +270,7 @@ export default function ResultScreen() {
       ) : null}
       <Header onBack={goBack} />
       <ScrollView
+        {...tipsScroller}
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
@@ -168,38 +304,148 @@ export default function ResultScreen() {
           </Animated.View>
         ) : null}
 
-        {/* 1 · Hero - classified type, tier, confidence ring. Keep the card neutral so the tier
-            color stays focused on the badge and confidence ring. */}
+        {/* 1 · Hero - classified type, tier, confidence ring, and the one action to take. The card
+            stays white; the tier color lives in the pill, the ring and the action band, so it reads
+            as status rather than tinting the whole screen. */}
         <Animated.View entering={FadeInDown}>
-          <View style={[styles.hero, { backgroundColor: colors.bg }]}>
-            <View style={styles.heroTop}>
+          <View style={[styles.hero, { backgroundColor: theme.surface }]}>
+            <View style={styles.heroBody}>
               <ThemedText type="subhead" themeColor="textSecondary">
                 {t("Detected skin condition")}
               </ThemedText>
-              <ThemedText type="title1" accessibilityRole="header">
-                {cls?.name ?? t("Unrecognized result")}
-              </ThemedText>
-              <View style={[styles.tierBadge, { backgroundColor: colors.fg }]}>
-                <ThemedText type="subhead" style={{ color: theme.onBrand }}>
-                  {qualifier ? t("Precautionary") : tier.name}
-                </ThemedText>
-              </View>
-            </View>
-            {pct !== undefined && cls ? (
-              <View style={styles.heroBottom}>
-                <ConfidenceRing pct={pct} color={colors.fg} />
-                <View style={styles.heroConfText}>
-                  <ThemedText type="headline">{t("Model confidence")}</ThemedText>
-                  <ThemedText type="subhead" themeColor="textSecondary">
-                    {pct}
-                    {t("% match to")} {cls.lay}.
+              {/* Class name left, tier pill pinned to the top-right corner of the same row. */}
+              <View style={styles.heroTitleRow}>
+                {/* The bare clinical name ("Melanoma", "Benign"). The hedging lives in the
+                    "% match to a pattern with features similar to…" line right below, and in the
+                    disclaimer - not in the label the user repeats to a clinician. */}
+                {/* A combined result steps down to title2, one name per line with "or" stepped
+                    back - at title1 two names wrap into three ragged lines beside the pill. */}
+                {combined ? (
+                  <ThemedText type="title2" style={styles.heroTitle}>
+                    {CLASS_DISPLAY[result.parts[0].cls].name}
+                    {"\n"}
+                    <ThemedText type="title2" themeColor="textSecondary">
+                      {t("or")}{" "}
+                    </ThemedText>
+                    {CLASS_DISPLAY[result.parts[1].cls].name}
+                  </ThemedText>
+                ) : (
+                  <ThemedText type="title1" style={styles.heroTitle}>
+                    {knownClass ? result.name : t("Unrecognized result")}
+                  </ThemedText>
+                )}
+                <View style={[styles.tierBadge, { backgroundColor: colors.bg }]}>
+                  <View
+                    style={[styles.tierDot, { backgroundColor: colors.fg }]}
+                  />
+                  <ThemedText type="footnote" style={styles.tierBadgeText}>
+                    {qualifier ? t("Precautionary") : tier.name}
                   </ThemedText>
                 </View>
               </View>
-            ) : null}
-            <ThemedText type="footnote" themeColor="textSecondary">
-              {t("AI-assisted screening does not confirm a diagnosis or replace a consultation with a dermatologist.")}
-            </ThemedText>
+              <TourTarget
+                id="resultConfidence"
+                style={combined ? styles.heroConfStack : styles.heroConf}
+              >
+                {combined && result.parts.every(({ p }) => isModelScore(p)) ? (
+                  // The ring carries the combined malignant match, with the individual
+                  // calibrated scores shown in the legend.
+                  // Legend sits below at full width: beside the ring, "Basal Cell Carcinoma" wraps.
+                  <>
+                    <View style={styles.heroConf}>
+                      <ConfidenceRing pct={combinedPct} color={colors.fg} />
+                      <View style={styles.heroConfText}>
+                        <ThemedText type="subhead" themeColor="textSecondary">
+                          {t("Match to skin-cancer patterns")}
+                        </ThemedText>
+                        <View
+                          style={[
+                            styles.splitTrack,
+                            { backgroundColor: theme.elementBg },
+                          ]}
+                        >
+                          {result.parts.map((x, i) => (
+                            <View
+                              key={x.cls}
+                              style={{
+                                flex: x.p,
+                                backgroundColor:
+                                  i === 0
+                                    ? colors.fg
+                                    : withAlpha(colors.fg, 0.45),
+                              }}
+                            />
+                          ))}
+                          <View
+                            style={{ flex: Math.max(0, 1 - combinedPct / 100) }}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                    <View
+                      style={[
+                        styles.splitLegend,
+                        { backgroundColor: theme.elementBg },
+                      ]}
+                    >
+                      {result.parts.map((x, i) => (
+                        <View key={x.cls} style={styles.splitRow}>
+                          <View
+                            style={[
+                              styles.tierDot,
+                              {
+                                backgroundColor:
+                                  i === 0
+                                    ? colors.fg
+                                    : withAlpha(colors.fg, 0.45),
+                              },
+                            ]}
+                          />
+                          <ThemedText type="callout" style={styles.splitName}>
+                            {CLASS_DISPLAY[x.cls].name}
+                          </ThemedText>
+                          <ThemedText type="callout" style={styles.splitPct}>
+                            {Math.round(x.p * 100)}%
+                          </ThemedText>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                  ) : knownClass && pct !== undefined ? (
+                  <>
+                    <ConfidenceRing pct={pct} color={colors.fg} />
+                    <View style={styles.heroConfText}>
+                      <ThemedText type="subhead" themeColor="textSecondary">
+                        {t("Model confidence")}
+                      </ThemedText>
+                      {/* `topClass` is the raw model enum - this printed "78% probability for MEL
+                          pattern" in the most important sentence on the screen. */}
+                      <ThemedText type="callout">
+                        {pct}
+                        {t("% match to")}{" "}
+                        {CLASS_DISPLAY[classification.topClass].lay}.
+                      </ThemedText>
+                    </View>
+                  </>
+                ) : null}
+              </TourTarget>
+              <ThemedText type="footnote" themeColor="textSecondary">
+                {t("AI-assisted screening does not confirm a diagnosis or replace a consultation with a dermatologist.")}
+              </ThemedText>
+            </View>
+            <TourTarget id="resultPriority" style={[styles.priority, { backgroundColor: colors.bg }]}>
+              <Icon
+                name="arrow.right.circle.fill"
+                tintColor={colors.fg}
+                size={22}
+              />
+              <View style={styles.priorityText}>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  {t("Priority action:").replace(/:$/, "")}
+                </ThemedText>
+                <ThemedText type="headline">{tier.priorityAction}</ThemedText>
+              </View>
+            </TourTarget>
           </View>
         </Animated.View>
 
@@ -287,22 +533,8 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 3 · The one action to take, with the safety warning immediately underneath. */}
-        <Animated.View
-          entering={FadeInDown.delay(110)}
-          style={styles.priorityBlock}
-        >
-          <View style={[styles.priority, { backgroundColor: colors.bg }]}>
-            <View
-              style={[styles.priorityDot, { backgroundColor: colors.fg }]}
-            />
-            <ThemedText
-              type="subhead"
-              style={[styles.priorityText, { color: colors.fg }]}
-            >
-              {t("Priority action:")} {tier.priorityAction}
-            </ThemedText>
-          </View>
+        {/* 3 · The safety warning, right under the photo and the action it qualifies. */}
+        <Animated.View entering={FadeInDown.delay(110)}>
           <WarningBanner />
         </Animated.View>
 
@@ -311,40 +543,70 @@ export default function ResultScreen() {
           <Card style={styles.section}>
             <ThemedText type="headline">{t("What this means")}</ThemedText>
             {qualifier ? (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
                 {CONFIDENCE_QUALIFIER.body} {tier.recommendation}
               </ThemedText>
-            ) : gated ? (
-              <ThemedText type="body" themeColor="textSecondary">
-                {MALIGNANT_GATE.body} {tier.recommendation}
+            ) : !knownClass ? (
+              <ThemedText type="callout" themeColor="textSecondary">
+                {tier.recommendation}
               </ThemedText>
-            ) : cls ? (
-              <ThemedText type="body" themeColor="textSecondary">
-                {t("This result suggests a")}{" "}
-                <ThemedText type="body" style={{ color: colors.fg }}>
-                  {PATTERN_WORD[classification.topClass]} {t("pattern (")}
-                  {classification.topClass})
-                </ThemedText>{" "}
-                {t("based on your photo.")}{" "}
-                <ThemedText type="body">
-                  {t("It is not a confirmed diagnosis.")}
-                </ThemedText>{" "}
+            ) : gated ? (
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
+                {malignantGateCopy(classification.topClass).body}{" "}
                 {tier.recommendation}
               </ThemedText>
             ) : (
-              <ThemedText type="body" themeColor="textSecondary">
+              <ThemedText
+                type="callout"
+                themeColor="textSecondary"
+                style={styles.para}
+              >
+                {t("This result suggests a")}{" "}
+                <ThemedText type="callout" style={styles.emphasis}>
+                  {result.parts
+                    .map((x) => PATTERN_WORD[x.cls])
+                    .join(` ${t("or")} `)}{" "}
+                  {t("pattern (")}
+                  {result.code})
+                </ThemedText>{" "}
+                {t("based on your photo.")}{" "}
+                <ThemedText type="callout" style={styles.emphasis}>
+                  {t("It is not a confirmed diagnosis.")}
+                </ThemedText>{" "}
                 {tier.recommendation}
               </ThemedText>
             )}
           </Card>
         </Animated.View>
 
-        {/* 5 · About the classified type (factual) + full probability breakdown */}
+        {/* 5 · Why it could be either - cited look-alike explanation, combined results only */}
+        {combined ? (
+          <Animated.View entering={FadeInDown.delay(185)}>
+            <WhyEither
+              first={result.parts[0].cls}
+              second={result.parts[1].cls}
+            />
+          </Animated.View>
+        ) : null}
+
+        {/* 6 · About the classified type (factual) + full probability breakdown */}
         <Animated.View entering={FadeInDown.delay(210)}>
-          <AboutType key={record.id} record={record} guide={guide} />
+          <AboutType
+            key={record.id}
+            record={record}
+            named={knownClass ? result.parts.map(({ cls }) => cls) : []}
+          />
         </Animated.View>
 
-        {/* 6 · Symptom recap */}
+        {/* 7 · Symptom recap */}
         <Animated.View entering={FadeInDown.delay(260)}>
           <Card style={styles.section}>
             <View style={styles.sectionHead}>
@@ -397,61 +659,154 @@ export default function ResultScreen() {
           </Card>
         </Animated.View>
 
-        {/* 7 · Next steps */}
+        {/* 8 · Next steps */}
         <Animated.View entering={FadeInDown.delay(310)} style={styles.actions}>
           <ThemedText type="title2">{t("Next steps")}</ThemedText>
+          {/* One filled CTA so the main next step is unmistakable; everything else is a quieter
+              list of options below it. */}
           {tier.showReport ? (
-            <Button
-              label={t("View screening summary")}
-              variant="brand"
-              icon="doc.text.fill"
-              onPress={() =>
+            <TourTarget id="resultSummary">
+              <Button
+                label={t("View screening summary")}
+                variant="brand"
+                icon="doc.text.fill"
+                onPress={() =>
+                  router.push({
+                    pathname: "/scan/report",
+                    params: { id: record.id },
+                  })
+                }
+              />
+            </TourTarget>
+          ) : null}
+          <TourTarget id="resultMore">
+            <Card padded={false} style={styles.actionList}>
+              {[
+                tier.showEducation && learnArticle ? (
+                  <SettingsRow
+                    key="learn"
+                    icon="book.fill"
+                    label={
+                      learnArticle.label
+                        ? t(learnArticle.label)
+                        : t("About {{name}}", {
+                            name: CLASS_DISPLAY[classification.topClass].full,
+                          })
+                    }
+                    sublabel={t("What it looks like and when to get it checked")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/learn/article",
+                        params: learnArticle.params,
+                      })
+                    }
+                  />
+                ) : null,
+                record.lesionId ? (
+                  <SettingsRow
+                    key="timeline"
+                    icon="clock.arrow.circlepath"
+                    label={t("See this spot over time")}
+                    sublabel={t("Compare with your earlier scans")}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/scan/lesion",
+                        params: { id: record.lesionId! },
+                      })
+                    }
+                  />
+                ) : null,
+                tier.offerReminder ? (
+                  <ReminderRow key="reminder" lesionId={record.lesionId} />
+                ) : null,
+              ]
+                .filter(Boolean)
+                .map((row, i) => (
+                  <View key={(row as { key: string }).key}>
+                    {i > 0 ? (
+                      <View
+                        style={[
+                          styles.actionDivider,
+                          { backgroundColor: theme.hairline },
+                        ]}
+                      />
+                    ) : null}
+                    {row}
+                  </View>
+                ))}
+            </Card>
+          </TourTarget>
+          {tier.showDirectory ? (
+            // The nearest places to get the spot checked, not just a link to the directory.
+            <TourTarget id="resultDerms">
+              <NearbyDerms
+                data={derms}
+                onSeeAll={() =>
+                  router.push({
+                    pathname: "/(tabs)/directory",
+                    // Every scan is about a spot, so land on the places that do mole/skin-cancer
+                    // checks. `at` makes every visit a new request: the directory stays mounted, so
+                    // without it a second scan couldn't re-apply a chip the user had cleared.
+                    params: { concern: "skin_cancer_mole_check", at: String(Date.now()) },
+                  })
+                }
+              />
+            </TourTarget>
+          ) : null}
+          {tier.showDirectory ? (
+            // Right under the clinics: the no-phone-call way to see a dermatologist.
+            <BookOnlineDerms
+              data={derms}
+              onSeeAll={(filter) =>
                 router.push({
-                  pathname: "/scan/report",
-                  params: { id: record.id },
+                  pathname: "/(tabs)/directory",
+                  // Dermatologists tab with the Books online / Online consult chip on.
+                  params: { segment: "doctors", filter, at: String(Date.now()) },
                 })
               }
             />
           ) : null}
-          {tier.showDirectory ? (
-            <Button
-              label={t("Find a clinic near you")}
-              variant={tier.showReport ? "outline" : "brand"}
-              icon="mappin.circle.fill"
-              onPress={() => router.push("/(tabs)/directory")}
-            />
-          ) : null}
-          {tier.showEducation ? (
-            <Button
-              label={t("Learn more about skin cancer")}
-              variant="brand"
-              icon="book.fill"
-              onPress={() => router.push("/(tabs)/learn")}
-            />
-          ) : null}
-          <Button
-            label={t("See this spot over time")}
-            variant={
-              tier.showReport || tier.showEducation ? "outline" : "brand"
-            }
-            icon="clock.arrow.circlepath"
-            onPress={() =>
-              router.push({
-                pathname: "/scan/lesion",
-                params: { id: record.lesionId! },
-              })
-            }
-            disabled={!record.lesionId}
-          />
-          {tier.offerReminder ? (
-            <ReminderRow lesionId={record.lesionId} />
-          ) : null}
+          <Pressable
+            onPress={() => setConfirmDeleteVisible(true)}
+            accessibilityRole="button"
+            hitSlop={Space.md}
+            style={({ pressed }) => [
+              styles.deleteLink,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Icon name="trash.fill" tintColor={theme.muted} size={14} />
+            <ThemedText type="footnote" themeColor="muted">
+              {t("Delete this scan")}
+            </ThemedText>
+          </Pressable>
         </Animated.View>
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmDeleteVisible}
+        icon="trash.fill"
+        destructive
+        loading={deleting}
+        title={t("Delete this scan?")}
+        message={t(
+          "This can't be undone. The photos, answers and result for this scan are permanently removed from this device.",
+        )}
+        confirmLabel={deleting ? t("Deleting…") : t("Delete scan")}
+        cancelLabel={t("Keep scan")}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDeleteVisible(false)}
+      />
       <ImageViewer
         visible={viewerUri != null}
         uri={viewerUri ?? ""}
         onClose={() => setViewerUri(null)}
+      />
+      <ResearchConsentSheet
+        visible={researchAsk}
+        mode="ask"
+        onShare={handleResearchShare}
+        onNotNow={handleResearchNotNow}
+        onClose={() => setResearchAsk(false)}
       />
     </Screen>
   );
@@ -526,24 +881,14 @@ function WarningBanner() {
   useLocale();
   const theme = useTheme();
   return (
-    <View
-      style={[
-        styles.warningBanner,
-        {
-          backgroundColor: theme.riskModerateBg,
-          borderColor: theme.riskModerate,
-        },
-      ]}
-    >
+    <View style={[styles.warningBanner, { backgroundColor: theme.elementBg }]}>
       <Icon
         name="exclamationmark.triangle.fill"
         tintColor={theme.riskModerate}
         size={18}
       />
       <View style={styles.warningCopy}>
-        <ThemedText type="subhead" style={{ color: theme.riskModerate }}>
-          {t("Avoid self-medication")}
-        </ThemedText>
+        <ThemedText type="subhead">{t("Avoid self-medication")}</ThemedText>
         <ThemedText type="footnote" themeColor="textSecondary">
           {t(AVOID_SELF_MEDICATION_WARNING).replace(/^[^.]*\.\s*/, "")}
         </ThemedText>
@@ -597,70 +942,143 @@ function ConfidenceRing({ pct, color }: { pct: number; color: string }) {
   );
 }
 
+/**
+ * Why a combined result names two cancers: a short cited paragraph on how the pair look alike, the
+ * shared "only a dermatologist can tell" closing line, and the numbered sources it cites. Copy and
+ * citations live in lib/triage/lookalike.ts; the source rows match the Learn articles' SourcesBlock.
+ */
+function WhyEither({
+  first,
+  second,
+}: {
+  first: LesionClass;
+  second: LesionClass;
+}) {
+  useLocale();
+  const theme = useTheme();
+  // Collapsed by default: six full citation titles outweigh the paragraph they support.
+  const [open, setOpen] = useState(false);
+  const copy = lookalikeFor(first, second);
+  if (!copy) return null;
+  const sources = [...copy.sources, FREEMAN_APPS];
+  const paragraph = `${copy.body} ${lookalikeClosing(sources.length)}`;
+
+  return (
+    <Card style={styles.section}>
+      <ThemedText type="headline">{t("Why it could be either")}</ThemedText>
+      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
+        {/* Citation markers in the brand colour, so they read as references, not as prose. */}
+        {paragraph.split(/(\[\d+\])/g).map((part, i) =>
+          /^\[\d+\]$/.test(part) ? (
+            <ThemedText
+              key={i}
+              type="footnote"
+              style={{ color: theme.brandPressed }}
+            >
+              {part}
+            </ThemedText>
+          ) : (
+            part
+          ),
+        )}
+      </ThemedText>
+      <Pressable
+        onPress={() => setOpen((v) => !v)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.expandRow}
+      >
+        <ThemedText type="subhead" themeColor="brand">
+          {open
+            ? t("Hide sources")
+            : t("See {{n}} sources", { n: sources.length })}
+        </ThemedText>
+        <Icon
+          name={open ? "chevron.up" : "chevron.down"}
+          tintColor={theme.brand}
+          size={14}
+        />
+      </Pressable>
+      {open ? (
+        <Animated.View entering={FadeInDown} style={styles.citeList}>
+          {sources.map((id, i) => {
+            const source = SOURCES[id];
+            return (
+              <Pressable
+                key={id}
+                onPress={() => Linking.openURL(source.url)}
+                accessibilityRole="link"
+                accessibilityLabel={`${i + 1}. ${source.title}, ${source.org}. Opens in your browser.`}
+                style={({ pressed }) => [
+                  styles.citeRow,
+                  {
+                    backgroundColor: theme.elementBg,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <ThemedText
+                  type="footnote"
+                  style={[styles.citeNum, { color: theme.brandPressed }]}
+                >
+                  {i + 1}
+                </ThemedText>
+                <View style={styles.citeText}>
+                  <ThemedText type="caption" themeColor="muted">
+                    {source.org}
+                  </ThemedText>
+                  <ThemedText type="footnote" style={styles.emphasis}>
+                    {source.title}
+                  </ThemedText>
+                </View>
+                <Icon
+                  name="arrow.up.right"
+                  size={13}
+                  tintColor={theme.brandPressed}
+                />
+              </Pressable>
+            );
+          })}
+        </Animated.View>
+      ) : null}
+    </Card>
+  );
+}
+
 /** Factual, non-alarming description of the classified type + expandable per-class probabilities. */
+function isModelScore(score: number): boolean {
+  return Number.isFinite(score) && score >= 0 && score <= 1;
+}
+
 function AboutType({
   record,
-  guide,
+  named,
 }: {
   record: ScreeningRecord;
-  guide: ReturnType<typeof getConditionGuide>;
+  named: LesionClass[];
 }) {
   useLocale();
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const { classification } = record;
-  if (!guide) {
+  const scores = CLASS_BY_URGENCY.flatMap((label) => {
+    const score = classification.probs?.[label];
+    return isModelScore(score) ? [{ label, score }] : [];
+  });
+  if (named.length === 0) {
     return (
       <Card>
-        <ThemedText type="body" themeColor="textSecondary">
+        <ThemedText type="callout" themeColor="textSecondary">
           {t("Condition details are unavailable for this result. Ask a dermatologist to assess the spot, especially if it changes, bleeds, or does not heal.")}
         </ThemedText>
       </Card>
     );
   }
-  const cls = CLASS_DISPLAY[classification.topClass];
-  const scores = CLASS_BY_URGENCY.flatMap((label) => {
-    const score = classification.probs?.[label];
-    return Number.isFinite(score) && score >= 0 && score <= 1
-      ? [{ label, score }]
-      : [];
-  });
 
   return (
     <Card style={styles.section}>
-      <ThemedText type="headline" accessibilityRole="header">
-        {t("About {{name}}", { name: cls.full })}
-      </ThemedText>
-      <ThemedText type="body" themeColor="textSecondary">
-        {t(guide.description)}
-      </ThemedText>
-      <Pressable
-        onPress={() => setDetailsOpen((value) => !value)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: detailsOpen }}
-        style={styles.expandRow}
-      >
-        <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
-          {detailsOpen
-            ? t("Hide condition details")
-            : t("See signs, risk factors, and care guidance")}
-        </ThemedText>
-        <Icon
-          name={detailsOpen ? "chevron.up" : "chevron.down"}
-          tintColor={theme.brand}
-          size={14}
-        />
-      </Pressable>
-      {detailsOpen ? (
-        <View style={styles.section}>
-          <GuideSection title={t("Common signs and symptoms")} body={guide.signs} />
-          <GuideSection title={t("Possible contributing factors")} body={guide.factors} />
-          <GuideSection title={t("Recommended next steps")} body={guide.nextSteps} />
-          <GuideSection title={t("When to consult a dermatologist")} body={guide.consult} />
-          <GuideSection title={t("Important reminders")} body={guide.reminder} />
-        </View>
-      ) : null}
+      {/* A combined result explains both named types. */}
+      {named.map((label) => <ConditionDetails key={label} label={label} />)}
       {scores.length > 0 ? <LayoutAnimationConfig skipEntering={false}>
         <Pressable
           onPress={() => setOpen((v) => !v)}
@@ -680,7 +1098,7 @@ function AboutType({
         {open ? (
           <Animated.View entering={FadeInDown} style={styles.bars}>
             {scores.map(({ label: c, score: p }) => {
-              const top = c === classification.topClass;
+              const top = named.includes(c);
               return (
                 <View key={c} style={styles.barRow}>
                   <ThemedText
@@ -728,11 +1146,51 @@ function AboutType({
   );
 }
 
+function ConditionDetails({ label }: { label: LesionClass }) {
+  const [open, setOpen] = useState(false);
+  const theme = useTheme();
+  const guide = getConditionGuide(label);
+  if (!guide) return null;
+
+  return (
+    <View style={styles.guideSection}>
+      <ThemedText type="headline" accessibilityRole="header">
+        {t("About {{name}}", { name: CLASS_DISPLAY[label].full })}
+      </ThemedText>
+      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
+        {t(guide.description)}
+      </ThemedText>
+      <Pressable
+        onPress={() => setOpen((value) => !value)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        style={styles.expandRow}
+      >
+        <ThemedText type="subhead" themeColor="brand" style={styles.expandLabel}>
+          {open ? t("Hide condition details") : t("See signs, risk factors, and care guidance")}
+        </ThemedText>
+        <Icon name={open ? "chevron.up" : "chevron.down"} tintColor={theme.brand} size={14} />
+      </Pressable>
+      {open ? (
+        <View style={styles.section}>
+          <GuideSection title={t("Common signs and symptoms")} body={guide.signs} />
+          <GuideSection title={t("Possible contributing factors")} body={guide.factors} />
+          <GuideSection title={t("Recommended next steps")} body={guide.nextSteps} />
+          <GuideSection title={t("When to consult a dermatologist")} body={guide.consult} />
+          <GuideSection title={t("Important reminders")} body={guide.reminder} />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 function GuideSection({ title, body }: { title: string; body: string }) {
   return (
     <View style={styles.guideSection}>
       <ThemedText type="headline" accessibilityRole="header">{title}</ThemedText>
-      <ThemedText type="body" themeColor="textSecondary">{t(body)}</ThemedText>
+      <ThemedText type="callout" themeColor="textSecondary" style={styles.para}>
+        {t(body)}
+      </ThemedText>
     </View>
   );
 }
@@ -849,72 +1307,64 @@ function ReminderRow({ lesionId }: { lesionId?: string | null }) {
 
   if (state === "done") {
     return (
-      <View style={[styles.reminderDone, { backgroundColor: theme.riskLowBg }]}>
-        <Icon
-          name="checkmark.circle.fill"
-          tintColor={theme.riskLow}
-          size={18}
-        />
-        <ThemedText
-          type="subhead"
-          themeColor="textSecondary"
-          style={styles.reminderText}
-        >
-          {dueLabel
+      <SettingsRow
+        icon="bell.fill"
+        label={t("Reminder set")}
+        sublabel={
+          dueLabel
             ? `We’ll notify you on ${dueLabel} to re-check this spot.`
-            : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`}
-        </ThemedText>
-      </View>
+            : `We’ll notify you in ${REMINDER_DAYS} days to re-check this spot.`
+        }
+        accessory={
+          <Icon
+            name="checkmark.circle.fill"
+            tintColor={theme.riskLow}
+            size={22}
+          />
+        }
+      />
     );
   }
 
   // Permission refused (or previously refused and no longer promptable) - the only way back is the
-  // system settings screen, so say so instead of leaving a button that silently does nothing.
+  // system settings screen, so say so instead of leaving a row that silently does nothing.
   if (state === "denied") {
     return (
-      <View style={styles.reminderDenied}>
-        <View
-          style={[
-            styles.reminderDone,
-            { backgroundColor: theme.riskModerateBg },
-          ]}
-        >
-          <Icon name="bell.fill" tintColor={theme.riskModerate} size={18} />
-          <ThemedText
-            type="subhead"
-            themeColor="textSecondary"
-            style={styles.reminderText}
-          >
-            {t(
-              "Notifications are turned off for SpotOn, so we can’t remind you.",
-            )}
-          </ThemedText>
-        </View>
-        <Button
-          label={t("Open notification settings")}
-          variant="outline"
-          icon="gearshape.fill"
-          onPress={() => Linking.openSettings()}
-        />
-      </View>
+      <SettingsRow
+        icon="gearshape.fill"
+        label={t("Open notification settings")}
+        sublabel={t(
+          "Notifications are turned off for SpotOn, so we can’t remind you.",
+        )}
+        onPress={() => Linking.openSettings()}
+      />
     );
   }
 
   if (state === "unsupported") {
     return (
-      <ThemedText type="footnote" themeColor="muted">
-        {t("Reminders aren’t available on this device.")}
-      </ThemedText>
+      <SettingsRow
+        icon="bell.fill"
+        label={`Remind me in ${REMINDER_DAYS} days`}
+        sublabel={t("Reminders aren’t available on this device.")}
+        accessory={null}
+      />
     );
   }
 
   return (
-    <Button
-      label={`Remind me in ${REMINDER_DAYS} days`}
-      variant="outline"
+    <SettingsRow
       icon="bell.fill"
-      loading={state === "working"}
-      onPress={enable}
+      label={`Remind me in ${REMINDER_DAYS} days`}
+      sublabel={t("We’ll nudge you to re-check this spot")}
+      onPress={state === "working" ? undefined : enable}
+      accessory={
+        state === "working" ? (
+          <ActivityIndicator color={theme.brand} />
+        ) : (
+          "chevron"
+        )
+      }
     />
   );
 }
@@ -952,26 +1402,66 @@ const styles = StyleSheet.create({
     gap: Space.base,
   },
   center: { textAlign: "center" },
-  // Keep the hero card neutral so the tier color is reserved for status accents.
   hero: {
     borderRadius: Radius.xl,
-    padding: Space.xl,
-    gap: Space.lg,
+    overflow: "hidden",
     ...Elevation.sm,
   },
-  heroTop: {
+  heroBody: { padding: Space.xl, gap: Space.md },
+  heroTitleRow: {
+    flexDirection: "row",
     alignItems: "flex-start",
-    gap: Space.sm,
+    justifyContent: "space-between",
+    gap: Space.md,
   },
-  guideSection: { gap: Space.xs },
-  expandLabel: { flexShrink: 1 },
+  // flexShrink so a long name ("Squamous cell carcinoma") wraps instead of pushing the pill off.
+  heroTitle: { flexShrink: 1 },
   tierBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: Space.xs + 2,
     paddingHorizontal: Space.md,
     paddingVertical: Space.xs,
     borderRadius: Radius.pill,
   },
-  heroBottom: { flexDirection: "row", alignItems: "center", gap: Space.lg },
+  tierDot: { width: 8, height: 8, borderRadius: 4 },
+  tierBadgeText: { fontWeight: "600" },
+  heroConf: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.base,
+    marginTop: Space.xs,
+  },
   heroConfText: { flex: 1, gap: 2 },
+  splitTrack: {
+    flexDirection: "row",
+    height: 8,
+    borderRadius: Radius.pill,
+    overflow: "hidden",
+    marginTop: Space.sm,
+  },
+  heroConfStack: { gap: Space.md },
+  citeList: { gap: Space.sm, marginTop: Space.xs },
+  citeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Space.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.base,
+    borderRadius: Radius.md,
+  },
+  citeNum: { fontWeight: "700", minWidth: 16, fontVariant: ["tabular-nums"] },
+  citeText: { flex: 1, minWidth: 0, gap: 2 },
+  splitLegend: {
+    borderRadius: Radius.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.base,
+    gap: Space.sm,
+  },
+  splitRow: { flexDirection: "row", alignItems: "center", gap: Space.sm },
+  splitName: { flex: 1 },
+  splitPct: { fontWeight: "600", fontVariant: ["tabular-nums"] },
   // Keep the photo inset inside the white card so the media and details read as one framed
   // record, matching the tracked-spot card treatment.
   photoCard: {
@@ -1010,29 +1500,26 @@ const styles = StyleSheet.create({
   },
   thumbSmall: { width: 56, height: 56, borderRadius: Radius.sm },
   photoCaptionText: { flex: 1, gap: 2 },
-  // Priority action, with the disclaimer as a footnote beneath.
-  priorityBlock: { gap: Space.md },
   priority: {
     flexDirection: "row",
     alignItems: "center",
     gap: Space.md,
-    paddingHorizontal: Space.base,
+    paddingHorizontal: Space.xl,
     paddingVertical: Space.base,
-    borderRadius: Radius.md,
   },
-  priorityDot: { width: 8, height: 8, borderRadius: 4 },
-  priorityText: { flex: 1 },
+  priorityText: { flex: 1, gap: 2 },
   warningBanner: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: Space.sm,
-    padding: Space.md,
-    borderWidth: 1,
-    borderRadius: Radius.md,
+    gap: Space.md,
+    padding: Space.base,
+    borderRadius: Radius.lg,
   },
   warningCopy: { flex: 1, gap: 2 },
   // Cards
   section: { gap: Space.md },
+  para: { lineHeight: 22 },
+  emphasis: { fontWeight: "600" },
   sectionHead: {
     flexDirection: "row",
     alignItems: "center",
@@ -1051,6 +1538,8 @@ const styles = StyleSheet.create({
     paddingVertical: Space.xs,
     minHeight: 44,
   },
+  expandLabel: { flexShrink: 1 },
+  guideSection: { gap: Space.xs },
   bars: { gap: Space.md },
   barRow: { flexDirection: "row", alignItems: "center", gap: Space.md },
   barLabel: { width: "45%" },
@@ -1084,13 +1573,17 @@ const styles = StyleSheet.create({
   },
   findingText: { flex: 1 },
   actions: { gap: Space.md, marginTop: Space.sm },
-  reminderDone: {
+  actionList: { paddingHorizontal: Space.base, paddingVertical: Space.xs },
+  // Inset to the label column (44pt icon + row gap), like an iOS grouped list.
+  actionDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 44 + Space.base,
+  },
+  deleteLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Space.sm,
-    padding: Space.base,
-    borderRadius: Radius.md,
+    alignSelf: "center",
+    gap: Space.xs,
+    paddingVertical: Space.sm,
   },
-  reminderText: { flex: 1 },
-  reminderDenied: { gap: Space.sm },
 });

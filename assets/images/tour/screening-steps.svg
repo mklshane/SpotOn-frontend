@@ -1,0 +1,116 @@
+<svg width="360" height="200" viewBox="0 0 360 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="ss-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(180 100) scale(150 92)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ss-skin" x1="146" y1="34" x2="214" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2C4A2"/>
+      <stop offset="1" stop-color="#D99B74"/>
+    </linearGradient>
+    <radialGradient id="ss-spot" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(178 90) scale(11 10)">
+      <stop stop-color="#4A2A1C"/>
+      <stop offset="0.7" stop-color="#6B3D27"/>
+      <stop offset="1" stop-color="#8C5436" stop-opacity="0.6"/>
+    </radialGradient>
+    <linearGradient id="ss-brand" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFA468"/>
+      <stop offset="1" stop-color="#F26A2E"/>
+    </linearGradient>
+    <filter id="ss-shadow" x="-30%" y="-25%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#7A4A2B" flood-opacity="0.16"/>
+    </filter>
+    <clipPath id="ss-screen">
+      <rect x="146" y="34" width="68" height="128" rx="13"/>
+    </clipPath>
+  </defs>
+
+  <!-- soft light -->
+  <ellipse cx="180" cy="100" rx="150" ry="92" fill="url(#ss-glow)"/>
+
+  <!-- the route through the four steps -->
+  <path d="M96 62 C 116 40, 128 44, 140 56 M220 70 C 236 62, 244 58, 254 60 M290 92 L290 112"
+        stroke="#FF8A4C" stroke-opacity="0.5" stroke-width="2" stroke-linecap="round" stroke-dasharray="1.5 6"/>
+
+  <!-- ground shadow under the phone -->
+  <ellipse cx="180" cy="186" rx="46" ry="5" fill="#7A4A2B" opacity="0.10"/>
+
+  <!-- 1 · mark the spot on the body -->
+  <g filter="url(#ss-shadow)">
+    <rect x="36" y="40" width="60" height="84" rx="14" fill="#FFFFFF"/>
+  </g>
+  <g fill="#FCCDAE">
+    <circle cx="66" cy="56" r="6.5"/>
+    <rect x="58" y="64" width="16" height="28" rx="7"/>
+    <rect x="47" y="65" width="9" height="24" rx="4.5" transform="rotate(14 51.5 77)"/>
+    <rect x="76" y="65" width="9" height="24" rx="4.5" transform="rotate(-14 80.5 77)"/>
+    <rect x="58.5" y="88" width="7" height="26" rx="3.5"/>
+    <rect x="66.5" y="88" width="7" height="26" rx="3.5"/>
+  </g>
+  <!-- marker pin on the upper arm -->
+  <path d="M82 74 c -5.5 0 -9 -4 -9 -8.5 a 9 9 0 0 1 18 0 c 0 4.5 -3.5 8.5 -9 8.5 z" transform="translate(0 -6)" fill="url(#ss-brand)"/>
+  <path d="M82 70.5 l -3.2 -4.6 h 6.4 z" fill="#F26A2E"/>
+  <circle cx="82" cy="59.5" r="3" fill="#FFFFFF"/>
+
+  <!-- 2 · take a clear photo -->
+  <g transform="rotate(-4 180 98)">
+    <g filter="url(#ss-shadow)">
+      <rect x="138" y="26" width="84" height="144" rx="20" fill="#FFFFFF"/>
+    </g>
+    <g clip-path="url(#ss-screen)">
+      <rect x="146" y="34" width="68" height="128" fill="url(#ss-skin)"/>
+      <!-- faint skin texture -->
+      <path d="M146 64 C 168 58, 192 70, 214 62 M146 122 C 170 116, 190 128, 214 120" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="2"/>
+      <ellipse cx="178" cy="90" rx="10" ry="9" fill="url(#ss-spot)"/>
+      <!-- viewfinder corners -->
+      <g stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M160 78 V73 a3 3 0 0 1 3 -3 H168"/>
+        <path d="M188 70 H193 a3 3 0 0 1 3 3 V78"/>
+        <path d="M196 102 V107 a3 3 0 0 1 -3 3 H188"/>
+        <path d="M168 110 H163 a3 3 0 0 1 -3 -3 V102"/>
+      </g>
+      <!-- shutter -->
+      <circle cx="180" cy="144" r="9.5" fill="#FFFFFF" fill-opacity="0.9"/>
+      <circle cx="180" cy="144" r="6.5" fill="url(#ss-brand)"/>
+    </g>
+    <rect x="170" y="38" width="20" height="4" rx="2" fill="#FFFFFF" fill-opacity="0.75"/>
+  </g>
+
+  <!-- 3 · answer a few questions -->
+  <g filter="url(#ss-shadow)">
+    <rect x="254" y="30" width="72" height="62" rx="14" fill="#FFFFFF"/>
+  </g>
+  <rect x="264" y="41" width="11" height="11" rx="3.5" fill="url(#ss-brand)"/>
+  <path d="M266.8 46.6 l 2.1 2.1 l 3.6 -4" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="280" y="44" width="34" height="5" rx="2.5" fill="#E8D9CD"/>
+  <rect x="264" y="56" width="11" height="11" rx="3.5" fill="url(#ss-brand)"/>
+  <path d="M266.8 61.6 l 2.1 2.1 l 3.6 -4" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="280" y="59" width="26" height="5" rx="2.5" fill="#E8D9CD"/>
+  <rect x="264.75" y="71.75" width="9.5" height="9.5" rx="3" stroke="#E8D9CD" stroke-width="1.5"/>
+  <rect x="280" y="74" width="30" height="5" rx="2.5" fill="#F1E5DB"/>
+
+  <!-- 4 · see your result -->
+  <g filter="url(#ss-shadow)">
+    <rect x="250" y="112" width="80" height="58" rx="14" fill="#FFFFFF"/>
+  </g>
+  <!-- gauge -->
+  <path d="M262 150 a 14 14 0 0 1 28 0" stroke="#F1E5DB" stroke-width="5" stroke-linecap="round"/>
+  <path d="M262 150 a 14 14 0 0 1 10.5 -13.55" stroke="#34A878" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="276" cy="150" r="2.6" fill="#211A15" fill-opacity="0.7"/>
+  <path d="M276 150 L 268.5 140.5" stroke="#211A15" stroke-opacity="0.7" stroke-width="2" stroke-linecap="round"/>
+  <!-- tier pill + lines -->
+  <rect x="297" y="124" width="24" height="10" rx="5" fill="#DDF3E8"/>
+  <circle cx="302.5" cy="129" r="2" fill="#34A878"/>
+  <rect x="306" y="127.5" width="11" height="3" rx="1.5" fill="#34A878" fill-opacity="0.7"/>
+  <rect x="297" y="140" width="24" height="4" rx="2" fill="#E8D9CD"/>
+  <rect x="297" y="149" width="17" height="4" rx="2" fill="#F1E5DB"/>
+
+  <!-- sparkles -->
+  <g fill="#FF8A4C">
+    <path d="M118 28 l 2.6 6 l 6 2.6 l -6 2.6 l -2.6 6 l -2.6 -6 l -6 -2.6 l 6 -2.6 z" opacity="0.8"/>
+    <path d="M238 172 l 2 4.6 l 4.6 2 l -4.6 2 l -2 4.6 l -2 -4.6 l -4.6 -2 l 4.6 -2 z" opacity="0.55"/>
+    <circle cx="30" cy="150" r="3" opacity="0.35"/>
+    <circle cx="340" cy="104" r="3" opacity="0.35"/>
+    <circle cx="112" cy="150" r="2.5" opacity="0.3"/>
+  </g>
+</svg>

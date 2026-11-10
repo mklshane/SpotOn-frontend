@@ -6,6 +6,8 @@ import { CancerTypeCard } from '@/components/learn/CancerTypeCard';
 import { ConditionsCard } from '@/components/learn/ConditionsCard';
 import { EducationCard } from '@/components/learn/EducationCard';
 import { FeaturedEducationCard } from '@/components/learn/FeaturedEducationCard';
+import { openTopic, topicLengthLabel } from '@/components/learn/topic-nav';
+import { ARTICLE_PHOTOS } from '@/components/learn/LearnArticleHero';
 import { ThemedText } from '@/components/themed-text';
 import { Entrance, EntranceProvider } from '@/components/ui/entrance';
 import { Screen } from '@/components/ui/screen';
@@ -15,13 +17,13 @@ import { Space } from '@/constants/theme';
 import {
   getCategoryLabel,
   getDailyLearnRecommendation,
-  getTopicReadMinutes,
   LEARN_TOPICS,
   type LearnCategoryId,
   type Topic,
 } from '@/data/learn-content';
 import { useCurrentConditions } from '@/hooks/use-current-conditions';
 import { useTheme } from '@/hooks/use-theme';
+import { TourTarget } from '@/lib/product-tour';
 
 // Two topics are promoted into their own blocks above the list: the featured
 // card and the horizontal types rail. The browse list skips them rather than
@@ -30,7 +32,6 @@ const FEATURED_TOPIC_ID = 'warning-signs';
 const TYPES_TOPIC_ID = 'types-of-skin-cancer';
 
 const FEATURED_IMAGE = require('@/assets/images/learn/article-self-check.jpg');
-const TIP_IMAGE = require('@/assets/images/learn/recommended-sun-protection.jpg');
 
 // The three cancer-type articles live under the 'types-of-skin-cancer' topic;
 // each card deep-links straight to its article. Ordered most-serious first,
@@ -72,35 +73,8 @@ type Entry = {
   onPress: () => void;
 };
 
-function openTopic(topic: Topic) {
-  switch (topic.kind) {
-    case 'article':
-      router.push({
-        pathname: '/learn/article',
-        params: { topicId: topic.id },
-      });
-      return;
-    case 'subtopics':
-      router.push({ pathname: '/learn/topic', params: { topicId: topic.id } });
-      return;
-    case 'comingSoon':
-      router.push('/learn/questionnaire');
-      return;
-    default:
-      // Exhaustiveness check: a compile error here means a new Topic kind was
-      // added without teaching openTopic where it should navigate.
-      topic satisfies never;
-  }
-}
-
-function lengthLabel(topic: Topic): string {
-  if (topic.kind === 'subtopics') return `${topic.subtopics.length} guides`;
-  if (topic.kind === 'comingSoon') return 'Coming soon';
-  return `${getTopicReadMinutes(topic)} min read`;
-}
-
 function topicEntry(topic: Topic): Entry {
-  const tag = `${getCategoryLabel(topic.category)} · ${lengthLabel(topic)}`;
+  const tag = `${getCategoryLabel(topic.category)} · ${topicLengthLabel(topic)}`;
 
   return {
     key: topic.id,
@@ -119,6 +93,7 @@ export default function LearnScreen() {
 
   const featured = LEARN_TOPICS.find((t) => t.id === FEATURED_TOPIC_ID);
   const recommendation = getDailyLearnRecommendation();
+  const tipPhoto = ARTICLE_PHOTOS[recommendation.topicId];
   // Live temp + UV: online-only. 'hidden' leaves the screen exactly as it is offline.
   const conditions = useCurrentConditions();
   // Indices after the conditions card shift by one only when it is shown.
@@ -146,17 +121,19 @@ export default function LearnScreen() {
 
           {featured ? (
             <Entrance index={1}>
-              <FeaturedEducationCard
-                image={FEATURED_IMAGE}
-                imageLabel="A woman checking the skin on her forearm"
-                category={getCategoryLabel(featured.category)}
-                title={t('Know the warning signs')}
-                description={t(
-                  'The ABCDE rule, and five things to look for in a mole, in one quick read.'
-                )}
-                meta={lengthLabel(featured)}
-                onPress={() => openTopic(featured)}
-              />
+              <TourTarget id="learnFeatured">
+                <FeaturedEducationCard
+                  image={FEATURED_IMAGE}
+                  imageLabel="A woman checking the skin on her forearm"
+                  category={getCategoryLabel(featured.category)}
+                  title={t('Know the warning signs')}
+                  description={t(
+                    'The ABCDE rule, and five things to look for in a mole, in one quick read.'
+                  )}
+                  meta={topicLengthLabel(featured)}
+                  onPress={() => openTopic(featured)}
+                />
+              </TourTarget>
             </Entrance>
           ) : null}
 
@@ -170,7 +147,7 @@ export default function LearnScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/learn/article',
-                    params: { topicId: recommendation.topicId },
+                    params: { topicId: 'prevention' },
                   })
                 }
               />
@@ -179,9 +156,9 @@ export default function LearnScreen() {
 
           <Entrance index={2 + o}>
             <EducationCard
-              image={TIP_IMAGE}
-              imageLabel="A woman applying sunscreen outdoors"
-              tag="Today's tip"
+              image={tipPhoto?.source}
+              imageLabel={tipPhoto?.accessibilityLabel}
+              tag={t("Today's tip")}
               title={recommendation.title}
               description={recommendation.summary}
               onPress={() =>

@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS facilities (
   photo_url       TEXT,
   photo_attribution TEXT,
   department_info TEXT,
+  derm_status     TEXT,
+  concerns        TEXT NOT NULL DEFAULT '[]',
+  pds_skin_cancer_center INTEGER,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_facilities_city ON facilities(city);
@@ -60,6 +63,7 @@ CREATE TABLE IF NOT EXISTS doctors (
   google_maps_url     TEXT,
   photo_url           TEXT,
   description         TEXT,
+  concerns            TEXT NOT NULL DEFAULT '[]',
   updated_at          TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_doctors_city ON doctors(city);
@@ -77,6 +81,7 @@ CREATE TABLE IF NOT EXISTS booking_links (
   is_active          INTEGER NOT NULL,
   last_verified      TEXT,
   next_available     TEXT,
+  offers_online      INTEGER,
   created_at         TEXT NOT NULL,
   updated_at         TEXT
 );
@@ -90,6 +95,12 @@ CREATE TABLE IF NOT EXISTS doctor_facility (
   facility_id TEXT NOT NULL,
   is_primary  INTEGER,
   schedule    TEXT,
+  schedule_days INTEGER,
+  room        TEXT,
+  phone       TEXT,
+  source_url  TEXT,
+  verified_at TEXT,
+  consultation_fee INTEGER,
   updated_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_doctor_facility_doctor ON doctor_facility(doctor_id);
@@ -110,6 +121,19 @@ CREATE TABLE IF NOT EXISTS telemedicine_platforms (
 CREATE TABLE IF NOT EXISTS sync_meta (
   key   TEXT PRIMARY KEY NOT NULL,
   value TEXT
+);
+
+-- Clinics and doctors a user saved ("My dermatologists"). Per account, this device only. Not a
+-- synced table, so the directory sync's sweep never touches it; name/subtitle are a snapshot so a
+-- saved place stays readable even after the directory drops it.
+CREATE TABLE IF NOT EXISTS saved_items (
+  user_id   TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  item_id   TEXT NOT NULL,
+  name      TEXT NOT NULL,
+  subtitle  TEXT,
+  saved_at  TEXT NOT NULL,
+  PRIMARY KEY (user_id, kind, item_id)
 );
 
 -- Tracked lesions. MUST stay ABOVE the screenings block, and nothing above that block may repeat
@@ -184,7 +208,12 @@ CREATE TABLE IF NOT EXISTS screenings (
   image_count          INTEGER NOT NULL DEFAULT 1,
   per_image_json       TEXT,
   image_disagreement   INTEGER NOT NULL DEFAULT 0,
-  aggregate_method     TEXT NOT NULL DEFAULT 'single'
+  aggregate_method     TEXT NOT NULL DEFAULT 'single',
+  second_class         TEXT,
+  second_confidence    REAL,
+  research_status      TEXT,
+  research_shared_at   TEXT,
+  research_attempts    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC);
 `;
@@ -195,7 +224,7 @@ CREATE INDEX IF NOT EXISTS idx_screenings_created ON screenings(created_at DESC)
 
 // Bump when adding ALTERs below. Fresh installs get the full SCHEMA and are
 // stamped with the current version; existing databases replay the ALTERs.
-const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 20;
 
 // version-2 columns (migration 011 server-side). Each statement is applied
 // individually and "duplicate column" is tolerated, so a partially-migrated
@@ -358,6 +387,54 @@ const MIGRATION_V16 = [
   "ALTER TABLE screenings ADD COLUMN mark_mesh TEXT",
 ];
 
+// v17 - patient-facing directory search (server migration 016): concern tags on facilities and
+// doctors, a hospital's dermatology status, and structured clinic days on doctor_facility so the
+// directory can answer "who is in on Saturday". Server rows only change when a script touches
+// them (which bumps updated_at), so the defaults here match the server defaults exactly.
+const MIGRATION_V17 = [
+  "ALTER TABLE facilities ADD COLUMN derm_status TEXT",
+  "ALTER TABLE facilities ADD COLUMN concerns TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE facilities ADD COLUMN pds_skin_cancer_center INTEGER",
+  "ALTER TABLE doctors ADD COLUMN concerns TEXT NOT NULL DEFAULT '[]'",
+  "ALTER TABLE doctor_facility ADD COLUMN schedule_days INTEGER",
+  "ALTER TABLE doctor_facility ADD COLUMN room TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN phone TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN source_url TEXT",
+  "ALTER TABLE doctor_facility ADD COLUMN verified_at TEXT",
+  // Rows synced before v17 never carried these columns, and an incremental sync only
+  // re-sends rows changed since the cursor; dropping it makes the next sync a full one.
+  "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
+];
+
+// v18 - consultation fee per doctor-clinic link and which booking links are online consults
+// (server migration 018), plus the local saved_items table (created by SCHEMA; its index lives
+// here per the note above SCHEMA_VERSION).
+const MIGRATION_V18 = [
+  "ALTER TABLE doctor_facility ADD COLUMN consultation_fee INTEGER",
+  "ALTER TABLE booking_links ADD COLUMN offers_online INTEGER",
+  "CREATE INDEX IF NOT EXISTS idx_saved_items_user ON saved_items(user_id, saved_at DESC)",
+  // Existing rows predate these columns; a full sync re-reads them.
+  "DELETE FROM sync_meta WHERE key = 'sync_cursor'",
+];
+
+// v19 - runner-up class of a combined malignant result ("Melanoma or Basal Cell Carcinoma"; see
+// pickCombinedMalignant in tps-core.ts). NULL on every pre-v19 row, which is correct: those results
+// were scored and labelled on the top class alone, and they keep that label and TPS.
+const MIGRATION_V19 = [
+  "ALTER TABLE screenings ADD COLUMN second_class TEXT",
+  "ALTER TABLE screenings ADD COLUMN second_confidence REAL",
+];
+
+// v20 - optional research sharing ("Help improve SpotOn", data/research-queue.ts). The upload queue
+// is these columns on the screening itself: `research_status` is NULL (never queued - every pre-v20
+// row, and every row saved without consent), 'pending', 'sent', 'skipped' or 'failed'. NULL on old
+// rows is the point, not a gap: history from before consent is never shared, so nothing backfills.
+const MIGRATION_V20 = [
+  "ALTER TABLE screenings ADD COLUMN research_status TEXT",
+  "ALTER TABLE screenings ADD COLUMN research_shared_at TEXT",
+  "ALTER TABLE screenings ADD COLUMN research_attempts INTEGER NOT NULL DEFAULT 0",
+];
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   const row = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version");
   const version = row?.user_version ?? 0;
@@ -378,6 +455,10 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     ...(version < 14 ? MIGRATION_V14 : []),
     ...(version < 15 ? MIGRATION_V15 : []),
     ...(version < 16 ? MIGRATION_V16 : []),
+    ...(version < 17 ? MIGRATION_V17 : []),
+    ...(version < 18 ? MIGRATION_V18 : []),
+    ...(version < 19 ? MIGRATION_V19 : []),
+    ...(version < 20 ? MIGRATION_V20 : []),
   ];
   for (const stmt of pending) {
     try {

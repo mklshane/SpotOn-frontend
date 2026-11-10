@@ -1,12 +1,12 @@
 import { t, useLocale } from '@/lib/i18n';
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedText } from "@/components/themed-text";
+import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
@@ -16,9 +16,11 @@ import { SettingsRow } from "@/components/ui/settings-row";
 import { Gradients, Radius, Space } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuth } from "@/lib/auth";
+import { TourTarget } from "@/lib/product-tour";
 import { computeAge, SEX_LABELS, skinTypeLabel } from "@/lib/profile-format";
 import { useScanHistory } from "@/lib/scan-history";
 import { TabContentInset } from '@/components/ui/tab-bar';
+import { readPendingProfile } from '@/lib/profile-pending';
 
 export default function ProfileScreen() {
   useLocale();
@@ -27,6 +29,17 @@ export default function ProfileScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const [signingOut, setSigningOut] = useState(false);
+  const [pendingProfile, setPendingProfile] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (user?.id) {
+      readPendingProfile(user.id).then((pending) => {
+        if (active) setPendingProfile(Boolean(pending));
+      }).catch(() => {});
+    } else setPendingProfile(false);
+    return () => { active = false; };
+  }, [user]));
 
   const name = user?.full_name?.trim() || "Your profile";
   const identifier = user?.email || user?.phone || "";
@@ -34,13 +47,6 @@ export default function ProfileScreen() {
   const age = computeAge(user?.date_of_birth ?? null);
   const sexLabel = user?.sex ? (SEX_LABELS[user.sex] ?? user.sex) : null;
   const skinLabel = skinTypeLabel(user?.fitzpatrick_skin_type ?? null);
-
-  // Cache-bust on `updated_at` - the backend reuses the same avatar_url on
-  // every re-upload, and without this the cached image from before the edit
-  // would keep rendering even though the URL "changed" server-side.
-  const avatarSource = user?.avatar_url
-    ? { uri: `${user.avatar_url}?v=${encodeURIComponent(user.updated_at)}` }
-    : null;
 
   const scanCount = entries.length;
   const lastScan = entries[0]?.createdAt;
@@ -88,16 +94,13 @@ export default function ProfileScreen() {
             style={styles.avatarWrap}
           >
             <View style={styles.avatarFrost}>
-              {avatarSource ? (
-                <Image
-                  source={avatarSource}
-                  contentFit="cover"
-                  transition={150}
-                  style={[StyleSheet.absoluteFill]}
-                />
-              ) : (
-                <Icon name="person.fill" tintColor="#FFFFFF" size={40} />
-              )}
+              <Avatar
+                uri={user?.avatar_url}
+                name={user?.full_name ?? undefined}
+                size={AVATAR}
+                backgroundColor="rgba(255,255,255,0.16)"
+                textColor="#FFFFFF"
+              />
             </View>
             <View
               style={[styles.editBadge, { backgroundColor: theme.surface }]}
@@ -160,6 +163,14 @@ export default function ProfileScreen() {
           showsVerticalScrollIndicator={false}
           overScrollMode="never"
         >
+          {pendingProfile ? (
+            <View style={[styles.pendingNotice, { backgroundColor: theme.brandTint }]}>
+              <View style={[styles.pendingDot, { backgroundColor: theme.brand }]} />
+              <ThemedText type="footnote" style={{ color: theme.brand, flex: 1 }}>
+                {t("Saved on this device. Will sync when online.")}
+              </ThemedText>
+            </View>
+          ) : null}
           <ThemedText
             type="caption"
             themeColor="brand"
@@ -182,12 +193,23 @@ export default function ProfileScreen() {
             </View>
           </Card>
 
+          <TourTarget id="profileBodyMap" style={styles.menuTarget}>
+            <Card style={[styles.menu, styles.compactCard, styles.flush]}>
+              <SettingsRow
+                icon="figure.stand"
+                label={t("See body lesions")}
+                sublabel={t("View your screening history on the 3D body")}
+                onPress={() => router.push("/scan/history")}
+              />
+            </Card>
+          </TourTarget>
+
           <Card style={[styles.menu, styles.compactCard]}>
             <SettingsRow
-              icon="figure.stand"
-              label={t("See body lesions")}
-              sublabel={t("View your screening history on the 3D body")}
-              onPress={() => router.push("/scan/history")}
+              icon="bookmark.fill"
+              label={t("My dermatologists")}
+              sublabel={t("Clinics and doctors you saved")}
+              onPress={() => router.push("/profile/saved")}
             />
           </Card>
 
@@ -202,7 +224,7 @@ export default function ProfileScreen() {
           <View style={styles.actions}>
             <Button
               label={t("Sign out")}
-              variant="outline"
+              variant="brand"
               loading={signingOut}
               onPress={handleSignOut}
             />
@@ -217,6 +239,8 @@ const AVATAR = 88;
 const EDIT_BADGE = 30;
 
 const styles = StyleSheet.create({
+  pendingNotice: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, borderRadius: 14, padding: Space.base, marginBottom: Space.lg },
+  pendingDot: { width: 8, height: 8, borderRadius: 4 },
   hero: { paddingHorizontal: Space.xl, paddingBottom: Space.xxxl },
   heroTitle: { opacity: 0.85, marginBottom: Space.lg },
   avatarWrap: { alignSelf: "center", marginBottom: Space.base },
@@ -280,5 +304,8 @@ const styles = StyleSheet.create({
   rowText: { flex: 1, gap: 2 },
   menu: { marginTop: Space.base, gap: 0, paddingVertical: Space.md },
   compactCard: { paddingVertical: Space.base },
+  // A tour target carries the card's top margin so the spotlight hugs the card, not the gap.
+  menuTarget: { marginTop: Space.base },
+  flush: { marginTop: 0 },
   actions: { marginTop: Space.xl },
 });

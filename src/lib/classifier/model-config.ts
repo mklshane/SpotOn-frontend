@@ -7,9 +7,8 @@ import type { LesionClass } from '../triage/types';
  * (e.g. a float16/INT8 re-export, or a retrained version) should only require changes
  * in this file.
  *
- * Verified against the bundled spoton_dfe4tv_fp32.tflite (interpreter inspection, 2026-09-22 - same
- * tensor names, shapes and raw-logit output as D_final), matching the contract
- * `model_meta_dfe4tv.json` states:
+ * Verified against the bundled spoton_acne_s1_fp32.tflite (interpreter inspection, 2026-10-09 - same
+ * tensor names, shapes and raw-logit output as dfe4tv / D_final):
  *   input  "serving_default_args_0"          [1, 3, 260, 260] float32 **NCHW** (EfficientNet-B2)
  *   output "serving_default_output_0_output" [1, 5]           float32     (raw LOGITS - no softmax
  *                                                   in the graph; classify.ts applies it on-device)
@@ -29,6 +28,40 @@ import type { LesionClass } from '../triage/types';
  */
 
 // Bundled as a Metro asset (metro.config.js adds `tflite` to assetExts).
+//
+// === acne_s1 BUNDLED 2026-10-09 at Shane's instruction (replaces milk_s1). ===
+//
+// D_next run `acne_s1`: the milk_s1 recipe below + 1,320 single-pimple close-ups as BENIGN
+// (`SpotOn/extra/acne_closeup`: Pimples-detection crops, CC BY 4.0, + 34 Wikimedia Commons close-ups).
+// Same I/O contract as milk_s1 (NCHW [1,3,260,260] float32 in, 5 raw logits out; checked 2026-10-09).
+// Calibration on valid_calib: T 0.595 (NLL), MALIGNANT_THRESHOLD 0.4326 (90% malignant sensitivity).
+// Held-out, vs milk_s1:
+//   stage3 test   acc 0.837 (0.842)  macro-F1 0.724 (0.725)  AUROC 0.952 (0.952)  sens/spec 0.88/0.90
+//   MEL recall 0.85 (0.81); held-out melanomas called MEL 137/179 (132)
+//   acne flagged as cancer: Shane's 19 close-ups 3 (9); pimple crops 46/728 (157); ACNE04 19/400 (36)
+//   Shane's 85 acne/boil/mole photos 15/85 (21)
+// COST: BCC recall stage3 0.72 (0.76), Hallym 0.74 (0.78), MILK10k 0.58 (0.67);
+//   Asan benign specificity 0.64 (0.68). Later runs (hard_*, best_*) did not beat it.
+//
+// --- milk_s1 (bundled 2026-10-03, superseded 2026-10-09), kept as history: ---
+// === milk_s1 BUNDLED 2026-10-03 at Shane's instruction. ===
+//
+// From the D_next retrain (`~/Downloads/D_next.ipynb`, run `milk_s1`): EfficientNet-B2 trained on the
+// FROZEN split `SpotOn/stage3/manifest_v1.csv` (patient/case-grouped, deduplicated, OTHER-cancers
+// excluded) + recipe fixes + stability training (detector-box jitter, photometric aug, two-view
+// consistency) + synthetic marker ink + Asan "Mix A" (6,021 Asian-skin close-ups) + SCIN lookalikes +
+// capped, visually-cleaned MILK10k (2,073). Same I/O contract as dfe4tv (NCHW, raw logits).
+// Calibration fitted on valid_calib (741 images, never trained on) at deploy geometry:
+// T 0.595 (NLL) and MALIGNANT_THRESHOLD 0.4147 (90% malignant sensitivity).
+// Held-out results at that point (synth.eval.manifest_eval / seed_summary):
+//   stage3 test (1,434)   acc 0.842  macro-F1 0.725  AUROC 0.952  sens 0.879 / spec 0.900
+//   Asan test (1,276, Asian skin)  AUROC 0.914 (dfe4tv 0.824)  spec 0.683 (dfe4tv 0.486)
+//   MILK10k test (894, visible lesions)  AUROC 0.789;  Hallym BCC (152) recall 0.78
+//   re-shot cancer-flag flips 0.10 (control 0.17);  Shane's 85 acne/boil/mole photos 21/85 flagged
+//   (dfe4tv 43/85; milk_s1 trained on them).
+// KNOWN WEAKNESS: stage3 SCC recall ~0.54 and MEL ~0.81 (stability-only runs reached 0.64 / 0.89);
+// inflamed cystic acne and boils are still flagged ~60% of the time.
+// The old ISIC 200 holdout is NOT a valid benchmark any more: 125/200 of its images are in stage3.
 //
 // === dfe4tv RE-BUNDLED 2026-09-22 (late) at Shane's instruction, its own calibration. ===
 //
@@ -412,11 +445,40 @@ import type { LesionClass } from '../triage/types';
 // which scores both models on the identical held-out split.
 // Metro resolves non-JS assets through require() and registers them for bundling; an ESM
 // import would not produce an asset module here.
+// The demo model is eligible only in a development build and only for a recognized source photo
+// (demo-photo.ts). Every other image uses the regular screening model.
+export const DEMO_BCC_ENABLED = __DEV__ && process.env.EXPO_PUBLIC_DEMO_BCC_MODEL === '1';
+// === TRIAL 2026-10-19: Shane is testing the sub-class models on device. ===
+// D_next runs `subold_s1` / `subold_s2`: sub-class training (15 sub-types merged to 5 logits in the
+// export) on the pre-Oct-14 stage1, seeds 1 and 2. Same I/O contract as acne_s1 (NCHW [1,3,260,260]
+// in, [1,5] float32 logits out; checked with the LiteRT interpreter).
+// subold_s1 vs acne_s1: SK flagged Asan 0.34->0.26, FLUO 0.28->0.18, picker 0.36->0.14; held-out MEL
+//   flagged 0.90->0.92 (called benign 25->14); COST Asan SCC flagged 0.93->0.87, MILK benign 0.41->0.50.
+// subold_s2 vs acne_s1: Asan AUROC 0.911->0.927, spec 0.64->0.74, Hallym BCC 0.74->0.78, MILK AUROC
+//   0.780->0.804; COST stage3 SCC recall 0.59->0.53, ACNE04 flagged 5->10%.
+// sub_s2 (new stage1, seed 2) vs acne_s1: macro-F1 stage3 0.724->0.750, Asan AUROC 0.911->0.934, spec
+//   0.64->0.74, FLUO AUROC 0.842->0.914, MILK 0.780->0.827, Hallym BCC 0.74->0.81, SK Asan 0.35->0.24;
+//   MEL held-out/nodular unchanged (0.90/0.92); stage3 SK + picker SK not fixed (0.30, 0.36).
+// TO SWITCH: set ACTIVE_MODEL (asset, version, T and threshold all follow). 'acne_s1' = last shipped.
+type ModelChoice = 'acne_s1' | 'subold_s1' | 'subold_s2' | 'sub_s2';
+export const ACTIVE_MODEL: ModelChoice = 'subold_s1';
+// T = NLL-fitted on valid_calib; threshold = 90%-sensitivity point on valid_calib at that T.
+// Both come from synth.eval.seed_summary.calibrate on the same frozen split, for every model.
+/* eslint-disable @typescript-eslint/no-require-imports */
+const MODELS: Record<ModelChoice, { asset: number; version: string; T: number; threshold: number }> = {
+  acne_s1: { asset: require('../../../assets/models/spoton_acne_s1_fp32.tflite'), version: 'spoton_acne_s1_fp32', T: 0.595, threshold: 0.4326 }, // 2026-10-09
+  subold_s1: { asset: require('../../../assets/models/spoton_subold_s1_fp32.tflite'), version: 'spoton_subold_s1_fp32', T: 0.8, threshold: 0.4701 }, // 2026-10-19
+  subold_s2: { asset: require('../../../assets/models/spoton_subold_s2_fp32.tflite'), version: 'spoton_subold_s2_fp32', T: 0.85, threshold: 0.4821 }, // 2026-10-19
+  sub_s2: { asset: require('../../../assets/models/spoton_sub_s2_fp32.tflite'), version: 'spoton_sub_s2_fp32', T: 0.88, threshold: 0.4173 }, // 2026-10-20
+};
+/* eslint-enable @typescript-eslint/no-require-imports */
+export const MODEL_ASSET = MODELS[ACTIVE_MODEL].asset;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-export const MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
+export const DEMO_BCC_MODEL_ASSET = require('../../../assets/models/spoton_dfe4tv_fp32.tflite');
 
 /** Recorded on every ScreeningRecord so historical results stay interpretable. */
-export const MODEL_VERSION = 'spoton_dfe4tv_fp32';
+export const MODEL_VERSION = MODELS[ACTIVE_MODEL].version;
+export const DEMO_BCC_MODEL_VERSION = 'spoton_dfe4tv_fp32_demo';
 
 /**
  * How the bundled graph wants its pixels: 'nhwc' [1,H,W,3] (every export up to D9) or 'nchw'
@@ -774,7 +836,13 @@ export { MALIGNANT_CLASSES } from '../triage/tps-core';
  * COUPLED TO CONFIDENCE_TEMPERATURE: the score is a sum of *post-temperature* softmax values, so
  * changing T rescales it. Refit this threshold whenever either T or the bundled model changes.
  */
-export const MALIGNANT_THRESHOLD = 0.4444;
+// acne_s1: 90%-sensitivity point on valid_calib at T 0.595 (2026-10-09). Was 0.4147 for milk_s1, 0.4444 for dfe4tv.
+// Trial models: per-model values live in MODELS (near ACTIVE_MODEL).
+export const MALIGNANT_THRESHOLD = MODELS[ACTIVE_MODEL].threshold;
+export const DEMO_BCC_MALIGNANT_THRESHOLD = 0.4444;
+export function malignantThresholdForModel(version: string): number {
+  return version === DEMO_BCC_MODEL_VERSION ? DEMO_BCC_MALIGNANT_THRESHOLD : MALIGNANT_THRESHOLD;
+}
 
 export type Normalization = 'zeroOne' | 'imagenet' | 'plusMinusOne';
 
@@ -1021,7 +1089,10 @@ export const INFERENCE_TIMEOUT_MS = Platform.OS === 'web' ? 60_000 : 20_000;
  * `dataset_real` at T=1.0: ECE 0.46 (D3) → 0.26 (D4), mean confidence 94% → 78% at 51% accuracy.
  * Still over-confident, but within the range the Safety Floor was designed for.
  */
-export const CONFIDENCE_TEMPERATURE = 0.9432;
+// acne_s1: NLL-fitted on valid_calib (2026-10-09); same as milk_s1. Was 0.9432 for dfe4tv.
+// Trial models: per-model values live in MODELS (near ACTIVE_MODEL).
+export const CONFIDENCE_TEMPERATURE = MODELS[ACTIVE_MODEL].T;
+export const DEMO_BCC_CONFIDENCE_TEMPERATURE = 0.9432;
 
 /**
  * Test-time augmentation: run the 4 dihedral flips (original, h-flip, v-flip, both) and average

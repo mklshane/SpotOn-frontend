@@ -1,4 +1,7 @@
+import { Platform } from "react-native";
+
 import { assetFileUri } from "@/lib/asset-uri";
+import { perfLog } from "@/lib/perf-log";
 import { loadTensorflowModel } from "@/lib/tflite";
 
 /** The loaded TFLite model handle (single-class YOLO lesion detector). */
@@ -109,6 +112,42 @@ export function getLesionModel(): Promise<LesionModel> {
   return modelPromise;
 }
 
+let cameraModelPromise: Promise<LesionModel> | null = null;
+
+/**
+ * The live camera's detector. Android tries the GPU delegate and falls back to the shared CPU
+ * model above if it cannot load.
+ *
+ * WHY (2026-10-19, vivo V2248 / Dimensity 700): with the camera open, the camera HAL alone uses
+ * about two cores. The 768 detector then ran at 560-970 ms per pass on CPU, even with XNNPACK
+ * enabled, which spaced live passes 1-2.6 s apart. On the idle Mali GPU, benchmark_model measured
+ * 117 ms under the same camera load.
+ *
+ * Its own interpreter, so the shared CPU model keeps serving the still path and the gallery
+ * search. The 2026-09-15 GPU attempt broke the expo-gl 3D body screen (see getLesionModel), so
+ * that screen must be re-checked after the camera mounts whenever this changes.
+ */
+export function getLesionModelForCamera(): Promise<LesionModel> {
+  if (Platform.OS !== "android") return getLesionModel();
+  if (!cameraModelPromise) {
+    cameraModelPromise = (async () => {
+      const t0 = Date.now();
+      try {
+        const m = await loadTensorflowModel({ url: await assetFileUri(MODEL_ASSET) }, ["android-gpu"]);
+        const s = m.inputs[0]?.shape ?? [];
+        const n = s.length === 4 ? s[1] * s[2] * s[3] : 0;
+        if (n > 0) await m.run([new Float32Array(n).buffer as ArrayBuffer]);
+        perfLog("detector.gpuLoad", Date.now() - t0, "ok");
+        return m;
+      } catch (e) {
+        perfLog("detector.gpuLoad", Date.now() - t0, `fallback=cpu ${String(e)}`);
+        return getLesionModel();
+      }
+    })();
+  }
+  return cameraModelPromise;
+}
+
 /** Read input size + YOLO output layout from a loaded model. */
 export function readLayout(model: LesionModel) {
   const shape = model.outputs[0].shape; // [1, d1, d2]
@@ -136,4 +175,7 @@ export function readLayout(model: LesionModel) {
  */
 export function prewarmLesionModel(): void {
   getLesionModel().catch(() => {});
+  // The Android GPU interpreter takes ~7 s to build (OpenCL kernel compile). Built on capture
+  // mount, that was 7 s with no box.
+  getLesionModelForCamera().catch(() => {});
 }

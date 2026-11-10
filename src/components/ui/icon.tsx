@@ -24,6 +24,12 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'chevron.right': { set: 'ionicons', name: 'chevron-forward' },
   'chevron.up': { set: 'ionicons', name: 'chevron-up' },
   'chevron.down': { set: 'ionicons', name: 'chevron-down' },
+  'arrow.right': { set: 'ionicons', name: 'arrow-forward' },
+  'arrow.right.circle.fill': { set: 'ionicons', name: 'arrow-forward-circle' },
+  'arrow.up.circle.fill': { set: 'ionicons', name: 'arrow-up-circle' },
+  'arrow.down.circle.fill': { set: 'ionicons', name: 'arrow-down-circle' },
+  'equal.circle.fill': { set: 'ionicons', name: 'remove-circle' },
+  'plus.circle.fill': { set: 'ionicons', name: 'add-circle' },
   // glyphs
   checkmark: { set: 'ionicons', name: 'checkmark' },
   xmark: { set: 'ionicons', name: 'close' },
@@ -83,6 +89,8 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'checkmark.seal.fill': { set: 'ionicons', name: 'checkmark-circle' },
   'arrow.triangle.turn.up.right.diamond.fill': { set: 'ionicons', name: 'navigate' },
   'arrow.up.right': { set: 'ionicons', name: 'open-outline' },
+  location: { set: 'ionicons', name: 'navigate-outline' },
+  'location.fill': { set: 'ionicons', name: 'navigate' },
   // learn
   'cross.case.fill': { set: 'ionicons', name: 'medkit' },
   'square.grid.2x2.fill': { set: 'ionicons', name: 'grid' },
@@ -112,6 +120,18 @@ const VECTOR_MAP: Record<string, VectorSpec> = {
   'square.stack.3d.up.fill': { set: 'ionicons', name: 'layers' },
   'list.bullet': { set: 'ionicons', name: 'list' },
   'arrow.clockwise': { set: 'ionicons', name: 'refresh' },
+  // multi-photo review + set quality check
+  exclamationmark: { set: 'ionicons', name: 'alert' },
+  'plus.viewfinder': { set: 'ionicons', name: 'add-circle-outline' },
+  // directory: saved / online consult / report
+  bookmark: { set: 'ionicons', name: 'bookmark-outline' },
+  'bookmark.fill': { set: 'ionicons', name: 'bookmark' },
+  'video.fill': { set: 'ionicons', name: 'videocam' },
+  flag: { set: 'ionicons', name: 'flag-outline' },
+  'slider.horizontal.3': { set: 'ionicons', name: 'options-outline' },
+  // settings: back up / restore
+  'arrow.up.doc.fill': { set: 'ionicons', name: 'save' },
+  'arrow.down.doc.fill': { set: 'ionicons', name: 'download' },
 };
 
 const FALLBACK: VectorSpec = { set: 'ionicons', name: 'ellipse-outline' };

@@ -85,6 +85,8 @@ type ScreeningSessionValue = {
   /** Accept a photo and return its index. Also starts its inference (see enqueueImage). */
   addImage: (img: Omit<ScreeningImage, 'index'>) => number;
   removeImage: (uri: string) => void;
+  /** Record the quality screen's verdict on a photo already in the set (see quality.tsx). */
+  updateImage: (uri: string, patch: Partial<Pick<ScreeningImage, 'qualityPassed' | 'detected'>>) => void;
   /**
    * Start inference for one accepted photo. Runs chained (never concurrent - one interpreter), so
    * by the time the user finishes capturing and answering, earlier photos are already done.
@@ -111,7 +113,16 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   const [followUp, setFollowUp] = useState<ScreeningSessionValue['followUp']>(null);
   const [mustAsk, setMustAsk] = useState<readonly QuestionId[]>(ALL_QUESTIONS);
   const [acceptedLowConfidence, setAcceptedLowConfidence] = useState(false);
-  const [images, setImages] = useState<ScreeningImage[]>([]);
+  const [images, setImagesState] = useState<ScreeningImage[]>([]);
+  // Synchronous mirror of `images`. addImage must RETURN the new photo's index, and a functional
+  // setState updater is not guaranteed to run before the call returns (React defers it whenever the
+  // provider already has a pending update - e.g. acceptLowConfidence() queued just before), which
+  // made addImage return 0 and the second photo's run overwrite the first's.
+  const imagesRef = useRef<ScreeningImage[]>([]);
+  const setImages = useCallback((next: ScreeningImage[]) => {
+    imagesRef.current = next;
+    setImagesState(next);
+  }, []);
 
   // Per-image inference, chained so only one runs at a time (a single native interpreter, and the
   // TTA loop's "one buffer live at a time" invariant). Refs: settling must not re-render the
@@ -120,7 +131,9 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     attempt: number;
     runs: Map<number, { uri: string; promise: Promise<SetPart> }>;
   }>({ attempt: 1, runs: new Map() });
-  const modelRef = useRef<Promise<LoadedModel> | null>(null);
+  const modelRef = useRef<{ regular: Promise<LoadedModel> | null; demo: Promise<LoadedModel> | null }>({
+    regular: null, demo: null,
+  });
 
   // The live inference promise + its resolved value. Refs on purpose: settling must not
   // re-render questionnaire consumers, and the analysis screen pulls the promise imperatively.
@@ -145,18 +158,19 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   }, []);
 
   /** Load the interpreter once per session; every image's run awaits the same promise. */
-  const loadModel = useCallback(() => {
-    if (!modelRef.current) {
-      modelRef.current = (async () => {
+  const loadModel = useCallback((demo = false) => {
+    const key = demo ? 'demo' : 'regular';
+    if (!modelRef.current[key]) {
+      modelRef.current[key] = (async () => {
         const { prepareModel } = await import('./classifier/classify');
-        return prepareModel();
+        return prepareModel(demo);
       })();
       // A load failure must not poison every later attempt.
-      modelRef.current.catch(() => {
-        modelRef.current = null;
+      modelRef.current[key].catch(() => {
+        modelRef.current[key] = null;
       });
     }
-    return modelRef.current;
+    return modelRef.current[key];
   }, []);
 
   const enqueueImage = useCallback(
@@ -168,7 +182,15 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       }
       // Keyed on (index, uri): a retake reuses the index with a different photo, and joining the
       // previous photo's promise there would classify the image the user just rejected.
-      if (store.runs.get(index)?.uri === uri) return; // already running/settled for this exact photo
+      if ([...store.runs.values()].some((r) => r.uri === uri)) return; // already running/settled
+      // removeImage keeps surviving runs under their original keys, so after deleting photo 1 on the
+      // review screen the next photo's array index can be a key a KEPT photo still holds. Replacing
+      // that run would silently drop a photo the user kept; take the next free key instead (keys only
+      // order the set and label the audit trail).
+      const holder = store.runs.get(index);
+      if (holder && imagesRef.current.some((p) => p.uri === holder.uri)) {
+        index = Math.max(...store.runs.keys()) + 1;
+      }
       setClassificationState('running');
 
       // Chain onto the previous image so runs never overlap; a failure upstream must not block us.
@@ -176,8 +198,9 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       const promise = (async () => {
         await Promise.allSettled(previous);
         const { classifyImageAt } = await import('./classifier/classify');
-        const { model, inputSize } = await loadModel();
-        return classifyImageAt(uri, index, model, inputSize, attempt);
+        const demo = imagesRef.current.find((p) => p.uri === uri)?.demoModel === true;
+        const loaded = await loadModel(demo);
+        return classifyImageAt(uri, index, loaded, attempt);
       })();
       store.runs.set(index, { uri, promise });
       promise
@@ -204,7 +227,8 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     if (store.runs.size === 0) throw new Error('screening: classification never started');
     const { composeSetResult } = await import('./classifier/classify');
     const settled = await Promise.all([...store.runs.values()].map((r) => r.promise));
-    const { inputSize } = await loadModel();
+    const primary = imagesRef.current[0];
+    const { inputSize } = await loadModel(primary?.demoModel === true);
     const out = composeSetResult(settled, attempt, inputSize);
     lastOutputRef.current = out;
     return out;
@@ -218,22 +242,24 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
   }, [images, imageUri, attempt, enqueueImage]);
 
   const addImage = useCallback<ScreeningSessionValue['addImage']>((img) => {
-    let index = 0;
-    setImages((prev) => {
-      const existing = prev.findIndex((p) => p.uri === img.uri);
-      if (existing !== -1) {
-        index = prev[existing].index;
-        return prev;
-      }
-      index = prev.length;
-      return [...prev, { ...img, index }];
-    });
+    const prev = imagesRef.current;
+    const existing = prev.find((p) => p.uri === img.uri);
+    if (existing) return existing.index;
+    // quality.tsx starts this photo's inference on arrival under `images.length`; reuse that key.
+    const run = [...partsRef.current.runs.entries()].find(([, r]) => r.uri === img.uri);
+    const index = run ? run[0] : prev.length;
+    setImages([...prev, { ...img, index }]);
     return index;
-  }, []);
+  }, [setImages]);
 
   const removeImage = useCallback((uri: string) => {
     // Re-index so images[0] is always the primary and indices stay contiguous.
-    setImages((prev) => prev.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i })));
+    const next = imagesRef.current.filter((p) => p.uri !== uri).map((p, i) => ({ ...p, index: i }));
+    setImages(next);
+    // `imageUri` is the primary's mirror (analysis shows it). Photos are now added on the review
+    // screen and dropped from it or from quality's "Continue with N photos", so a removed primary
+    // must hand the role to whatever is first now.
+    setImageUri(next[0]?.uri ?? null);
     // Drop ONLY this photo's run.
     //
     // This used to reset the whole map, which silently destroyed every other photo's completed
@@ -250,7 +276,13 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     const runs = new Map([...store.runs.entries()].filter(([, r]) => r.uri !== uri));
     partsRef.current = { attempt: store.attempt, runs };
     if (runs.size === 0) setClassificationState('idle');
-  }, []);
+  }, [setImages]);
+
+  const updateImage = useCallback<ScreeningSessionValue['updateImage']>((uri, patch) => {
+    const prev = imagesRef.current;
+    if (!prev.some((p) => p.uri === uri)) return;
+    setImages(prev.map((p) => (p.uri === uri ? { ...p, ...patch } : p)));
+  }, [setImages]);
 
   const acceptLowConfidence = useCallback(() => setAcceptedLowConfidence(true), []);
 
@@ -265,7 +297,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setClassificationState('idle');
     partsRef.current = { attempt: 2, runs: new Map() };
     lastOutputRef.current = null;
-  }, []);
+  }, [setImages]);
 
   const reset = useCallback(() => {
     setBodyMark(null);
@@ -281,7 +313,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setAcceptedLowConfidence(false);
     partsRef.current = { attempt: 1, runs: new Map() };
     lastOutputRef.current = null;
-  }, []);
+  }, [setImages]);
 
   useEffect(() => {
     if (previousAccountId.current !== accountId) {
@@ -317,7 +349,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
     setBodyMark(lesion.mark);
     setAnswers(prefilled);
     setMustAsk(ask);
-  }, []);
+  }, [setImages]);
 
   const questionnaireComplete = useMemo(
     () => ALL_QUESTIONS.every((q) => answers[q] !== undefined),
@@ -352,6 +384,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       images,
       addImage,
       removeImage,
+      updateImage,
       enqueueImage,
     }),
     [
@@ -378,6 +411,7 @@ export function ScreeningSessionProvider({ children }: { children: React.ReactNo
       images,
       addImage,
       removeImage,
+      updateImage,
       enqueueImage,
     ],
   );

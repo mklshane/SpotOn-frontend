@@ -43,6 +43,7 @@ export function TextField({
   onBlur,
   onChangeText,
   onKeyPress,
+  multiline,
   ...rest
 }: TextFieldProps) {
   useLocale();
@@ -64,13 +65,15 @@ export function TextField({
       <View
         style={[
           styles.field,
+          multiline && styles.multilineField,
           { backgroundColor: fieldBackgroundColor ?? theme.elementBg, borderColor, borderWidth: 1.5 },
         ]}>
         <TextInput
           ref={inputRef}
           placeholderTextColor={theme.muted}
           secureTextEntry={hidden}
-          style={[styles.input, { color: theme.text }, style]}
+          style={[styles.input, multiline && styles.multilineInput, { color: theme.text }, style]}
+          multiline={multiline}
           onChangeText={(value) => {
             const transformedValue = transformInput?.(value) ?? value;
 
@@ -126,7 +129,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  multilineField: {
+    height: undefined,
+    minHeight: 120,
+    alignItems: 'stretch',
+    paddingVertical: Space.md,
+  },
   input: { flex: 1, ...Type.body, paddingVertical: 0 },
+  multilineInput: { minHeight: 96, textAlignVertical: 'top' },
   toggle: { paddingLeft: Space.sm },
   error: { marginTop: Space.xs },
 });

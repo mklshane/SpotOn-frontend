@@ -2,6 +2,10 @@ import type { IconName } from "@/components/ui/icon";
 import type { ClinicalImageId } from "@/data/learn-images";
 import type { PendingSourceId, SourceId } from "@/data/learn-sources";
 import { localizedCopy } from "../lib/i18n/core";
+import { QUESTION_SOURCE } from "../lib/triage/questions";
+import { TIER_SOURCE } from "../lib/triage/recommendations";
+import { TIER_ORDER, type TriageTier } from "../lib/triage/tps-core";
+import type { QuestionId } from "../lib/triage/types";
 
 /** Which of the five ABCDE signs a comparison diagram illustrates. */
 export type AbcdeSign =
@@ -45,6 +49,14 @@ export type ArticleBlock =
   | { kind: "bodyAreas"; heading?: string; intro?: string; areas: BodyArea[] }
   | { kind: "notice"; tone: "info" | "caution"; title?: string; text: string }
   | { kind: "subtypes"; heading?: string; intro?: string; items: Subtype[] }
+  | {
+      kind: "gallery";
+      heading?: string;
+      intro?: string;
+      items: GalleryItem[];
+      /** Quiet line under the grid, e.g. what the photos do and do not show. */
+      footnote?: string;
+    }
   | { kind: "sources"; sources: SourceId[]; pending?: PendingSourceId[] };
 
 /**
@@ -104,6 +116,13 @@ export type Subtype = {
   points: string[];
 };
 
+/**
+ * One photograph in a `gallery` block. Galleries exist to show range, the same
+ * condition on different skin or in different places, so every item is a real
+ * photo slot and its caption says what is actually in the frame.
+ */
+export type GalleryItem = { photo: ClinicalImageId; caption: string };
+
 export type Step = { title: string; detail: string };
 
 export type ListItem = { icon: IconName; title: string; detail: string };
@@ -125,6 +144,8 @@ export type Article = {
   /** One line used by list cards and search results. */
   summary: string;
   blocks: ArticleBlock[];
+  /** Topic ids offered under "Keep reading", so an article never dead-ends. */
+  related?: string[];
 };
 
 /**
@@ -153,8 +174,7 @@ type TopicBase = {
 
 export type Topic =
   | (TopicBase & { kind: "article"; article: Article })
-  | (TopicBase & { kind: "subtopics"; subtopics: Article[] })
-  | (TopicBase & { kind: "comingSoon" });
+  | (TopicBase & { kind: "subtopics"; subtopics: Article[] });
 
 export type LearnRecommendation = {
   title: string;
@@ -164,15 +184,22 @@ export type LearnRecommendation = {
 
 /**
  * Short, actionable tips that rotate by local calendar date. Each tip links
- * into the existing Philippines-specific UV protection article, keeping the
- * recommendation useful offline and avoiding a separate content flow.
+ * into the article it is drawn from, so it stays useful offline and every
+ * claim already sits beside its source. Sun-safety and skin-check tips
+ * alternate, so a week of tips covers more than one topic.
  */
-export const LEARN_RECOMMENDATIONS = [
+export const LEARN_RECOMMENDATIONS = localizedCopy([
   {
     title: "Protect easy-to-miss areas",
     summary:
       "Apply sunscreen to your ears, neck, hands, and feet before going outdoors.",
     topicId: "prevention",
+  },
+  {
+    title: "Check your skin in the same order",
+    summary:
+      "Go from scalp to soles the same way every time, so a new or changing spot is easier to notice.",
+    topicId: "self-check",
   },
   {
     title: "Reapply sunscreen outdoors",
@@ -181,10 +208,22 @@ export const LEARN_RECOMMENDATIONS = [
     topicId: "prevention",
   },
   {
+    title: "Look for the one that stands out",
+    summary:
+      "A spot that looks unlike your other moles is worth a closer look, even if it seems small.",
+    topicId: "warning-signs",
+  },
+  {
     title: "Cloudy days still need protection",
     summary:
       "UV rays can still reach your skin on cloudy or cool days, so keep protecting exposed skin.",
     topicId: "prevention",
+  },
+  {
+    title: "Change matters most",
+    summary:
+      "A spot that grows, darkens, or changes shape over weeks to months is worth showing a dermatologist.",
+    topicId: "warning-signs",
   },
   {
     title: "Plan around peak UV hours",
@@ -193,10 +232,22 @@ export const LEARN_RECOMMENDATIONS = [
     topicId: "prevention",
   },
   {
+    title: "Do not skip palms, soles, and nails",
+    summary:
+      "Skin cancer can appear where the sun rarely reaches, so include your hands, feet, and nails in every check.",
+    topicId: "self-check",
+  },
+  {
     title: "Make daily commutes sun-safe",
     summary:
       "Use sunscreen, a hat, or protective clothing for walks and rides, not only beach days.",
     topicId: "prevention",
+  },
+  {
+    title: "Keep a dated photo",
+    summary:
+      "Scan a spot you want to watch, so you can compare pictures months apart instead of relying on memory.",
+    topicId: "self-check",
   },
   {
     title: "Choose broad-spectrum protection",
@@ -205,12 +256,24 @@ export const LEARN_RECOMMENDATIONS = [
     topicId: "prevention",
   },
   {
+    title: "A sore that keeps reopening",
+    summary:
+      "A sore that heals, then reopens in the same place over several weeks, is worth having checked.",
+    topicId: "when-to-see-a-doctor",
+  },
+  {
     title: "Pair sunscreen with shade and clothing",
     summary:
       "Sunscreen works best alongside shade, protective clothing, a hat, and sunglasses.",
     topicId: "prevention",
   },
-] as const satisfies readonly LearnRecommendation[];
+  {
+    title: "Ask someone to check your back",
+    summary:
+      "Your back and scalp are hard to see alone. A trusted person or a phone camera covers the blind spots.",
+    topicId: "self-check",
+  },
+] as const satisfies readonly LearnRecommendation[]);
 
 export function getDailyLearnRecommendation(
   date = new Date(),
@@ -227,6 +290,38 @@ export function getDailyLearnRecommendation(
   return LEARN_RECOMMENDATIONS[index] ?? LEARN_RECOMMENDATIONS[0];
 }
 
+/** One icon per result level, for the result explainer's list of levels. */
+const TIER_ICON: Record<TriageTier, IconName> = {
+  low: "checkmark.seal.fill",
+  moderate: "clock.fill",
+  high: "exclamationmark.circle.fill",
+  critical: "exclamationmark.triangle.fill",
+};
+
+/**
+ * The longer explanation under each questionnaire item in the Learn article.
+ * Keyed by question id rather than position so reordering the scan's
+ * questions cannot attach a detail to the wrong question.
+ */
+const QUESTION_DETAILS: Record<QuestionId, string> = {
+  evolution:
+    "Look at whether the spot has become larger or smaller, changed from its original shape, or developed a different color. Changes may include becoming darker, lighter, redder, or developing more than one color.",
+  bleeding_nonhealing:
+    "Think about whether the spot repeatedly bleeds, forms a crust or scab, or remains open, irritated, or wounded without properly healing for more than three weeks.",
+  irregular_border:
+    "Look closely at the outer edge of the spot. Check whether the border is smooth and clearly defined, or whether it appears uneven, jagged, irregular, or difficult to distinguish from the surrounding skin.",
+  spontaneous_bleeding:
+    "Consider whether you have noticed the spot bleeding without an obvious cause. This means the area was not recently scratched, rubbed, cut, or injured before the bleeding occurred.",
+  rough_scaly:
+    "If it is safe to touch, notice the texture of the spot. Check whether it feels unusually rough, dry, scaly, or hard, or whether a crust repeatedly forms on the surface after coming off.",
+  larger_7mm:
+    "Use a pencil eraser or a small pea as a general size reference. If the spot appears wider than approximately 7 millimeters, answer Yes. The measurement does not need to be exact. The ABCDE rule mentions about 6 mm instead; this question follows the Glasgow 7-Point Checklist, which uses 7 mm.",
+  ugly_duckling:
+    "Compare this spot with your other moles or skin spots. Look for noticeable differences in size, shape, color, or overall appearance. Consider whether this particular spot stands out from the others.",
+  persistent_2mo:
+    "Think about when you first noticed the spot. Check whether it has remained present for more than two months without becoming smaller, fading, or disappearing.",
+};
+
 export const LEARN_TOPICS: Topic[] = localizedCopy([
   {
     id: "what-is-skin-cancer",
@@ -238,6 +333,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "what-is-skin-cancer",
+      related: ["types-of-skin-cancer", "warning-signs", "risk-factors"],
       title: "What is Skin Cancer",
       icon: "cross.case.fill",
       summary:
@@ -278,6 +374,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     subtopics: [
       {
         id: "bcc",
+        related: ["warning-signs", "self-check", "when-to-see-a-doctor"],
         title: "Basal Cell Carcinoma",
         icon: "cross.case.fill",
         summary:
@@ -398,6 +495,16 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
             ],
           },
           {
+            kind: "gallery",
+            heading: "On brown skin",
+            intro:
+              "Basal cell carcinoma on Fitzpatrick type V skin. On darker skin it more often carries brown, black, or grey colour, so it can be mistaken for a mole.",
+            items: [
+              { photo: "bcc-brown-pigmented", caption: "Pigmented, skin type V" },
+              { photo: "bcc-brown-bump", caption: "Shiny bump, skin type V" },
+            ],
+          },
+          {
             kind: "bodyAreas",
             heading: "Where it usually appears",
             intro: "Almost always on skin that gets regular sun.",
@@ -426,6 +533,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
       },
       {
         id: "scc",
+        related: ["warning-signs", "self-check", "when-to-see-a-doctor"],
         title: "Squamous Cell Carcinoma",
         icon: "cross.case.fill",
         summary:
@@ -530,6 +638,16 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
             ],
           },
           {
+            kind: "gallery",
+            heading: "On brown skin",
+            intro:
+              "Squamous cell carcinoma on Fitzpatrick type IV and V skin.",
+            items: [
+              { photo: "scc-brown-crusted", caption: "Crusted, skin type IV" },
+              { photo: "scc-brown-plaque", caption: "Scaly patch, skin type V" },
+            ],
+          },
+          {
             kind: "bodyAreas",
             heading: "Where it usually appears",
             intro: "On the areas that take the most daily sun.",
@@ -559,6 +677,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
       },
       {
         id: "melanoma",
+        related: ["warning-signs", "self-check", "when-to-see-a-doctor"],
         title: "Melanoma",
         icon: "cross.case.fill",
         summary:
@@ -683,6 +802,18 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
             ],
           },
           {
+            kind: "gallery",
+            heading: "On brown skin, and where the sun rarely reaches",
+            intro:
+              "Melanoma on Fitzpatrick type IV skin, and on the sole of the foot, where acral melanoma appears without being linked to sun exposure.",
+            items: [
+              { photo: "melanoma-brown-flat", caption: "Flat and uneven, skin type IV" },
+              { photo: "melanoma-brown-dark", caption: "Dark and ragged, skin type IV" },
+              { photo: "acral-sole-small", caption: "On the sole of the foot" },
+              { photo: "acral-sole-large", caption: "Acral lentiginous, across the sole" },
+            ],
+          },
+          {
             kind: "bodyAreas",
             heading: "Where it usually appears",
             intro:
@@ -722,6 +853,227 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     ],
   },
   {
+    id: "harmless-spots",
+    title: "Spots That Are Usually Harmless",
+    subtitle: "Common non-cancerous growths, and how to tell them apart.",
+    icon: "checkmark.seal.fill",
+    category: "basics",
+    kind: "article",
+    article: {
+      id: "harmless-spots",
+      related: ["understanding-your-result", "warning-signs", "self-check"],
+      title: "Spots That Are Usually Harmless",
+      icon: "checkmark.seal.fill",
+      summary:
+        "What common harmless spots look like, and when one is still worth checking.",
+      // The look-alikes a Benign result usually means. Photographed ones are
+      // cards; the two without a licensable photograph stay as text rather
+      // than borrowing an image of something else.
+      blocks: [
+        {
+          kind: "prose",
+          paragraphs: [
+            "Most spots on the skin are not cancer. Knowing what common harmless growths look like can make a result easier to understand, but only a dermatologist can say for certain what a spot is.",
+          ],
+        },
+        {
+          kind: "subtypes",
+          heading: "Common harmless spots",
+          intro: "Tap one to see what it may look like.",
+          items: [
+            {
+              id: "common-mole",
+              name: "Common mole",
+              summary: "Most adults have several, and the common type is harmless.",
+              photo: "benign-mole",
+              appearance:
+                "A small brown spot, usually one even colour with a smooth, regular edge.",
+              points: [
+                "Almost every adult has some moles.",
+                "Having 50 or more moles raises the risk of melanoma, so it is worth checking them regularly.",
+                "A new mole, or one that changes, is worth showing a dermatologist.",
+              ],
+            },
+            {
+              id: "seborrheic-keratosis",
+              name: "Seborrheic keratosis",
+              summary: "A waxy, stuck-on growth that becomes common with age.",
+              photo: "benign-seborrheic-keratosis",
+              appearance:
+                "Can look like a dab of brown candle wax, or be warty and thick. Most are tan or brown, but they range from white to black.",
+              location:
+                "Almost anywhere except the palms and soles, most often the chest, back, head, or neck.",
+              points: [
+                "Harmless and not contagious.",
+                "Most common in middle-aged and older adults, who often have several.",
+                "It can look like skin cancer, so have a dermatologist check one you are unsure about.",
+              ],
+            },
+            {
+              id: "cherry-angioma",
+              name: "Cherry angioma",
+              summary: "A small, bright red dot made of tiny blood vessels.",
+              photo: "benign-cherry-angioma",
+              appearance:
+                "Bright cherry red, from pinhead size to about 6 mm across, either smooth or slightly raised.",
+              location:
+                "Usually the trunk, though they can appear almost anywhere.",
+              points: [
+                "Most common after age 30.",
+                "Usually harmless, though it can bleed if it is injured.",
+                "Worth showing a doctor if its appearance changes.",
+              ],
+            },
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "Other common harmless spots",
+          items: [
+            {
+              icon: "circle.grid.2x2.fill",
+              title: "Dermatofibroma",
+              detail:
+                "A firm bump, most often on the lower legs, that dimples inward when you pinch the skin around it. It is pink to light brown on lighter skin, and dark brown to black on darker skin.",
+            },
+            {
+              icon: "sun.max.fill",
+              title: "Age spots (solar lentigines)",
+              detail:
+                "Flat tan, brown, or dark spots on skin that gets a lot of sun, such as the backs of the hands, the forearms, and the face. In Asian skin they most often appear on the face. They can resemble early melanoma, so a dermatologist may want to check one that looks different from the rest.",
+            },
+          ],
+        },
+        {
+          kind: "notice",
+          tone: "caution",
+          title: "Harmless spots can still change",
+          text: "A benign result does not mean a spot will never change. If any spot grows, changes colour or shape, bleeds, or itches, have it checked, whatever it looked like before.",
+        },
+        {
+          kind: "sources",
+          sources: [
+            "aadMoles",
+            "aadAbcde",
+            "aadSeborrheicKeratosis",
+            "medlineCherryAngioma",
+            "dermnetDermatofibroma",
+            "dermnetSolarLentigo",
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: "actinic-keratosis",
+    title: "Actinic Keratosis (Precancer)",
+    subtitle: "A rough, sun-damaged patch that can turn into skin cancer.",
+    icon: "exclamationmark.circle.fill",
+    category: "warning-signs",
+    kind: "article",
+    article: {
+      id: "actinic-keratosis",
+      related: ["types-of-skin-cancer", "prevention", "understanding-your-result"],
+      title: "Actinic Keratosis (Precancer)",
+      icon: "exclamationmark.circle.fill",
+      summary:
+        "What a precancerous patch looks and feels like, and why it is worth treating.",
+      blocks: [
+        {
+          kind: "prose",
+          paragraphs: [
+            "An actinic keratosis, or AK, is a precancerous growth caused by the sun or indoor tanning. It is not cancer, but some AKs turn into squamous cell carcinoma if they are left untreated.",
+          ],
+        },
+        {
+          kind: "visual",
+          heading: "What it may look like",
+          photo: "ak-example",
+          traits: [
+            {
+              title: "Rough, like sandpaper",
+              detail: "You can often feel one before you can see it.",
+            },
+            {
+              title: "Many possible colours",
+              detail:
+                "Usually red, pink, or skin coloured, but it can also be grey, yellow, brown, tan, or white.",
+            },
+            {
+              title: "Easy to dismiss",
+              detail:
+                "It can look like a new age spot, a pimple, or a patch of irritated skin.",
+            },
+          ],
+        },
+        {
+          kind: "gallery",
+          heading: "Other forms it can take",
+          intro:
+            "Actinic keratosis on Fitzpatrick type IV and V skin.",
+          items: [
+            { photo: "ak-thick", caption: "Thick, crusted, skin type IV" },
+            { photo: "ak-raised", caption: "Raised and scaly, skin type V" },
+          ],
+        },
+        {
+          kind: "bodyAreas",
+          heading: "Where it usually appears",
+          intro: "On the skin that has had the most sun over the years.",
+          areas: [
+            { region: "head / face", label: "Face, ears, and lips" },
+            { region: "back of head", label: "Balding scalp" },
+            { region: "neck", label: "Neck" },
+            { region: "hand", label: "Hands" },
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "Signs to have it checked soon",
+          items: [
+            {
+              icon: "bandage.fill",
+              title: "It itches, stings, or bleeds",
+              detail:
+                "An AK can burn, feel tender, catch on clothing, or bleed.",
+            },
+            {
+              icon: "exclamationmark.triangle.fill",
+              title: "It grows into a horn shape",
+              detail:
+                "A horn-shaped growth can signal a higher risk of squamous cell carcinoma, so a dermatologist should examine it promptly.",
+            },
+            {
+              icon: "drop.fill",
+              title: "A lip that stays dry and scaly",
+              detail:
+                "A dry, scaly lip that never heals, white scaly patches, or a lip that loses its colour can be a precancerous change.",
+            },
+          ],
+        },
+        {
+          kind: "prose",
+          heading: "How it relates to your SpotOn result",
+          paragraphs: [
+            "SpotOn's Other pattern covers spots like this one, which do not match the three common cancer types but may still need a dermatologist.",
+          ],
+        },
+        {
+          kind: "notice",
+          tone: "info",
+          title: "Worth remembering",
+          text: "Because some AKs become squamous cell carcinoma, a rough patch on sun-damaged skin is worth showing a dermatologist rather than waiting to see whether it goes away.",
+        },
+        {
+          kind: "sources",
+          sources: ["aadActinicKeratosis", "aadActinicKeratosisSymptoms"],
+        },
+      ],
+    },
+  },
+  {
     id: "warning-signs",
     title: "Warning Signs (ABCDE Rule)",
     subtitle: "A simple checklist for spotting a mole that needs attention.",
@@ -730,6 +1082,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "warning-signs",
+      related: ["self-check", "types-of-skin-cancer", "when-to-see-a-doctor"],
       title: "Warning Signs (ABCDE Rule)",
       icon: "exclamationmark.triangle.fill",
       summary: "Five things to look for in a mole, shown side by side.",
@@ -855,6 +1208,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "self-check",
+      related: ["warning-signs", "questionnaire", "when-to-see-a-doctor"],
       title: "How to Check Your Skin",
       icon: "magnifyingglass",
       summary:
@@ -913,6 +1267,15 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           ],
         },
         {
+          kind: "gallery",
+          items: [
+            {
+              photo: "life-back-check",
+              caption: "Someone else can see the skin on your back",
+            },
+          ],
+        },
+        {
           kind: "notice",
           tone: "info",
           title: "Ask for a second pair of eyes",
@@ -935,6 +1298,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "risk-factors",
+      related: ["prevention", "self-check"],
       title: "Risk Factors",
       icon: "figure.stand",
       summary:
@@ -980,6 +1344,22 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           ],
         },
         {
+          kind: "gallery",
+          heading: "Sun at work",
+          intro:
+            "Long hours outdoors, such as farm work, fishing, or driving, add up to a lot of sun over the years.",
+          items: [
+            {
+              photo: "life-rice-farmers",
+              caption: "Rice farmers in Laguna",
+            },
+            {
+              photo: "life-corn-farmers",
+              caption: "A corn harvest in the Philippines",
+            },
+          ],
+        },
+        {
           kind: "prose",
           heading: "What to do with this",
           paragraphs: [
@@ -997,6 +1377,130 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     },
   },
   {
+    id: "skin-of-color",
+    title: "Skin Cancer on Brown Skin",
+    subtitle: "Where to look, and why it is often found late.",
+    icon: "person.2.fill",
+    category: "risk",
+    kind: "article",
+    article: {
+      id: "skin-of-color",
+      related: ["self-check", "warning-signs", "types-of-skin-cancer"],
+      title: "Skin Cancer on Brown Skin",
+      icon: "person.2.fill",
+      summary:
+        "How skin cancer can look different on darker skin, and the places to check.",
+      blocks: [
+        {
+          kind: "prose",
+          paragraphs: [
+            "Skin cancer is less common on darker skin, but when it does develop it is often advanced by the time it is diagnosed. Found early, melanoma is highly treatable, so knowing where and how to look matters.",
+          ],
+        },
+        {
+          kind: "prose",
+          heading: "It can look different",
+          paragraphs: [
+            "On darker skin, skin cancer can look different from the examples most people have seen, and it often appears where the sun rarely reaches. Sun-exposed areas such as the face and neck can still be affected.",
+          ],
+        },
+        {
+          kind: "bodyAreas",
+          heading: "Places to look closely",
+          intro: "These areas get little sun, and they are easy to skip.",
+          areas: [
+            { region: "hand", label: "Palms, fingers, and nails" },
+            { region: "foot", label: "Soles, toes, and toenails" },
+            { region: "head / face", label: "Lips and inside the mouth" },
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "Signs to watch for",
+          items: [
+            {
+              icon: "ruler.fill",
+              title: "A dark line in a nail",
+              detail:
+                "A brown or black streak along a nail can look like a bruise. Unlike a bruise, it does not grow out with the nail.",
+            },
+            {
+              icon: "bandage.fill",
+              title: "A spot near a nail that will not heal",
+              detail:
+                "A sore or spot under or around a nail that does not heal is worth having checked.",
+            },
+            {
+              icon: "arrow.triangle.2.circlepath",
+              title: "A patch that changes over time",
+              detail:
+                "A growth or patch that grows or changes, wherever it is on the body.",
+            },
+            {
+              icon: "exclamationmark.triangle.fill",
+              title: "Changes in scars or old injuries",
+              detail:
+                "Skin cancer is more likely to develop in scars and in skin that was injured or treated with radiation, so watch these areas too.",
+            },
+          ],
+        },
+        {
+          kind: "gallery",
+          heading: "What these signs can look like",
+          intro:
+            "Real photographs from the places this article asks you to check.",
+          items: [
+            { photo: "nail-streak", caption: "A dark line along a nail" },
+            { photo: "nail-melanoma", caption: "Advanced melanoma of the thumbnail" },
+            { photo: "acral-sole-small", caption: "Melanoma on the sole" },
+            { photo: "acral-sole-large", caption: "Large acral melanoma on the sole" },
+          ],
+          footnote:
+            "The source of the nail-line photo does not say whether it was cancer. Only a dermatologist can tell, so have any new or changing dark line checked.",
+        },
+        {
+          kind: "steps",
+          heading: "Checking darker skin",
+          intro: "Add these to your usual self-check.",
+          steps: [
+            {
+              title: "Use two mirrors",
+              detail:
+                "A full-length mirror and a handheld mirror, in a private space with good light.",
+            },
+            {
+              title: "Check your hands and feet closely",
+              detail:
+                "Look at your palms, your soles, and between your fingers and toes.",
+            },
+            {
+              title: "Look at every nail",
+              detail:
+                "Fingernails and toenails, for any dark line or spot that does not heal.",
+            },
+            {
+              title: "Check your lips and mouth",
+              detail: "Look at your lips and the inside of your mouth.",
+            },
+            {
+              title: "Book a dermatologist if something looks off",
+              detail:
+                "Mention exactly what you found and where, so it is not missed during the visit.",
+            },
+          ],
+        },
+        {
+          kind: "notice",
+          tone: "caution",
+          title: "Feet are easy to miss",
+          text: "Many people never check their feet, so skin cancer there is often found only after it has spread. A quick look at your soles and toes during each self-check closes that gap.",
+        },
+        { kind: "sources", sources: ["aadSkinOfColor", "aadSelfExam"] },
+      ],
+    },
+  },
+  {
     id: "prevention",
     title: "UV Protection in the Philippines",
     subtitle: "Sun safety tips for our year-round tropical climate.",
@@ -1005,6 +1509,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "prevention",
+      related: ["risk-factors", "self-check"],
       title: "UV Protection in the Philippines",
       icon: "sun.max.fill",
       summary:
@@ -1061,6 +1566,32 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           ],
         },
         {
+          kind: "gallery",
+          heading: "Sun protection, day to day",
+          intro:
+            "Ordinary habits that add up over a sunny week.",
+          items: [
+            {
+              photo: "life-umbrella-street",
+              caption: "A payong on an ordinary errand",
+            },
+            {
+              photo: "life-sun-hat",
+              caption: "A wide brim shades the face and neck",
+            },
+            {
+              photo: "life-sunscreen-face",
+              caption: "Sunscreen on the face before heading out",
+            },
+            {
+              photo: "life-sunscreen-label",
+              caption: "Look for Broad Spectrum on the label",
+            },
+          ],
+          footnote:
+            "The example label shows SPF 15. For daily outdoor use, the advice above is broad-spectrum SPF 30 or higher.",
+        },
+        {
           kind: "sources",
           sources: ["whoUvIndex", "nciPrevention", "aadOverview"],
         },
@@ -1076,6 +1607,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "when-to-see-a-doctor",
+      related: ["warning-signs", "questionnaire"],
       title: "When to See a Doctor",
       icon: "stethoscope",
       summary:
@@ -1138,6 +1670,20 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           ],
         },
         {
+          kind: "gallery",
+          heading: "At the clinic",
+          items: [
+            {
+              photo: "life-derm-screening",
+              caption: "A dermatologist looking at a spot up close",
+            },
+            {
+              photo: "life-dermatoscope",
+              caption: "A dermatoscope gives a magnified view of the skin",
+            },
+          ],
+        },
+        {
           kind: "prose",
           heading: "Finding a clinic",
           paragraphs: [
@@ -1155,6 +1701,168 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     },
   },
 
+  {
+    id: "understanding-your-result",
+    title: "Understanding Your SpotOn Result",
+    subtitle: "What your result means, and what it cannot tell you.",
+    icon: "list.bullet.clipboard.fill",
+    category: "care",
+    kind: "article",
+    article: {
+      id: "understanding-your-result",
+      related: ["harmless-spots", "actinic-keratosis", "when-to-see-a-doctor"],
+      title: "Understanding Your SpotOn Result",
+      icon: "list.bullet.clipboard.fill",
+      summary:
+        "How a result is made, what each level means, and its limits.",
+      blocks: [
+        {
+          kind: "prose",
+          paragraphs: [
+            "SpotOn looks at a photo of your spot and your answers to eight short questions, then suggests how soon to have it checked. It is a screening aid, not a diagnosis: it can point you toward a doctor, but it cannot tell you what a spot is.",
+          ],
+        },
+        {
+          kind: "steps",
+          heading: "How a result is made",
+          steps: [
+            {
+              title: "Photo check",
+              detail:
+                "SpotOn first checks that the photo is clear and shows skin. If it cannot see the spot well, it asks for a clearer photo.",
+            },
+            {
+              title: "Pattern match",
+              detail:
+                "The photo is compared with patterns learned from many images of skin spots, and matched to the closest of five patterns.",
+            },
+            {
+              title: "Your answers",
+              detail:
+                "Your answers to the eight questions, based on the Glasgow 7-Point Checklist, can raise how soon a check is recommended. On their own they never lead to the most urgent level.",
+            },
+            {
+              title: "One recommendation",
+              detail:
+                "Both are combined into one of four levels, each with a suggested time to see a doctor.",
+            },
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "The five patterns",
+          intro:
+            "A match means the spot shares features with a pattern, not that it is that condition.",
+          items: [
+            {
+              icon: "exclamationmark.triangle.fill",
+              title: "Melanoma",
+              detail: "The most serious type of skin cancer.",
+            },
+            {
+              icon: "cross.case.fill",
+              title: "Squamous Cell Carcinoma",
+              detail:
+                "A common skin cancer that often looks rough, scaly, or crusted.",
+            },
+            {
+              icon: "cross.case.fill",
+              title: "Basal Cell Carcinoma",
+              detail:
+                "The most common skin cancer, often a pearly bump or a sore that heals and returns.",
+            },
+            {
+              icon: "questionmark.circle.fill",
+              title: "Other (unusual pattern)",
+              detail:
+                "A spot that does not clearly match the common cancer types. It may be a precancer such as an actinic keratosis, or another skin condition.",
+            },
+            {
+              icon: "checkmark.seal.fill",
+              title: "Benign",
+              detail:
+                "A pattern that looks non-cancerous, like an ordinary mole or a seborrheic keratosis.",
+            },
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "The four levels",
+          intro: "This is the advice the result screen gives for each level.",
+          // Word for word from the result screen's own copy, so the two can
+          // never disagree about what a level asks you to do.
+          items: TIER_ORDER.map((tier) => ({
+            icon: TIER_ICON[tier],
+            title: TIER_SOURCE[tier].name,
+            detail: TIER_SOURCE[tier].recommendation,
+          })),
+        },
+        {
+          kind: "prose",
+          heading: "What the percentage means",
+          paragraphs: [
+            "The percentage shows how closely your photo matched the pattern SpotOn names. It is not the chance that the spot is or is not cancer, and a high percentage is not a diagnosis.",
+          ],
+        },
+        {
+          kind: "list",
+          variant: "grouped",
+          heading: "When SpotOn plays it safe",
+          items: [
+            {
+              icon: "camera.viewfinder",
+              title: "Unclear photos",
+              detail:
+                "If the photos could not be read clearly enough for a confident assessment, SpotOn recommends a check-up as a precaution. This reflects photo uncertainty, not a detected risk.",
+            },
+            {
+              icon: "chart.bar.fill",
+              title: "Split results",
+              detail:
+                "If the closest match is not a cancer type but a meaningful share of the assessment still points toward one, SpotOn raises the recommendation rather than relying on the closest match alone.",
+            },
+          ],
+        },
+        {
+          kind: "notice",
+          tone: "caution",
+          title: "A low result is not an all-clear",
+          text: "SpotOn can miss skin cancer, especially in unclear photos. If a spot changes, bleeds, itches, or simply worries you, see a dermatologist whatever your last result said.",
+        },
+        {
+          kind: "list",
+          variant: "tips",
+          heading: "Getting a clearer result",
+          items: [
+            {
+              icon: "sun.max.fill",
+              title: "Use good, even light",
+              detail: "Daylight or a bright room, without harsh shadows across the spot.",
+            },
+            {
+              icon: "plus.viewfinder",
+              title: "Get close and hold steady",
+              detail: "Let the spot fill most of the frame, and wait for the camera to focus.",
+            },
+            {
+              icon: "eye.slash",
+              title: "Keep the spot uncovered",
+              detail: "Move hair, makeup, or bandages away from it first.",
+            },
+            {
+              icon: "clock.arrow.circlepath",
+              title: "Scan again over time",
+              detail:
+                "A dated series of photos shows change far better than any single result.",
+            },
+          ],
+        },
+        { kind: "sources", sources: ["glasgow7pcl"] },
+      ],
+    },
+  },
   //Questionnaire
   {
     id: "questionnaire",
@@ -1165,6 +1873,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
     kind: "article",
     article: {
       id: "questionnaire",
+      related: ["warning-signs", "self-check"],
       title: "SpotOn Questionnaire",
       icon: "doc.text.fill",
       summary:
@@ -1183,64 +1892,13 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           heading: "The 8 questions",
           intro:
             "Work through each one and see if it applies to the spot you're checking.",
-          items: [
-            {
-              icon: "arrow.triangle.2.circlepath",
-              title:
-                "Has this spot changed in size, shape, or color over the past few weeks or months?",
-              detail:
-                "Look at whether the spot has become larger or smaller, changed from its original shape, or developed a different color. Changes may include becoming darker, lighter, redder, or developing more than one color.",
-            },
-            {
-              icon: "bandage.fill",
-              title:
-                "Has this spot been bleeding, crusting, scabbing, or failing to heal for more than three weeks?",
-              detail:
-                "Think about whether the spot repeatedly bleeds, forms a crust or scab, or remains open, irritated, or wounded without properly healing for more than three weeks.",
-            },
-            {
-              icon: "circle.dashed",
-              title:
-                "Does this spot have an uneven, ragged, or blurry edge rather than a smooth, well-defined border?",
-              detail:
-                "Look closely at the outer edge of the spot. Check whether the border is smooth and clearly defined, or whether it appears uneven, jagged, irregular, or difficult to distinguish from the surrounding skin.",
-            },
-            {
-              icon: "drop.fill",
-              title:
-                "Does this spot bleed on its own, without being scratched, rubbed, or injured?",
-              detail:
-                "Consider whether you have noticed the spot bleeding without an obvious cause. This means the area was not recently scratched, rubbed, cut, or injured before the bleeding occurred.",
-            },
-            {
-              icon: "circle.grid.3x3.fill",
-              title:
-                "Does this spot feel rough, scaly, or hard to the touch, or does it have a crusty surface that keeps coming back?",
-              detail:
-                "If it is safe to touch, notice the texture of the spot. Check whether it feels unusually rough, dry, scaly, or hard, or whether a crust repeatedly forms on the surface after coming off.",
-            },
-            {
-              icon: "ruler.fill",
-              title:
-                "Is this spot wider than a pencil eraser — roughly 7 millimeters, or about the size of a small pea?",
-              detail:
-                "Use a pencil eraser or a small pea as a general size reference. If the spot appears wider than approximately 7 millimeters, answer Yes. The measurement does not need to be exact.",
-            },
-            {
-              icon: "square.grid.2x2.fill",
-              title:
-                "Does this spot look clearly different from all the other moles or spots on your body?",
-              detail:
-                "Compare this spot with your other moles or skin spots. Look for noticeable differences in size, shape, color, or overall appearance. Consider whether this particular spot stands out from the others.",
-            },
-            {
-              icon: "calendar.badge.clock",
-              title:
-                "Has this spot been present for more than two months without getting any smaller or going away?",
-              detail:
-                "Think about when you first noticed the spot. Check whether it has remained present for more than two months without becoming smaller, fading, or disappearing.",
-            },
-          ],
+          // Titles and icons come from the scan's own question set, so this
+          // article always shows exactly what the app asks.
+          items: QUESTION_SOURCE.map((q) => ({
+            icon: q.icon,
+            title: q.question,
+            detail: QUESTION_DETAILS[q.id],
+          })),
         },
         {
           kind: "notice",
@@ -1248,6 +1906,7 @@ export const LEARN_TOPICS: Topic[] = localizedCopy([
           title: "Important to know",
           text: "This checklist does not diagnose anything on its own, and no single answer means a spot is dangerous. If several of these apply, or you're simply unsure, it's worth having it looked at professionally.",
         },
+        { kind: "sources", sources: ["glasgow7pcl", "aadAbcde"] },
       ],
     },
   },
@@ -1264,9 +1923,7 @@ export function getArticle(
   const topic = getTopic(topicId);
   if (!topic) return undefined;
   if (topic.kind === "article") return topic.article;
-  if (topic.kind === "subtopics")
-    return topic.subtopics.find((a) => a.id === articleId);
-  return undefined;
+  return topic.subtopics.find((a) => a.id === articleId);
 }
 
 export function getCategoryLabel(id: LearnCategoryId): string {
@@ -1345,6 +2002,11 @@ function blockWords(block: ArticleBlock): number {
           0,
         )
       );
+    case "gallery":
+      return (
+        countWords(block.heading, block.intro, block.footnote) +
+        block.items.reduce((total, item) => total + countWords(item.caption), 0)
+      );
     case "sources":
       // A reference list is scanned, not read. Counting it would inflate every
       // article's estimate by a minute for text nobody reads start to finish.
@@ -1368,14 +2030,11 @@ export function getArticleReadMinutes(article: Article): number {
   return Math.max(1, Math.ceil(words / WORDS_PER_MINUTE));
 }
 
-/** Combined reading time for a topic, or `undefined` when it has no article yet. */
-export function getTopicReadMinutes(topic: Topic): number | undefined {
+/** Combined reading time for a topic, across all of its articles. */
+export function getTopicReadMinutes(topic: Topic): number {
   if (topic.kind === "article") return getArticleReadMinutes(topic.article);
-  if (topic.kind === "subtopics") {
-    return topic.subtopics.reduce(
-      (total, article) => total + getArticleReadMinutes(article),
-      0,
-    );
-  }
-  return undefined;
+  return topic.subtopics.reduce(
+    (total, article) => total + getArticleReadMinutes(article),
+    0,
+  );
 }

@@ -154,6 +154,14 @@ const MULTI = {
 
 // ---------------------------------------------------------------- cases
 
+// Combined malignant result: MEL .602 / BCC .381 names both and reports both shares.
+const combinedRecord = (() => {
+  const r = record({ confidence: 0.602, tier: 'high', tps: 4.15 });
+  r.classification.probs = { BCC: 0.381, BENIGN: 0.007, MEL: 0.602, OTHER: 0.005, SCC: 0.005 };
+  r.triage = { ...r.triage, secondClass: 'BCC', secondConfidence: 0.381 };
+  return r;
+})();
+
 const CASES = [
   { name: 'critical', model: buildReportModel(record(), PROFILE), assets: PHOTO },
   {
@@ -242,6 +250,7 @@ const CASES = [
     })(),
     assets: PHOTO,
   },
+  { name: 'combined-mel-bcc', model: buildReportModel(combinedRecord, PROFILE), assets: PHOTO },
 ];
 
 /* -------------------------------------------------- one-page budget
@@ -333,13 +342,22 @@ for (const c of CASES) {
     );
 
     const gatedHtml = buildReportHtml(
-      buildReportModel(record({ tier: 'moderate', malignantGateApplied: true }), PROFILE),
+      buildReportModel(record({ topClass: 'BENIGN', tier: 'moderate', malignantGateApplied: true }), PROFILE),
       PHOTO,
     );
     check('gated report prints the caveat', gatedHtml.includes('Note on this assessment:'));
     check(
       'gated caveat explains the closest match was not a cancer type',
       gatedHtml.includes('closest single match'),
+    );
+    // A malignant argmax raised by the gate must not claim the closest match "was not a cancer type".
+    const gatedMalignant = buildReportHtml(
+      buildReportModel(record({ topClass: 'MEL', tier: 'moderate', malignantGateApplied: true }), PROFILE),
+      PHOTO,
+    );
+    check(
+      'gated malignant-top caveat does not deny a cancer-type match',
+      !gatedMalignant.includes('was not a cancer type') && gatedMalignant.includes('pattern doctors prefer to examine'),
     );
 
     // The floor is the whole explanation when both fire - the gate's reasoning about spread-out
@@ -422,6 +440,16 @@ for (const c of CASES) {
   check('classification reads "Melanoma (MEL)"', html.includes('Melanoma (MEL)'));
   check('confidence carries one decimal', html.includes('87.4%'));
   check('date/time in PHT', html.includes('May 13, 2026') && html.includes('09:42 AM PHT'));
+}
+
+// Combined malignant result names both classes, higher probability first, with both codes
+{
+  const html = buildReportHtml(buildReportModel(combinedRecord, PROFILE), PHOTO);
+  check('combined reads "Melanoma or Basal Cell Carcinoma (MEL/BCC)"',
+    html.includes('Melanoma or Basal Cell Carcinoma (MEL/BCC)'));
+  check('combined reports both shares', html.includes('60.2% / 38.1%'));
+  const single = buildReportHtml(CASES[0].model, PHOTO);
+  check('single result is unchanged by the combined path', !single.includes(' or ') || single.includes('Melanoma (MEL)'));
 }
 
 // Escaping

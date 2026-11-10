@@ -1,5 +1,6 @@
 import { t, useLocale } from '@/lib/i18n';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useRef } from 'react';
+import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Radius, Space } from '@/constants/theme';
@@ -11,6 +12,8 @@ import { Icon, type IconName } from './icon';
 export type ActionSheetOption = {
   key: string;
   label: string;
+  /** A second line under the label, for choices that need a word of explanation. */
+  description?: string;
   icon?: IconName;
   destructive?: boolean;
   onPress: () => void;
@@ -25,15 +28,30 @@ export type ActionSheetProps = {
 
 /**
  * Themed bottom action sheet (e.g. "Choose image source"). Mirrors the Modal +
- * backdrop pattern used by `DateField`. Tapping an option fires its handler then closes.
+ * backdrop pattern used by `DateField`. Tapping an option closes the sheet, then fires its handler.
+ *
+ * On iOS the handler waits for the Modal's `onDismiss`: presenting a native controller (e.g. the
+ * photo library picker) while this Modal is still fading out fails silently - the picker never opens.
  */
 export function ActionSheet({ visible, title, options, onClose }: ActionSheetProps) {
   useLocale();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const pending = useRef<(() => void) | null>(null);
+
+  function runPending() {
+    const fn = pending.current;
+    pending.current = null;
+    fn?.();
+  }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      onDismiss={runPending}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         {/* Stop propagation so taps inside the sheet don't dismiss it. */}
         <Pressable
@@ -52,8 +70,10 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
                 key={opt.key}
                 accessibilityRole="button"
                 onPress={() => {
+                  pending.current = opt.onPress;
                   onClose();
-                  opt.onPress();
+                  // onDismiss is iOS-only; elsewhere there is no presentation conflict to wait out.
+                  if (Platform.OS !== 'ios') runPending();
                 }}
                 style={({ pressed }) => [
                   styles.row,
@@ -67,11 +87,18 @@ export function ActionSheet({ visible, title, options, onClose }: ActionSheetPro
                     tintColor={opt.destructive ? theme.riskCritical : theme.brand}
                   />
                 ) : null}
-                <ThemedText
-                  type="headline"
-                  themeColor={opt.destructive ? 'riskCritical' : 'text'}>
-                  {opt.label}
-                </ThemedText>
+                <View style={styles.rowText}>
+                  <ThemedText
+                    type="headline"
+                    themeColor={opt.destructive ? 'riskCritical' : 'text'}>
+                    {opt.label}
+                  </ThemedText>
+                  {opt.description ? (
+                    <ThemedText type="footnote" themeColor="textSecondary">
+                      {opt.description}
+                    </ThemedText>
+                  ) : null}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -105,10 +132,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    height: 58,
+    minHeight: 58,
     paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
     borderRadius: Radius.md,
   },
+  rowText: { flex: 1, gap: 2 },
   cancel: { height: 54, alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.6 },
 });

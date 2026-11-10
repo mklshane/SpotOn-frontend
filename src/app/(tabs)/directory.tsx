@@ -1,6 +1,6 @@
 import { t, useLocale } from '@/lib/i18n';
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Platform, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -9,7 +9,7 @@ import {
   DirectorySegments,
   type DirectorySegment,
 } from "@/components/directory/DirectorySegments";
-import { DoctorsView } from "@/components/directory/DoctorsView";
+import { DoctorsView, isDoctorLinkFilter } from "@/components/directory/DoctorsView";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
 import { Entrance, EntranceProvider } from "@/components/ui/entrance";
@@ -18,7 +18,11 @@ import { Radius, Space } from "@/constants/theme";
 import { needsInitialSync, needsReconcile, runSync } from "@/data/sync";
 import { useConnectivity } from "@/hooks/use-connectivity";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useLocation } from "@/hooks/use-location";
+import { isConcern } from "@/lib/concerns";
+import { flushPendingReports } from "@/lib/directory-reports";
 import { useTheme } from "@/hooks/use-theme";
+import { TourTarget } from "@/lib/product-tour";
 
 export default function DirectoryScreen() {
   useLocale();
@@ -26,15 +30,25 @@ export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
   const { isOnline } = useConnectivity();
 
-  const params = useLocalSearchParams<{ segment?: string }>();
+  // One GPS request for both tabs (each used to run its own).
+  const location = useLocation();
+  const params = useLocalSearchParams<{ segment?: string; concern?: string; filter?: string; at?: string }>();
+  // /directory?concern=skin_cancer_mole_check&at=<ms> - a scan result opens the directory
+  // pre-filtered; `at` differs per visit so the concern re-applies even after being cleared.
+  const initialConcern = isConcern(params.concern) ? params.concern : null;
   const [segment, setSegment] = useState<DirectorySegment>("clinics");
   const [query, setQuery] = useState("");
 
-  // Allow deep links like /directory?segment=doctors to land on a segment.
-  useEffect(() => {
-    if (params.segment === "doctors" || params.segment === "clinics")
-      setSegment(params.segment);
-  }, [params.segment]);
+  // Deep links like /directory?segment=doctors land on a segment; a concern link (scan result)
+  // lands on Clinics. Keyed on the link's `at` nonce too, so a second scan switches back even if
+  // the user moved to the Dermatologists tab. Adjusted during render, not in an effect.
+  const linkKey = `${params.segment ?? ""}:${initialConcern ?? ""}:${params.at ?? ""}`;
+  const [appliedLink, setAppliedLink] = useState("::");
+  if (linkKey !== appliedLink) {
+    setAppliedLink(linkKey);
+    if (params.segment === "doctors" || params.segment === "clinics") setSegment(params.segment);
+    else if (initialConcern) setSegment("clinics");
+  }
   const debouncedQuery = useDebouncedValue(query, 250);
   const [overlayH, setOverlayH] = useState(0);
 
@@ -44,26 +58,47 @@ export default function DirectoryScreen() {
   // bumps it too - the pages it did apply are valid rows.
   const [syncVersion, setSyncVersion] = useState(0);
   const synced = () => setSyncVersion((v) => v + 1);
+  // Surfaced to the lists so an empty DB after a failed download says "not downloaded yet - Try
+  // again" instead of "No clinics found. Try a different search or filter."
+  const [syncFailed, setSyncFailed] = useState(false);
+  const [syncing, setSyncing] = useState(true);
+
+  const startSync = useCallback(async () => {
+    setSyncFailed(false);
+    setSyncing(true);
+    const full = (await needsInitialSync()) || (await needsReconcile());
+    return runSync(full ? { full: true } : undefined)
+      // A sync that reached the server means we're online: send reports queued while offline.
+      .then(() => flushPendingReports().catch(() => 0))
+      .catch((err) => {
+        // First-ever / reconcile passes are full syncs: if this fails offline-first screens fall
+        // back to an empty local DB, so it has to reach the UI, not just the console.
+        console.warn("[directory] sync failed", err);
+        setSyncFailed(true);
+      })
+      .finally(() => {
+        setSyncing(false);
+        synced();
+      });
+  }, []);
 
   useEffect(() => {
+    // Initial sync: plain promise chain (not startSync) so no state is set synchronously here.
     (async () => {
-      if (await needsInitialSync()) {
-        // First-ever sync - if this fails offline-first screens fall back to an
-        // empty local DB with no distinct "sync failed" signal, so at least log it.
-        await runSync({ full: true })
-          .catch((err) => console.warn("[directory] initial sync failed", err))
-          .finally(synced);
-      } else if (await needsReconcile()) {
-        // One-off full pass so an install that predates delete-sweeping drops
-        // rows removed server-side (deleted pathology labs were still listed).
-        runSync({ full: true })
-          .catch((err) => console.warn("[directory] reconcile sync failed", err))
-          .finally(synced);
-      } else {
-        runSync().catch(() => {}).finally(synced);
-      }
+      const full = (await needsInitialSync()) || (await needsReconcile());
+      await runSync(full ? { full: true } : undefined)
+        .then(() => flushPendingReports().catch(() => 0))
+        .catch((err) => {
+          console.warn("[directory] sync failed", err);
+          setSyncFailed(true);
+        });
+      setSyncing(false);
+      synced();
     })();
   }, []);
+  const retrySync = useCallback(() => {
+    startSync();
+  }, [startSync]);
 
   const onOverlayLayout = (e: LayoutChangeEvent) =>
     setOverlayH(e.nativeEvent.layout.height);
@@ -81,21 +116,23 @@ export default function DirectoryScreen() {
       style={[styles.overlay, { paddingTop: insets.top + (Platform.OS === "web" ? Space.xl : 0) }]}
       onLayout={onOverlayLayout}
     >
-      <DirectorySegments
-        value={segment}
-        onChange={(next) => {
-          setSegment(next);
-          setQuery("");
-        }}
-      />
-      <SearchBar
-        value={query}
-        onChangeText={setQuery}
-        placeholder={
-          segment === "clinics" ? t("Search clinics or area…") : t("Search doctors…")
-        }
-        elevation="md"
-      />
+      <TourTarget id="directorySearch" style={styles.searchGroup}>
+        <DirectorySegments
+          value={segment}
+          onChange={(next) => {
+            setSegment(next);
+            setQuery("");
+          }}
+        />
+        <SearchBar
+          value={query}
+          onChangeText={setQuery}
+          placeholder={
+            segment === "clinics" ? t("Search clinic, city or doctor…") : t("Search dermatologists…")
+          }
+          elevation="md"
+        />
+      </TourTarget>
       {!isOnline ? (
         <View
           style={[styles.offlineChip, { backgroundColor: theme.brandTint }]}
@@ -124,10 +161,18 @@ export default function DirectoryScreen() {
         ]}
       >
         <ClinicsView
-          query={debouncedQuery}
+          query={segment === "clinics" ? debouncedQuery : ""}
+          syncFailed={syncFailed}
+          syncing={syncing}
+          onRetrySync={retrySync}
           syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
+          initialConcern={initialConcern}
+          initialConcernKey={params.at ?? null}
+          coords={location.coords}
+          locationStatus={location.status}
+          onRequestLocation={location.retry}
         />
       </View>
       <View
@@ -137,10 +182,16 @@ export default function DirectoryScreen() {
         ]}
       >
         <DoctorsView
-          query={debouncedQuery}
+          query={segment === "doctors" ? debouncedQuery : ""}
+          syncFailed={syncFailed}
+          syncing={syncing}
+          onRetrySync={retrySync}
           syncVersion={syncVersion}
           topInset={overlayH}
           header={header}
+          coords={location.coords}
+          linkFilter={isDoctorLinkFilter(params.filter) ? params.filter : undefined}
+          linkKey={params.at}
         />
       </View>
       </View>
@@ -161,6 +212,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     paddingBottom: Space.md,
   },
+  searchGroup: { gap: Space.md },
   offlineChip: {
     flexDirection: "row",
     alignSelf: "flex-start",

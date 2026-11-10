@@ -10,7 +10,7 @@ export type DirectorySegment = 'clinics' | 'doctors';
 
 const SEGMENTS: { value: DirectorySegment; label: string; icon: IconName }[] = localizedCopy([
   { value: 'clinics', label: 'Clinics', icon: 'building.2.fill' },
-  { value: 'doctors', label: 'Online Booking', icon: 'stethoscope' },
+  { value: 'doctors', label: 'Dermatologists', icon: 'stethoscope' },
 ]);
 
 export type DirectorySegmentsProps = {
@@ -24,7 +24,7 @@ export function DirectorySegments({ value, onChange }: DirectorySegmentsProps) {
   const theme = useTheme();
 
   return (
-    <View style={styles.row}>
+    <View style={styles.row} accessibilityRole="tablist">
       {SEGMENTS.map((segment) => {
         const active = segment.value === value;
         return (
@@ -32,7 +32,7 @@ export function DirectorySegments({ value, onChange }: DirectorySegmentsProps) {
             key={segment.value}
             onPress={() => onChange(segment.value)}
             style={[styles.pill, { backgroundColor: active ? theme.brand : theme.elementBg }]}
-            accessibilityRole="button"
+            accessibilityRole="tab"
             accessibilityState={{ selected: active }}>
             <Icon name={segment.icon} size={16} tintColor={active ? theme.onBrand : theme.muted} />
             <ThemedText type="subhead" themeColor={active ? 'onBrand' : 'muted'} style={styles.label}>

@@ -1,0 +1,154 @@
+/**
+ * Regression test for src/lib/directory-core.ts - phone splitting, URL normalisation and the
+ * Manila-time "open now" logic behind the clinic and doctor pages. Cases are taken from real
+ * listings in the synced directory.
+ *
+ * Run:  npm run test:directory
+ */
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const ROOT = new URL('..', import.meta.url).pathname;
+const out = mkdtempSync(join(tmpdir(), 'directory-core-'));
+execFileSync(
+  join(ROOT, 'node_modules/.bin/tsc'),
+  ['src/lib/directory-core.ts', 'src/lib/concerns.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022,dom', '--moduleResolution', 'bundler'],
+  { cwd: ROOT, stdio: 'inherit' },
+);
+const { splitPhones, toDialable, formatPhone, compactSchedule, scheduleDayBit, displayServices, looksLikePlaceName, normalizeUrl, parseHHMM, openStatusAt, haversineMeters, foldSearch, likeContains, isHospitalWithoutDerm, isHospitalType, summarizeDerms } = await import(
+  pathToFileURL(join(out, 'directory-core.js')).href
+);
+
+let passed = 0;
+let failed = 0;
+function check(name, ok) {
+  if (ok) passed++;
+  else {
+    failed++;
+    console.log('  FAIL', name);
+  }
+}
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+// ---- phones ----
+check('mobile → +63', toDialable('0917 872 0874') === '+639178720874');
+check('landline area code → +63', toDialable('(02) 8894 3952') === '+63288943952');
+check('provincial landline → +63', toDialable('(035) 225 6716') === '+63352256716');
+check('already +63 kept', toDialable('+63 917 123 4567') === '+639171234567');
+check('63 prefix gets +', toDialable('639171234567') === '+639171234567');
+check('7-digit local left as-is', toDialable('7982572') === '7982572');
+check('too short rejected', toDialable('12345') === null);
+check(
+  'comma list splits into three',
+  eq(splitPhones('0917-547-7622, 7982572, 0976 002 1552').map((p) => p.dial), ['+639175477622', '7982572', '+639760021552']),
+);
+check(
+  'slash list splits',
+  eq(splitPhones('(02) 8123-4567 / 0917 123 4567').map((p) => p.dial), ['+63281234567', '+639171234567']),
+);
+check('"or" splits', splitPhones('0917 123 4567 or 0918 765 4321').length === 2);
+check('extension dropped', eq(splitPhones('(02) 8123-4567 loc. 120').map((p) => p.dial), ['+63281234567']));
+check('display keeps formatting', splitPhones('(0977) 855-5769, (02) 7900-1316')[0].display === '(0977) 855-5769');
+check('duplicates collapse', splitPhones('0917 123 4567, 09171234567').length === 1);
+check('empty → []', eq(splitPhones(null), []) && eq(splitPhones('  '), []));
+
+// ---- urls ----
+check('https kept', normalizeUrl('https://skinstation.ph/appointments') === 'https://skinstation.ph/appointments');
+check('missing scheme gets https', normalizeUrl('www.clinic.ph') === 'https://www.clinic.ph/');
+check('facebook path gets https', normalizeUrl('facebook.com/someclinic') === 'https://facebook.com/someclinic');
+check('mailto rejected', normalizeUrl('mailto:a@b.com') === null);
+check('javascript rejected', normalizeUrl('javascript:alert(1)') === null);
+check('spaces rejected', normalizeUrl('not a url') === null);
+check('no dot rejected', normalizeUrl('localhost') === null);
+check('empty rejected', normalizeUrl('') === null && normalizeUrl(null) === null);
+
+// ---- hours ----
+check('HH:MM parses', parseHHMM('09:30') === 570);
+check('H:MM parses', parseHHMM('9:00') === 540);
+check('12h text rejected', parseHHMM('9:00 AM') === null);
+check('garbage rejected', parseHHMM('25:00') === null && parseHHMM('') === null);
+
+// Manila is UTC+8 with no DST. 2026-10-05 is a Monday.
+const manila = (iso) => new Date(`${iso}+08:00`);
+const wk = { open: '09:00', close: '17:00' };
+const we = { open: '10:00', close: '14:00' };
+check('weekday open', eq(openStatusAt(wk, we, manila('2026-10-05T10:00:00')), { open: true, changesAt: '17:00' }));
+check('weekday before open', eq(openStatusAt(wk, we, manila('2026-10-05T08:00:00')), { open: false, changesAt: '09:00' }));
+check('weekday after close', eq(openStatusAt(wk, we, manila('2026-10-05T17:00:00')), { open: false, changesAt: null }));
+check('saturday uses weekend hours', openStatusAt(wk, we, manila('2026-10-10T15:00:00')).open === false);
+check('no weekend hours → unknown', openStatusAt(wk, null, manila('2026-10-11T11:00:00')).open === null);
+check('24h (open === close)', openStatusAt({ open: '00:00', close: '00:00' }, null, manila('2026-10-05T03:00:00')).open === true);
+const night = { open: '20:00', close: '02:00' };
+check('overnight evening open', openStatusAt(night, night, manila('2026-10-05T23:00:00')).open === true);
+check('overnight tail carries into next day', eq(openStatusAt(night, null, manila('2026-10-10T01:00:00')), { open: true, changesAt: '02:00' }));
+check('overnight after tail closed', openStatusAt(night, night, manila('2026-10-06T03:00:00')).open === false);
+check('invalid hours → unknown', openStatusAt({ open: '9:00 AM', close: '5:00 PM' }, null, manila('2026-10-05T10:00:00')).open === null);
+// Device time zone must not matter: 10:00 Manila is 02:00 UTC / previous evening in the Americas.
+check('evaluated in Manila regardless of device zone', openStatusAt(wk, we, new Date('2026-10-05T02:00:00Z')).open === true);
+
+// ---- distance ----
+const d = haversineMeters(14.5995, 120.9842, 14.6760, 121.0437); // Manila → Quezon City ≈ 10.6 km
+check('haversine ≈ 10.6 km', d > 10_000 && d < 11_200);
+
+// Call button labels show the number in the usual PH form, whatever the listing wrote.
+check('mobile label', formatPhone(toDialable('09765094655')) === '0976 509 4655');
+check('Manila landline label', formatPhone(toDialable('0287133315')) === '(02) 8713 3315');
+check('provincial landline label', formatPhone(toDialable('(043) 773 6800')) === '(043) 773 6800');
+check('provincial, unspaced', formatPhone(toDialable('0437564386')) === '(043) 756 4386');
+check('local 7-digit kept', formatPhone(toDialable('7982572')) === '7982572');
+
+// Compact schedules: same hours grouped, 3+ consecutive days as a range.
+check('weekday block', compactSchedule('Monday | 10:00 AM - 03:00 PM; Tuesday | 10:00 AM - 03:00 PM; Wednesday | 10:00 AM - 03:00 PM; Thursday | 10:00 AM - 03:00 PM; Friday | 10:00 AM - 03:00 PM') === 'Mon–Fri · 10 AM–3 PM');
+check('mixed hours', compactSchedule('Tuesday | 09:00 AM - 11:00 AM; Saturday | 09:00 AM - 11:00 AM') === 'Tue, Sat · 9–11 AM');
+check('two groups', compactSchedule('Monday | 01:00 PM - 05:00 PM; Wednesday | 01:00 PM - 05:00 PM; Saturday | 09:00 AM - 12:00 PM') === 'Mon, Wed · 1–5 PM; Sat · 9 AM–12 PM');
+check('split day hours', compactSchedule('Monday | 10:00 AM - 12:00 PM, 01:00 PM - 05:00 PM') === 'Mon · 10 AM–12 PM, 1–5 PM');
+check('also listed hint', compactSchedule('Friday | 03:00 PM - 06:00 PM | Also listed: Tuesday | 10:00 AM - 11:00 AM') === 'Fri · 3–6 PM (other hours also listed)');
+check('by appointment', compactSchedule('Tuesday | By appointment') === 'Tue · By appointment');
+check('SeriousMD day phrase', compactSchedule('Monday to Tuesday, Thursday to Saturday | 11:00 AM - 03:00 PM | (By Appointment)') === 'Mon, Tue, Thu–Sat · 11 AM–3 PM (By Appointment)');
+check('SeriousMD two blocks + contact dropped', compactSchedule('Tuesday and Thursday | 09:00 AM - 05:00 PM | (Walk-In and Appointment) | Friday | 09:00 AM - 01:00 PM | Call 0917 000 0000') === 'Tue, Thu · 9 AM–5 PM; Fri · 9 AM–1 PM (Walk-In and Appointment)');
+check('roster note kept, contact dropped', compactSchedule('Wednesday | 09:30 AM - 11:30 AM | (By Appointment) | Contact Jona 0961 000 6594') === 'Wed · 9:30–11:30 AM (By Appointment)');
+check('unreadable -> null', compactSchedule('Mon-Sat 9-5') === null);
+check('Sunday bit', scheduleDayBit(0) === 64 && scheduleDayBit(1) === 1 && scheduleDayBit(6) === 32);
+check('hospital without derm shows no services', displayServices(['skin_biopsy'], true).length === 0);
+check('oncology tag dropped', displayServices(['oncology_treatment', 'dermoscopy'], false).join() === 'dermoscopy');
+check('clinic name is not a city', looksLikePlaceName('Dermcare Skin Clinic') && !looksLikePlaceName('Lipa City, Batangas'));
+
+// Derm-first ranking: the directory lists places where a dermatologist can be seen first.
+const { dermTier } = await import(pathToFileURL(join(out, 'concerns.js')).href);
+check('derm clinic is tier 0', dermTier({ type: 'dermatology_clinic', derm_status: 'unchecked' }) === 0);
+check('hospital with linked derm is tier 0', dermTier({ type: 'private_hospital', derm_status: 'has_derm_doctors' }) === 0);
+check('PDS center hospital is tier 0', dermTier({ type: 'government_hospital', derm_status: 'unchecked', pds_skin_cancer_center: true }) === 0);
+check('derm dept, no names is tier 1', dermTier({ type: 'medical_center', derm_status: 'derm_dept_no_names' }) === 1);
+check('no derm found is tier 2', dermTier({ type: 'private_hospital', derm_status: 'no_derm_found' }) === 2);
+check('unchecked hospital is tier 2', dermTier({ type: 'government_hospital', derm_status: null }) === 2);
+
+// ---- search folding ----
+check('ñ folds to n', foldSearch('Las Piñas') === 'las pinas');
+check('accents fold', foldSearch(' José Ríñón ') === 'jose rinon');
+check('LIKE wildcards escaped', likeContains('50%_off') === '%50\\%\\_off%');
+check('backslash escaped', likeContains('a\\b') === '%a\\\\b%');
+
+// ---- one "hospital without derm" rule ----
+check('hospital with 0 linked derms', isHospitalWithoutDerm({ type: 'private_hospital', derm_status: 'has_derm_doctors' }, 0));
+check('hospital with linked derm', !isHospitalWithoutDerm({ type: 'private_hospital', derm_status: 'no_derm_found' }, 2));
+check('no count falls back to derm_status', isHospitalWithoutDerm({ type: 'government_hospital', derm_status: 'unchecked' }) && !isHospitalWithoutDerm({ type: 'government_hospital', derm_status: 'has_derm_doctors' }));
+check('clinic is never "hospital without derm"', !isHospitalWithoutDerm({ type: 'dermatology_clinic' }, 0));
+check('hospital types', isHospitalType('medical_center') && !isHospitalType('dermatology_clinic') && !isHospitalType(null));
+
+// ---- derm summary per facility ----
+const sum = summarizeDerms([
+  { facility_id: 'a', schedule_days: 2, bookable: 1 },
+  { facility_id: 'a', schedule_days: 32, bookable: 0 },
+  { facility_id: 'a', schedule_days: null },
+  { facility_id: 'b', schedule_days: null },
+]);
+check('summary counts bookable derms', sum.get('a').bookable === 1 && sum.get('b').bookable === 0);
+check('summary counts derms', sum.get('a').count === 3 && sum.get('b').count === 1);
+check('summary unions days (Tue|Sat)', sum.get('a').daysMask === (2 | 32) && sum.get('b').daysMask === 0);
+check('Saturday in today mask', (sum.get('a').daysMask & scheduleDayBit(6)) !== 0 && (sum.get('a').daysMask & scheduleDayBit(1)) === 0);
+
+console.log(`directory core: ${passed} passed, ${failed} failed`);
+if (failed) process.exit(1);

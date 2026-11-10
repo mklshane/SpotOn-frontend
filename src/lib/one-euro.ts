@@ -23,6 +23,8 @@ export type OneEuro = {
   filter: (value: number, tMs: number) => number;
   /** Forget history so the next sample is passed through untouched (call when the target is lost). */
   reset: () => void;
+  /** The filtered rate of change (units per second) - what the adaptive cutoff is driven by. */
+  velocity: () => number;
 };
 
 export function makeOneEuro(minCutoff = 1.2, beta = 0.01, dCutoff = 1.0): OneEuro {
@@ -56,6 +58,9 @@ export function makeOneEuro(minCutoff = 1.2, beta = 0.01, dCutoff = 1.0): OneEur
       xPrev = null;
       dxPrev = 0;
       tPrev = 0;
+    },
+    velocity() {
+      return dxPrev;
     },
   };
 }

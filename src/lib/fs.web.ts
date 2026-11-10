@@ -21,6 +21,8 @@ const PREFIX = '/_fs/';
 /** Mirrors the native roots. Trailing slash matters: callers build paths by concatenation. */
 export const documentDirectory = `${PREFIX}doc/`;
 export const cacheDirectory = `${PREFIX}cache/`;
+export const FileSystemUploadType = { BINARY_CONTENT: 0, MULTIPART: 1 } as const;
+export const FileSystemSessionType = { BACKGROUND: 0, FOREGROUND: 1 } as const;
 
 export type FileInfo =
   | { exists: false; uri: string; isDirectory: false }
@@ -126,7 +128,7 @@ function asStorageError(e: unknown, uri: string): Error {
   });
 }
 
-async function writeBlob(uri: string, blob: Blob): Promise<void> {
+export async function writeBlob(uri: string, blob: Blob): Promise<void> {
   await ensureFsReady();
   try {
     const fh = await fileFor(uri, true);
@@ -142,7 +144,7 @@ async function writeBlob(uri: string, blob: Blob): Promise<void> {
  * Read any source the app might copy *from*: an /_fs/ path, a blob: URL from the camera canvas,
  * a data: URI, or an http(s) asset. fetch() handles all four - /_fs/ included, via the worker.
  */
-async function fetchBlob(uri: string): Promise<Blob> {
+export async function fetchBlob(uri: string): Promise<Blob> {
   if (isOwned(uri)) await ensureFsReady();
   const res = await fetch(unscheme(uri));
   if (!res.ok) throw new Error(`could not read ${uri}: ${res.status}`);
@@ -228,6 +230,17 @@ export async function deleteAsync(uri: string, options?: { idempotent?: boolean 
 
 export async function copyAsync({ from, to }: { from: string; to: string }): Promise<void> {
   await writeBlob(to, await fetchBlob(from));
+}
+
+export async function uploadAsync(
+  url: string,
+  fileUri: string,
+  options: { fieldName?: string; mimeType?: string; headers?: Record<string, string>; httpMethod?: string } = {},
+): Promise<{ status: number; body: string; headers: Record<string, string>; mimeType: string | null }> {
+  const form = new FormData();
+  form.append(options.fieldName ?? 'file', await fetchBlob(fileUri), 'avatar.jpg');
+  const response = await fetch(url, { method: options.httpMethod ?? 'POST', headers: options.headers, body: form });
+  return { status: response.status, body: await response.text(), headers: {}, mimeType: response.headers.get('content-type') };
 }
 
 export async function moveAsync({ from, to }: { from: string; to: string }): Promise<void> {

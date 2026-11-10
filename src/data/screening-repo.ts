@@ -63,6 +63,8 @@ type Row = {
   per_image_json: string | null;
   image_disagreement: number | null;
   aggregate_method: string | null;
+  second_class: string | null;
+  second_confidence: number | null;
 };
 
 /**
@@ -123,6 +125,9 @@ function toRecord(row: Row): ScreeningRecord {
     confidenceQualifier: row.confidence_qualifier === 1,
     malignantScore: row.malignant_score ?? 0,
     malignantGateApplied: row.malignant_gate_applied === 1,
+    ...(row.second_class && row.second_confidence != null
+      ? { secondClass: row.second_class as TriageResult["secondClass"], secondConfidence: row.second_confidence }
+      : {}),
   };
   return {
     id: row.id,
@@ -148,9 +153,7 @@ function toRecord(row: Row): ScreeningRecord {
     source: row.source as "camera" | "gallery",
     questionnaire,
     classification,
-    firstAttempt: row.first_attempt_json
-      ? (JSON.parse(row.first_attempt_json) as ClassificationOutput)
-      : undefined,
+    firstAttempt: safeParse<ClassificationOutput | undefined>(row.first_attempt_json, undefined),
     triage,
     lesionId: row.lesion_id ?? null,
     followUpOf: row.followup_of ?? undefined,
@@ -172,8 +175,9 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
        safety_floor_applied, confidence_qualifier, malignant_score, malignant_gate_applied,
        scale_unstable, classifier_refined, detector_used,
        lesion_id, user_id, followup_of, answers_carried, answers_source_id,
-       images_json, image_count, per_image_json, image_disagreement, aggregate_method
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       images_json, image_count, per_image_json, image_disagreement, aggregate_method,
+       second_class, second_confidence
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     record.id,
     record.createdAt,
     record.mark?.point[0] ?? null,
@@ -218,6 +222,8 @@ export async function insertScreening(record: ScreeningRecord): Promise<void> {
     record.classification.perImage ? JSON.stringify(record.classification.perImage) : null,
     record.classification.imageDisagreement ? 1 : 0,
     record.classification.aggregate ?? "single",
+    record.triage.secondClass ?? null,
+    record.triage.secondConfidence ?? null,
   );
 }
 
@@ -382,7 +388,7 @@ export async function deleteScreening(id: string, userId: string): Promise<void>
 }
 
 /**
- * Delete every screening and lesion belonging to one account, photos included.
+ * Delete every screening, lesion and saved clinic/doctor belonging to one account, photos included.
  *
  * Used when the account itself is deleted: the server row is gone, so this history could never
  * be reached again - it would just sit in documentDirectory as orphaned lesion photos under a
@@ -397,6 +403,8 @@ export async function deleteAllForUser(userId: string): Promise<void> {
   await withDbTransaction(async () => {
     await db.runAsync("DELETE FROM screenings WHERE user_id = ?", userId);
     await db.runAsync("DELETE FROM lesions WHERE user_id = ?", userId);
+    // Saved clinics/doctors are account data too (saved-repo.ts).
+    await db.runAsync("DELETE FROM saved_items WHERE user_id = ?", userId);
   });
   // Files last: the rows are what make the history reachable, and a failed unlink
   // must not leave them behind.

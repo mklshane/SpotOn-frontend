@@ -1263,7 +1263,7 @@ import {
   requestDataExport,
 } from '@/lib/settings-api';
 
-const SUPPORT_EMAIL = 'help.spoton@gmail.com';
+const SUPPORT_EMAIL = 'help.spoton.dlsl@gmail.com';
 
 function formatConsentStatus(user: { consent_data_privacy: boolean; consent_at: string | null } | null): string {
   if (!user?.consent_data_privacy) return 'Not granted';
@@ -1785,7 +1785,7 @@ Use the project's `run` skill (or `npm run android` / `npx expo start` per your 
 
 1. **Profile tab** - identity card unchanged; stats card shows age/sex/skin type or "-" placeholders with an "Add details" link if any are missing; screening summary shows the seeded scan-history count/date; "See body lesions" still navigates to `/scan/history` as before; "Edit profile" and "Settings" rows navigate correctly.
 2. **Edit profile** (`/profile/edit`) - fields pre-fill from the signed-in user; Save writes through, returns to Profile, and the identity/stats cards reflect the change immediately (no need to restart the app).
-3. **Settings** (`/profile/settings`) - each section renders; "Re-screening reminders" toggle animates and persists (toggle it, background/reopen the app, confirm it stayed on); "Change password" expands the inline form without the keyboard covering the inputs on Android; "Delete account" shows the confirm sheet (do not actually delete during this check unless you have a disposable test account); "Request data export" and "Change password" show the expected "not available yet" message if the backend 404s; "Help & support" opens the device's mail client to `help.spoton@gmail.com`; Terms/Privacy rows push `StubScreen` and the back chevron returns to Settings.
+3. **Settings** (`/profile/settings`) - each section renders; "Re-screening reminders" toggle animates and persists (toggle it, background/reopen the app, confirm it stayed on); "Change password" expands the inline form without the keyboard covering the inputs on Android; "Delete account" shows the confirm sheet (do not actually delete during this check unless you have a disposable test account); "Request data export" and "Change password" show the expected "not available yet" message if the backend 404s; "Help & support" opens the device's mail client to `help.spoton.dlsl@gmail.com`; Terms/Privacy rows push `StubScreen` and the back chevron returns to Settings.
 
 - [ ] **Step 4: Final commit (only if the manual pass above required fixes)**
 

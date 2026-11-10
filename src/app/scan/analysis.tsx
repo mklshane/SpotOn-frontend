@@ -30,7 +30,7 @@ import { useScanHistory } from '@/lib/scan-history';
 import { useScreeningSession } from '@/lib/screening-session';
 import {
   IMAGE_AGREEMENT_CHECK_ENABLED,
-  MALIGNANT_THRESHOLD,
+  malignantThresholdForModel,
 } from '@/lib/classifier/model-config';
 import { RESCAN_PROMPT } from '@/lib/triage/recommendations';
 import { decideAnalysis } from '@/lib/triage/scan-flow';
@@ -39,6 +39,7 @@ import {
   computeMalignantScore,
   computeTriage,
   evaluateImageAgreement,
+  pickCombinedMalignant,
   evaluateSafetyFloor,
   evaluateScaleConsistency,
 } from '@/lib/triage/tps-core';
@@ -216,7 +217,8 @@ export default function AnalysisScreen() {
         {
           applyFloor,
           malignantScore: computeMalignantScore(output.probs),
-          malignantThreshold: MALIGNANT_THRESHOLD,
+          malignantThreshold: malignantThresholdForModel(output.modelVersion),
+          second: pickCombinedMalignant(output.probs) ?? undefined,
         },
       );
       payload = {
@@ -240,7 +242,9 @@ export default function AnalysisScreen() {
         // user having to opt in at scan time.
         lesionId: s.followUp?.lesion.id ?? null,
         followUpOf: s.followUp?.priorScreening.id,
-        answersCarried: s.followUp != null,
+        // Only true when at least one answer was actually reused - a follow-up that re-asked all 8
+        // questions carried nothing.
+        answersCarried: s.followUp != null && s.questionsToReask.length < 8,
         answersSourceId: s.followUp?.priorScreening.id,
       };
     } catch (e) {

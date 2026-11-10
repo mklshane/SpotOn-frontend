@@ -101,7 +101,7 @@ export function SettingsRow({
 }
 
 export type ContactLinkProps = {
-  /** The address to open in the device's mail client, e.g. "help.spoton@gmail.com". */
+  /** The address to open in the device's mail client, e.g. "help.spoton.dlsl@gmail.com". */
   email: string;
   /** Optional display text. Defaults to the email address itself. */
   label?: string;

@@ -1,7 +1,7 @@
 import { t, localizedCopy, useLocale } from '@/lib/i18n';
 import { NitroModules } from 'react-native-nitro-modules';
 import { FlipType, manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { router, useIsFocused } from 'expo-router';
+import { router, useFocusEffect, useIsFocused, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, type LayoutChangeEvent, Platform, Pressable, StyleSheet, useWindowDimensions, Vibration, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -49,9 +49,9 @@ import {
   acceptsSession,
   SEARCH_FRACTIONS,
   padDrawnBox,
-  searchRoiForZoom,
   stepStability,
   stepActiveTarget,
+  relockWindowMs,
   uprightRotation,
   type Coach,
   type CoachKind,
@@ -64,7 +64,9 @@ import {
   STABLE_FRAMES,
   LOCK_SCORE,
 } from '@/lib/capture-core';
+import { Buffer } from 'buffer';
 import { DARK } from '@/lib/image-quality-core';
+import { readAsStringAsync } from '@/lib/fs';
 import {
   ANDROID_CAPTURE_WAIT_MS,
   acceptsAndroidResult,
@@ -77,12 +79,15 @@ import {
   userFocused,
   androidResultMaxAgeMs,
   isFreshAndroidResult,
+  jpegExifOrientation,
+  canSkipUpright,
   waitForCaptureIdle,
 } from '@/lib/android-capture-policy';
-import { perfLog, perfMark, perfSince } from '@/lib/perf-log';
+import { PERF_LOG, perfLog, perfMark, perfSince } from '@/lib/perf-log';
 import { MAX_IMAGES_PER_SCREENING } from '@/lib/classifier/model-config';
 import { discardScratch } from '@/lib/scratch-files';
 import { useScreeningSession } from '@/lib/screening-session';
+import { ReviewChip } from '@/components/scan/review-chip';
 import { Button } from '@/components/ui/button';
 import { Icon, type IconName } from '@/components/ui/icon';
 import { GradientBackground } from '@/components/ui/gradient-background';
@@ -96,16 +101,21 @@ import {
 } from '@/components/scan/detection-box';
 import { PerfHud, PERF_ENABLED, usePerfCounters } from '@/components/scan/perf-hud';
 import { useDeviceTier } from '@/lib/device-tier';
-import { getLesionModel, readLayout, type LesionModel } from '@/lib/lesion-model';
+import { getLesionModelForCamera, readLayout, type LesionModel } from '@/lib/lesion-model';
 import { loadSkinGateForCamera, readSkinGateLayout, type SkinGateModel } from '@/lib/skin-gate';
 import { SKIN_GATE_FACE_MAX, SKIN_GATE_MIN } from '@/lib/triage/scan-flow';
 import {
   DETECTION_SMOOTHING_CONFIG as SMOOTH,
+  predictLead,
   softDeadband,
 } from '@/lib/detection-smoothing';
 import { makeOneEuro } from '@/lib/one-euro';
 import { Radius, Space } from '@/constants/theme';
 import { StatusBar } from 'expo-status-bar';
+import { Gyroscope } from 'expo-sensors';
+import { makeSteadyTracker, waitForSteady } from '@/lib/steady-shot';
+import { TourTarget } from '@/lib/product-tour';
+import { useScanTips } from '@/lib/scan-tips';
 
 // Reanimated-animated camera so pinch-zoom writes to a shared value (no React re-renders, which
 // would recreate the gesture mid-pinch and crash react-native-gesture-handler).
@@ -134,6 +144,21 @@ Reanimated.addWhitelistedNativeProps({ zoom: true });
 // Drawing-only padding for the green box; the forwarded crop box stays tight.
 const BOX_PAD = 0.25;
 const BOX_MAX = 0.98;
+/**
+ * Smallest side (pt) the green box is drawn at. A small mole's padded box was barely bigger than
+ * the spot itself and read as a speck rather than a reticle on it (screen recording, 2026-10-15).
+ * Drawing only - the crop box forwarded to the cropper keeps the detector's true extents.
+ */
+const BOX_MIN_PT = 72;
+/** How long local skin evidence for a spot survives that spot not being nominated (ms). */
+const LOCAL_SKIN_KEEP_MS = 1000;
+/**
+ * Android passes can be ~1 s apart, so a fixed 1 s let the evidence lapse between two nominations
+ * of the same spot and the streak never reached the 2 reads that show its box in a not-skin scene.
+ */
+function localSkinKeepMs(intervalMs?: number): number {
+  return intervalMs == null ? LOCAL_SKIN_KEEP_MS : Math.max(LOCAL_SKIN_KEEP_MS, 2.5 * intervalMs);
+}
 
 const LIVE_MARGIN = 0.04; // coach this much before the still gate would reject
 const DARK_THRESHOLD = DARK + LIVE_MARGIN; // 0.20
@@ -177,6 +202,13 @@ const SEARCH_SKIN_MS_LOW = 333;
 /** Keep the former 3/s or 1.5/s cadence while tracking. */
 const TRACK_SKIN_MS_HIGH = 333;
 const TRACK_SKIN_MS_LOW = 667;
+/**
+ * iOS ignores Vibration.vibrate's duration and always runs a ~400 ms buzz. A tap inside that
+ * window would shoot a vibrating phone, so the steady wait holds off until the buzz is over.
+ */
+const IOS_BUZZ_MS = 450;
+/** Show "Hold steady…" only if the steady wait is visibly delaying the shot. */
+const STEADY_HINT_AFTER_MS = 150;
 /** Maximum time the shutter waits for an already-running detector pass to release the camera frame. */
 const CAPTURE_INFERENCE_WAIT_MS = 500;
 /** Keep capture paused until the navigation transition has removed this screen's camera output. */
@@ -264,7 +296,10 @@ const frameHintBottom = (windowH: number) =>
 // Cap applied when baking in the EXIF orientation. Android keeps its full still (8 MP on a Galaxy
 // A42: a 2448 short edge instead of 1536), so the crop screen cuts the lesion from real pixels
 // rather than enlarging a 2048 copy - the main reason its close crops looked soft.
-const PHOTO_LONG_EDGE = Platform.OS === 'android' ? 4096 : 2048;
+// Capped at 3264 (2026-10-07): a vivo V2248 picks a 3060x4080 still unconstrained, and baking that
+// full 12.5 MP re-encode took seconds and drove the Java heap to 0% free. 3264 keeps the A42's
+// 3264x2448 untouched and still leaves a 2448 short edge for the crop.
+const PHOTO_LONG_EDGE = Platform.OS === 'android' ? 3264 : 2048;
 
 
 export default function CaptureScreen() {
@@ -284,6 +319,8 @@ export default function CaptureScreen() {
    */
   const [position, setPosition] = useState<CameraPosition>('back');
   const device = useCameraDevice(position);
+  // Tips point at the camera controls, which only exist once the camera is up.
+  useScanTips('capture', { enabled: hasPermission && Boolean(device) });
   const backDevice = useCameraDevice('back');
   const frontDevice = useCameraDevice('front');
   const canFlip = backDevice != null && frontDevice != null;
@@ -322,6 +359,20 @@ export default function CaptureScreen() {
   // Without this gate the preview and the detector keep running through all of them, competing
   // with the classifier for exactly the CPU it needs.
   const isFocused = useIsFocused();
+
+  // No swipe-back on the camera, in EITHER stack. `gestureEnabled: false` in scan/_layout only
+  // silences the scan stack; on iOS 26 the root stack's full-screen pop gesture then picks up the
+  // same rightward drag (a zoom-in on the slider) and pops the whole scan flow instead. So the
+  // parent's gesture is switched off while this screen is focused, and back on when it isn't -
+  // body, history, result etc. keep their swipe. The close button is the way out.
+  const navigation = useNavigation();
+  useFocusEffect(
+    useCallback(() => {
+      const parent = navigation.getParent();
+      parent?.setOptions({ gestureEnabled: false });
+      return () => parent?.setOptions({ gestureEnabled: true });
+    }, [navigation]),
+  );
   const [appActive, setAppActive] = useState(true);
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => setAppActive(s === 'active'));
@@ -346,7 +397,7 @@ export default function CaptureScreen() {
   const [detectorFailed, setDetectorFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    getLesionModel()
+    getLesionModelForCamera()
       .then((m) => {
         if (alive) setModel(m);
       })
@@ -387,6 +438,28 @@ export default function CaptureScreen() {
   const [guide, setGuide] = useState(true);
   const [busy, setBusy] = useState(false);
   const captureInFlightRef = useRef(false);
+  // Steady-shot: gyro samples feed this while the camera is live, and shoot() waits on it.
+  const steadyTracker = useMemo(() => makeSteadyTracker(), []);
+  const lastBuzzAtRef = useRef(0);
+  const [holdSteady, setHoldSteady] = useState(false);
+  useEffect(() => {
+    if (!isFocused || !appActive) return;
+    let sub: { remove(): void } | null = null;
+    let alive = true;
+    Gyroscope.isAvailableAsync()
+      .then((ok) => {
+        if (!ok || !alive) return;
+        Gyroscope.setUpdateInterval(16);
+        // Stamp with Date.now(): the sensor's own timestamp uses a different clock per platform.
+        sub = Gyroscope.addListener(({ x, y, z }) => steadyTracker.push(x, y, z, Date.now()));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      sub?.remove();
+      steadyTracker.reset();
+    };
+  }, [isFocused, appActive, steadyTracker]);
   const [focusPt, setFocusPt] = useState<{ x: number; y: number; id: number } | null>(null);
 
   // The ONLY per-frame-derived React state. Everything else the detector produces (the box pose,
@@ -406,6 +479,9 @@ export default function CaptureScreen() {
   const localSkinGenerationRef = useRef(0);
   // Anchor local skin approval to one lesion, so a slowly drifting track cannot carry it away.
   const localSkinBoxRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // When the anchored spot was last nominated. Its skin evidence survives a frame or two of the
+  // nominee flickering out, but not a long absence.
+  const localSkinSeenAtRef = useRef(0);
   const visibleRef = useRef(false);
   const sessionRef = useRef(0);
   const firstSearchAtRef = useRef(0);
@@ -460,6 +536,8 @@ export default function CaptureScreen() {
   const hasTorch = device?.hasTorch === true;
 
   const zoomSV = useSharedValue(1);
+  const shutterFlash = useSharedValue(0);
+  const shutterFlashStyle = useAnimatedStyle(() => ({ opacity: shutterFlash.value }));
   const startZoom = useSharedValue(1);
   // The detector's copy of the zoom. `zoomSV` is a Reanimated value living on Reanimated's UI
   // runtime; the frame processor runs on VisionCamera's separate react-native-worklets-core
@@ -480,9 +558,9 @@ export default function CaptureScreen() {
    * Keying this on the number alone was safe while the device was fixed, and is not now: back and
    * front both commonly report neutralZoom 1, so flipping at 5x would leave zoomSV at 5. The
    * preview survives that (VisionCamera clamps to the device's range) but the DETECTOR does not -
-   * detectorZoomSV would stay at 5 and searchRoiForZoom would go on carving out the tight centre
-   * ROI that 5x implies, while the frame it is carving from is a full-width 1x view. The box then
-   * maps back through an ROI that never existed. device.id is the identity that actually changed.
+   * detectorZoomSV would stay at 5, and the tracker's zoom-dependent centre weighting and
+   * box-growth expectation would describe a zoom the frame does not have. device.id is the
+   * identity that actually changed.
    */
   const deviceId = device?.id;
   useEffect(() => {
@@ -490,8 +568,8 @@ export default function CaptureScreen() {
     syncDetectorZoom(neutralZoom);
   }, [deviceId, neutralZoom, zoomSV, syncDetectorZoom]);
   /* eslint-enable react-hooks/immutability */
-  // Quantized so a pinch cannot flood the JS thread: the ROI schedule is smooth in log2(zoom), so
-  // 2% steps are far finer than anything the crop can resolve.
+  // Quantized so a pinch cannot flood the JS thread: the zoom only feeds the tracker's centre
+  // weighting and geometry check, where 2% steps are far finer than anything that matters.
   useAnimatedReaction(
     () => Math.round(zoomSV.value * 50) / 50,
     (zoom, previous) => {
@@ -503,24 +581,29 @@ export default function CaptureScreen() {
   // Candidate association, handover hysteresis and miss retention live in a pure tested state
   // machine. Only its single active target is ever allowed to reach the drawing layer.
   const targetRef = useRef(initialActiveTargetState);
+  const decisionTallyRef = useRef<Record<string, number>>({});
   const stableStreakRef = useRef(0);
   const lastCenter = useRef<{ x: number; y: number } | null>(null);
   const lastSize = useRef<{ w: number; h: number } | null>(null);
   // The detected box in full-frame (= saved photo) normalized coords, carried to the crop
   // screen so it can auto-frame the lesion without re-running the model (see shoot()).
   const lastImgBox = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // Measured gap between accepted detections (ms), smoothed. Feeds the box's latency lead; measured
+  // rather than assumed because the real cadence ranges from ~12 fps (iOS) to ~1 fps (low Android).
+  const lastDetectAtRef = useRef<number | null>(null);
+  const detectIntervalRef = useRef(1000 / TARGET_FPS_HIGH);
   // One-Euro filters - one per tracked scalar. Preview box (what's drawn) + img box (forwarded
   // to crop). These keep the box steady under small camera shifts but responsive to real motion.
   const euro = useMemo(
     () => ({
-      px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta),
-      iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
-      ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta),
+      px: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      py: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      pw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ph: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ix: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      iy: makeOneEuro(SMOOTH.position.minCutoff, SMOOTH.position.beta, SMOOTH.dCutoff),
+      iw: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
+      ih: makeOneEuro(SMOOTH.size.minCutoff, SMOOTH.size.beta, SMOOTH.dCutoff),
     }),
     [],
   );
@@ -531,6 +614,9 @@ export default function CaptureScreen() {
   // Shutter coordination crosses JS and the camera worklet. Pausing first prevents a new detector
   // call from starting while takePhoto reconfigures/reads the same native camera pipeline.
   const capturePausedSV = useWorkletValue(false);
+  const detectMsSV = useWorkletValue(-1);
+  // Android keeps the frame processor attached and gates on this instead (see the Camera prop).
+  const guideSV = useWorkletValue(true);
   const inferenceBusySV = useWorkletValue(false);
   const lastSkinAtSV = useWorkletValue(0);
   const lastLocalSkinAtSV = useWorkletValue(0);
@@ -540,6 +626,8 @@ export default function CaptureScreen() {
   const trackingSV = useWorkletValue(false);
   const sessionSV = useWorkletValue(0);
   const androidScheduleSV = useWorkletValue(initialAndroidSchedule(0));
+  // Android: the box is drawn and has settled, so detector passes can be spaced out.
+  const steadyTrackSV = useWorkletValue(false);
   const localSkinRequestedSV = useWorkletValue(0);
   const localSkinNeededSV = useWorkletValue(false);
   const localSkinCxSV = useWorkletValue(0.5);
@@ -566,6 +654,7 @@ export default function CaptureScreen() {
     localSkinStreakRef.current = 0;
     visibleRef.current = false;
     stableStreakRef.current = 0;
+    steadyTrackSV.value = false;
     resetDetectionBox(boxValues, { immediate: ANDROID_CAPTURE });
     metricsRef.current = null;
     lastCenter.current = null;
@@ -573,9 +662,10 @@ export default function CaptureScreen() {
     lastImgBox.current = null;
     // Forget filter history so re-acquiring snaps to the new box instead of gliding from the old.
     Object.values(euro).forEach((f) => f.reset());
+    lastDetectAtRef.current = null;
     applyCoach();
   }, [applyCoach, boxValues, euro, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
-    pinnedCropSV, trackingSV]);
+    pinnedCropSV, steadyTrackSV, trackingSV]);
 
   // Expiry must also run when inference stops producing results altogether. It clears crop
   // metadata as well as the visible box; missed detections must not keep an old target alive.
@@ -641,8 +731,22 @@ export default function CaptureScreen() {
         previewRoi,
         batch.roi.zoomProgress,
         batch.zoomRatio,
+        // Android passes are 3-10x slower than iOS; a confident nominee shows on its first pass.
+        ANDROID_CAPTURE ? LOCK_SCORE : undefined,
+        Date.now(),
+        // A slow Android pass often lands after iOS's 700 ms re-lock window; widen it to two passes.
+        relockWindowMs(ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined),
       );
       targetRef.current = decision.state;
+      if (PERF_LOG) {
+        const tally = decisionTallyRef.current;
+        tally[decision.kind] = (tally[decision.kind] ?? 0) + 1;
+        tally.n = (tally.n ?? 0) + 1;
+        if (tally.n % 10 === 0) {
+          perfLog('live.decisions', 0, `last10=${JSON.stringify(tally)} top=${(batch.candidates[0]?.score ?? 0).toFixed(2)}`);
+          decisionTallyRef.current = {};
+        }
+      }
       trackingSV.value = decision.state.active != null;
 
       const nominee = decision.state.acquisition?.candidate ?? decision.state.active;
@@ -652,7 +756,10 @@ export default function CaptureScreen() {
         if (isLocalized(nominee, previewRoi)) {
           const box = nominee.imageBox;
           const previous = localSkinBoxRef.current;
+          const now = Date.now();
           if (!previous || decision.kind === 'handover' ||
+              now - localSkinSeenAtRef.current > localSkinKeepMs(
+                ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined) ||
               Math.hypot(previous.cx - box.cx, previous.cy - box.cy) > 0.12) {
             localSkinGenerationRef.current += 1;
             localSkinStreakRef.current = 0;
@@ -661,6 +768,7 @@ export default function CaptureScreen() {
             lastLocalSkinAtSV.value = 0;
             localSkinBoxRef.current = box;
           }
+          localSkinSeenAtRef.current = now;
           localSkinCxSV.value = box.cx;
           localSkinCySV.value = box.cy;
           localSkinWSV.value = box.w;
@@ -674,16 +782,21 @@ export default function CaptureScreen() {
           localSkinStreakRef.current = 0;
         }
       } else {
+        // No nominee this frame: stop asking for local skin reads, but KEEP the evidence already
+        // gathered for the anchored spot. A faint lesion's score flickers around the bar, and
+        // wiping the streak on every miss meant that with a broad not-skin scene (a wall at the
+        // frame edge) it could never collect the two consecutive reads that let its box show -
+        // 13 s of searching on a centred, visible lesion (screen recording 2026-10-15). The anchor
+        // is still dropped if the next nominee is elsewhere (> 0.12) or after LOCAL_SKIN_KEEP_MS.
         pinnedCropSV.value = -1;
-        localSkinGenerationRef.current += 1;
         localSkinRequestedSV.value = 0;
-        localSkinNeededSV.value = false;
-        localSkinBoxRef.current = null;
-        localSkinStreakRef.current = 0;
       }
 
       if (decision.kind === 'clear') {
         clearTrack();
+        // clearTrack resets the tracker wholesale; keep the decision's memory of the lost lesion so
+        // it can re-lock on its first frame back (stepActiveTarget, RELOCK_MS).
+        targetRef.current = decision.state;
         recordSelection();
         return;
       }
@@ -704,6 +817,7 @@ export default function CaptureScreen() {
       )) {
         if (PERF_ENABLED) perf.rejection.value = 2;
         visibleRef.current = false;
+        steadyTrackSV.value = false;
         metricsRef.current = null;
         resetDetectionBox(boxValues, { immediate: true });
         applyCoach();
@@ -743,13 +857,35 @@ export default function CaptureScreen() {
       lastCenter.current = { x: fx, y: fy };
       lastSize.current = { w: fw, h: fh };
 
-      const displayBox = { x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh };
+      // Where the lesion is NOW: the detection is `age` ms old on arrival and will be on screen for
+      // about half an interval more. Drawn box only - lastCenter (deadband/stability), autofocus
+      // and the crop box all keep the un-extrapolated, measured position.
+      const lastDetectAt = lastDetectAtRef.current;
+      if (lastDetectAt !== null && !acquired && !handover) {
+        const gap = Math.min(1500, Math.max(16, t - lastDetectAt));
+        detectIntervalRef.current = detectIntervalRef.current * 0.7 + gap * 0.3;
+      }
+      lastDetectAtRef.current = t;
+      const age = t - batch.startedAt;
+      const lx = fx + predictLead(euro.px.velocity(), age, detectIntervalRef.current);
+      const ly = fy + predictLead(euro.py.velocity(), age, detectIntervalRef.current);
+      // Square floor in points, so a tiny mole still gets a reticle-sized box around it.
+      const dw = Math.max(fw, BOX_MIN_PT / SW);
+      const dh = Math.max(fh, BOX_MIN_PT / SH);
+      const displayBox = { x: lx - dw / 2, y: ly - dh / 2, w: dw, h: dh };
       const wasVisible = visibleRef.current;
       visibleRef.current = true;
       // Pixels against the same measured view size the mapping above normalised by.
       const viewDims = { width: SW, height: SH };
       if (handover) handoverDetectionBox(boxValues, displayBox, viewDims);
-      else trackDetectionBox(boxValues, displayBox, { snap: acquired || !wasVisible, size: viewDims });
+      // A re-lock glides from where the box just faded, so losing and regaining the same mole reads
+      // as one continuous box rather than a new one appearing.
+      else trackDetectionBox(boxValues, displayBox, {
+        snap: !decision.relock && (acquired || !wasVisible),
+        size: viewDims,
+        // Android: soften the glide to span its slower detector passes (iOS keeps the 320 spring).
+        cadenceMs: ANDROID_CAPTURE ? androidScheduleSV.value.intervalMs : undefined,
+      });
 
       const icx = euro.ix.filter(imageBox.cx, t);
       const icy = euro.iy.filter(imageBox.cy, t);
@@ -764,6 +900,7 @@ export default function CaptureScreen() {
         locked: target.score >= LOCK_SCORE,
         stable: stableStreakRef.current >= STABLE_FRAMES,
       };
+      steadyTrackSV.value = ANDROID_CAPTURE && stableStreakRef.current >= STABLE_FRAMES;
       if (ANDROID_CAPTURE && canFocusRef.current && !captureInFlightRef.current) {
         const nextFocus = nextAutoFocus(autoFocusRef.current, t, fx, fy, stableStreakRef.current);
         if (nextFocus) {
@@ -787,16 +924,22 @@ export default function CaptureScreen() {
     if (!acceptsSession(sessionRef.current, callbackSession)) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     gateRef.current = code;
     applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   const onDebug = useRunOnJS((msg: string) => console.log('[fp]', msg), []);
+  const livePassCountSV = useWorkletValue(0);
+  const onLivePass = useRunOnJS((detMs: number, totalMs: number, intervalMs: number) => {
+    perfLog('live.pass', totalMs, `detector=${detMs}ms interval=${Math.round(intervalMs)}ms`);
+  }, []);
   // Live skin-gate reads arrive as 0 skin / 1 not skin / 2 face, debounced here by stepScene.
   const onScene = useRunOnJS((code: number, callbackSession: number, startedAt: number) => {
     if (!acceptsSession(sessionRef.current, callbackSession)) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     const before = sceneRef.current.scene;
     sceneRef.current = stepScene(sceneRef.current, code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin');
@@ -809,17 +952,18 @@ export default function CaptureScreen() {
       resetDetectionBox(boxValues, { immediate: true });
       applyCoach();
     } else applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   const onLocalScene = useRunOnJS((code: number, callbackSession: number, generation: number, startedAt: number) => {
     if (!acceptsSession(sessionRef.current, callbackSession) || generation !== localSkinGenerationRef.current) return;
     if (ANDROID_CAPTURE && !acceptsAndroidResult(
       sessionRef.current, callbackSession, startedAt, Date.now(), captureInFlightRef.current,
+      androidMaxAgeMs(),
     )) return;
     const read = code === 2 ? 'face' : code === 1 ? 'not_skin' : 'skin';
     localSkinStreakRef.current = stepLocalSkin(localSkinStreakRef.current, read);
     if (localSkinStreakRef.current >= 2) localSkinNeededSV.value = false;
     applyCoach();
-  }, []);
+  }, [androidMaxAgeMs]);
   /* eslint-enable react-hooks/immutability */
 
   // VisionCamera v4's worklet can't touch a Nitro HybridObject's native state, so box the
@@ -867,21 +1011,24 @@ export default function CaptureScreen() {
     visibleRef.current = false;
     targetRef.current = initialActiveTargetState;
     stableStreakRef.current = 0;
+    steadyTrackSV.value = false;
     lastCenter.current = null;
     lastSize.current = null;
     lastImgBox.current = null;
     metricsRef.current = null;
     Object.values(euro).forEach((filter) => filter.reset());
+    lastDetectAtRef.current = null;
     resetDetectionBox(boxValues, { immediate: true });
     guideRef.current = guide;
+    guideSV.value = guide;
     lastGateSV.value = -1;
     blurStreakSV.value = 0;
     gateRef.current = GATE_OK;
     applyCoach();
-  }, [guide, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
+  }, [guide, guideSV, applyCoach, boxValues, blurStreakSV, lastGateSV, euro, cropIndexSV,
     lastSkinAtSV, lastLocalSkinAtSV, localSkinAttemptsSV, localSkinNeededSV, localSkinRequestedSV,
     perf.firstBoxMs, perf.searchCrop, perf.searchFraction, perf.candidateScore, perf.rejection,
-    pinnedCropSV, sessionSV, trackingSV, androidScheduleSV, targetFps, perf.intervalMs, perf.resultAgeMs]);
+    pinnedCropSV, sessionSV, trackingSV, androidScheduleSV, steadyTrackSV, targetFps, perf.intervalMs, perf.resultAgeMs]);
   useEffect(() => {
     restartSession();
   }, [deviceId, guide, isFocused, appActive, model, restartSession]);
@@ -892,7 +1039,7 @@ export default function CaptureScreen() {
   const frameProcessor = useFrameProcessor(
     (frame) => {
       'worklet';
-      if (boxedModel == null || layout == null || capturePausedSV.value) return;
+      if (boxedModel == null || layout == null || capturePausedSV.value || !guideSV.value) return;
       const detect = () => {
         'worklet';
         if (capturePausedSV.value) return;
@@ -909,14 +1056,17 @@ export default function CaptureScreen() {
           const zoomRatio = Math.max(1, zoom / Math.max(0.001, neutralZoom));
           const cropIndex = nextSearchCrop(cropIndexSV.value, pinnedCropSV.value);
           cropIndexSV.value = cropIndex;
-          const zoomRoi = searchRoiForZoom(frame.width, frame.height, zoom, neutralZoom);
           const guideCenter = previewToFullFrame(
             { cx: 0.5, cy: 0.42, w: 0, h: 0 },
             frame.width, frame.height, SW, SH, mirrored,
           );
+          // The search cycle is NOT narrowed by zoom: VisionCamera's frames are already zoomed, so
+          // shrinking the crop too magnified the spot twice. At 4x even the "wide" crop was a 46%
+          // centre square, the detector never saw the whole view, and its no-background phantom
+          // (a box filling most of a tight crop of plain skin) out-scored the real, now-blurry mole.
           const requestedRoi = focusedSearchRoi(
             frame.width, frame.height,
-            Math.min(zoomRoi.fraction, SEARCH_FRACTIONS[cropIndex]),
+            SEARCH_FRACTIONS[cropIndex],
             cropIndex === 0 ? { cx: 0.5, cy: 0.5, w: 0, h: 0 } : guideCenter,
           );
           const crop = sensorCropForRoi(frame.width, frame.height, frame.orientation, requestedRoi);
@@ -980,6 +1130,7 @@ export default function CaptureScreen() {
               : input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength);
           const outputs = tflite.runSync([inputBuffer as ArrayBuffer]);
           const tInferred = Date.now();
+          detectMsSV.value = tInferred - tPreprocessed;
           const out = new Float32Array(outputs[0]);
           const { chMajor, channels, anchors, numClasses } = layout;
 
@@ -1036,9 +1187,14 @@ export default function CaptureScreen() {
             const localGeneration = localSkinRequestedSV.value;
             const searching = !trackingSV.value;
             const interval = searching ? searchSkinMs : trackSkinMs;
-            const checkScene = t0 - lastSkinAtSV.value >= interval;
-            const checkLocal = !checkScene && localGeneration > 0 && localSkinNeededSV.value &&
+            const sceneDue = t0 - lastSkinAtSV.value >= interval;
+            const localDue = localGeneration > 0 && localSkinNeededSV.value &&
               (localSkinAttemptsSV.value < 2 || t0 - lastLocalSkinAtSV.value >= interval);
+            // Android: a pass is slower than the scene interval, so the scene read was due on every
+            // tick and the local reads a nominee needs never ran - in a not-skin scene its box could
+            // not show at all. There the local read goes first (it stops once two reads agree).
+            const checkLocal = localDue && (ANDROID_CAPTURE || !sceneDue);
+            const checkScene = !checkLocal && sceneDue;
             if (checkLocal || checkScene) {
               const skinRoi = checkLocal
                 ? localSkinRoi(frame.width, frame.height, {
@@ -1089,6 +1245,13 @@ export default function CaptureScreen() {
             androidScheduleSV.value = completeAndroidDetection(
               androidScheduleSV.value, callbackSession, Date.now() - t0,
             );
+            // Release-safe stage timing (EXPO_PUBLIC_PERF_LOG); every 10th pass to keep the hop cheap.
+            if (PERF_LOG && detectMsSV.value >= 0) {
+              livePassCountSV.value += 1;
+              if (livePassCountSV.value % 10 === 1) {
+                onLivePass(detectMsSV.value, Date.now() - t0, androidScheduleSV.value.intervalMs);
+              }
+            }
             if (PERF_ENABLED) perf.intervalMs.value = androidScheduleSV.value.intervalMs;
           }
           inferenceBusySV.value = false;
@@ -1097,7 +1260,9 @@ export default function CaptureScreen() {
       if (ANDROID_CAPTURE) {
         const now = Date.now();
         const schedule = androidScheduleSV.value;
-        if (!androidDetectionDue(schedule, now, capturePausedSV.value, inferenceBusySV.value)) return;
+        if (!androidDetectionDue(
+          schedule, now, capturePausedSV.value, inferenceBusySV.value, steadyTrackSV.value,
+        )) return;
         androidScheduleSV.value = { ...schedule, lastStartedAt: now };
         detect();
       } else {
@@ -1109,6 +1274,10 @@ export default function CaptureScreen() {
       layout,
       boxedSkin,
       skinSize,
+      guideSV,
+      detectMsSV,
+      livePassCountSV,
+      onLivePass,
       lastSkinAtSV,
       lastLocalSkinAtSV,
       localSkinAttemptsSV,
@@ -1141,6 +1310,7 @@ export default function CaptureScreen() {
       capturePausedSV,
       inferenceBusySV,
       androidScheduleSV,
+      steadyTrackSV,
       perf,
     ],
   );
@@ -1239,7 +1409,10 @@ export default function CaptureScreen() {
   const wasReady = useRef(false);
   useEffect(() => {
     const ready = coach === 'ready';
-    if (ready && !wasReady.current) Vibration.vibrate(10);
+    if (ready && !wasReady.current) {
+      Vibration.vibrate(10);
+      lastBuzzAtRef.current = Date.now();
+    }
     wasReady.current = ready;
   }, [coach]);
 
@@ -1267,18 +1440,45 @@ export default function CaptureScreen() {
   async function shoot() {
     const cam = camera.current;
     if (!cam || busy || captureInFlightRef.current) return;
+    // The set is full: a fourth photo has nowhere to go. Show the set instead of discarding a shot.
+    if (session.images.length >= MAX_IMAGES_PER_SCREENING) {
+      router.push('/scan/review');
+      return;
+    }
     captureInFlightRef.current = true;
     capturePausedSV.value = true;
     perfMark('shutter');
+    // Instant acknowledgement: the still can take a second or two to save on Android, and a
+    // spinner alone read as "the tap did not register".
+    // No vibration here: on iOS it is a ~400 ms buzz that shook the phone DURING the exposure.
+    // The flash below is the acknowledgement.
+    shutterFlash.value = withSequence(withTiming(0.7, { duration: 40 }), withTiming(0, { duration: 220 }));
     if (ANDROID_CAPTURE) setBusy(true);
     let navigated = false;
     try {
       // The current detector pass owns a camera frame and the shared TFLite interpreter. Let it
       // finish before asking the native camera to capture a still; new passes are already paused.
-      await waitForCaptureIdle(
-        () => inferenceBusySV.value,
-        ANDROID_CAPTURE ? ANDROID_CAPTURE_WAIT_MS : CAPTURE_INFERENCE_WAIT_MS,
-      );
+      // In parallel: wait for the phone to stop moving after the tap (the tap itself jolts it,
+      // which blurs a macro shot). Overlapping the two waits means steadiness costs nothing when
+      // a detector pass is still finishing anyway.
+      const hintTimer = setTimeout(() => setHoldSteady(true), STEADY_HINT_AFTER_MS);
+      const steadyWait = waitForSteady(steadyTracker, {
+        now: Date.now,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+        notBefore: Platform.OS === 'ios' ? lastBuzzAtRef.current + IOS_BUZZ_MS : 0,
+      });
+      let steadyRes;
+      try {
+        await waitForCaptureIdle(
+          () => inferenceBusySV.value,
+          ANDROID_CAPTURE ? ANDROID_CAPTURE_WAIT_MS : CAPTURE_INFERENCE_WAIT_MS,
+        );
+        steadyRes = await steadyWait;
+      } finally {
+        clearTimeout(hintTimer);
+        setHoldSteady(false);
+      }
+      perfLog('capture.steadyWait', steadyRes.waitedMs, steadyRes.reason);
       // Freeze metadata at exposure time, before image manipulation or the expiry timer can
       // change it. Slow Android results must not auto-crop a new photo to an old target.
       const androidCaptureBox = ANDROID_CAPTURE && metricsRef.current != null &&
@@ -1322,11 +1522,29 @@ export default function CaptureScreen() {
       if (Math.max(photo.width, photo.height) > PHOTO_LONG_EDGE) {
         actions.push({ resize: { height: PHOTO_LONG_EDGE } });
       }
-      const upright = await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
+      // Android: many HALs already write upright portrait pixels with no EXIF rotation. The pass
+      // below then only downscales, ~1 s on a vivo V2248, and crop.tsx cuts its square from the
+      // original just as well (see canSkipUpright). Decided from the file's own EXIF;
+      // photo.width/height are its raw pixel bounds (BitmapFactory, EXIF ignored).
+      let skipUpright = false;
+      let exifNote = '';
+      if (ANDROID_CAPTURE) {
+        try {
+          const head = await readAsStringAsync(raw, { encoding: 'base64', position: 0, length: 65536 });
+          const orientation = jpegExifOrientation(new Uint8Array(Buffer.from(head, 'base64')));
+          skipUpright = canSkipUpright(photo.width, photo.height, orientation, mirrored);
+          exifNote = `exif=${orientation}`;
+        } catch (e) {
+          exifNote = `exif read failed: ${String(e)}`;
+        }
+      }
+      const upright = skipUpright
+        ? { uri: raw, width: photo.width, height: photo.height }
+        : await manipulateAsync(raw, actions, { compress: 0.92, format: SaveFormat.JPEG });
       // The sensor still is the single biggest scratch file we produce (2-8 MB, full resolution)
       // and `upright` has now superseded it - nothing downstream ever reads photo.path again.
-      await discardScratch(raw);
-      perfLog('capture.upright', Date.now() - tUpright);
+      if (!skipUpright) await discardScratch(raw);
+      perfLog('capture.upright', Date.now() - tUpright, `${skipUpright ? 'skipped' : 'baked'} ${exifNote}`);
       // Carry the live detector's verdict + box forward. We can't re-run the model on the still
       // here - its interpreter is busy on the camera thread, and hitting it from JS crashes - so
       // the crop screen uses this box (full-frame normalized) to auto-frame the lesion.
@@ -1406,11 +1624,12 @@ export default function CaptureScreen() {
             isActive={isFocused && appActive}
             onStarted={restartSession}
             photo
-            // Android's default ('balanced') is zero-shutter-lag: a frame lifted from the preview
-            // ring buffer with no pre-capture AF/AE, soft at macro distance. 'quality' runs the
-            // capture sequence and full ISP processing - a sharper still for the classifier at a
-            // few hundred ms more shutter time. iOS's 'balanced' is already right.
-            photoQualityBalance={ANDROID_CAPTURE ? 'quality' : 'balanced'}
+            // 'balanced' on both platforms. Android's 'quality' (MAXIMIZE_QUALITY) re-ran AF/AE and
+            // full ISP processing after the tap: 1.8-2.5 s of spinner on a vivo V2248 (2026-10-07).
+            // Lesion auto-focus (nextAutoFocus) already focuses on the spot before the tap, so the
+            // zero-shutter-lag frame is the focused one.
+            // 'speed' was measured too (2026-10-19, same phone): 1.34 s vs 1.43 s - not worth it.
+            photoQualityBalance="balanced"
             animatedProps={animatedProps}
             /**
              * Load-bearing; do NOT delete this as a redundant default.
@@ -1429,11 +1648,15 @@ export default function CaptureScreen() {
              */
             isMirrored={false}
             torch={torch && hasTorch ? 'on' : 'off'}
-            frameProcessor={guide && isFocused ? frameProcessor : undefined}
+            // Android: attaching/detaching a frame processor adds/removes the CameraX analysis use
+            // case and rebinds the whole session - a ~0.6 s black preview on every Guide toggle
+            // (vivo V2248, 2026-10-07). Keep it attached while focused and gate on guideSV.
+            frameProcessor={(ANDROID_CAPTURE || guide) && isFocused ? frameProcessor : undefined}
           />
         </View>
       </GestureDetector>
 
+      <Reanimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.shutterFlash, shutterFlashStyle]} />
       {focusPt ? <FocusReticle key={focusPt.id} x={focusPt.x} y={focusPt.y} /> : null}
 
       {/* Framing brackets */}
@@ -1468,7 +1691,9 @@ export default function CaptureScreen() {
           Too-dark takes the full screen (you can't see anyway); blur is a compact banner so the
           preview stays visible and the user can watch it sharpen. */}
       {/* Android's full-quality capture runs AF/AE first; moving during it is the main way to blur. */}
-      {busy ? (
+      {holdSteady ? (
+        <CoachPill kind="steady" top={insets.top + Space.xxl} />
+      ) : busy ? (
         ANDROID_CAPTURE ? <CoachPill kind="steady" top={insets.top + Space.xxl} /> : null
       ) : coach == null ? null : coach === 'dark' ? (
         <CaptureCoach title={t("It's too dark")} subtitle={t("Turn on the light or move somewhere brighter")} icon="sun.max" />
@@ -1507,10 +1732,12 @@ export default function CaptureScreen() {
       ) : null}
 
       {/* Instructions */}
-      <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
-        <ThemedText type="subhead" style={styles.instructionsLabel}>
-          {t("Instructions")}</ThemedText>
-      </Pressable>
+      <TourTarget id="captureInstructions" style={styles.instructionsAnchor}>
+        <Pressable onPress={() => router.push('/scan/instructions')} style={styles.instructions} accessibilityRole="button">
+          <ThemedText type="subhead" style={styles.instructionsLabel}>
+            {t("Instructions")}</ThemedText>
+        </Pressable>
+      </TourTarget>
 
       {/* Zoom indicator - absent, not dead, on a fixed-focal-length camera (see canZoom). */}
       {canZoom ? (
@@ -1549,21 +1776,17 @@ export default function CaptureScreen() {
           <View style={styles.sideBtn} />
         )}
 
-        {session.images.length > 0 ? (
-          <View style={styles.shotCount} pointerEvents="none">
-            <ThemedText type="caption" style={styles.shotCountText}>
-              {session.images.length} {t("of")} {MAX_IMAGES_PER_SCREENING}
-            </ThemedText>
-          </View>
-        ) : null}
+        <ReviewChip style={styles.shotCount} />
         {/* eslint-disable-next-line react-hooks/immutability -- event handler coordinates a
             native-backed worklet signal after render */}
-        <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")} accessibilityState={{ busy, disabled: busy }}>
-          <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
-          {ANDROID_CAPTURE && busy
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />}
-        </Pressable>
+        <TourTarget id="captureShutter">
+          <Pressable onPress={shoot} disabled={busy} style={styles.shutter} accessibilityRole="button" accessibilityLabel={t("Capture")} accessibilityState={{ busy, disabled: busy }}>
+            <GradientBackground variant="sunsetVivid" start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.shutterFill} />
+            {ANDROID_CAPTURE && busy
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Icon name="camera.fill" tintColor="#FFFFFF" size={28} />}
+          </Pressable>
+        </TourTarget>
 
         <Pressable
           hitSlop={12}
@@ -1571,11 +1794,13 @@ export default function CaptureScreen() {
           style={styles.sideBtn}
           accessibilityRole="button"
           accessibilityLabel={t("Toggle guide")}>
-          <View style={[styles.toggle, guide && styles.toggleOn]}>
-            <View style={[styles.knob, guide && styles.knobOn]} />
-          </View>
-          <ThemedText type="caption" style={styles.guideLabel}>
-            {t("Guide")}</ThemedText>
+          <TourTarget id="captureGuide" style={styles.guideTarget}>
+            <View style={[styles.toggle, guide && styles.toggleOn]}>
+              <View style={[styles.knob, guide && styles.knobOn]} />
+            </View>
+            <ThemedText type="caption" style={styles.guideLabel}>
+              {t("Guide")}</ThemedText>
+          </TourTarget>
         </Pressable>
       </View>
 
@@ -1705,6 +1930,7 @@ const BRACKET = 36;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
+  shutterFlash: { backgroundColor: '#FFFFFF' },
   black: { flex: 1, backgroundColor: '#000' },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   bracket: { position: 'absolute', width: BRACKET, height: BRACKET, borderColor: 'rgba(255,255,255,0.95)' },
@@ -1729,10 +1955,8 @@ const styles = StyleSheet.create({
   frameHintText: { color: 'rgba(255,255,255,0.92)' },
   close: { position: 'absolute', left: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   flip: { position: 'absolute', right: Space.lg, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  instructionsAnchor: { position: 'absolute', bottom: 196, alignSelf: 'center' },
   instructions: {
-    position: 'absolute',
-    bottom: 196,
-    alignSelf: 'center',
     paddingHorizontal: Space.lg,
     paddingVertical: Space.sm,
     borderRadius: 999,
@@ -1789,6 +2013,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Space.xl,
   },
   sideBtn: { width: 64, alignItems: 'center', gap: 4 },
+  guideTarget: { alignItems: 'center', gap: 4 },
   shutter: {
     width: 76,
     height: 76,
@@ -1800,16 +2025,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
   },
   shutterFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  shotCount: {
-    position: 'absolute',
-    top: -34,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: Radius.pill,
-    backgroundColor: 'rgba(20,16,13,0.55)',
-  },
-  shotCountText: { color: '#FFFFFF' },
+  shotCount: { position: 'absolute', top: -Space.huge, alignSelf: 'center' },
   toggle: { width: 42, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.3)', padding: 3, justifyContent: 'center' },
   toggleOn: { backgroundColor: '#FF8A4C' },
   knob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFFFFF' },

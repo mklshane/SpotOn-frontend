@@ -1,5 +1,5 @@
 import { t, localizedCopy } from "../i18n/core";
-import type { LesionClass, TriageTier } from './types';
+import type { LesionClass, TriageResult, TriageTier } from './types';
 
 /**
  * All user-facing copy for triage results, keyed by tier - the single source for the
@@ -27,7 +27,12 @@ export type TierContent = {
   offerReminder: boolean;
 };
 
-export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
+/**
+ * Untranslated source copy. The Learn hub's result explainer reads this so its
+ * description of each level is word for word what the result screen shows;
+ * display code uses TIER_CONTENT, whose fields translate on read.
+ */
+export const TIER_SOURCE: Record<TriageTier, TierContent> = {
   low: {
     name: 'Low',
     headline: 'No strong signs of concern right now',
@@ -76,7 +81,9 @@ export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy({
     showEducation: false,
     offerReminder: false,
   },
-});
+};
+
+export const TIER_CONTENT: Record<TriageTier, TierContent> = localizedCopy(TIER_SOURCE);
 
 /** Shown instead of the standard headline when the Safety Floor Rule was applied. */
 export const CONFIDENCE_QUALIFIER = localizedCopy({
@@ -96,6 +103,21 @@ export const MALIGNANT_GATE = localizedCopy({
   body:
     'The closest single match for your photo was not a cancer type, but a meaningful share of the assessment still pointed toward one. When that happens we raise the recommendation rather than rely on the closest match alone. This is a precaution, not a detection.',
 });
+
+/**
+ * Shown instead of MALIGNANT_GATE when the floor was raised and the closest match itself IS a
+ * cancer type (MEL/SCC/BCC) - the gate copy's "was not a cancer type" would be false there.
+ */
+export const MALIGNANT_TOP = localizedCopy({
+  title: 'Worth having checked',
+  body:
+    'The closest match for your photo was a pattern doctors prefer to examine, even though the overall score was low. We raise the recommendation in that case rather than rely on the score alone. This is a precaution, not a detection.',
+});
+
+/** Picks the explanation for a gate-raised result: the copy depends on what the argmax was. */
+export function malignantGateCopy(topClass: string): { title: string; body: string } {
+  return ['MEL', 'SCC', 'BCC'].includes(topClass) ? MALIGNANT_TOP : MALIGNANT_GATE;
+}
 
 /** Non-alarming retake prompt for a first low-confidence pass. */
 export const RESCAN_PROMPT = localizedCopy({
@@ -218,3 +240,33 @@ export const CLASS_DISPLAY = Object.fromEntries(
     },
   ]),
 ) as Record<LesionClass, ClassDisplay>;
+
+/**
+ * The result's display label. Usually the top class alone; for a combined malignant result (both of
+ * the top two are malignant and the runner-up holds >= 30% - see pickCombinedMalignant) it names
+ * both, higher probability first: "Melanoma or Basal Cell Carcinoma" (MEL/BCC). Clinical names stay
+ * English in every locale, like CLASS_DISPLAY; only the joining word is translated.
+ */
+export type ResultDisplay = {
+  name: string;
+  /** Model codes, e.g. "MEL" or "MEL/BCC". */
+  code: string;
+  /** Each named class with its probability, in display order (one entry, or two when combined). */
+  parts: { cls: LesionClass; p: number }[];
+};
+
+export function resultDisplay(
+  topClass: LesionClass,
+  topConfidence: number,
+  triage: Pick<TriageResult, 'secondClass' | 'secondConfidence'>,
+): ResultDisplay {
+  const parts = [{ cls: topClass, p: topConfidence }];
+  if (triage.secondClass && triage.secondConfidence != null) {
+    parts.push({ cls: triage.secondClass, p: triage.secondConfidence });
+  }
+  return {
+    name: parts.map((x) => CLASS_NAME[x.cls]).join(` ${t('or')} `),
+    code: parts.map((x) => x.cls).join('/'),
+    parts,
+  };
+}

@@ -104,8 +104,8 @@ Layout (`ClinicsView.tsx`): a full-screen `ClinicMap` with a `@gorhom/bottom-she
 `onLayout` → `overlayH`, passed to both views as `topInset`):
 - `DirectorySegments` - two **gray tab pills**: active = brand-filled pill with white
   icon+label, inactive = muted gray (`elementBg`) pill. Icons `building.2.fill` / `stethoscope`.
-- `SearchBar` (floating) - debounced 250ms (`useDebouncedValue`), placeholder "Search clinics
-  or area…". Switching segments clears the query.
+- `SearchBar` (floating) - debounced 250ms (`useDebouncedValue`), placeholder "Search clinic,
+  city or doctor…" (Dermatologists: "Search dermatologists…"). Switching segments clears the query.
 - Offline chip (brand tint) when `!isOnline`.
 
 **Map** (`ClinicMap.tsx`):
@@ -119,18 +119,26 @@ Layout (`ClinicsView.tsx`): a full-screen `ClinicMap` with a `@gorhom/bottom-she
   clinic's `city, province`.
 
 **Bottom sheet** (draggable "container"):
-- Snap points `['32%', '64%', '92%']`, starts collapsed (`index 0`), `topInset` = overlay
-  height so a fully-expanded sheet never covers the overlay. `enableDynamicSizing={false}`.
-- Fixed header (grabber + these): **results row** - "`N clinics · by <distance|rating|name>`"
-  and a **sort cycle button** (`arrow.up.arrow.down`) that rotates **Nearest → Top rated →
-  Name** (Nearest only when location is known); then a horizontal **filter chip row**:
-  `All Clinics` (clears), `Open Now`, `PhilHealth`, then service facets derived from the data.
-- Body: `BottomSheetFlatList` of `ClinicCard`. `ListState` handles loading/empty/error.
+- Snap points `['20%', '50%', '96%']`, starts collapsed (`index 0`). `enableDynamicSizing={false}`.
+- Fixed header: **results row** - "`N clinics & hospitals`" and a labelled **sort
+  pill** that rotates **Nearest → Top rated → A–Z** (Nearest only with a location). Without a
+  location (permission denied) a **"Turn on location"** banner asks again, or opens Settings.
+- Two horizontal **chip rows**: place filters `All` (clears) · `Derm in today` · `Hospitals` ·
+  `Clinics` · `Weekend clinic` · `Books online`, then the patient **concern** chips
+  (`lib/concerns.ts`; the active one moves to the front).
+- Body: `BottomSheetFlatList` of `ClinicCard`. With a location and no search: the nearest 200 (`NEAREST_LIMIT`); a typed search covers the whole directory, nearest first; no location: every match by name. PDS credit as footer.
+  `ListState` handles downloading / not downloaded / loading / empty (+ Clear filters) / error.
 
-**Data flow**: `coords ? nearbyFacilities(...) : listFacilities(...)` keyed on
-`[query, service, coords]` (stale-while-loading - no spinner flash on refilter). `Open Now` /
-`PhilHealth` are applied client-side; sort is client-side (`distance_m` / `google_rating` /
-`name`). Facet chips come from a one-time broad `listFacilities({limit:1000})`.
+**Data flow**: `listFacilities({q, concern, kind, dayMask, hasBookingUrl, limit: null})`, then a
+JS distance pass when `coords` is known. Search is accent-folded (`foldSearch`, "Las Pinas" ↔
+"Las Piñas") and also matches **linked dermatologists' names**, so a doctor's name finds the
+places they hold clinic. `facilityDermSummary()` (count + union of clinic days per facility)
+drives `Derm in today` (a derm is scheduled today, or a non-hospital clinic is open now) and the
+cards. Derm-first ranking (`dermTier`) applies on top of any sort.
+
+**Scan result → directory**: `/(tabs)/directory?concern=skin_cancer_mole_check&at=<ms>`. The
+`at` nonce makes each visit re-apply the concern and switch to Clinics, even after the user
+cleared the chip or moved tabs.
 
 **Pin → preview card**:
 - Tapping a pin selects it. The preview is a **`Marker` anchored to the clinic's coordinate**
@@ -146,10 +154,15 @@ Layout (`ClinicsView.tsx`): a full-screen `ClinicMap` with a `@gorhom/bottom-she
   We read `e.nativeEvent.features`, call `e.stopPropagation()`, and guard `Map.onPress` with a
   timestamp so the same tap can't clear the selection.
 
-**Clinic list card** (`ClinicCard.tsx`): left rail = small orange marker dot + bold distance +
-open/closed status dot; body = name, tag badges (**PhilHealth**, **Open Now**, **practice
-type**, top service), info rows (address / Mon–Fri hours / phone), and actions **Directions**
-(filled) · **Call** (icon) · **Details** (outline). Card tap and Details both open the detail.
+**Clinic list card** (`ClinicCard.tsx`): left rail = distance + open/closed dot; body = name, a
+**derm line** ("3 dermatologists · in today", or "No dermatologist listed - call the OPD" for a
+hospital with none), badges, address / phone, and actions **Directions** · **Book** (disabled
+offline) · **Call** · **Details**. Hospitals show no "Open now" or Mon–Fri hours - a hospital's
+own (often 24h) hours say nothing about when a derm is in. No photo thumbnail (Google's photo
+credit can't fit; the detail hero carries it). One screen-reader stop per card, with
+Directions / Call / Book as accessibility actions. The list shares one number-picker sheet.
+The "hospital without derm" rule is one function, `isHospitalWithoutDerm(facility, dermCount)`,
+used by the card, the map preview and the detail page.
 
 **Offline map packs** (`map-offline.ts`): on first location + connection, `downloadAreaPack`
 caches a bounded OpenFreeMap pack (~25 km, zoom 10–15) so tiles render offline. Gated on
@@ -157,21 +170,30 @@ caches a bounded OpenFreeMap pack (~25 km, zoom 10–15) so tiles render offline
 
 ---
 
-## 6. Online Booking (doctors) view
+## 6. Dermatologists view
 
-`DoctorsView.tsx` - no map. A top spacer of `topInset` clears the overlay, then a **PDS
-certified** toggle + specialty facet chips, then a `FlatList` of `DoctorCard` (name, specialty,
-city, PDS badge) from `listDoctors({q, specialty, pdsCertified})`. `ListState` for
-loading/empty/error. Search comes from the shared overlay.
+`DoctorsView.tsx` - no map. Was "Online Booking" and listed only doctors with a booking link
+(~150 of ~1,500), so most dermatologists could not be found by name anywhere. Now it lists
+**every non-excluded doctor** (`listDoctors({q, hasBookingLink?, dayMask?, limit: null})`),
+nearest practice first when located. Chips: `All` · `Books online` · `In today` · `Weekend
+clinic`. `DoctorCard` shows the primary practice, "In today" and "Books online" tags
+(`doctorCardInfo()`). A failed refresh shows a banner over the old rows. PDS credit as footer.
 
-**Doctor detail** (`app/directory/doctor.tsx`): `getDoctor` + `getDoctorBookingLinks` → name,
-title, specialties + PDS badge, and a list of **booking links** (platform name, fee, rating,
-availability) each opening its URL via `expo-web-browser`.
+**Doctor detail** (`app/directory/doctor.tsx`): identity → best booking link as the primary
+action → **Practices at** (in today first, then nearest; translated schedule; Call + Directions
+per practice) → direct line → more booking links → about/website → footer (updated date,
+Report incorrect info, PDS credit).
 
-**Clinic detail** (`app/directory/clinic.tsx`): `getFacility` → name + practice-type/status
-badges, address (→ directions), hours card, services badges, PhilHealth, fee range, rating;
-actions **Book online** (`booking_url`), **Call**, **Directions**, **Website**. Manual back
-header like `scan/history.tsx`.
+**Clinic detail** (`app/directory/clinic.tsx`): identity/badges → actions **Book**, **Skin
+clinic** (the derm OPD's own line from `department_info.phone`, when known), **Call/Hospital**,
+**Directions**, **Website** → hours → address → skin services → doctors here (in today first,
+"Schedule checked <date>" from `verified_at`) → fee/about → footer with Report incorrect info
+and the PDS credit.
+
+**PDS credit** (`components/directory/PdsAttribution.tsx`): the PDS Board approved using its
+"Find a Dermatologist" directory on 2026-10-16 on condition that PDS is acknowledged; the line
+(with a link to https://pds.org.ph/search-doctor/ and a not-an-endorsement note) appears on
+both lists and both detail pages.
 
 ---
 
@@ -192,7 +214,9 @@ the map lights up with no code change. `showZoom` and the attached `Marker` are 
 - "Details" and the preview's "+N more" both open the clinic detail; "+N more" could instead
   expand services inline.
 - The sort control is a cycle button, not a dropdown menu.
-- Doctors have no map (no coordinates in the doctor table) - Online Booking is list-only.
+- Doctors have no map (no coordinates in the doctor table) - the Dermatologists tab is list-only.
+- Concern tags are near-uniform on doctors (every PDS derm carries the same 8), so the doctor
+  list deliberately has no concern filter.
 
 ---
 
@@ -209,3 +233,40 @@ the map lights up with no code change. `showZoom` and the attached `Marker` are 
 5. Offline (airplane mode after caching a pack): tiles still render, distance sort still works,
    details open, doctor booking links / clinic actions open externally.
 6. Pressure-test each screen against the 10 anti-AI-slop rules (`spoton-ui-design`).
+
+---
+
+## 10. Round 2 (2026-10-17): information features
+
+- **Scan result → nearest dermatologists** (`components/directory/NearbyDerms.tsx`, on `scan/result.tsx`
+  when `tier.showDirectory`): the 3 nearest tier-0 places doing mole checks, each with Call +
+  Directions, and "See all clinics on the map". Uses the last known location (never prompts).
+  If the nearest is > 50 km (`FAR_METERS`), an "Or consult online" block lists up to 3 doctors with
+  an `offers_online` booking link (`onlineConsultOptions()`), cheapest fee first.
+- **Fees / online / PhilHealth**: `doctor_facility.consultation_fee` and `booking_links.offers_online`
+  (server migration 018, SQLite v18). Clinic doctor rows and doctor practice cards show
+  "₱800 consult"; cards show "Consult from ₱…" (facility `fee_min`); doctors with an online link get
+  an "Online consult" badge/chip. PhilHealth shows only a positive "PhilHealth-accredited (hospital)"
+  badge - never "no PhilHealth".
+- **My dermatologists** (`data/saved-repo.ts`, `app/profile/saved.tsx`): bookmark on both detail
+  headers (`ListingActions`), per account, this device only, wiped with the account; rows keep a
+  name snapshot so a place dropped from the directory still reads ("No longer listed").
+- **Share** (`lib/share-listing.ts`): system share sheet (Messenger/SMS/…); web uses
+  `navigator.share`, else copies to the clipboard. Message = name, address, phone, up to 3
+  dermatologists' schedules, map link.
+- **Report incorrect info** (`app/directory/report.tsx`, modal): category chips + optional note →
+  `POST /directory/reports` (server 019). Offline/5xx → queued per account in sync_meta and sent
+  after the next successful directory sync (`lib/directory-reports.ts`). Signed-out users get the
+  old mailto. Reviewed in SpotOn-admin → Reports.
+- **Concern chips**: tags are now evidence-based (37_ rewrite); a chip shows only when ≥ 15 places
+  list it (`MIN_CONCERN_PLACES`), under the note "Every dermatologist treats common skin problems…".
+
+### 2026-10-17 list/filter redesign
+- Sheet header: one line - "Near <city of nearest place>" (or "Results for “q”" / "All clinics") +
+  "N places", sort pill on the right. The big count card is gone.
+- One chip rail (`Chip size="sm"`, 36pt + hit slop): **Filters** (opens `DirectoryFilterSheet`: place
+  type, availability toggles, skin concern with its explanation, sort) · active concern as a removable
+  chip · Derm in today · Clinics · Hospitals · Weekend.
+- `ClinicCard`: name + distance; one meta line (type · ★ rating · From ₱fee · PhilHealth); open/closed
+  with next change (clinics only); derm line; one address line; Call / Directions / Book pills. The
+  whole card opens the details (no Details button, no badge row, no distance rail).

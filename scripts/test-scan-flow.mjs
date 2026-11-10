@@ -23,7 +23,7 @@ execFileSync(
   ['src/lib/triage/scan-flow.ts', '--ignoreConfig', '--outDir', out, '--module', 'esnext', '--target', 'es2022', '--lib', 'es2022', '--moduleResolution', 'bundler'],
   { cwd: ROOT, stdio: 'inherit' },
 );
-const { decideIqa, decideQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
+const { decideIqa, decideQuality, decideSetQuality, nextStepAfterQuality, decideAnalysis, skinGateVerdict, colourSkinOk, isHeadRegion, readStateFromVerdict, retakeStartsRescan } = await import(
   pathToFileURL(join(out, 'scan-flow.js')).href
 );
 
@@ -49,7 +49,11 @@ check('iqa: blur blocks', !iqa({ sharpOk: false }).pass);
 // The lesion ROW is a conjunction: a lesion cannot be in a frame that is not skin, and a green
 // tick on a photo of a street is a false statement rather than a mis-tuned threshold.
 check('iqa: not skin fails the lesion ROW, not just the pass', !iqa({ skinOk: false }).lesionRowOk);
-check('iqa: no presence fails the lesion row', !iqa({ presenceOk: false }).lesionRowOk);
+// Lesion OR skin passes (2026-09-29): a faint spot the presence check misses is still allowed.
+check('iqa: no presence still passes on skin', iqa({ presenceOk: false }).pass && iqa({ presenceOk: false }).lesionRowOk);
+check('iqa: no presence is not recorded as a seen lesion', !iqa({ presenceOk: false }).lesionSeen);
+check('iqa: presence on skin is a seen lesion', iqa().lesionSeen);
+check('iqa: presence on non-skin is NOT a seen lesion', !iqa({ skinGate: 'not_skin' }).lesionSeen);
 // The learned skin gate replaced the detector veto (2026-09-19). Every non-'skin' verdict blocks the
 // row - including 'failed', because could-not-check is not a pass (2026-09-17).
 check('iqa: skin gate says not skin -> lesion row fails', !iqa({ skinGate: 'not_skin' }).lesionRowOk);
@@ -75,8 +79,8 @@ check(
   !iqa({ presenceOk: true, skinGate: 'face' }).pass,
 );
 check(
-  'iqa: the skin gate does NOT waive presence (bare skin still needs a spot)',
-  !iqa({ presenceOk: false, skinGate: 'skin' }).pass,
+  'iqa: presence does NOT waive the colour skin check',
+  !iqa({ presenceOk: true, skinOk: false }).pass,
 );
 
 // Head regions get the "part the hair" tip. Stored as display text, so both languages must match.
@@ -117,6 +121,29 @@ check('timeout stops waiting', !q(true, 'timeout').analyzing);
 // Nothing is decided before the image checks have settled.
 check('unsettled checks keep analyzing', q(true, 'ok', false).analyzing);
 check('unsettled checks keep analyzing even on failure', q(false, 'ok', false).analyzing);
+
+/* ------------------------------------------------------------------ decideSetQuality */
+// IQA runs once over the 1-3 photo set (2026-10-07); this decides what the quality screen offers.
+const P = { pass: true };
+const F = { pass: false };
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+{
+  const one = decideSetQuality([P]);
+  check('set: a single passing photo is all-pass', one.allPass && !one.nonePass && eq(one.passing, [0]));
+  const oneBad = decideSetQuality([F]);
+  check('set: a single failing photo is none-pass', !oneBad.allPass && oneBad.nonePass && eq(oneBad.failing, [0]));
+  const all = decideSetQuality([P, P, P]);
+  check('set: three passing photos are all-pass', all.allPass && eq(all.passing, [0, 1, 2]) && all.failing.length === 0);
+  const mixed = decideSetQuality([P, F, P]);
+  check('set: a mixed set is neither all- nor none-pass', !mixed.allPass && !mixed.nonePass);
+  check('set: a mixed set keeps the passing photos in order', eq(mixed.passing, [0, 2]) && eq(mixed.failing, [1]));
+  // Dropping a failed primary leaves the first passing photo first, so it becomes images[0].
+  const badPrimary = decideSetQuality([F, P]);
+  check('set: failed primary -> the first passing photo leads', eq(badPrimary.passing, [1]) && eq(badPrimary.failing, [0]));
+  const none = decideSetQuality([F, F]);
+  check('set: nothing passing is none-pass', none.nonePass && !none.allPass);
+  check('set: an empty set is never all-pass', !decideSetQuality([]).allPass);
+}
 
 /* ------------------------------------------------------------------ nextStepAfterQuality */
 const step = (questionnaireComplete) => nextStepAfterQuality({ questionnaireComplete });
@@ -168,6 +195,15 @@ for (const r of ['pending', 'ok', 'timeout']) {
 // low-confidence photo reaches analysis, which applies the floor.
 const strike2 = decideAnalysis({ verdict: 'apply-floor', acceptedLowConfidence: false });
 check('second low-confidence attempt finalizes with the floor', strike2.kind === 'finalize' && strike2.applyFloor === true);
+
+// Pale skin under flash (2026-10-18): grey/bluish pixels fail the colour rule, so a CONFIDENT model
+// overrules it - and only a confident one.
+check('flash-pale skin: confident model overrules the colour rule', colourSkinOk(false, 0.97));
+check('colour rule still vetoes when the model is unsure', !colourSkinOk(false, 0.6));
+check('colour rule still vetoes when the model did not run', !colourSkinOk(false, undefined));
+check('colour pass needs no model', colourSkinOk(true, undefined));
+check('flash-pale skin passes the whole gate',
+  decideIqa({ error: false, brightnessOk: true, sharpOk: true, skinOk: colourSkinOk(false, 0.97), presenceOk: true, skinGate: 'skin' }).pass);
 
 if (fails.length) {
   console.error(`\nscan flow: ${pass} passed, ${fails.length} FAILED`);

@@ -9,6 +9,7 @@ import { Gradients, Radius, Space, Type } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 import { ThemedText } from '../themed-text';
+import { TourTarget } from '@/lib/product-tour';
 
 type SF = IconName;
 type TabConfig = { label: string; icon: SF; iconActive?: SF; center?: boolean };
@@ -79,17 +80,19 @@ export function CustomTabBar({ state, navigation }: TabBarProps) {
               onPress={() => router.push('/scan/body')}
               style={({ pressed }) => [styles.item, pressed && styles.pressed]}
               accessibilityRole="button">
-              <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>
-                <View style={styles.centerCircle}>
-                  <LinearGradient
-                    colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
-                    start={{ x: 0.1, y: 0 }}
-                    end={{ x: 0.9, y: 1 }}
-                    style={StyleSheet.absoluteFill}
-                  />
-                  <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
+              <TourTarget id="scanTab" style={styles.centerTarget}>
+                <View style={[styles.centerRing, { backgroundColor: theme.surface }, styles.centerShadow]}>
+                  <View style={styles.centerCircle}>
+                    <LinearGradient
+                      colors={Gradients.sunsetVivid.colors as unknown as [string, string, ...string[]]}
+                      start={{ x: 0.1, y: 0 }}
+                      end={{ x: 0.9, y: 1 }}
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <Icon name={cfg.icon} tintColor={theme.onBrand} size={26} />
+                  </View>
                 </View>
-              </View>
+              </TourTarget>
               <ThemedText
                 type="caption"
                 themeColor={focused ? 'brand' : 'muted'}
@@ -138,11 +141,12 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   label: { ...Type.caption },
   labelActive: { fontWeight: '600' },
+  // The ring rises out of the bar; the tour target sits on the ring so the spotlight circles it.
+  centerTarget: { marginTop: -TabBarOverhang },
   centerRing: {
     width: RING,
     height: RING,
     borderRadius: RING / 2,
-    marginTop: -TabBarOverhang,
     padding: 4,
     alignItems: 'center',
     justifyContent: 'center',

@@ -10,18 +10,22 @@ import { Icon } from '@/components/ui/icon';
 import { Elevation, Radius, Space } from '@/constants/theme';
 import type { FacilityWithDistance } from '@/data/repositories';
 import { useTheme } from '@/hooks/use-theme';
+import { displayServices, isHospitalType, isHospitalWithoutDerm, type DermSummary } from '@/lib/directory-core';
+import { dermSummaryLine, todayScheduleBit } from '@/lib/directory-display';
 import { facilityDisplayName, formatDistance, humanizeTag } from '@/lib/format';
 import { formatHoursLine, isOpenNow } from '@/lib/hours';
 
 export type ClinicPreviewCardProps = {
   facility: FacilitySync | FacilityWithDistance;
+  /** Linked dermatologists here; undefined = not loaded (falls back to derm_status). */
+  derm?: DermSummary;
   onClose: () => void;
 };
 
 const MAX_SERVICES_SHOWN = 2;
 
 /** The callout attached to a tapped map pin (rendered inside a MapLibre `Marker`). */
-export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps) {
+export function ClinicPreviewCard({ facility, derm, onClose }: ClinicPreviewCardProps) {
   useLocale();
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -35,10 +39,15 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
   }
 
   const distance = 'distance_m' in facility ? facility.distance_m : null;
-  const open = isOpenNow(facility.weekday_hours, facility.weekend_hours);
+  // A hospital's own hours (often 24h) say nothing about when a dermatologist is in.
+  const hospital = isHospitalType(facility.type);
+  const open = hospital ? null : isOpenNow(facility.weekday_hours, facility.weekend_hours);
+  const noDerm = isHospitalWithoutDerm(facility, derm?.count);
+  const dermLine = noDerm ? t('No dermatologist listed - call the OPD') : dermSummaryLine(derm, todayScheduleBit());
 
-  const shown = facility.services.slice(0, MAX_SERVICES_SHOWN);
-  const extra = facility.services.length - shown.length;
+  const services = displayServices(facility.services, noDerm);
+  const shown = services.slice(0, MAX_SERVICES_SHOWN);
+  const extra = services.length - shown.length;
   // Never show the raw taxonomy tag - humanize the service list, or the practice type if there are no services.
   const specialization = shown.length ? shown.map(humanizeTag).join('; ') : humanizeTag(facility.type);
 
@@ -48,7 +57,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         <ThemedText type="headline" style={styles.name} numberOfLines={1}>
           {facilityDisplayName(facility)}
         </ThemedText>
-        <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel={t("Close")}>
+        <Pressable onPress={onClose} hitSlop={14} accessibilityRole="button" accessibilityLabel={t("Close")}>
           <Icon name="xmark" size={16} tintColor={theme.muted} />
         </Pressable>
       </View>
@@ -60,9 +69,15 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
         {extra > 0 ? (
           <ThemedText type="footnote" themeColor="brand" style={styles.more}>
             {' '}
-            +{extra} {t("more")}</ThemedText>
+            {t("+{{count}} more", { count: extra })}</ThemedText>
         ) : null}
       </View>
+
+      {dermLine ? (
+        <ThemedText type="footnote" themeColor={noDerm ? 'textSecondary' : 'brand'} style={styles.hoursLabel} numberOfLines={1}>
+          {dermLine}
+        </ThemedText>
+      ) : null}
 
       {open != null ? (
         <Pressable
@@ -72,7 +87,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
           accessibilityState={{ expanded }}>
           <Icon name="clock.fill" size={14} tintColor={open ? theme.riskLow : theme.riskHigh} />
           <ThemedText type="footnote" themeColor={open ? 'riskLow' : 'riskHigh'} style={styles.hoursLabel}>
-            {open ? 'Open Now' : 'Closed Now'}
+            {open ? t('Open now') : t('Closed')}
           </ThemedText>
           <Icon name={expanded ? 'chevron.up' : 'chevron.down'} size={12} tintColor={theme.muted} />
         </Pressable>
@@ -89,7 +104,7 @@ export function ClinicPreviewCard({ facility, onClose }: ClinicPreviewCardProps)
       ) : null}
 
       <ThemedText type="footnote" themeColor="muted" numberOfLines={1}>
-        {distance != null ? `${formatDistance(distance)} (Near You) · ` : ''}
+        {distance != null ? `${t('{{distance}} from you', { distance: formatDistance(distance) })} · ` : ''}
         {facility.address}
       </ThemedText>
 

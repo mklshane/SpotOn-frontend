@@ -91,6 +91,22 @@ export function warmUpApi(): void {
   fetch(`${API_BASE_URL}/health`, { signal: controller.signal }).catch(() => {});
 }
 
+/**
+ * True when fetch itself rejected (no HTTP response at all) - as opposed to our 60s abort
+ * ("timed out") or an ApiError carrying a status.
+ *
+ * The usual cause in practice is not the user's connection: after a quiet spell the phone reuses
+ * a pooled keep-alive socket that Render's edge has already closed, the request dies on it, and
+ * an immediate second attempt on a fresh socket goes through. Reported 2026-10-20: sign-up said
+ * "Can't reach the server", tapping Create account again worked.
+ */
+export function isTransportError(e: unknown): boolean {
+  return e instanceof TypeError || (e instanceof Error && /fetch failed|network request failed/i.test(e.message));
+}
+
+const TRANSPORT_RETRY_DELAY_MS = 800;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function fetchWithTimeout(
   input: string,
   init: RequestInit,
@@ -116,6 +132,11 @@ async function request<T>(
     params?: QueryParams;
     body?: unknown;
     auth?: boolean;
+    /**
+     * Resend once after a transport error (see isTransportError). Default: GET only, since a
+     * POST that died mid-flight may already have taken effect on the server.
+     */
+    retry?: boolean;
     _retried?: boolean;
   } = {},
 ): Promise<T> {
@@ -134,19 +155,25 @@ async function request<T>(
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetchWithTimeout(
-    `${API_BASE_URL}${path}${queryString(opts.params)}`,
-    {
-      method,
-      headers,
-      body:
-        opts.body === undefined
-          ? undefined
-          : isFormData
-            ? (opts.body as FormData)
-            : JSON.stringify(opts.body),
-    },
-  );
+  const url = `${API_BASE_URL}${path}${queryString(opts.params)}`;
+  const init: RequestInit = {
+    method,
+    headers,
+    body:
+      opts.body === undefined
+        ? undefined
+        : isFormData
+          ? (opts.body as FormData)
+          : JSON.stringify(opts.body),
+  };
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, init);
+  } catch (e) {
+    if (!(opts.retry ?? method === "GET") || !isTransportError(e)) throw e;
+    await sleep(TRANSPORT_RETRY_DELAY_MS);
+    res = await fetchWithTimeout(url, init);
+  }
 
   // One-shot refresh-and-retry on an expired access token.
   if (res.status === 401 && opts.auth && refreshHandler && !opts._retried) {
@@ -167,8 +194,9 @@ async function request<T>(
 export const api = {
   get: <T>(path: string, params?: QueryParams, auth = false) =>
     request<T>("GET", path, { params, auth }),
-  post: <T>(path: string, body?: unknown, auth = true) =>
-    request<T>("POST", path, { body, auth }),
+  /** `retry`: only for POSTs that are safe to send twice (see request's `retry`). */
+  post: <T>(path: string, body?: unknown, auth = true, retry = false) =>
+    request<T>("POST", path, { body, auth, retry }),
   patch: <T>(path: string, body?: unknown, auth = true) =>
     request<T>("PATCH", path, { body, auth }),
   delete: <T>(path: string, body?: unknown, auth = true) =>
